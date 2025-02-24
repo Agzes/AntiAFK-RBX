@@ -1,4 +1,4 @@
-<h6 align="center">🐟 | FishStrap support in development | 🛠️</h6>
+<h6 align="center">🐟 | FishStrap / rbx with shaders, support in development | 🛠️</h6>
 
 ![header](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/antiafk-rbx.png)
 ![features](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/features.png)
