@@ -1,7 +1,10 @@
-<h6 align="center">🐟 | FishStrap / rbx with shaders, support in development | 🛠️</h6>
+<h6 align="center">🐟 | FishStrap / rbx with shaders, support added in BETA-2.1 | ⭐<br>🚀 | AntiAFK-RBX work with BloxStrap/FishStrap/Roblox[base/shaders] </h6>
+
 
 ![header](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/antiafk-rbx.png)
 ![features](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/features.png)
+<h6 align="center">🚀 | AntiAFK-RBX also work with BloxStrap/FishStrap/Roblox[base/shaders]</h6><br>
+
 ![multi-instance](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/multi-instance.png)
 ![showcase-label](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/showcase.png)
 
