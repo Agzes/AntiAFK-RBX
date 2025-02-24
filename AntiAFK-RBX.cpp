@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstring>
 #include <dwmapi.h>  
+#include <winreg.h>
 
 using namespace std::chrono_literals;
 
@@ -23,12 +24,13 @@ using namespace std::chrono_literals;
 #define ID_INFORMATION   9
 #define ID_EMULATE_SPACE 10
 #define ID_MULTI_SUPPORT 11
+#define ID_FISHSTRAP_SUP 12
 
 HWND g_hwnd;
 HINSTANCE g_hInst;
 NOTIFYICONDATA g_nid;
 HMENU g_hMenu;
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false);
 std::condition_variable g_cv;
 std::mutex g_cv_m;
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX");
@@ -163,7 +165,7 @@ std::vector<HWND> FindAllRobloxWindows(bool includeHidden = false) {
     pe.dwSize = sizeof(PROCESSENTRY32);
     if (Process32First(snap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0) {
+            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0 || (g_fishstrapSupport.load() && _wcsicmp(pe.szExeFile, L"eurotrucks2.exe") == 0)) {
                 auto procWins = GetWindowsForProcess(pe.th32ProcessID, includeHidden);
                 wins.insert(wins.end(), procWins.begin(), procWins.end());
             }
@@ -254,6 +256,34 @@ void PerformJump(HWND target) {
     }
 }
 
+
+void LoadSettings() {
+    HKEY hKey;
+    DWORD multiSupport = 0, fishstrapSupport = 0;
+    DWORD dataSize = sizeof(DWORD);
+
+    if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        RegQueryValueEx(hKey, L"MultiSupport", NULL, NULL, (LPBYTE)&multiSupport, &dataSize);
+        RegQueryValueEx(hKey, L"FishstrapSupport", NULL, NULL, (LPBYTE)&fishstrapSupport, &dataSize);
+        RegCloseKey(hKey);
+    }
+
+    g_multiSupport = multiSupport;
+    g_fishstrapSupport = fishstrapSupport;
+}
+
+void SaveSettings() {
+    HKEY hKey;
+    DWORD multiSupport = g_multiSupport.load();
+    DWORD fishstrapSupport = g_fishstrapSupport.load();
+
+    if (RegCreateKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueEx(hKey, L"MultiSupport", 0, REG_DWORD, (const BYTE*)&multiSupport, sizeof(DWORD));
+        RegSetValueEx(hKey, L"FishstrapSupport", 0, REG_DWORD, (const BYTE*)&fishstrapSupport, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
 void EnableMultiInstanceSupport() {
     if (!g_hMultiInstanceMutex)
         g_hMultiInstanceMutex = CreateMutex(NULL, TRUE, L"ROBLOX_singletonEvent");
@@ -265,6 +295,7 @@ void DisableMultiInstanceSupport() {
         g_hMultiInstanceMutex = NULL;
     }
 }
+
 
 void main_thread() {
     while (!g_stopThread.load()) {
@@ -301,16 +332,18 @@ void CreateTrayMenu(bool afk) {
     if (g_hMenu) DestroyMenu(g_hMenu);
     g_hMenu = CreatePopupMenu();
     AppendMenu(g_hMenu, MF_STRING, ID_INFORMATION, L"AntiAFK-RBX by Agzes");
-    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, L"Beta: v.2.0 | With ❤️");
+    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, L"Beta: v.2.1 | With ❤️");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EMULATE_SPACE, L"Test Anti-AFK move");
     AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
     AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
+    AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox"); 
     AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Support");
+    AppendMenu(g_hMenu, MF_STRING | (g_fishstrapSupport.load() ? MF_CHECKED : 0), ID_FISHSTRAP_SUP, L"FishStrap/Shader Support");
+    AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
 }
 
@@ -369,6 +402,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (rbx) {
                     ShowWindow(rbx, SW_SHOW);
                 }
+                else if (g_fishstrapSupport.load()) {
+					rbx = FindWindowByProcessName(L"eurotrucks2.exe");
+					if (rbx) {
+						ShowWindow(rbx, SW_SHOW);
+					}
+                    else {
+                        ShowTrayNotification(L"Error", L"Roblox window not found!");
+                    }
+                }
                 else {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
                 }
@@ -383,7 +425,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 HWND rbx = FindWindowByProcessName(L"RobloxPlayerBeta.exe");
                 if (rbx) {
                     ShowWindow(rbx, SW_HIDE);
-                }
+                } else if (g_fishstrapSupport.load()) {
+					rbx = FindWindowByProcessName(L"eurotrucks2.exe");
+					if (rbx) {
+						ShowWindow(rbx, SW_HIDE);
+					} 
+                    else {
+						ShowTrayNotification(L"Error", L"Roblox window not found!");
+					}
+				}
                 else {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
                 }
@@ -422,6 +472,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 EnableMultiInstanceSupport();
             else
                 DisableMultiInstanceSupport();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            UpdateTrayIcon();
+            break;
+        case ID_FISHSTRAP_SUP:
+            g_fishstrapSupport = !g_fishstrapSupport.load();
+            SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             UpdateTrayIcon();
             break;
@@ -452,6 +509,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
     wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+    LoadSettings();
     RegisterClass(&wc);
     g_hwnd = CreateWindowEx(0, CLASS_NAME, L"AntiAFK-RBX-tray", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
