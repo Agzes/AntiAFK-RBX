@@ -18,14 +18,16 @@ jobs:
       with:
         vs-version: 17
 
-    - name: cmake-configure
-      uses: snickerbockers/cmake-configure@prerel1
 
-    - name: Build project
+    - name: Configure with CMake
       run: |
         mkdir build
         cd build
-        cmake -G "Visual Studio 16 2019" ..
+        cmake -G "Visual Studio 17 2022" ..
+    
+    - name: Build project
+      run: |
+        cd build
         cmake --build . --config Release
 
     - name: Create Release
