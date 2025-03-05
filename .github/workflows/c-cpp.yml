@@ -1,5 +1,8 @@
 name: Build and Release for Windows Application
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
