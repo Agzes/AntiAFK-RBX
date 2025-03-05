@@ -1,3 +1,4 @@
+<h6 align="center">⚠️ | AntiAFK-RBX may be falsely detected as a "virus" by Windows Defender! [idk why] [WIP] | ⚠️</h6>
 <h6 align="center">🚀 | AntiAFK-RBX work with BloxStrap/FishStrap/Roblox[base/shaders] ! </h6>
 
 
