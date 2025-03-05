@@ -1,0 +1,48 @@
+name: Build and Release for Windows Application
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up C++ environment
+      uses: actions/setup-cpp@v1
+
+    - name: Install CMake
+      uses: lukka/get-cmake@v3
+
+    - name: Build project
+      run: |
+        mkdir build
+        cd build
+        cmake -G "Visual Studio 16 2019" ..
+        cmake --build . --config Release
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.sha }}
+        release_name: Release ${{ github.sha }}
+        draft: false
+        prerelease: true
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/Release/your_binary_name.exe
+        asset_name: your_binary_name.exe
+        asset_content_type: application/octet-stream
