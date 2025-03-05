@@ -19,7 +19,7 @@ jobs:
         vs-version: 16
 
     - name: Install CMake
-      uses: lukka/get-cmake@v3
+      uses: lukka/get-cmake@v2
 
     - name: Build project
       run: |
