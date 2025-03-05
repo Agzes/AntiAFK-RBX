@@ -16,7 +16,7 @@ jobs:
     - name: Install Visual Studio
       uses: microsoft/setup-msbuild@v1.0.2
       with:
-        vs-version: 16
+        vs-version: 17
 
     - name: cmake-configure
       uses: snickerbockers/cmake-configure@prerel1
