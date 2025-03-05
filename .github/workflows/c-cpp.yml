@@ -18,12 +18,7 @@ jobs:
       with:
         vs-version: 16
 
-    - name: Install CMake
-      uses: lukka/get-cmake@v2
-
     - name: cmake-configure
-      # You may pin to the exact commit or the version.
-      # uses: snickerbockers/cmake-configure@34c25d17135428976b13963a8e5e3b1b0b277fd1
       uses: snickerbockers/cmake-configure@prerel1
 
     - name: Build project
