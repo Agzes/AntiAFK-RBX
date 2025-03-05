@@ -21,6 +21,10 @@ jobs:
     - name: Install CMake
       uses: lukka/get-cmake@v2
 
+    - name: Set up CMake environment
+      run: |
+        echo "CMAKE_PATH=D:\a\_temp\cmake-3.17.1-win64-x64\bin" >> $GITHUB_ENV
+
     - name: Build project
       run: |
         mkdir build
