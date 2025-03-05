@@ -13,8 +13,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Set up C++ environment
-      uses: actions/setup-cpp@v1
+    - name: Install Visual Studio
+      uses: microsoft/setup-msbuild@v1.0.2
+      with:
+        vs-version: 16
 
     - name: Install CMake
       uses: lukka/get-cmake@v3
