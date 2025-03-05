@@ -1,4 +1,4 @@
-name: Build and Release for Windows Application
+name: Build and Release
 
 permissions:
   contents: write
