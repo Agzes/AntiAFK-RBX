@@ -33,14 +33,45 @@ jobs:
         cd build
         cmake --build . --config Release
 
+    - name: Set Release Tag
+      id: release_date
+      shell: pwsh
+      run: |
+        $today = Get-Date -Format "yyyy-MM-dd"
+        $tag = "v$today"
+        Write-Output "::set-output name=date::$tag"
+        Write-Output "Using release tag: $tag"
+
+    - name: Delete previous pre-release if exists
+      uses: actions/github-script@v6
+      env:
+        CURRENT_TAG: ${{ steps.release_date.outputs.date }}
+      with:
+        script: |
+          const currentTag = process.env.CURRENT_TAG;
+          const releases = await github.rest.repos.listReleases({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          for (const release of releases.data) {
+            if (release.prerelease && release.tag_name !== currentTag) {
+              console.log(`Deleting prerelease: ${release.tag_name}`);
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+              });
+            }
+          }
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ github.sha }}
-        release_name: Release v${{ github.sha }}
+        tag_name: ${{ steps.release_date.outputs.date }}
+        release_name: Release ${{ steps.release_date.outputs.date }}
         draft: false
         prerelease: true
 
