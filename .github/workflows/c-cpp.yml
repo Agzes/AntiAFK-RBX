@@ -24,6 +24,7 @@ jobs:
     - name: Set up CMake environment
       run: |
         echo "CMAKE_PATH=D:\a\_temp\cmake-3.17.1-win64-x64\bin" >> $GITHUB_ENV
+        echo "PATH=$CMAKE_PATH:$PATH" >> $GITHUB_ENV
 
     - name: Build project
       run: |
