@@ -6,5 +6,6 @@ add_definitions(-DUNICODE -D_UNICODE)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set_target_properties(AntiAFK-RBX PROPERTIES WholeProgramOptimization FALSE)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
 add_executable(AntiAFK-RBX AntiAFK-RBX.cpp)
