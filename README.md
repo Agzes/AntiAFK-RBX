@@ -1,9 +1,10 @@
-<h6 align="center">⚠️ | AntiAFK-RBX may be falsely detected as a "virus" by Windows Defender! [idk why] [WIP] | https://github.com/Agzes/AntiAFK-RBX/issues/2 | ⚠️</h6>
 <h6 align="center">🚀 | AntiAFK-RBX work with BloxStrap/FishStrap/Roblox[base/shaders] ! </h6>
 
 
 ![header](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/antiafk-rbx.png)
 ![features](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/features.png)
+<h6 align="center">📂 | The latest AntiAFK-RBX build can reach 40Kb in size* </h6>
+
 ![multi-instance](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/multi-instance.png)
 ![showcase-label](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/showcase.png)
 

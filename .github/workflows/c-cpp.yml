@@ -22,12 +22,12 @@ jobs:
       with:
         vs-version: 17
 
-    - name: Build 32-bit version
-      run: |
-        mkdir build32
-        cd build32
-        cmake -G "Visual Studio 17 2022" -A Win32 ..
-        cmake --build . --config Release
+    # - name: Build 32-bit version
+    #   run: |
+    #     mkdir build32
+    #     cd build32
+    #     cmake -G "Visual Studio 17 2022" -A Win32 ..
+    #     cmake --build . --config Release
 
     - name: Build 64-bit version
       run: |
@@ -88,15 +88,15 @@ jobs:
         draft: false
         prerelease: true
 
-    - name: Upload 32-bit Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build32/Release/AntiAFK-RBX.exe
-        asset_name: AntiAFK-RBX.exe
-        asset_content_type: application/octet-stream
+    # - name: Upload 32-bit Release Asset
+    #   uses: actions/upload-release-asset@v1
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   with:
+    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+    #     asset_path: build32/Release/AntiAFK-RBX.exe
+    #     asset_name: AntiAFK-RBX.exe
+    #     asset_content_type: application/octet-stream
 
     - name: Upload 64-bit Release Asset
       uses: actions/upload-release-asset@v1
@@ -105,5 +105,5 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: build64/Release/AntiAFK-RBX.exe
-        asset_name: AntiAFK-RBX (x64).exe
+        asset_name: AntiAFK-RBX.exe
         asset_content_type: application/octet-stream
