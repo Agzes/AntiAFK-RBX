@@ -1,4 +1,9 @@
-<h6 align="center">🚀 | AntiAFK-RBX work with BloxStrap/FishStrap/Roblox[base/shaders] ! </h6>
+<h6 align="center">🚀 | AntiAFK-RBX work with BloxStrap/FishStrap/Roblox[base/shaders] ! 
+
+✨ | See our [Tips-For-Use in Wiki](https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/Tips-for-use.md) | 🪶
+
+</h6>
+
 
 <details align="center" ><summary> <b> 🖼️ | Open without image ReadME | ⬇️ </b> </summary>
 
