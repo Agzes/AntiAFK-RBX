@@ -13,9 +13,9 @@
 <h2 align="center"> ✨ Features </h2>
 <h5 align="left"> 
 
-* 🪶 lightwight: takes up less than 40Kb of disk space
+* 🪶 lightwight: takes up less than ⁓50Kb of disk space
 * ⏩ fast: optimized and written in c++
-* 🪶 not demaning: requires 4MB of RAM, almost no CPU required
+* 🪶 not demaning: requires <2MB of RAM, almost no CPU required
 * 👁️ hides game: allow you to completely hide the game window
 * 📂 open-source: has open source code on github
 * 👁️ without focus: does not require your focus on the game window
@@ -51,7 +51,7 @@ with love by Agzes ❤️
 
 ![header](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/antiafk-rbx.png)
 ![features](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/features.png)
-<h6 align="center">📂 | The latest AntiAFK-RBX build can reach 40Kb in size* </h6>
+<h6 align="center">📂 | The latest AntiAFK-RBX build can reach 50Kb in size* </h6>
 
 ![multi-instance](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/multi-instance.png)
 ![showcase-label](https://github.com/Agzes/AntiAFK-RBX/blob/main/ReadME/showcase.png)
