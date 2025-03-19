@@ -2,6 +2,7 @@
 
 ✨ | See our [Tips-For-Use in Wiki](https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/Tips-for-use.md) | 🪶
 
+🛠️ | Note: We working on a major update, which will correct all mistakes! | 🪚
 </h6>
 
 
