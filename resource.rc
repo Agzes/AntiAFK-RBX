@@ -1,0 +1,35 @@
+#define APSTUDIO_READONLY_SYMBOLS
+#include "winres.h"
+#undef APSTUDIO_READONLY_SYMBOLS
+
+MAINICON ICON "logo.ico"
+
+
+VS_VERSION_INFO VERSIONINFO
+	FILEVERSION 0, 2, 2, 0
+	PRODUCTVERSION 0, 2, 2, 0
+	FILEFLAGSMASK 0x3FL
+	FILEFLAGS 0x0L
+	FILEOS 0x4L
+	FILETYPE 0x1L
+	FILESUBTYPE 0x0L
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904E4"
+		BEGIN
+			VALUE "CompanyName", "Agzes"
+			VALUE "FileDescription", "AntiAFK-RBX by Agzes | AntiAFK and Multi-Instance for Roblox"
+			VALUE "FileVersion", "0.2.2.0"
+			VALUE "InternalName", "AntiAFK-RBX"
+			VALUE "LegalCopyright", "© Agzes"
+			VALUE "OriginalFilename", "AntiAFK-RBX.exe"
+			VALUE "ProductName", "AntiAFK-RBX"
+			VALUE "ProductVersion", "0.2.2"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1252
+	END
+END

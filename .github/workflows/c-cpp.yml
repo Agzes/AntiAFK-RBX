@@ -1,4 +1,3 @@
-
 name: Build and Release
 
 permissions:
@@ -22,12 +21,28 @@ jobs:
       with:
         vs-version: 17
 
-    # - name: Build 32-bit version
-    #   run: |
-    #     mkdir build32
-    #     cd build32
-    #     cmake -G "Visual Studio 17 2022" -A Win32 ..
-    #     cmake --build . --config Release
+    - name: Create CMakeLists.txt for resource files with Unicode support
+      run: |
+        echo 'cmake_minimum_required(VERSION 3.10)
+        project(AntiAFK-RBX)
+        
+        set(CMAKE_CXX_STANDARD 17)
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
+        
+        set(RESOURCE_FILES
+            resource.rc
+            resource.h
+            logo.ico
+        )
+        
+        add_definitions(-DUNICODE -D_UNICODE)
+        
+        if(MSVC)
+          add_compile_options(/utf-8)
+        endif()
+        
+        add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})
+        target_link_libraries(AntiAFK-RBX wininet dwmapi)' > CMakeLists.txt
 
     - name: Build 64-bit version
       run: |
@@ -42,10 +57,30 @@ jobs:
       run: |
         $today = Get-Date -Format "yyyy-MM-dd"
         $tag = "v$today"
-        Write-Output "::set-output name=date::$tag"
+        echo "date=$tag" >> $env:GITHUB_OUTPUT
         Write-Output "Using release tag: $tag"
 
-    - name: Delete previous pre-release if exists
+    - name: Get latest stable release
+      id: latest_release
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const releases = await github.rest.repos.listReleases({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          
+          const stableRelease = releases.data.find(release => !release.prerelease);
+          if (stableRelease) {
+            console.log(`Latest stable release: ${stableRelease.tag_name}`);
+            return stableRelease.html_url;
+          } else {
+            console.log('No stable release found');
+            return '';
+          }
+        result-encoding: string
+
+    - name: Delete previous pre-releases
       uses: actions/github-script@v6
       env:
         CURRENT_TAG: ${{ steps.release_date.outputs.date }}
@@ -56,14 +91,18 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
           });
+          
           for (const release of releases.data) {
-            if (release.prerelease && release.tag_name !== currentTag) {
+            if (release.prerelease) {
+              console.log(`Found prerelease: ${release.tag_name}`);
+              
               console.log(`Deleting prerelease: ${release.tag_name}`);
               await github.rest.repos.deleteRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: release.id,
               });
+              
               try {
                 console.log(`Deleting tag: ${release.tag_name}`);
                 await github.rest.git.deleteRef({
@@ -82,21 +121,20 @@ jobs:
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        LATEST_RELEASE: ${{ steps.latest_release.outputs.result }}
       with:
         tag_name: ${{ steps.release_date.outputs.date }}
-        release_name: Release ${{ steps.release_date.outputs.date }}
+        release_name: Pre-release ${{ steps.release_date.outputs.date }}
+        body: |
+          ## ⚠️ This is a pre-release version of AntiAFK-RBX 🚀
+          
+          This build is automatically generated from the latest code in the repository.
+          It may contain experimental features or bugs. ⚠️
+          
+          For the latest stable release, please visit:
+          ${{ steps.latest_release.outputs.result }}
         draft: false
         prerelease: true
-
-    # - name: Upload 32-bit Release Asset
-    #   uses: actions/upload-release-asset@v1
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-    #     asset_path: build32/Release/AntiAFK-RBX.exe
-    #     asset_name: AntiAFK-RBX.exe
-    #     asset_content_type: application/octet-stream
 
     - name: Upload 64-bit Release Asset
       uses: actions/upload-release-asset@v1
