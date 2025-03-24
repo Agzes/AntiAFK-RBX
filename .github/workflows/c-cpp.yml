@@ -38,13 +38,10 @@ jobs:
         add_definitions(-DUNICODE -D_UNICODE)
         
         if(MSVC)
-          add_compile_options(/utf-8)
-          add_compile_options(/O1 /Os /GF /Gy) 
+          add_compile_options(/utf-8 /O1 /Os /GF /Gy)
           set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /OPT:REF /OPT:ICF")
-          set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Zi")
-          set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+          set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
         endif()
-        
         
         add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})
         target_link_libraries(AntiAFK-RBX wininet dwmapi)' > CMakeLists.txt
