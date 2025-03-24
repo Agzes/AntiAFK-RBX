@@ -42,7 +42,7 @@ jobs:
         endif()
         
         add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})
-        target_link_libraries(AntiAFK-RBX wininet dwmapi)' > CMakeLists.txt
+        
 
     - name: Build 64-bit version
       run: |
