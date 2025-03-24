@@ -22,13 +22,15 @@ jobs:
         vs-version: '17.13.2'
 
     - name: Create Visual Studio Project
+      shell: pwsh
       run: |
         
         mkdir AntiAFK-RBX
         cd AntiAFK-RBX
         
         
-        echo '<?xml version="1.0" encoding="utf-8"?>
+        @'
+        <?xml version="1.0" encoding="utf-8"?>
         <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
           <ItemGroup Label="ProjectConfigurations">
             <ProjectConfiguration Include="Release|x64">
@@ -44,7 +46,7 @@ jobs:
             <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
           </PropertyGroup>
           <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-          <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''" Label="Configuration">
+          <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
             <ConfigurationType>Application</ConfigurationType>
             <UseDebugLibraries>false</UseDebugLibraries>
             <PlatformToolset>v143</PlatformToolset>
@@ -56,14 +58,14 @@ jobs:
           </ImportGroup>
           <ImportGroup Label="Shared">
           </ImportGroup>
-          <ImportGroup Label="PropertySheets" Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
-            <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('\''$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props'\'')" Label="LocalAppDataPlatform" />
+          <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+            <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
           </ImportGroup>
           <PropertyGroup Label="UserMacros" />
-          <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
+          <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
             <LinkIncremental>false</LinkIncremental>
           </PropertyGroup>
-          <ItemDefinitionGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
+          <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
             <ClCompile>
               <PrecompiledHeader>
               </PrecompiledHeader>
@@ -98,11 +100,13 @@ jobs:
           <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
           <ImportGroup Label="ExtensionTargets">
           </ImportGroup>
-        </Project>' > AntiAFK-RBX.vcxproj
+        </Project>
+        '@ > AntiAFK-RBX.vcxproj
         
         
-        echo 'Microsoft Visual Studio Solution File, Format Version 12.00
-        
+        @'
+        Microsoft Visual Studio Solution File, Format Version 12.00
+        # Visual Studio Version 17
         VisualStudioVersion = 17.13.2
         MinimumVisualStudioVersion = 10.0.40219.1
         Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AntiAFK-RBX", "AntiAFK-RBX.vcxproj", "{12345678-1234-1234-1234-123456789ABC}"
@@ -121,7 +125,8 @@ jobs:
           GlobalSection(ExtensibilityGlobals) = postSolution
             SolutionGuid = {98765432-4321-4321-4321-987654321CBA}
           EndGlobalSection
-        EndGlobal' > AntiAFK-RBX.sln
+        EndGlobal
+        '@ > AntiAFK-RBX.sln
 
     - name: Build with MSBuild
       run: |
