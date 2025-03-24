@@ -142,7 +142,7 @@ jobs:
       run: |
         Copy-Item AntiAFK-RBX\x64\Release\AntiAFK-RBX.exe -Destination AntiAFK-RBX\x64\Release\AntiAFK-RBX-Original.exe
         
-        curl -L -o upx.zip https://github.com/upx/upx/releases/download/v5.0.0/upx-5.0.0-win64.zip
+        curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-win64.zip
         Expand-Archive upx.zip -DestinationPath upx
         
         upx\upx.exe --best --lzma AntiAFK-RBX\x64\Release\AntiAFK-RBX-upx.exe
