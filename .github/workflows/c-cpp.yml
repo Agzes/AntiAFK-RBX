@@ -76,6 +76,11 @@ jobs:
               <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
               <ConformanceMode>true</ConformanceMode>
               <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+              <Optimization>MinSpace</Optimization>
+              <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+              <StringPooling>true</StringPooling>
+              <ExceptionHandling>false</ExceptionHandling>
+              <BufferSecurityCheck>false</BufferSecurityCheck>
             </ClCompile>
             <Link>
               <SubSystem>Windows</SubSystem>
@@ -131,7 +136,17 @@ jobs:
     - name: Build with MSBuild
       run: |
         cd AntiAFK-RBX
-        msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true
+        msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true /p:DebugInformationFormat=None /p:DebugType=None
+
+    - name: Create UPX compressed version
+      run: |
+        Copy-Item AntiAFK-RBX\x64\Release\AntiAFK-RBX.exe -Destination AntiAFK-RBX\x64\Release\AntiAFK-RBX-Original.exe
+        
+        curl -L -o upx.zip https://github.com/upx/upx/releases/download/v5.0.0/upx-5.0.0-win64.zip
+        Expand-Archive upx.zip -DestinationPath upx
+        
+        upx\upx.exe --best --lzma AntiAFK-RBX\x64\Release\AntiAFK-RBX-upx.exe
+      shell: pwsh
 
     - name: Set Release Tag
       id: release_date
@@ -213,17 +228,31 @@ jobs:
           This build is automatically generated from the latest code in the repository.
           It may contain experimental features or bugs. ⚠️
           
+          ### Files:
+          - **AntiAFK-RBX-upx.exe** - UPX compressed version (smaller size)
+          - **AntiAFK-RBX-Original.exe** - Original uncompressed version
+          
           For the latest stable release, please visit:
           ${{ steps.latest_release.outputs.result }}
         draft: false
         prerelease: true
 
-    - name: Upload 64-bit Release Asset
+    - name: Upload UPX compressed version
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: AntiAFK-RBX/x64/Release/AntiAFK-RBX.exe
-        asset_name: AntiAFK-RBX.exe
+        asset_path: AntiAFK-RBX/x64/Release/AntiAFK-RBX-upx.exe
+        asset_name: AntiAFK-RBX-upx.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload original version
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: AntiAFK-RBX/x64/Release/AntiAFK-RBX-Original.exe
+        asset_name: AntiAFK-RBX-Original.exe
         asset_content_type: application/octet-stream
