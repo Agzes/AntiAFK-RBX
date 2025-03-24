@@ -139,14 +139,20 @@ jobs:
         msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true /p:DebugInformationFormat=None /p:DebugType=None
 
     - name: Create UPX compressed version
+      shell: pwsh
       run: |
         Copy-Item AntiAFK-RBX\x64\Release\AntiAFK-RBX.exe -Destination AntiAFK-RBX\x64\Release\AntiAFK-RBX-Original.exe
+
+        Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-win64.zip" -OutFile "upx.zip"
         
-        curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-win64.zip
-        Expand-Archive upx.zip -DestinationPath upx
+        Expand-Archive -Path "upx.zip" -DestinationPath "upx_temp"
         
-        upx\upx.exe --best --lzma AntiAFK-RBX\x64\Release\AntiAFK-RBX-upx.exe
-      shell: pwsh
+        $upxExe = Get-ChildItem -Path "upx_temp" -Recurse -Filter "upx.exe" | Select-Object -First 1 -ExpandProperty FullName
+        Write-Host "UPX executable found at: $upxExe"
+        
+        Copy-Item AntiAFK-RBX\x64\Release\AntiAFK-RBX.exe -Destination AntiAFK-RBX\x64\Release\AntiAFK-RBX-UPX.exe
+
+        & "$upxExe" --best --lzma "AntiAFK-RBX\x64\Release\AntiAFK-RBX-UPX.exe"
 
     - name: Set Release Tag
       id: release_date
