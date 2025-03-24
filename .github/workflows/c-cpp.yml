@@ -21,37 +21,112 @@ jobs:
       with:
         vs-version: '17.13.2'
 
-    - name: Create CMakeLists.txt for resource files with Unicode support
+    - name: Create Visual Studio Project
       run: |
-        echo 'cmake_minimum_required(VERSION 3.10)
-        project(AntiAFK-RBX)
         
-        set(CMAKE_CXX_STANDARD 17)
-        set(CMAKE_CXX_STANDARD_REQUIRED ON)
+        mkdir AntiAFK-RBX
+        cd AntiAFK-RBX
         
-        set(RESOURCE_FILES
-            resource.rc
-            resource.h
-            logo.ico
-        )
         
-        add_definitions(-DUNICODE -D_UNICODE)
+        echo '<?xml version="1.0" encoding="utf-8"?>
+        <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+          <ItemGroup Label="ProjectConfigurations">
+            <ProjectConfiguration Include="Release|x64">
+              <Configuration>Release</Configuration>
+              <Platform>x64</Platform>
+            </ProjectConfiguration>
+          </ItemGroup>
+          <PropertyGroup Label="Globals">
+            <VCProjectVersion>16.0</VCProjectVersion>
+            <ProjectGuid>{12345678-1234-1234-1234-123456789ABC}</ProjectGuid>
+            <Keyword>Win32Proj</Keyword>
+            <RootNamespace>AntiAFK-RBX</RootNamespace>
+            <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+          </PropertyGroup>
+          <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+          <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''" Label="Configuration">
+            <ConfigurationType>Application</ConfigurationType>
+            <UseDebugLibraries>false</UseDebugLibraries>
+            <PlatformToolset>v143</PlatformToolset>
+            <WholeProgramOptimization>true</WholeProgramOptimization>
+            <CharacterSet>Unicode</CharacterSet>
+          </PropertyGroup>
+          <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+          <ImportGroup Label="ExtensionSettings">
+          </ImportGroup>
+          <ImportGroup Label="Shared">
+          </ImportGroup>
+          <ImportGroup Label="PropertySheets" Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
+            <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('\''$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props'\'')" Label="LocalAppDataPlatform" />
+          </ImportGroup>
+          <PropertyGroup Label="UserMacros" />
+          <PropertyGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
+            <LinkIncremental>false</LinkIncremental>
+          </PropertyGroup>
+          <ItemDefinitionGroup Condition="'\''$(Configuration)|$(Platform)'\''=='\''Release|x64'\''">
+            <ClCompile>
+              <PrecompiledHeader>
+              </PrecompiledHeader>
+              <WarningLevel>Level3</WarningLevel>
+              <FunctionLevelLinking>true</FunctionLevelLinking>
+              <IntrinsicFunctions>true</IntrinsicFunctions>
+              <SDLCheck>true</SDLCheck>
+              <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+              <ConformanceMode>true</ConformanceMode>
+              <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+            </ClCompile>
+            <Link>
+              <SubSystem>Windows</SubSystem>
+              <EnableCOMDATFolding>true</EnableCOMDATFolding>
+              <OptimizeReferences>true</OptimizeReferences>
+              <GenerateDebugInformation>false</GenerateDebugInformation>
+              <AdditionalDependencies>wininet.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+            </Link>
+          </ItemDefinitionGroup>
+          <ItemGroup>
+            <ClCompile Include="..\AntiAFK-RBX.cpp" />
+          </ItemGroup>
+          <ItemGroup>
+            <ResourceCompile Include="..\resource.rc" />
+          </ItemGroup>
+          <ItemGroup>
+            <ClInclude Include="..\resource.h" />
+          </ItemGroup>
+          <ItemGroup>
+            <Image Include="..\logo.ico" />
+          </ItemGroup>
+          <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+          <ImportGroup Label="ExtensionTargets">
+          </ImportGroup>
+        </Project>' > AntiAFK-RBX.vcxproj
         
-        if(MSVC)
-          add_compile_options(/utf-8 /O1 /Os /GF /Gy)
-          set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /OPT:REF /OPT:ICF")
-          set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-        endif()
         
-        add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})
-        target_link_libraries(AntiAFK-RBX wininet dwmapi)' > CMakeLists.txt
+        echo 'Microsoft Visual Studio Solution File, Format Version 12.00
+        
+        VisualStudioVersion = 17.13.2
+        MinimumVisualStudioVersion = 10.0.40219.1
+        Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AntiAFK-RBX", "AntiAFK-RBX.vcxproj", "{12345678-1234-1234-1234-123456789ABC}"
+        EndProject
+        Global
+          GlobalSection(SolutionConfigurationPlatforms) = preSolution
+            Release|x64 = Release|x64
+          EndGlobalSection
+          GlobalSection(ProjectConfigurationPlatforms) = postSolution
+            {12345678-1234-1234-1234-123456789ABC}.Release|x64.ActiveCfg = Release|x64
+            {12345678-1234-1234-1234-123456789ABC}.Release|x64.Build.0 = Release|x64
+          EndGlobalSection
+          GlobalSection(SolutionProperties) = preSolution
+            HideSolutionNode = FALSE
+          EndGlobalSection
+          GlobalSection(ExtensibilityGlobals) = postSolution
+            SolutionGuid = {98765432-4321-4321-4321-987654321CBA}
+          EndGlobalSection
+        EndGlobal' > AntiAFK-RBX.sln
 
-    - name: Build 64-bit version
+    - name: Build with MSBuild
       run: |
-        mkdir build64
-        cd build64
-        cmake -G "Visual Studio 17 2022" -A x64 -T v143 ..
-        cmake --build . --config Release -- /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true
+        cd AntiAFK-RBX
+        msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true
 
     - name: Set Release Tag
       id: release_date
@@ -144,6 +219,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build64/Release/AntiAFK-RBX.exe
+        asset_path: AntiAFK-RBX/x64/Release/AntiAFK-RBX.exe
         asset_name: AntiAFK-RBX.exe
         asset_content_type: application/octet-stream
