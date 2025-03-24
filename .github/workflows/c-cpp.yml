@@ -41,7 +41,8 @@ jobs:
           add_compile_options(/utf-8)
         endif()
         
-        add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})' > CMakeLists.txt
+        add_executable(AntiAFK-RBX WIN32 AntiAFK-RBX.cpp ${RESOURCE_FILES})
+        target_link_libraries(AntiAFK-RBX wininet dwmapi)' > CMakeLists.txt
 
     - name: Build 64-bit version
       run: |
