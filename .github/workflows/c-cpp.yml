@@ -51,7 +51,7 @@ jobs:
         mkdir build64
         cd build64
         cmake -G "Visual Studio 17 2022" -A x64 -T v143 ..
-        cmake --build . --config Release
+        cmake --build . --config Release -- /p:RuntimeLibrary=MultiThreaded /p:WholeProgramOptimization=true
 
     - name: Set Release Tag
       id: release_date
