@@ -36,14 +36,14 @@
 
 
 <kbd align="left">
-𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜<h4> </h4>
+𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈<h4> </h4>
 <h4>
 
 * | Wiki -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki) <br>
 * | Tips To Use -> [[Click | Wiki>T-F-U!]](https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use) <br>
 * | UserSafe -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki/User%E2%80%90Safe-mode) <br>
 </h4><h3></h3>
-𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜</kbd>
+𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈</kbd>
 <h2 align="center">  </h2>
 
 <div align="center"><kbd align="left">
