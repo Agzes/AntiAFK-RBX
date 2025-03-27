@@ -22,30 +22,38 @@
 <br>𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲</kbd>
 </kbd></div>
 
-<div align="center"><kbd align="left">
 
-> 📦 To run multi-instance for Roblox: \
-> &nbsp;&nbsp;&nbsp;&nbsp;1 | Close all roblox instance \
-> &nbsp;&nbsp;&nbsp;&nbsp;2 | Enable multi-instance support in AntiAFK-RBX tray menu \
-> &nbsp;&nbsp;&nbsp;&nbsp;3 | Run Roblox instance without limit!
-</kbd>
+<div align="center"><kbd align="left">
+𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘<h4> </h4>
+<h4>
+
+* | To use Multi-Instance -> close all roblox instance, then ⤵ <br>
+* | -> enable multi-instance support in AntiAFK-RBX tray menu ⤵  <br>
+* | -> run Roblox instance without limit! <br>
+</h4><h3></h3>
+𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘</kbd>
+
+
 
 <kbd align="left">
+𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜<h4> </h4>
+<h4>
 
-> 💡 See wiki and Tips: \
-> &nbsp;&nbsp;&nbsp;&nbsp;1 | Wiki -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki) \
-> &nbsp;&nbsp;&nbsp;&nbsp;2 | Tips To Use -> [[Click | Wiki>T-F-U!]](https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use) \
-> &nbsp;&nbsp;&nbsp;&nbsp;3 | UserSafe -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki/User%E2%80%90Safe-mode)
-</kbd>
+* | Wiki -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki) <br>
+* | Tips To Use -> [[Click | Wiki>T-F-U!]](https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use) <br>
+* | UserSafe -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki/User%E2%80%90Safe-mode) <br>
+</h4><h3></h3>
+𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜</kbd>
 <h2 align="center">  </h2>
 
-<div align="center"><kbd align="left"><br>
+<div align="center"><kbd align="left">
+𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘<h4> </h4>
+<h4>
 
-> 🛡️ Compile and License <br><br>
 ⚙️ How to comile? <a url="https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md">https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md</a> <br><br>
 🛡️ MIT License: <a url="https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE"> https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE</a>
-<br><br>
-</kbd>
+</h4><h3></h3>
+𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘</kbd>
 
 <h2 align="center">  </h2>
 
@@ -61,4 +69,4 @@ https://github.com/user-attachments/assets/1f990133-a922-424f-ab9a-2f9fe94f5236 
 
 
 <br><br>
-<kbd>✨ Beta 𝘃𝗲𝗿𝘀𝗶𝗼𝗻 𝗳𝗼𝗿 𝗥𝗘𝗔𝗗𝗠𝗘</kbd>
+<kbd>✨ 𝗕𝗲𝘁𝗮 𝘃𝗲𝗿𝘀𝗶𝗼𝗻 𝗳𝗼𝗿 𝗥𝗘𝗔𝗗𝗠𝗘</kbd>
