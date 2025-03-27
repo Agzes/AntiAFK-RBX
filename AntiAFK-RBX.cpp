@@ -70,7 +70,7 @@ std::condition_variable g_cv;
 std::mutex g_cv_m;
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX");
 constexpr DWORD ACTION_DELAY = 30, ALT_DELAY = 15;
-int g_selectedTime = 9;
+int g_selectedTime = 540;
 int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
 HANDLE g_hMultiInstanceMutex = NULL;
 
