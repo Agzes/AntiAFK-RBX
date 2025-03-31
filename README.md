@@ -57,7 +57,8 @@
 
 <h2 align="center">  </h2>
 
-<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd> <br> <img width="auto" height="auto" src="https://visit-counter.vercel.app/counter.png?page=github.com%2FAgzes-ANTIAFK-RBX&s=40&c=e2231a&bg=00000000&no=2&ff=digi&tb=&ta="> </h5>
+<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd> <br> <img width="auto" height="auto" src="https://visit-counter.vercel.app/counter.png?page=github.com%2FAgzes-ANTIAFK-RBX-v2-2&s=40&c=e2231a&bg=00000000&no=2&ff=digi&tb=&ta="> <br>
+<kbd>visit counter since 31.03.25 </kbd> </h5>
 
 
 <div align="center"> <kbd>With</kbd> <kbd>❤️</kbd> <kbd>by</kbd> <kbd>Agzes</kbd> </div>
