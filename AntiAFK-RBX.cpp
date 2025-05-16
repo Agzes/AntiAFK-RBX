@@ -34,6 +34,7 @@ using namespace std::chrono_literals;
 #define ID_MULTI_SUPPORT 11
 #define ID_FISHSTRAP_SUP 12
 #define ID_UPDATE_AVAILABLE 1000
+#define ID_ANNOUNCEMENT_TEXT 1001
 
 #define ID_SETTINGS_MENU 30
 #define ID_AUTO_UPDATE 32
@@ -73,6 +74,19 @@ constexpr DWORD ACTION_DELAY = 30, ALT_DELAY = 15;
 int g_selectedTime = 540;
 int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
 HANDLE g_hMultiInstanceMutex = NULL;
+std::atomic<bool> g_userActive(false); // User-Safe mode
+std::atomic<uint64_t> g_lastActivityTime(0);
+const int USER_INACTIVITY_WAIT = 3;
+const int MAX_WAIT_TIME = 60;
+std::thread g_activityMonitorThread;
+std::atomic<bool> g_monitorThreadRunning(false);
+std::atomic<bool> g_updateInterval(false);
+bool announcement_isEnabled = false;
+bool announcement_isWithNotify = false;
+std::string announcementText;
+std::string announcementLabel;
+std::string announcementLink;
+std::string announcementID;
 
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
 HICON CreateCustomIcon();
@@ -294,7 +308,6 @@ void ShowAllRobloxWindows_Multi()
 
 void AntiAFK_Action(HWND target)
 {
-    Sleep(ACTION_DELAY);
     switch (g_selectedAction)
     {
     case 0: // Space
@@ -321,7 +334,6 @@ void AntiAFK_Action(HWND target)
         keybd_event('O', MapVirtualKey('O', 0), KEYEVENTF_KEYUP, 0);
         break;
     }
-    Sleep(ACTION_DELAY);
 }
 
 void SaveSettings()
@@ -387,8 +399,6 @@ void DisableMultiInstanceSupport()
     }
 }
 
-std::atomic<bool> g_updateInterval(false);
-
 void CreateTrayMenu(bool afk)
 {
     if (g_hMenu)
@@ -402,7 +412,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, L"[Link] - SourceForge");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)InfoMenu, L"AntiAFK-RBX by Agzes");
 
-    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, L"Beta: v.2.2 | With ❤️");
+    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, L"Beta: v.2.2.1 | With ❤️");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EMULATE_SPACE, L"Test Anti-AFK move");
     AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
@@ -450,6 +460,10 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
         AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⭳] • Update Available");
+    if (announcement_isEnabled && !announcementLabel.empty())
+        AppendMenu(g_hMenu, MF_STRING, ID_ANNOUNCEMENT_TEXT, std::wstring(announcementLabel.begin(), announcementLabel.end()).c_str());
+    if (announcement_isEnabled && !announcementLabel.empty())
+        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
 }
 
@@ -484,12 +498,116 @@ void CheckForUpdates(bool showNotification = true)
     }
 }
 
-std::atomic<bool> g_userActive(false); // User-Safe mode BETA
-std::atomic<uint64_t> g_lastActivityTime(0);
-const int USER_INACTIVITY_WAIT = 3; 
-const int MAX_WAIT_TIME = 60;       
-std::thread g_activityMonitorThread;
-std::atomic<bool> g_monitorThreadRunning(false);
+void CheckForAnnouncement()
+{
+    std::string configPath = "Software\\Agzes\\AntiAFK-RBX";
+    int announcementID = 0;
+    const wchar_t *urls[] = {
+        L"https://raw.githubusercontent.com/Agzes/AHK-FOR-RPM/refs/heads/main/!Announcement/ID",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isEnabled",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isEveryRun",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isNotify",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/label",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/link",
+        L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/text",};
+
+    HINTERNET hInternet = InternetOpen(L"AntiAFK-RBX/2.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet)
+        return;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        HINTERNET hConnect = InternetOpenUrl(hInternet, urls[i], NULL, 0, INTERNET_FLAG_RELOAD, 0);
+        if (!hConnect)
+            continue;
+
+        char buffer[1024] = {0};
+        DWORD bytesRead = 0;
+        InternetReadFile(hConnect, buffer, sizeof(buffer) - 1, &bytesRead);
+        InternetCloseHandle(hConnect);
+
+        if (bytesRead > 0)
+        {
+            buffer[bytesRead] = 0;
+            switch (i) {
+                case 0: { 
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcementID = atoi(buffer);
+                    break;
+                }
+                case 1: {
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcement_isEnabled = (buffer[0] == '1');
+                    break;
+                }
+                case 2: {
+                    if (strcmp(buffer, "ERROR") != 0) {
+                        bool isEveryRun = (buffer[0] == '1');
+                        if (!isEveryRun) {
+                            HKEY hKey;
+                            DWORD currentID = 0;
+                            DWORD dataSize = sizeof(DWORD);
+                            if (RegOpenKeyExA(HKEY_CURRENT_USER, configPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+                                RegQueryValueExA(hKey, "IDForAnnouncement", NULL, NULL, (LPBYTE)&currentID, &dataSize);
+                                RegCloseKey(hKey);
+                            }
+                            if (announcementID <= currentID) {
+                                InternetCloseHandle(hInternet);
+                                return;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case 3: {
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcement_isWithNotify = (buffer[0] == '1');
+                    break;
+                }
+                case 4: {
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcementLabel = buffer;
+                    break;
+                }
+                case 5: {
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcementLink = buffer;
+                    break;
+                }
+                case 6: {
+                    if (strcmp(buffer, "ERROR") != 0)
+                        announcementText = buffer;
+                    break;
+                }
+            }
+        }
+    }
+
+    InternetCloseHandle(hInternet);
+
+    if (announcement_isEnabled) {
+        if (announcement_isWithNotify) {
+            /* if (announcementLink == "None") {
+                MessageBox(NULL, std::wstring(announcementText.begin(), announcementText.end()).c_str(), std::wstring(announcementLabel.begin(), announcementLabel.end()).c_str(), MB_OK);
+            } else {
+                int result = MessageBox(NULL, std::wstring(announcementText.begin(), announcementText.end()).c_str(), std::wstring(announcementLabel.begin(), announcementLabel.end()).c_str(), MB_YESNO);
+                if (result == IDYES) {
+                    ShellExecute(NULL, L"open", std::wstring(announcementLink.begin(), announcementLink.end()).c_str(), NULL, NULL, SW_SHOWNORMAL);
+                }
+            } */
+
+            ShowTrayNotification(std::wstring(announcementLabel.begin(), announcementLabel.end()).c_str(), std::wstring(announcementText.begin(), announcementText.end()).c_str());                
+        }
+
+        HKEY hKey;
+        if (RegCreateKeyExA(HKEY_CURRENT_USER, configPath.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+            RegSetValueExA(hKey, "IDForAnnouncement", 0, REG_DWORD, (const BYTE *)&announcementID, sizeof(DWORD));
+            RegCloseKey(hKey);
+        }
+
+        CreateTrayMenu(g_isAfkStarted.load());
+    }
+}
 
 void MonitorUserActivity()
 {
@@ -560,7 +678,7 @@ void main_thread()
     {
         StartActivityMonitor();
     }
-    
+    CheckForAnnouncement();
 
     while (!g_stopThread.load())
     {
@@ -616,7 +734,7 @@ void main_thread()
                     }
                 }
 
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 3; i++)  
                 {
                     if (g_multiSupport.load())
                     {
@@ -630,7 +748,6 @@ void main_thread()
                             SetForegroundWindow(w);
                             for (int i = 0; i < 3; i++)
                             {
-                                Sleep(ACTION_DELAY);
                                 AntiAFK_Action(w);
                             }
                             if (wasMinimized)
@@ -942,6 +1059,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_selectedAction = LOWORD(wParam) - ID_ACTION_SPACE;
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_ANNOUNCEMENT_TEXT:
+            ShellExecute(NULL, L"open", std::wstring(announcementLink.begin(), announcementLink.end()).c_str(), NULL, NULL, SW_SHOWNORMAL);
+            ShowTrayNotification(L"AntiAFK-RBX", L"Link opened.");
             break;
         case ID_EXIT:
             ShowAllRobloxWindows_Multi();
