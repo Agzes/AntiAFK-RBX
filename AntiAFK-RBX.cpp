@@ -1,7 +1,7 @@
 // AntiAFK-RBX.cpp | The program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. | By Agzes
 // https://github.com/Agzes/AntiAFK-RBX
 
-int currentVersion = 4;
+int currentVersion = 5;
 
 #include <windows.h>
 #include <shellapi.h>
