@@ -1,7 +1,7 @@
 // AntiAFK-RBX.cpp | The program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. | By Agzes
 // https://github.com/Agzes/AntiAFK-RBX
 
-int currentVersion = 5;
+int currentVersion = 6;
 
 #include <windows.h>
 #include <shellapi.h>
@@ -503,7 +503,7 @@ void CheckForAnnouncement()
     std::string configPath = "Software\\Agzes\\AntiAFK-RBX";
     int announcementID = 0;
     const wchar_t *urls[] = {
-        L"https://raw.githubusercontent.com/Agzes/AHK-FOR-RPM/refs/heads/main/!Announcement/ID",
+        L"https://raw.githubusercontent.com/Agzes/AHK-FOR-RPM/refs/heads/main/Announcement/ID",
         L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isEnabled",
         L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isEveryRun",
         L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/isNotify",
@@ -671,14 +671,20 @@ void StopActivityMonitor()
 }
 
 void main_thread()
-{
-    if (g_autoUpdate.load())
-        CheckForUpdates();
+{   
+    if (g_autoUpdate.load()) {
+        try {
+            CheckForUpdates();
+        } catch (...) {}
+    }
     if (g_userSafe.load())
     {
         StartActivityMonitor();
     }
-    CheckForAnnouncement();
+    try {
+        CheckForAnnouncement();
+    } catch (...) {}
+    
 
     while (!g_stopThread.load())
     {
