@@ -6,19 +6,19 @@
 <kbd>
 <kbd><img width="auto" height="auto" src="https://github.com/user-attachments/assets/863d5cfb-efa3-40c0-b9e9-d3827e16489b"> </kbd>
 <kbd> 𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒  <br><br><br> 
-🪶 lightwight: takes up less than ⁓50Kb of disk space <br> <br> 
-⏩ fast: optimized and written in c++ , compile with optimization!<br> <br> 
-🪶 not demaning: requires <2MB of RAM, almost no CPU required, no disk <br> <br> 
-👁️ hides game: allow you to completely hide the game window [wiki]     <br> <br> 
-📂 open-source: has open source code on github [in this repository fr] <br> <br> 
-👁️ without focus: does not require your focus on the game window [wiki]<br> <br> 
-🛡️ safe: completely safe to use, uses only safe approaches to anti-afk <br> <br> 
-🌑 dark-theme: has full dark style theme for menu in tray (system) [!] <br> <br> 
-📦 multi-instance: make multi-instance roblox possible and support it  <br> <br> 
-🛡️ user-safe: which makes antiafk move even more descreet [wiki] [2.2] <br> <br>
-⚙️ settings: change action his interval, supports and other (auto-save)<br> <br>
-🚀 all-in-one: you don't need to install multi-instance app or other   <br> <br>
-🛠️ stable: the main task of AntiAFK-RBX is stability, no kick, no lag  <br> <br>
+⏩ fast: optimized and written in c++ <br><br>
+🪶 lightweight: takes up less than ⁓55Kb of disk space <br><br>
+👁️ without focus: does not require your focus on the game window <br><br>
+🚀 all-in-one: you don't need to install multi-instance app or other <br><br>
+🛡️ user-safe: which makes antiafk move even more discreet [wiki] [2.2] <br><br>
+⚙️ settings: change action his interval, supports and other (auto-save) <br><br>
+📦 multi-instance: make multi-instance roblox possible and support it [#6] <br><br>
+🪶 not demanding: requires <2MB of RAM, almost no CPU required, no disk <br><br>
+🛡️ safe: completely safe to use, uses only safe approaches to anti-afk <br><br>
+🛠️ stable: the main task of AntiAFK-RBX is stability, no kick, no lag <br><br>
+🌑 dark-theme: has a completely dark theme for the system tray menu <br><br>
+👁️ hides game: allow you to completely hide the game window <br><br>
+📂 open-source: has open source code on github <br><br>
 <br>𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲</kbd>
 </kbd></div>
 
@@ -46,14 +46,66 @@
 𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈</kbd>
 <h2 align="center">  </h2>
 
-<div align="center"><kbd align="left">
-𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘<h4> </h4>
-<h4>
 
-⚙️ How to comile? <a url="https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md">https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md</a> <br><br>
-🛡️ MIT License: <a url="https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE"> https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE</a>
-</h4><h3></h3>
-𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘//𝐂𝐎𝐌𝐏𝐈𝐋𝐄//𝗟𝗜𝗖𝗘𝗡𝗦𝗘</kbd>
+<!-- Download widget -->
+<div align="center">
+<kbd>
+
+# [⭳] • Downloads
+
+<br>&nbsp;&nbsp;<a href="https://github.com/Agzes/AntiAFK-RBX/releases/latest"><kbd>
+<kbd>🌐</kbd><kbd></kbd><kbd>GitHub Releases</kbd><kbd></kbd><kbd>Agzes/AntiAFK-RBX</kbd><br><br><br>
+<kbd> [⭳] • 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱 𝗡𝗼𝘄 </kbd><br><br><br></a>&nbsp;&nbsp;
+<br><br><br>
+<details><summary> <b> 📂 | Click to open other sources</b> </summary>
+<br><br>
+<kbd>
+<br>SourceForge - AntiAFK-RBX <br><br>
+
+[![Download AntiAFK-RBX](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/antiafk-rbx/files/latest/download)
+
+[sourceforge.net/projects/antiafk-rbx/](https://sourceforge.net/projects/antiafk-rbx/)
+</details>
+</kbd>
+</div>
+<!-- Download widget -->
+
+
+<br><div align="center">
+
+  <kbd>
+  <a href="https://github.com/Agzes/AntiAFK-RBX/wiki">
+
+#  [𝗪𝗶𝗸𝗶](https://github.com/Agzes/AntiAFK-RBX/wiki)
+&nbsp; [<kbd> Not run? </kbd>](https://github.com/Agzes/AntiAFK-RBX/wiki/Errors-With-Run)<kbd></kbd>[<kbd> Tips For Use </kbd>](https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use)<kbd></kbd>[<kbd> User-Safe </kbd>](https://github.com/Agzes/AntiAFK-RBX/wiki/User%E2%80%90Safe-mode) &nbsp;
+
+
+  </a>
+  </kbd>&nbsp;&nbsp;&nbsp;
+<kbd><a href="https://github.com/Agzes/AntiAFK-RBX/issues">
+
+# [𝗜𝘀𝘀𝘂𝗲𝘀](https://github.com/Agzes/AntiAFK-RBX/issues)
+&nbsp; [<kbd> If you have questions, problems, or ideas, write issue! </kbd>](https://github.com/Agzes/AntiAFK-RBX/issues) &nbsp;
+
+</a></kbd>
+
+</kbd>
+
+&nbsp;
+
+<div align="center">
+  <kbd>
+
+# &nbsp; [🛡️ 𝗠𝗜𝗧 𝗟𝗶𝗰𝗲𝗻𝘀𝗲](https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE) &nbsp;
+
+  </kbd>
+  &nbsp;&nbsp;&nbsp;
+  <kbd>
+
+#  &nbsp; [⚙️ 𝗛𝗼𝘄 𝘁𝗼 𝗰𝗼𝗺𝗶𝗹𝗲?](https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md) &nbsp;
+
+  </kbd>
+</kbd>
 
 <h2 align="center">  </h2>
 
