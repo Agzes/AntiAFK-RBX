@@ -1,3 +1,11 @@
-# Announcement in AntiAFK-RBX
-This a folder for Announcement in AntiAFK-RBX
-Announcement maybe used for discord server, updates and etc.
+<div align="center"> 
+
+`📂 • This folder is used for Announcements in AntiAFK-RBX.` 
+
+
+<br>
+
+# 📢 Announcements in AntiAFK-RBX
+Announcements are used to notify about known bugs, updates, tips for use, and more
+
+</div>
