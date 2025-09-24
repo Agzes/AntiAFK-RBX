@@ -7,13 +7,13 @@
 <kbd><img width="auto" height="auto" src="https://github.com/user-attachments/assets/863d5cfb-efa3-40c0-b9e9-d3827e16489b"> </kbd>
 <kbd> 𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒  <br><br><br> 
 ⏩ fast: optimized and written in c++ <br><br>
-🪶 lightweight: takes up less than ⁓55Kb of disk space <br><br>
+🪶 lightweight: takes up less than ⁓85Kb of disk space <br><br>
 👁️ without focus: does not require your focus on the game window <br><br>
 🚀 all-in-one: you don't need to install multi-instance app or other <br><br>
 🛡️ user-safe: which makes antiafk move even more discreet [wiki] [2.2] <br><br>
 ⚙️ settings: change action his interval, supports and other (auto-save) <br><br>
 📦 multi-instance: make multi-instance roblox possible and support it [#6] <br><br>
-🪶 not demanding: requires <2MB of RAM, almost no CPU required, no disk <br><br>
+🪶 not demanding: requires <4MB of RAM, almost no CPU required, no disk <br><br>
 🛡️ safe: completely safe to use, uses only safe approaches to anti-afk <br><br>
 🛠️ stable: the main task of AntiAFK-RBX is stability, no kick, no lag <br><br>
 🌑 dark-theme: has a completely dark theme for the system tray menu <br><br>
@@ -102,7 +102,7 @@
   &nbsp;&nbsp;&nbsp;
   <kbd>
 
-#  &nbsp; [⚙️ 𝗛𝗼𝘄 𝘁𝗼 𝗰𝗼𝗺𝗶𝗹𝗲?](https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md) &nbsp;
+#  &nbsp; [⚙️ 𝗛𝗼𝘄 𝘁𝗼 𝗰𝗼𝗺𝗽𝗶𝗹𝗲?](https://github.com/Agzes/AntiAFK-RBX/blob/main/Wiki/how-to-compile.md) &nbsp;
 
   </kbd>
 </kbd>
