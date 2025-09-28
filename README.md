@@ -109,11 +109,13 @@
 
 <h2 align="center">  </h2>
 
-<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd> <br> <img width="auto" height="auto" src="https://visit-counter.vercel.app/counter.png?page=github.com%2FAgzes-ANTIAFK-RBX-v2-2&s=40&c=e2231a&bg=00000000&no=2&ff=digi&tb=&ta="> <br>
-<kbd>visit counter since 31.03.25 </kbd> </h5>
+<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd>
+  
+<!-- <br> <img width="auto" height="auto" src="https://visit-counter.vercel.app/counter.png?page=github.com%2FAgzes-ANTIAFK-RBX-v2-2&s=40&c=e2231a&bg=00000000&no=2&ff=digi&tb=&ta="> <br>
+<kbd>visit counter since 31.03.25 </kbd> --> </h5>
 
 
-<div align="center"> <kbd>With</kbd> <kbd>❤️</kbd> <kbd>by</kbd> <kbd>Agzes</kbd> </div>
+
 
 
 <!-- https://github.com/user-attachments/assets/2ecd83fb-2455-428d-ae77-116667c3dd93
@@ -122,5 +124,6 @@ https://github.com/user-attachments/assets/1f990133-a922-424f-ab9a-2f9fe94f5236 
 
 
 <br><br>
+<div align="center"> <kbd>With</kbd> <kbd>❤️</kbd> <kbd>by</kbd> <kbd>Agzes</kbd> </div>
 <kbd>pls ⭐ project!</kbd><br>
-<kbd>✨ 𝗕𝗲𝘁𝗮 𝘃𝗲𝗿𝘀𝗶𝗼𝗻 𝗳𝗼𝗿 𝗥𝗘𝗔𝗗𝗠𝗘</kbd>
+<!-- <kbd>✨ 𝗕𝗲𝘁𝗮 𝘃𝗲𝗿𝘀𝗶𝗼𝗻 𝗳𝗼𝗿 𝗥𝗘𝗔𝗗𝗠𝗘</kbd>-->
