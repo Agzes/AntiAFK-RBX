@@ -12,124 +12,144 @@ int currentVersion = 8; // v.2.2.2
 #include <condition_variable>
 #include <mutex>
 #include <vector>
-#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <dwmapi.h>
 #include <winreg.h>
 #include <WinInet.h>
-
 #pragma comment(lib, "WinInet.lib")
+
 
 using namespace std::chrono_literals;
 
-#define ID_TRAY_ICON 1
-#define ID_EXIT 2
+
+#define ID_TRAY_ICON 0
+#define ID_INFORMATION 1
+#define ID_EMULATE_SPACE 2
 #define ID_START_AFK 3
 #define ID_STOP_AFK 4
+#define ID_TIME_SUBMENU 100
+#define ID_ACTION_SUBMENU 200
 #define ID_SHOW_WINDOW 5
 #define ID_HIDE_WINDOW 6
-#define ID_INFORMATION 9
-#define ID_EMULATE_SPACE 10
-#define ID_MULTI_SUPPORT 11
-#define ID_FISHSTRAP_SUP 12
+#define ID_SETTINGS_MENU 300
+#define ID_MULTI_SUPPORT 7
+#define ID_EXIT 8
+
+#define ID_ABOUT_MENU 1011
+#define ID_SHOW_TUTORIAL 1012
+#define ID_LINKWIKI_TUTORIAL 1001
+#define ID_LINKWIKI 1002
+#define ID_LINKGITHUB 1003
+#define ID_LINKSF 1004
+#define ID_LINKTTU 1005
+
+#define ID_TIME_CUSTOM 101
+#define ID_TIME_3 103
+#define ID_TIME_6 106
+#define ID_TIME_9 109
+#define ID_TIME_11 111
+#define ID_TIME_13 113
+#define ID_TIME_15 115
+#define ID_TIME_18 118
+
+#define ID_ACTION_SPACE 201
+#define ID_ACTION_WS 202
+#define ID_ACTION_ZOOM 203
+
+#define ID_FISHSTRAP_SUP 301
+#define ID_AUTO_UPDATE 302
+#define ID_USER_SAFE 303
+#define ID_AUTO_START_AFK 304
+#define ID_RESET_SETTINGS 305
+
 #define ID_UPDATE_AVAILABLE 1000
 #define ID_ANNOUNCEMENT_TEXT 1001
 
-#define ID_SETTINGS_MENU 30
-#define ID_RESET_SETTINGS 31
-#define ID_AUTO_UPDATE 32
-#define ID_USER_SAFE 33
-#define ID_AUTO_START_AFK 34
-
-#define ID_TIME_SUBMENU 13
-#define ID_ACTION_SUBMENU 14
-#define ID_TIME_3 15
-#define ID_TIME_6 16
-#define ID_TIME_9 17
-#define ID_TIME_11 18
-#define ID_TIME_13 19
-#define ID_TIME_15 20
-#define ID_TIME_18 21
-#define ID_ACTION_SPACE 22
-#define ID_ACTION_WS 23
-#define ID_ACTION_ZOOM 24
-#define ID_TIME_5_SEC 25
-#define ID_TIME_20_SEC 26
-#define ID_TIME_CUSTOM 27
-#define ID_ABOUT_MENU 28
-#define ID_SHOW_TUTORIAL 29
 #define ID_EDIT_SECONDS 1100
-#define ID_BTN_GITHUB 1103
-#define ID_BTN_CLOSE_ABOUT 1104
+#define ID_BTN_GITHUB 1101
+#define ID_BTN_CLOSE_ABOUT 1102
 #define ID_BTN_NEXT 1201
 #define ID_BTN_BACK 1202
 #define ID_BTN_SKIP 1203
 
-#define ID_LINKWIKI_TUTORIAL 205
-#define ID_LINKWIKI 201
-#define ID_LINKGITHUB 202
-#define ID_LINKSF 203
-#define ID_LINKTTU 204
 
-
-// Dev Mode -> added 5sec and 20sec to interval | can be turned on in code or in regedit
-std::atomic<bool> g_devMode(false);
 HWND g_hwnd;
 HINSTANCE g_hInst;
 NOTIFYICONDATA g_nid;
 HMENU g_hMenu;
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_userSafe(false), g_updateFound(false), g_autoStartAfk(false);
+HANDLE g_hMultiInstanceMutex = NULL;
+HWND g_hSplashWnd = NULL;
+
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_userSafe(false), g_updateFound(false), g_autoStartAfk(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false);
+std::string announcementText, announcementLabel, announcementLink, announcementID;
+std::atomic<uint64_t> g_lastActivityTime(0);
+std::thread g_activityMonitorThread;
 std::condition_variable g_cv;
 std::mutex g_cv_m;
+
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX");
+wchar_t g_splashStatus[128] = L"Initializing...";
 constexpr DWORD ACTION_DELAY = 30, ALT_DELAY = 15;
 int g_selectedTime = 540;
 int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
-HANDLE g_hMultiInstanceMutex = NULL;
-std::atomic<bool> g_userActive(false); // User-Safe mode
-std::atomic<uint64_t> g_lastActivityTime(0);
 const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
-std::thread g_activityMonitorThread;
-std::atomic<bool> g_monitorThreadRunning(false);
-std::atomic<bool> g_updateInterval(false);
-bool announcement_isEnabled = false;
-HWND g_hSplashWnd = NULL;
-wchar_t g_splashStatus[128] = L"Initializing...";
-bool announcement_isWithNotify = false;
-std::string announcementText;
-std::string announcementLabel;
-std::string announcementLink;
-std::string announcementID;
-
-std::atomic<bool> g_tutorialShown(false);
-
+bool announcement_isWithNotify = false, announcement_isEnabled = false;
 const COLORREF DARK_BG = RGB(30, 30, 30);
 const COLORREF DARK_TEXT = RGB(235, 235, 235);
 const COLORREF DARK_EDIT_BG = RGB(45, 45, 45);
 
-LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
-HICON CreateCustomIcon();
-LRESULT CALLBACK CustomIntervalWndProc(HWND, UINT, WPARAM, LPARAM);
-void ShowCustomIntervalDialog(HWND);
-LRESULT CALLBACK AboutWndProc(HWND, UINT, WPARAM, LPARAM);
-void ShowAboutDialog(HWND);
-LRESULT CALLBACK SplashWndProc(HWND, UINT, WPARAM, LPARAM);
-void CreateSplashScreen(HINSTANCE);
-void UpdateSplashStatus(const wchar_t*);
-void ResetSettings();
-void DrawThemedButton(LPDRAWITEMSTRUCT dis, bool isPrimary);
+struct EnumWindowsData
+{
+    DWORD processId;
+    bool includeHidden;
+    std::vector<HWND>* wins;
+};
 
-LRESULT CALLBACK TutorialWndProc(HWND, UINT, WPARAM, LPARAM);
-void ShowTutorialDialog(HWND);
+struct DarkMessageBoxParams
+{
+    const wchar_t* text;
+    UINT type;
+    int* result;
+};
+
+HICON CreateCustomIcon();
 HICON CreateCustomIconWithState(bool isOn, bool multi);
 
-void UpdateSplashStatus(const wchar_t* status)
+void ApplyDarkMode(HWND hWnd, bool enable)
 {
-    if (g_hSplashWnd)
+    HMODULE hUxTheme = GetModuleHandle(L"uxtheme.dll");
+    if (hUxTheme)
     {
-        PostMessage(g_hSplashWnd, WM_APP + 1, (WPARAM)status, 0);
+        typedef int(WINAPI* SetPreferredAppModeFunc)(int);
+        typedef void(WINAPI* FlushMenuThemesFunc)(void);
+        SetPreferredAppModeFunc SetPreferredAppMode = (SetPreferredAppModeFunc)GetProcAddress(hUxTheme, (LPCSTR)135);
+        FlushMenuThemesFunc FlushMenuThemes = (FlushMenuThemesFunc)GetProcAddress(hUxTheme, (LPCSTR)136);
+        if (SetPreferredAppMode && FlushMenuThemes)
+        {
+            int mode = enable ? 2 : 0;
+            SetPreferredAppMode(mode);
+            FlushMenuThemes();
+        }
+    }
+    HMODULE hDwm = LoadLibrary(L"dwmapi.dll");
+    if (hDwm)
+    {
+        typedef HRESULT(WINAPI* DwmSetWindowAttributeFunc)(HWND, DWORD, LPCVOID, DWORD);
+        DwmSetWindowAttributeFunc DwmSetWindowAttributePtr = (DwmSetWindowAttributeFunc)GetProcAddress(hDwm, "DwmSetWindowAttribute");
+        if (DwmSetWindowAttributePtr)
+        {
+            const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+            BOOL dark = enable ? TRUE : FALSE;
+            HRESULT hr = DwmSetWindowAttributePtr(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+            if (FAILED(hr))
+            {
+                const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE_FALLBACK = 19;
+                DwmSetWindowAttributePtr(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE_FALLBACK, &dark, sizeof(dark));
+            }
+        }
+        FreeLibrary(hDwm);
     }
 }
 
@@ -233,7 +253,8 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         RECT note_rect = { 0, 170, clientRect.right, clientRect.bottom };
         DrawTextW(hdc, g_splashStatus, -1, &note_rect, DT_CENTER | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
-        TEXTMETRIC tm13; GetTextMetrics(hdc, &tm13);
+        TEXTMETRIC tm13;
+        GetTextMetrics(hdc, &tm13);
         SelectObject(hdc, hFont10);
         RECT version_rect = clientRect;
         version_rect.bottom = clientRect.bottom - 7 - 17;
@@ -248,79 +269,42 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         EndPaint(hwnd, &ps);
         break;
     }
-    case WM_CLOSE: DestroyWindow(hwnd); break;
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        break;
     case WM_DESTROY:
-        if (hFont28) { DeleteObject(hFont28); hFont28 = NULL; }
-        if (hFont12b) { DeleteObject(hFont12b); hFont12b = NULL; }
-        if (hFont12) { DeleteObject(hFont12); hFont12 = NULL; }
-        if (hFont10) { DeleteObject(hFont10); hFont10 = NULL; }
+        if (hFont28)
+        {
+            DeleteObject(hFont28);
+            hFont28 = NULL;
+        }
+        if (hFont12b)
+        {
+            DeleteObject(hFont12b);
+            hFont12b = NULL;
+        }
+        if (hFont12)
+        {
+            DeleteObject(hFont12);
+            hFont12 = NULL;
+        }
+        if (hFont10)
+        {
+            DeleteObject(hFont10);
+            hFont10 = NULL;
+        }
         g_hSplashWnd = NULL;
         break;
-    default: return DefWindowProc(hwnd, msg, wParam, lParam);
+    default:
+        return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     return 0;
 }
 
-void ApplyDarkMode(HWND hWnd, bool enable)
+void UpdateSplashStatus(const wchar_t *status)
 {
-    HMODULE hUxTheme = GetModuleHandle(L"uxtheme.dll");
-    if (hUxTheme)
-    {
-        typedef int(WINAPI * SetPreferredAppModeFunc)(int);
-        typedef void(WINAPI * FlushMenuThemesFunc)(void);
-        SetPreferredAppModeFunc SetPreferredAppMode = (SetPreferredAppModeFunc)GetProcAddress(hUxTheme, (LPCSTR)135);
-        FlushMenuThemesFunc FlushMenuThemes = (FlushMenuThemesFunc)GetProcAddress(hUxTheme, (LPCSTR)136);
-        if (SetPreferredAppMode && FlushMenuThemes)
-        {
-            int mode = enable ? 2 : 0;
-            SetPreferredAppMode(mode);
-            FlushMenuThemes();
-        }
-    }
-    HMODULE hDwm = LoadLibrary(L"dwmapi.dll");
-    if (hDwm)
-    {
-        typedef HRESULT(WINAPI * DwmSetWindowAttributeFunc)(HWND, DWORD, LPCVOID, DWORD);
-        DwmSetWindowAttributeFunc DwmSetWindowAttributePtr = (DwmSetWindowAttributeFunc)GetProcAddress(hDwm, "DwmSetWindowAttribute");
-        if (DwmSetWindowAttributePtr)
-        {
-            const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-            BOOL dark = enable ? TRUE : FALSE;
-            HRESULT hr = DwmSetWindowAttributePtr(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-            if (FAILED(hr))
-            {
-                const DWORD DWMWA_USE_IMMERSIVE_DARK_MODE_FALLBACK = 19;
-                DwmSetWindowAttributePtr(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE_FALLBACK, &dark, sizeof(dark));
-            }
-        }
-        FreeLibrary(hDwm);
-    }
-}
-
-void CreateSplashScreen(HINSTANCE hInstance)
-{
-    const wchar_t SPLASH_CLASS_NAME[] = L"AntiAFK-RBX-Splash";
-    WNDCLASS wc = { 0 };
-    wc.lpfnWndProc = SplashWndProc;
-    wc.hInstance = hInstance;
-    wc.lpszClassName = SPLASH_CLASS_NAME;
-    wc.hbrBackground = CreateSolidBrush(DARK_BG);
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hIcon = CreateCustomIcon();
-    if (!RegisterClass(&wc)) return;
-
-    int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
-    int winW = 286, winH = 312;
-    int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
-
-    g_hSplashWnd = CreateWindowEx(WS_EX_TOPMOST, SPLASH_CLASS_NAME, L"AntiAFK-RBX", WS_POPUP | WS_CAPTION | WS_SYSMENU, x, y, winW, winH, NULL, NULL, hInstance, NULL);
-
     if (g_hSplashWnd)
-    {
-        ApplyDarkMode(g_hSplashWnd, true);
-        ShowWindow(g_hSplashWnd, SW_SHOW);
-        UpdateWindow(g_hSplashWnd);
-    }
+        PostMessage(g_hSplashWnd, WM_APP + 1, (WPARAM)status, 0);
 }
 
 LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -333,16 +317,21 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_CREATE:
     {
         ApplyDarkMode(hwnd, true);
-        if (!hbrBg) hbrBg = CreateSolidBrush(DARK_BG);
+        if (!hbrBg)
+            hbrBg = CreateSolidBrush(DARK_BG);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        if (!hFontTitle) hFontTitle = CreateFontW(-MulDiv(20, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        if (!hHelpColor) hHelpColor = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        if (!hFontText) hFontText = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        if (!hFontVersion) hFontVersion = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFontTitle)
+            hFontTitle = CreateFontW(-MulDiv(20, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        if (!hHelpColor)
+            hHelpColor = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        if (!hFontText)
+            hFontText = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFontVersion)
+            hFontVersion = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         const int dlgW = 300, dlgH = 352;
 
@@ -378,7 +367,8 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_ERASEBKGND:
     {
         HDC hdc = (HDC)wParam;
-        RECT rc; GetClientRect(hwnd, &rc);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
         FillRect(hdc, &rc, hbrBg);
         return 1;
     }
@@ -450,14 +440,61 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         DestroyWindow(hwnd);
         return 0;
     case WM_NCDESTROY:
-        if (hFontTitle) { DeleteObject(hFontTitle); hFontTitle = NULL; }
-        if (hFontText) { DeleteObject(hFontText); hFontText = NULL; }
-        if (hFontVersion) { DeleteObject(hFontVersion); hFontVersion = NULL; }
-        if (hHelpColor) { DeleteObject(hHelpColor); hHelpColor = NULL; }
-        if (hbrBg) { DeleteObject(hbrBg); hbrBg = NULL; }
+        if (hFontTitle)
+        {
+            DeleteObject(hFontTitle);
+            hFontTitle = NULL;
+        }
+        if (hFontText)
+        {
+            DeleteObject(hFontText);
+            hFontText = NULL;
+        }
+        if (hFontVersion)
+        {
+            DeleteObject(hFontVersion);
+            hFontVersion = NULL;
+        }
+        if (hHelpColor)
+        {
+            DeleteObject(hHelpColor);
+            hHelpColor = NULL;
+        }
+        if (hbrBg)
+        {
+            DeleteObject(hbrBg);
+            hbrBg = NULL;
+        }
         return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+void CreateSplashScreen(HINSTANCE hInstance)
+{
+    const wchar_t SPLASH_CLASS_NAME[] = L"AntiAFK-RBX-Splash";
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc = SplashWndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = SPLASH_CLASS_NAME;
+    wc.hbrBackground = CreateSolidBrush(DARK_BG);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hIcon = CreateCustomIcon();
+    if (!RegisterClass(&wc))
+        return;
+
+    int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
+    int winW = 286, winH = 312;
+    int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
+
+    g_hSplashWnd = CreateWindowEx(WS_EX_TOPMOST, SPLASH_CLASS_NAME, L"AntiAFK-RBX", WS_POPUP | WS_CAPTION | WS_SYSMENU, x, y, winW, winH, NULL, NULL, hInstance, NULL);
+
+    if (g_hSplashWnd)
+    {
+        ApplyDarkMode(g_hSplashWnd, true);
+        ShowWindow(g_hSplashWnd, SW_SHOW);
+        UpdateWindow(g_hSplashWnd);
+    }
 }
 
 void ShowAboutDialog(HWND owner)
@@ -465,7 +502,7 @@ void ShowAboutDialog(HWND owner)
     static bool registered = false;
     if (!registered)
     {
-        WNDCLASS wc = { 0 };
+        WNDCLASS wc = {0};
         wc.lpfnWndProc = AboutWndProc;
         wc.hInstance = g_hInst;
         wc.lpszClassName = L"AntiAFK-RBX-About";
@@ -475,8 +512,8 @@ void ShowAboutDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
     HWND h = CreateWindowEx(WS_EX_TOPMOST, L"AntiAFK-RBX-About",
-        L"About AntiAFK-RBX", WS_POPUP | WS_CAPTION | WS_SYSMENU,
-        CW_USEDEFAULT, CW_USEDEFAULT, 300, 352, owner, NULL, g_hInst, NULL);
+                            L"About AntiAFK-RBX", WS_POPUP | WS_CAPTION | WS_SYSMENU,
+                            CW_USEDEFAULT, CW_USEDEFAULT, 300, 352, owner, NULL, g_hInst, NULL);
     if (h)
     {
         ShowWindow(h, SW_SHOW);
@@ -497,13 +534,6 @@ void ShowTrayNotification(const wchar_t *title, const wchar_t *msg)
     Shell_NotifyIcon(NIM_MODIFY, &info);
 }
 
-struct EnumWindowsData
-{
-    DWORD processId;
-    bool includeHidden;
-    std::vector<HWND> *wins;
-};
-
 BOOL CALLBACK EnumWindowsProc(HWND h, LPARAM lParam)
 {
     auto *data = reinterpret_cast<EnumWindowsData *>(lParam);
@@ -513,12 +543,6 @@ BOOL CALLBACK EnumWindowsProc(HWND h, LPARAM lParam)
         (data->includeHidden || IsWindowVisible(h)))
         data->wins->push_back(h);
     return TRUE;
-}
-
-void UpdateTrayIcon()
-{
-    g_nid.hIcon = CreateCustomIcon();
-    Shell_NotifyIcon(NIM_MODIFY, &g_nid);
 }
 
 HICON CreateCustomIcon()
@@ -702,6 +726,82 @@ void AntiAFK_Action(HWND target)
     }
 }
 
+void EnableMultiInstanceSupport()
+{
+    if (!g_hMultiInstanceMutex)
+        g_hMultiInstanceMutex = CreateMutex(NULL, TRUE, L"ROBLOX_singletonEvent");
+}
+
+void DisableMultiInstanceSupport()
+{
+    if (g_hMultiInstanceMutex)
+    {
+        CloseHandle(g_hMultiInstanceMutex);
+        g_hMultiInstanceMutex = NULL;
+    }
+}
+
+void MonitorUserActivity()
+{
+    g_monitorThreadRunning = true;
+    g_lastActivityTime = GetTickCount64();
+    while (g_monitorThreadRunning)
+    {
+        bool activity = false;
+
+        for (int i = 1; i < 256 && !activity; i++)
+        {
+            if (GetAsyncKeyState(i) & 0x8000)
+            {
+                activity = true;
+            }
+        }
+
+        if (!activity && (GetAsyncKeyState(VK_LBUTTON) & 0x8000 ||
+            GetAsyncKeyState(VK_RBUTTON) & 0x8000 ||
+            GetAsyncKeyState(VK_MBUTTON) & 0x8000))
+        {
+            activity = true;
+        }
+
+        if (activity)
+        {
+            g_lastActivityTime = GetTickCount64();
+            g_userActive = true;
+        }
+        else
+        {
+            uint64_t currentTime = GetTickCount64();
+            if ((currentTime - g_lastActivityTime) / 1000 >= USER_INACTIVITY_WAIT)
+            {
+                g_userActive = false;
+            }
+        }
+        Sleep(100);
+    }
+}
+
+void StartActivityMonitor()
+{
+    if (!g_monitorThreadRunning)
+    {
+        if (g_activityMonitorThread.joinable())
+        {
+            g_activityMonitorThread.join();
+        }
+        g_activityMonitorThread = std::thread(MonitorUserActivity);
+    }
+}
+
+void StopActivityMonitor()
+{
+    g_monitorThreadRunning = false;
+    if (g_activityMonitorThread.joinable())
+    {
+        g_activityMonitorThread.join();
+    }
+}
+
 void SaveSettings()
 {
     HKEY hKey;
@@ -729,7 +829,7 @@ void SaveSettings()
 void LoadSettings()
 {
     HKEY hKey;
-    DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, devMode = 0, autoStartAfk = 0;
+    DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafe = 0, autoLimitRam = 0;
     DWORD tutorialShown = 0;
     DWORD dataSize = sizeof(DWORD);
@@ -740,7 +840,6 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"FishstrapSupport", NULL, NULL, (LPBYTE)&fishstrapSupport, &dataSize);
         RegQueryValueEx(hKey, L"SelectedTime", NULL, NULL, (LPBYTE)&selectedTime, &dataSize);
         RegQueryValueEx(hKey, L"SelectedAction", NULL, NULL, (LPBYTE)&selectedAction, &dataSize);
-        RegQueryValueEx(hKey, L"DevMode", NULL, NULL, (LPBYTE)&devMode, &dataSize); // DevMode
         RegQueryValueEx(hKey, L"AutoUpdate", NULL, NULL, (LPBYTE)&autoUpdate, &dataSize);
         RegQueryValueEx(hKey, L"UserSafe", NULL, NULL, (LPBYTE)&userSafe, &dataSize);
         RegQueryValueEx(hKey, L"AutoStartAfk", NULL, NULL, (LPBYTE)&autoStartAfk, &dataSize);
@@ -752,26 +851,34 @@ void LoadSettings()
     g_fishstrapSupport = fishstrapSupport;
     g_selectedTime = selectedTime;
     g_selectedAction = selectedAction;
-    g_devMode = devMode; // DevMode
     g_autoUpdate = autoUpdate;
     g_userSafe = userSafe;
     g_autoStartAfk = autoStartAfk;
     g_tutorialShown = tutorialShown;
 }
 
-void EnableMultiInstanceSupport()
+void ResetSettings()
 {
-    if (!g_hMultiInstanceMutex)
-        g_hMultiInstanceMutex = CreateMutex(NULL, TRUE, L"ROBLOX_singletonEvent");
-}
+    g_multiSupport = false;
+    g_fishstrapSupport = false;
+    g_selectedTime = 540;
+    g_selectedAction = 0;
+    g_autoUpdate = true;
+    g_userSafe = false;
+    g_autoStartAfk = false;
+    g_tutorialShown = false;
 
-void DisableMultiInstanceSupport()
-{
+    if (g_monitorThreadRunning.load())
+    {
+        StopActivityMonitor();
+    }
+
     if (g_hMultiInstanceMutex)
     {
-        CloseHandle(g_hMultiInstanceMutex);
-        g_hMultiInstanceMutex = NULL;
+        DisableMultiInstanceSupport();
     }
+
+    RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
 }
 
 void CreateTrayMenu(bool afk)
@@ -797,11 +904,6 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
 
     HMENU hTimeSubmenu = CreatePopupMenu();
-    if (g_devMode.load())
-    {
-        AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 5 ? MF_CHECKED : 0), ID_TIME_5_SEC, L"5 seconds [dev]");
-        AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 20 ? MF_CHECKED : 0), ID_TIME_20_SEC, L"20 seconds [dev]");
-    }
     AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, L"⏱️ Custom interval >");
     AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, L"3 minutes");
     AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, L"6 minutes");
@@ -848,14 +950,18 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
 }
 
+void UpdateTrayIcon()
+{
+    g_nid.hIcon = CreateCustomIcon();
+    Shell_NotifyIcon(NIM_MODIFY, &g_nid);
+}
+
 void CheckForUpdates(bool showNotification = true)
 {
     HINTERNET hInternet = InternetOpen(L"AntiAFK-RBX/2.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (!hInternet)
         return;
-    HINTERNET hConnect = InternetOpenUrl(hInternet,
-                                         L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/version",
-                                         NULL, 0, INTERNET_FLAG_RELOAD, 0);
+    HINTERNET hConnect = InternetOpenUrl(hInternet, L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/version", NULL, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hConnect)
         return;
     char buffer[16] = {0};
@@ -1004,89 +1110,6 @@ void CheckForAnnouncement()
 
         CreateTrayMenu(g_isAfkStarted.load());
     }
-}
-
-void MonitorUserActivity()
-{
-    g_monitorThreadRunning = true;
-    g_lastActivityTime = GetTickCount64();
-    while (g_monitorThreadRunning)
-    {
-        bool activity = false;
-
-        for (int i = 1; i < 256 && !activity; i++)
-        {
-            if (GetAsyncKeyState(i) & 0x8000)
-            {
-                activity = true;
-            }
-        }
-
-        if (!activity && (GetAsyncKeyState(VK_LBUTTON) & 0x8000 ||
-                          GetAsyncKeyState(VK_RBUTTON) & 0x8000 ||
-                          GetAsyncKeyState(VK_MBUTTON) & 0x8000))
-        {
-            activity = true;
-        }
-
-        if (activity)
-        {
-            g_lastActivityTime = GetTickCount64();
-            g_userActive = true;
-        }
-        else
-        {
-            uint64_t currentTime = GetTickCount64();
-            if ((currentTime - g_lastActivityTime) / 1000 >= USER_INACTIVITY_WAIT)
-            {
-                g_userActive = false;
-            }
-        }
-        Sleep(100);
-    }
-}
-
-void StartActivityMonitor()
-{
-    if (!g_monitorThreadRunning)
-    {
-        if (g_activityMonitorThread.joinable())
-        {
-            g_activityMonitorThread.join();
-        }
-        g_activityMonitorThread = std::thread(MonitorUserActivity);
-    }
-}
-
-void StopActivityMonitor()
-{
-    g_monitorThreadRunning = false;
-    if (g_activityMonitorThread.joinable())
-    {
-        g_activityMonitorThread.join();
-    }
-}
-
-void ResetSettings()
-{
-    g_multiSupport = false;
-    g_fishstrapSupport = false;
-    g_selectedTime = 540;
-    g_selectedAction = 0;
-    g_autoUpdate = true;
-    g_userSafe = false;
-    g_autoStartAfk = false;
-    g_tutorialShown = false;
-
-    if (g_monitorThreadRunning.load()) {
-        StopActivityMonitor();
-    }
-
-    if (g_hMultiInstanceMutex) {
-        DisableMultiInstanceSupport();
-    }
-
-    RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
 }
 
 LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -1287,18 +1310,25 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case WM_CREATE:
     {
         ApplyDarkMode(hwnd, true);
-        if (!hbrBg) hbrBg = CreateSolidBrush(DARK_BG);
+        if (!hbrBg)
+            hbrBg = CreateSolidBrush(DARK_BG);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        if (!hFont40) hFont40 = CreateFontW(-MulDiv(30, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        if (!hFont20) hFont20 = CreateFontW(-MulDiv(16, dpiY, 72), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        if (!hFont14) hFont14 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        if (!hFont14b) hFont14b = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        if (!hFont13) hFont13 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        if (!hFont11) hFont11 = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFont40)
+            hFont40 = CreateFontW(-MulDiv(30, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        if (!hFont20)
+            hFont20 = CreateFontW(-MulDiv(16, dpiY, 72), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFont14)
+            hFont14 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFont14b)
+            hFont14b = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFont13)
+            hFont13 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        if (!hFont11)
+            hFont11 = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         const int dlgW = 472, dlgH = 312;
         const int margin = 16;
@@ -1318,11 +1348,11 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         SendMessage(hLblSkip, WM_SETFONT, (WPARAM)hFont13, TRUE);
 
         hLinkGitHub = CreateWindowW(L"STATIC", L"More info in AntiAFK-RBX GitHub", WS_CHILD | SS_NOTIFY,
-            10, 150, 350, 20, hwnd, (HMENU)ID_LINKGITHUB, g_hInst, NULL);
+                                    10, 150, 350, 20, hwnd, (HMENU)ID_LINKGITHUB, g_hInst, NULL);
         SendMessage(hLinkGitHub, WM_SETFONT, (WPARAM)hFont13, TRUE);
 
         hLinkWiki = CreateWindowW(L"STATIC", L"More info in AntiAFK-RBX Wiki", WS_CHILD | SS_NOTIFY,
-            10, 150, 350, 20, hwnd, (HMENU)ID_LINKWIKI_TUTORIAL, g_hInst, NULL);
+                                  10, 150, 350, 20, hwnd, (HMENU)ID_LINKWIKI_TUTORIAL, g_hInst, NULL);
         SendMessage(hLinkWiki, WM_SETFONT, (WPARAM)hFont13, TRUE);
 
         int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
@@ -1349,7 +1379,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case WM_ERASEBKGND:
     {
         HDC hdc = (HDC)wParam;
-        RECT rc; GetClientRect(hwnd, &rc);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
         FillRect(hdc, &rc, hbrBg);
         return 1;
     }
@@ -1387,29 +1418,50 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                 DestroyWindow(hwnd);
             }
             break;
-        case ID_BTN_NEXT: 
-            if (page == 5) { 
+        case ID_BTN_NEXT:
+            if (page == 5)
+            {
                 g_tutorialShown = true;
                 SaveSettings();
                 CreateTrayMenu(g_isAfkStarted.load());
                 DestroyWindow(hwnd);
-            } else {
-                if (page == 3) { g_autoStartAfk = true; }
-                if (page == 4) { g_userSafe = true; if (!g_monitorThreadRunning) StartActivityMonitor(); }
+            }
+            else
+            {
+                if (page == 3)
+                {
+                    g_autoStartAfk = true;
+                }
+                if (page == 4)
+                {
+                    g_userSafe = true;
+                    if (!g_monitorThreadRunning)
+                        StartActivityMonitor();
+                }
                 page++;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             break;
         case ID_BTN_BACK:
-            if (page > 0) {
+            if (page > 0)
+            {
                 page--;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             break;
         case IDNO:
-            if (page == 3 || page == 4) {
-                if (page == 3) { g_autoStartAfk = false; }
-                if (page == 4) { g_userSafe = false; if (g_monitorThreadRunning) StopActivityMonitor(); }
+            if (page == 3 || page == 4)
+            {
+                if (page == 3)
+                {
+                    g_autoStartAfk = false;
+                }
+                if (page == 4)
+                {
+                    g_userSafe = false;
+                    if (g_monitorThreadRunning)
+                        StopActivityMonitor();
+                }
                 page++;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -1428,9 +1480,11 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
-        RECT rc; GetClientRect(hwnd, &rc);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
         HBRUSH bg = CreateSolidBrush(DARK_BG);
-        FillRect(hdc, &rc, bg); DeleteObject(bg);
+        FillRect(hdc, &rc, bg);
+        DeleteObject(bg);
         SetBkMode(hdc, TRANSPARENT);
         const int dlgW = 472, dlgH = 312;
 
@@ -1440,16 +1494,21 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ShowWindow(hLinkWiki, page == 4 ? SW_SHOW : SW_HIDE);
         ShowWindow(hBtnNo, (page == 3 || page == 4) ? SW_SHOW : SW_HIDE);
 
-        if (page == 3 || page == 4) {
+        if (page == 3 || page == 4)
+        {
             SetWindowTextW(hBtnNext, L"Yes");
             const int margin = 16, btnW = 131, btnH = 32, gap = 10;
             int y_pos = dlgH - margin - btnH - 33;
             int x_yes = dlgW - margin - btnW - 10;
             int x_no = x_yes - btnW - gap;
             SetWindowPos(hBtnNo, NULL, x_no, y_pos, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        } else if (page == 5) {
+        }
+        else if (page == 5)
+        {
             SetWindowTextW(hBtnNext, L"Finish");
-        } else {
+        }
+        else
+        {
             SetWindowTextW(hBtnNext, L"Next");
         }
 
@@ -1457,7 +1516,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         {
             HFONT old = (HFONT)SelectObject(hdc, hFont11);
             SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-            RECT rTop = { rc.left + 8, rc.top + 8, rc.right - 10, rc.top + 40 };
+            RECT rTop = {rc.left + 8, rc.top + 8, rc.right - 10, rc.top + 40};
             DrawTextW(hdc, L"MIT License", -1, &rTop, DT_TOP | DT_RIGHT | DT_SINGLELINE);
 
             int left = 10;
@@ -1465,24 +1524,24 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             int y = centerY - 75;
 
             SelectObject(hdc, hFont20);
-            SetTextColor(hdc, RGB(255,255,255));
-            TextOutW(hdc, left+4, y, L"Welcome to", 10);
+            SetTextColor(hdc, RGB(255, 255, 255));
+            TextOutW(hdc, left + 4, y, L"Welcome to", 10);
 
             y += 16;
             SelectObject(hdc, hFont40);
-            const wchar_t* p1 = L"AntiAFK-";
-            const wchar_t* p2 = L"RBX";
+            const wchar_t *p1 = L"AntiAFK-";
+            const wchar_t *p2 = L"RBX";
             SIZE s1, s2;
             GetTextExtentPoint32W(hdc, p1, lstrlenW(p1), &s1);
             GetTextExtentPoint32W(hdc, p2, lstrlenW(p2), &s2);
-            SetTextColor(hdc, RGB(255,255,255));
+            SetTextColor(hdc, RGB(255, 255, 255));
             TextOutW(hdc, left, y, p1, lstrlenW(p1));
             SetTextColor(hdc, RGB(0xE2, 0x23, 0x1A));
             TextOutW(hdc, left + s1.cx, y, p2, lstrlenW(p2));
 
             y += s2.cy - 8;
             SelectObject(hdc, hFont11);
-            SetTextColor(hdc, RGB(255,255,255));
+            SetTextColor(hdc, RGB(255, 255, 255));
             TextOutW(hdc, left, y, L"The program for AntiAFK and Multi-Instance in Roblox", 54);
 
             SelectObject(hdc, old);
@@ -1491,18 +1550,18 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         {
             const int margin = 10;
             HFONT old = (HFONT)SelectObject(hdc, hFont14b);
-            SetTextColor(hdc, RGB(255,255,255));
+            SetTextColor(hdc, RGB(255, 255, 255));
             TextOutW(hdc, margin, margin, L"How to use?", 12);
 
             SelectObject(hdc, hFont13);
-            TextOutW(hdc, dlgW-56, margin, L"1/5", 3);
+            TextOutW(hdc, dlgW - 56, margin, L"1/5", 3);
 
             SelectObject(hdc, hFont13);
-            RECT rText = { margin, margin + 34, rc.right - margin, rc.top + 150 };
-            const wchar_t* howto = L"AntiAFK-RBX its a tray program, all settings (interval, action, function and etc.) changing in tray menu (left to clock) shown when RightClick on AntiAFK-RBX dynamic tray-logo";
+            RECT rText = {margin, margin + 34, rc.right - margin, rc.top + 150};
+            const wchar_t *howto = L"AntiAFK-RBX its a tray program, all settings (interval, action, function and etc.) changing in tray menu (left to clock) shown when RightClick on AntiAFK-RBX dynamic tray-logo";
             DrawTextW(hdc, howto, -1, &rText, DT_WORDBREAK);
 
-            RECT rPrevLabel = { margin, rText.bottom - 35, rc.right - margin, rText.bottom - 14 };
+            RECT rPrevLabel = {margin, rText.bottom - 35, rc.right - margin, rText.bottom - 14};
             DrawTextW(hdc, L"dynamic tray-logo preview:", -1, &rPrevLabel, DT_CENTER | DT_TOP | DT_SINGLELINE);
 
             int iconsY = rPrevLabel.bottom + 8;
@@ -1513,23 +1572,25 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             HICON icoOff = CreateCustomIconWithState(false, false);
             HICON icoOnSingle = CreateCustomIconWithState(true, false);
             HICON icoOnMulti = CreateCustomIconWithState(true, true);
-            DrawIconEx(hdc, startX + 0*(iconSize+gap), iconsY, icoOnSingle, iconSize, iconSize, 0, NULL, DI_NORMAL);
-            DrawIconEx(hdc, startX + 1*(iconSize+gap), iconsY, icoOff, iconSize, iconSize, 0, NULL, DI_NORMAL);
-            DrawIconEx(hdc, startX + 2*(iconSize+gap), iconsY, icoOnMulti, iconSize, iconSize, 0, NULL, DI_NORMAL);
-            DestroyIcon(icoOnSingle); DestroyIcon(icoOff); DestroyIcon(icoOnMulti);
+            DrawIconEx(hdc, startX + 0 * (iconSize + gap), iconsY, icoOnSingle, iconSize, iconSize, 0, NULL, DI_NORMAL);
+            DrawIconEx(hdc, startX + 1 * (iconSize + gap), iconsY, icoOff, iconSize, iconSize, 0, NULL, DI_NORMAL);
+            DrawIconEx(hdc, startX + 2 * (iconSize + gap), iconsY, icoOnMulti, iconSize, iconSize, 0, NULL, DI_NORMAL);
+            DestroyIcon(icoOnSingle);
+            DestroyIcon(icoOff);
+            DestroyIcon(icoOnMulti);
 
             SelectObject(hdc, hFont11);
-            RECT rL1 = { startX - 70, iconsY + iconSize + 4, startX + iconSize + 80, iconsY + iconSize + 28 };
-            RECT rL2 = { startX + (iconSize+gap) - 223, iconsY + iconSize + 4, startX + (iconSize+gap) + iconSize + 220, iconsY + iconSize + 28 };
-            RECT rL3 = { startX + 2*(iconSize+gap) - 53, iconsY + iconSize + 4, startX + 2*(iconSize+gap) + iconSize + 240, iconsY + iconSize + 28 };
-            SetTextColor(hdc, RGB(255,255,255));
+            RECT rL1 = {startX - 70, iconsY + iconSize + 4, startX + iconSize + 80, iconsY + iconSize + 28};
+            RECT rL2 = {startX + (iconSize + gap) - 223, iconsY + iconSize + 4, startX + (iconSize + gap) + iconSize + 220, iconsY + iconSize + 28};
+            RECT rL3 = {startX + 2 * (iconSize + gap) - 53, iconsY + iconSize + 4, startX + 2 * (iconSize + gap) + iconSize + 240, iconsY + iconSize + 28};
+            SetTextColor(hdc, RGB(255, 255, 255));
             DrawTextW(hdc, L"ON - Single instance", -1, &rL1, DT_CENTER | DT_TOP | DT_SINGLELINE);
             DrawTextW(hdc, L"OFF", -1, &rL2, DT_CENTER | DT_TOP | DT_SINGLELINE);
             DrawTextW(hdc, L"ON - Multi instance", -1, &rL3, DT_LEFT | DT_TOP | DT_SINGLELINE);
 
             SelectObject(hdc, hFont13);
             SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-            RECT rHint = { margin, rc.bottom - 26 - 32 - 12, rc.right - margin, rc.bottom };
+            RECT rHint = {margin, rc.bottom - 26 - 32 - 12, rc.right - margin, rc.bottom};
             DrawTextW(hdc, L"tray logo can be hided in Windows tray folder (“ ^ ”)", -1, &rHint, DT_LEFT | DT_TOP | DT_SINGLELINE);
 
             SelectObject(hdc, old);
@@ -1544,8 +1605,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SelectObject(hdc, hFont13);
             TextOutW(hdc, dlgW - 56, margin, L"2/5", 3);
 
-            RECT rText = { margin, margin + 34, rc.right - margin, rc.top + 150 };
-            const wchar_t* workText = L"When the program starts, it starts another thread (AntiAFK thread), which checks whether the roblox window is running, and then performs actions on the user's settings, if the settings change during the process, the thread is restarted.";
+            RECT rText = {margin, margin + 34, rc.right - margin, rc.top + 150};
+            const wchar_t *workText = L"When the program starts, it starts another thread (AntiAFK thread), which checks whether the roblox window is running, and then performs actions on the user's settings, if the settings change during the process, the thread is restarted.";
             DrawTextW(hdc, workText, -1, &rText, DT_WORDBREAK);
 
             RECT rLink;
@@ -1564,15 +1625,15 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SelectObject(hdc, hFont13);
             TextOutW(hdc, dlgW - 56, margin, L"3/5", 3);
 
-            RECT rText = { margin + 4, margin + 50, rc.right - margin - 4, rc.bottom };
-            const wchar_t* tipsText = L"“AutoStart” Function - auto start/stop antiafk action if roblox is open/close, work only when AntiAFK-RBX is open. Recommended to turn it on. Turn it on?";
+            RECT rText = {margin + 4, margin + 50, rc.right - margin - 4, rc.bottom};
+            const wchar_t *tipsText = L"“AutoStart” Function - auto start/stop antiafk action if roblox is open/close, work only when AntiAFK-RBX is open. Recommended to turn it on. Turn it on?";
             RECT rTextActual = rText;
             DrawTextW(hdc, tipsText, -1, &rTextActual, DT_WORDBREAK | DT_CALCRECT);
             DrawTextW(hdc, tipsText, -1, &rTextActual, DT_WORDBREAK);
 
             SelectObject(hdc, hFont11);
             SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-            RECT rSubText = { margin, rTextActual.bottom + 8, rc.right - margin, rc.bottom };
+            RECT rSubText = {margin, rTextActual.bottom + 8, rc.right - margin, rc.bottom};
             DrawTextW(hdc, L"This can be changed in tray (Settings > AutoStart)", -1, &rSubText, DT_LEFT | DT_WORDBREAK);
 
             SelectObject(hdc, old);
@@ -1587,7 +1648,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SelectObject(hdc, hFont13);
             TextOutW(hdc, dlgW - 56, margin, L"4/5", 3);
 
-            RECT rText = { margin + 4, margin + 50, rc.right - margin - 4, rc.bottom };
+            RECT rText = {margin + 4, margin + 50, rc.right - margin - 4, rc.bottom};
             const wchar_t *tipsText = L"“User-Safe Mode” Function allows you to conveniently use your PC while AntiAFK is enabled. Recommended to turn it on. Turn it on?";
             RECT rTextActual = rText;
             DrawTextW(hdc, tipsText, -1, &rTextActual, DT_WORDBREAK | DT_CALCRECT);
@@ -1603,7 +1664,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         {
             HFONT old = (HFONT)SelectObject(hdc, hFont11);
             SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-            RECT rTop = { rc.left + 8, rc.top + 8, rc.right - 10, rc.top + 40 };
+            RECT rTop = {rc.left + 8, rc.top + 8, rc.right - 10, rc.top + 40};
             DrawTextW(hdc, L"Finish", -1, &rTop, DT_TOP | DT_RIGHT | DT_SINGLELINE);
 
             int centerY = (rc.bottom - rc.top) / 2;
@@ -1611,13 +1672,13 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
             SelectObject(hdc, hFont20);
             SetTextColor(hdc, RGB(255, 255, 255));
-            RECT rThanks = { 0, y, rc.right, y + 30 };
+            RECT rThanks = {0, y, rc.right, y + 30};
             DrawTextW(hdc, L"Thank for using", -1, &rThanks, DT_CENTER | DT_TOP | DT_SINGLELINE);
 
             y += 26;
             SelectObject(hdc, hFont40);
-            const wchar_t* p1 = L"AntiAFK-";
-            const wchar_t* p2 = L"RBX";
+            const wchar_t *p1 = L"AntiAFK-";
+            const wchar_t *p2 = L"RBX";
             SIZE s1, s2;
             GetTextExtentPoint32W(hdc, p1, lstrlenW(p1), &s1);
             GetTextExtentPoint32W(hdc, p2, lstrlenW(p2), &s2);
@@ -1631,7 +1692,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             y += s2.cy + 20;
             SelectObject(hdc, hFont11);
             SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-            RECT rBottom = { 0, y, rc.right, rc.bottom - 30 };
+            RECT rBottom = {0, y, rc.right, rc.bottom - 30};
             DrawTextW(hdc, L"Tutorial can be open again in tray (AntiAFK-RBX > Show Tutorial)", -1, &rBottom, DT_CENTER | DT_WORDBREAK);
 
             SelectObject(hdc, old);
@@ -1644,13 +1705,41 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         DestroyWindow(hwnd);
         return 0;
     case WM_NCDESTROY:
-        if (hFont40) { DeleteObject(hFont40); hFont40 = NULL; }
-        if (hFont20) { DeleteObject(hFont20); hFont20 = NULL; }
-        if (hFont14) { DeleteObject(hFont14); hFont14 = NULL; }
-        if (hFont14b) { DeleteObject(hFont14b); hFont14b = NULL; }
-        if (hFont13) { DeleteObject(hFont13); hFont13 = NULL; }
-        if (hFont11) { DeleteObject(hFont11); hFont11 = NULL; }
-        if (hbrBg) { DeleteObject(hbrBg); hbrBg = NULL; }
+        if (hFont40)
+        {
+            DeleteObject(hFont40);
+            hFont40 = NULL;
+        }
+        if (hFont20)
+        {
+            DeleteObject(hFont20);
+            hFont20 = NULL;
+        }
+        if (hFont14)
+        {
+            DeleteObject(hFont14);
+            hFont14 = NULL;
+        }
+        if (hFont14b)
+        {
+            DeleteObject(hFont14b);
+            hFont14b = NULL;
+        }
+        if (hFont13)
+        {
+            DeleteObject(hFont13);
+            hFont13 = NULL;
+        }
+        if (hFont11)
+        {
+            DeleteObject(hFont11);
+            hFont11 = NULL;
+        }
+        if (hbrBg)
+        {
+            DeleteObject(hbrBg);
+            hbrBg = NULL;
+        }
         return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -1678,18 +1767,12 @@ void ShowTutorialDialog(HWND owner)
     }
 }
 
-struct DarkMessageBoxParams {
-    const wchar_t* text;
-    UINT type;
-    int* result;
-};
-
 LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     static HFONT hFontText = NULL;
     static HBRUSH hbrBg = NULL;
     static HBRUSH hbrButtonPaneBg = NULL;
-    DarkMessageBoxParams* params = (DarkMessageBoxParams*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    DarkMessageBoxParams *params = (DarkMessageBoxParams *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
     switch (msg)
     {
@@ -1702,7 +1785,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             hbrButtonPaneBg = CreateSolidBrush(DARK_EDIT_BG);
 
         LPCREATESTRUCT lpcs = (LPCREATESTRUCT)lParam;
-        params = (DarkMessageBoxParams*)lpcs->lpCreateParams;
+        params = (DarkMessageBoxParams *)lpcs->lpCreateParams;
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)params);
 
         HDC screen = GetDC(NULL);
@@ -1720,7 +1803,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         const int icon_text_gap = 15;
         int dlgW = 380;
 
-        RECT textRect = { 0, 0, dlgW - main_margin * 2 - icon_size - icon_text_gap, 0 };
+        RECT textRect = {0, 0, dlgW - main_margin * 2 - icon_size - icon_text_gap, 0};
         DrawTextW(hdc, params->text, -1, &textRect, DT_CALCRECT | DT_WORDBREAK);
         SelectObject(hdc, oldFont);
         DeleteDC(hdc);
@@ -1734,12 +1817,17 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
         UINT iconType = params->type & 0xF0;
         LPCWSTR iconId = NULL;
-        if (iconType == MB_ICONINFORMATION) iconId = IDI_INFORMATION;
-        else if (iconType == MB_ICONWARNING) iconId = IDI_WARNING;
-        else if (iconType == MB_ICONERROR) iconId = IDI_ERROR;
-        else if (iconType == MB_ICONQUESTION) iconId = IDI_QUESTION;
+        if (iconType == MB_ICONINFORMATION)
+            iconId = IDI_INFORMATION;
+        else if (iconType == MB_ICONWARNING)
+            iconId = IDI_WARNING;
+        else if (iconType == MB_ICONERROR)
+            iconId = IDI_ERROR;
+        else if (iconType == MB_ICONQUESTION)
+            iconId = IDI_QUESTION;
 
-        if (iconId) {
+        if (iconId)
+        {
             HICON hIcon = LoadIcon(NULL, iconId);
             int iconY = main_margin + (contentH - icon_size) / 2;
             HWND hIconCtl = CreateWindowW(L"STATIC", NULL, WS_CHILD | WS_VISIBLE | SS_ICON, main_margin, iconY, icon_size, icon_size, hwnd, NULL, g_hInst, NULL);
@@ -1751,12 +1839,31 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         SendMessage(hText, WM_SETFONT, (WPARAM)hFontText, TRUE);
 
         UINT btnType = params->type & 0x0F;
-        std::vector<std::pair<int, const wchar_t*>> buttons;
-        if (btnType == MB_OK) { buttons.push_back({ IDOK, L"OK" }); }
-        else if (btnType == MB_OKCANCEL) { buttons.push_back({ IDOK, L"OK" }); buttons.push_back({ IDCANCEL, L"Cancel" }); }
-        else if (btnType == MB_YESNO) { buttons.push_back({ IDYES, L"Yes" }); buttons.push_back({ IDNO, L"No" }); }
-        else if (btnType == MB_YESNOCANCEL) { buttons.push_back({ IDYES, L"Yes" }); buttons.push_back({ IDNO, L"No" }); buttons.push_back({ IDCANCEL, L"Cancel" }); }
-        else { buttons.push_back({ IDOK, L"OK" }); }
+        std::vector<std::pair<int, const wchar_t *>> buttons;
+        if (btnType == MB_OK)
+        {
+            buttons.push_back({IDOK, L"OK"});
+        }
+        else if (btnType == MB_OKCANCEL)
+        {
+            buttons.push_back({IDOK, L"OK"});
+            buttons.push_back({IDCANCEL, L"Cancel"});
+        }
+        else if (btnType == MB_YESNO)
+        {
+            buttons.push_back({IDYES, L"Yes"});
+            buttons.push_back({IDNO, L"No"});
+        }
+        else if (btnType == MB_YESNOCANCEL)
+        {
+            buttons.push_back({IDYES, L"Yes"});
+            buttons.push_back({IDNO, L"No"});
+            buttons.push_back({IDCANCEL, L"Cancel"});
+        }
+        else
+        {
+            buttons.push_back({IDOK, L"OK"});
+        }
 
         const int btnW = 90;
         const int btnGap = 10;
@@ -1764,21 +1871,24 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         int btnY = dlgH - button_pane_height + button_margin;
         int currentX = dlgW - button_margin - totalBtnW;
 
-        for (size_t i = 0; i < buttons.size(); ++i) {
-            const auto& btn = buttons[i];
+        for (size_t i = 0; i < buttons.size(); ++i)
+        {
+            const auto &btn = buttons[i];
             bool isDefault = false;
             UINT defBtn = (params->type & MB_DEFMASK);
-            if ((defBtn == MB_DEFBUTTON1 && i == 0) || (defBtn == MB_DEFBUTTON2 && i == 1) || (defBtn == MB_DEFBUTTON3 && i == 2)) {
+            if ((defBtn == MB_DEFBUTTON1 && i == 0) || (defBtn == MB_DEFBUTTON2 && i == 1) || (defBtn == MB_DEFBUTTON3 && i == 2))
+            {
                 isDefault = true;
             }
 
             HWND hBtn = CreateWindowW(L"BUTTON", btn.second, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW | (isDefault ? BS_DEFPUSHBUTTON : 0), currentX, btnY, btnW, btnH, hwnd, (HMENU)btn.first, g_hInst, NULL);
             SendMessage(hBtn, WM_SETFONT, (WPARAM)hFontText, TRUE);
-            if (isDefault) SetFocus(hBtn);
+            if (isDefault)
+                SetFocus(hBtn);
             currentX += btnW + btnGap;
         }
 
-        RECT wndRect = { 0, 0, dlgW, dlgH };
+        RECT wndRect = {0, 0, dlgW, dlgH};
         AdjustWindowRect(&wndRect, GetWindowLong(hwnd, GWL_STYLE), FALSE);
         int finalW = wndRect.right - wndRect.left;
         int finalH = wndRect.bottom - wndRect.top;
@@ -1825,62 +1935,96 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         return TRUE;
     }
     case WM_COMMAND:
-        if (params && params->result) { *(params->result) = LOWORD(wParam); }
+        if (params && params->result)
+        {
+            *(params->result) = LOWORD(wParam);
+        }
         DestroyWindow(hwnd);
         break;
     case WM_KEYDOWN:
-        if (wParam == VK_ESCAPE) {
-            if (params && params->result) {
+        if (wParam == VK_ESCAPE)
+        {
+            if (params && params->result)
+            {
                 UINT btnType = params->type & 0x0F;
-                if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL) *(params->result) = IDCANCEL;
+                if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL)
+                    *(params->result) = IDCANCEL;
             }
             DestroyWindow(hwnd);
             return 0;
         }
         break;
     case WM_CLOSE:
-        if (params && params->result) {
+        if (params && params->result)
+        {
             UINT btnType = params->type & 0x0F;
-            if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL) *(params->result) = IDCANCEL;
+            if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL)
+                *(params->result) = IDCANCEL;
         }
         DestroyWindow(hwnd);
         return 0;
     case WM_NCDESTROY:
-        if (hFontText) { DeleteObject(hFontText); hFontText = NULL; }
-        if (hbrBg) { DeleteObject(hbrBg); hbrBg = NULL; }
-        if (hbrButtonPaneBg) { DeleteObject(hbrButtonPaneBg); hbrButtonPaneBg = NULL; }
+        if (hFontText)
+        {
+            DeleteObject(hFontText);
+            hFontText = NULL;
+        }
+        if (hbrBg)
+        {
+            DeleteObject(hbrBg);
+            hbrBg = NULL;
+        }
+        if (hbrButtonPaneBg)
+        {
+            DeleteObject(hbrButtonPaneBg);
+            hbrButtonPaneBg = NULL;
+        }
         break;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, UINT type)
+int ShowDarkMessageBox(HWND owner, const wchar_t *text, const wchar_t *caption, UINT type)
 {
     const wchar_t DLG_CLASS_NAME[] = L"AntiAFK-RBX-DarkMessageBox";
-    WNDCLASS wc = { 0 };
-    if (!GetClassInfo(g_hInst, DLG_CLASS_NAME, &wc)) {
+    WNDCLASS wc = {0};
+    if (!GetClassInfo(g_hInst, DLG_CLASS_NAME, &wc))
+    {
         wc.lpfnWndProc = DarkMessageBoxProc;
         wc.hInstance = g_hInst;
         wc.lpszClassName = DLG_CLASS_NAME;
-        wc.hbrBackground = CreateSolidBrush(DARK_BG); wc.hIcon = CreateCustomIcon(); wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-        if (!RegisterClass(&wc)) return 0;
+        wc.hbrBackground = CreateSolidBrush(DARK_BG);
+        wc.hIcon = CreateCustomIcon();
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        if (!RegisterClass(&wc))
+            return 0;
     }
 
     int result = 0;
     UINT btnType = type & 0x0F;
-    if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL) result = IDCANCEL;
-    else result = IDOK;
+    if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL)
+        result = IDCANCEL;
+    else
+        result = IDOK;
 
-    DarkMessageBoxParams params = { text, type, &result };
+    DarkMessageBoxParams params = {text, type, &result};
 
     HWND hDialog = CreateWindowEx(WS_EX_TOPMOST, DLG_CLASS_NAME, caption, WS_POPUP | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, owner, NULL, g_hInst, &params);
-    if (hDialog) {
-        if (owner) EnableWindow(owner, FALSE);
+    if (hDialog)
+    {
+        if (owner)
+            EnableWindow(owner, FALSE);
         MSG msg;
-        while (IsWindow(hDialog) && GetMessage(&msg, NULL, 0, 0)) {
-            if (!IsDialogMessage(hDialog, &msg)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+        while (IsWindow(hDialog) && GetMessage(&msg, NULL, 0, 0))
+        {
+            if (!IsDialogMessage(hDialog, &msg))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
         }
-        if (owner) {
+        if (owner)
+        {
             EnableWindow(owner, TRUE);
             SetForegroundWindow(owner);
         }
@@ -1897,7 +2041,9 @@ void main_thread()
         {
             CheckForUpdates();
         }
-        catch (...) {}
+        catch (...)
+        {
+        }
     }
 
     UpdateSplashStatus(L"Preparing user-safe mode...");
@@ -1911,7 +2057,9 @@ void main_thread()
     {
         CheckForAnnouncement();
     }
-    catch (...) {}
+    catch (...)
+    {
+    }
 
     UpdateSplashStatus(L"Finalizing setup...");
     bool wasAutoStarted = false;
@@ -2013,35 +2161,38 @@ void main_thread()
                             return;
                     }
                 }
-                
+
                 if (g_multiSupport.load())
                 {
                     for (HWND w : wins)
                     {
                         bool wasMinimized = IsIconic(w);
-                        if (wasMinimized) ShowWindow(w, SW_RESTORE);
-                        
+                        if (wasMinimized)
+                            ShowWindow(w, SW_RESTORE);
+
                         SetForegroundWindow(w);
                         for (int j = 0; j < 3; j++)
                         {
                             AntiAFK_Action(w);
                         }
-                        
-                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+
+                        if (wasMinimized)
+                            ShowWindow(w, SW_MINIMIZE);
                     }
                 }
                 else
                 {
                     HWND w = wins.front();
                     bool wasMinimized = IsIconic(w);
-                    if (wasMinimized) ShowWindow(w, SW_RESTORE);
+                    if (wasMinimized)
+                        ShowWindow(w, SW_RESTORE);
 
                     SetForegroundWindow(w);
                     for (int i = 0; i < 3; i++)
                     {
                         AntiAFK_Action(w);
                     }
-                    
+
                     if (wasMinimized)
                     {
                         ShowWindow(w, SW_MINIMIZE);
@@ -2256,7 +2407,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     for (HWND w : wins)
                     {
                         bool wasMinimized = IsIconic(w);
-                        if (wasMinimized) ShowWindow(w, SW_RESTORE);
+                        if (wasMinimized)
+                            ShowWindow(w, SW_RESTORE);
 
                         SetForegroundWindow(w);
                         for (int j = 0; j < 3; j++)
@@ -2264,14 +2416,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                             AntiAFK_Action(w);
                         }
 
-                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                        if (wasMinimized)
+                            ShowWindow(w, SW_MINIMIZE);
                     }
                 }
                 else
                 {
                     HWND w = wins.front();
                     bool wasMinimized = IsIconic(w);
-                    if (wasMinimized) ShowWindow(w, SW_RESTORE);
+                    if (wasMinimized)
+                        ShowWindow(w, SW_RESTORE);
 
                     SetForegroundWindow(w);
                     for (int i = 0; i < 3; i++)
@@ -2354,8 +2508,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_TIME_CUSTOM:
             ShowCustomIntervalDialog(g_hwnd);
             break;
-        case ID_TIME_5_SEC:
-        case ID_TIME_20_SEC:
         case ID_TIME_3:
         case ID_TIME_6:
         case ID_TIME_9:
@@ -2365,18 +2517,32 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_TIME_18:
         {
             int newTime = g_selectedTime;
-            switch (LOWORD(wParam)) {
-                case ID_TIME_5_SEC: newTime = 5; break;
-                case ID_TIME_20_SEC: newTime = 20; break;
-                case ID_TIME_3: newTime = 3 * 60; break;
-                case ID_TIME_6: newTime = 6 * 60; break;
-                case ID_TIME_9: newTime = 9 * 60; break;
-                case ID_TIME_11: newTime = 11 * 60; break;
-                case ID_TIME_13: newTime = 13 * 60; break;
-                case ID_TIME_15: newTime = 15 * 60; break;
-                case ID_TIME_18: newTime = 18 * 60; break;
+            switch (LOWORD(wParam))
+            {
+            case ID_TIME_3:
+                newTime = 3 * 60;
+                break;
+            case ID_TIME_6:
+                newTime = 6 * 60;
+                break;
+            case ID_TIME_9:
+                newTime = 9 * 60;
+                break;
+            case ID_TIME_11:
+                newTime = 11 * 60;
+                break;
+            case ID_TIME_13:
+                newTime = 13 * 60;
+                break;
+            case ID_TIME_15:
+                newTime = 15 * 60;
+                break;
+            case ID_TIME_18:
+                newTime = 18 * 60;
+                break;
             }
-            if (g_selectedTime != newTime) {
+            if (g_selectedTime != newTime)
+            {
                 g_selectedTime = newTime;
                 g_updateInterval = true;
                 g_cv.notify_all();
