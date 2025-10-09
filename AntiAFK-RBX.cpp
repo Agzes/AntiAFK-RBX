@@ -1,7 +1,8 @@
 // AntiAFK-RBX.cpp | The program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. | By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
-int currentVersion = 8; // v.2.2.2
+int currentVersion = 8;
+const wchar_t* g_Version = L"v.2.3.0";
 
 #include <windows.h>
 #include <shellapi.h>
@@ -60,8 +61,18 @@ using namespace std::chrono_literals;
 #define ID_FISHSTRAP_SUP 301
 #define ID_AUTO_UPDATE 302
 #define ID_USER_SAFE 303
-#define ID_AUTO_START_AFK 304
-#define ID_RESET_SETTINGS 305
+#define ID_USER_SAFE_SUBMENU 303 
+#define ID_USER_SAFE_OFF 304
+#define ID_USER_SAFE_LEGACY 305
+#define ID_USER_SAFE_BETA 306
+#define ID_AUTO_START_AFK 307
+#define ID_RESET_SETTINGS 308
+#define ID_AUTO_RECONNECT 309
+
+#define ID_RESTORE_METHOD_SUBMENU 400
+#define ID_RESTORE_OFF 401
+#define ID_RESTORE_FOREGROUND 402
+#define ID_RESTORE_ALTTAB 403
 
 #define ID_UPDATE_AVAILABLE 1000
 #define ID_ANNOUNCEMENT_TEXT 1001
@@ -81,7 +92,7 @@ HMENU g_hMenu;
 HANDLE g_hMultiInstanceMutex = NULL;
 HWND g_hSplashWnd = NULL;
 
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_userSafe(false), g_updateFound(false), g_autoStartAfk(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_updateFound(false), g_autoStartAfk(false), g_autoReconnect(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false);
 std::string announcementText, announcementLabel, announcementLink, announcementID;
 std::atomic<uint64_t> g_lastActivityTime(0);
 std::thread g_activityMonitorThread;
@@ -89,10 +100,13 @@ std::condition_variable g_cv;
 std::mutex g_cv_m;
 
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX");
+
 wchar_t g_splashStatus[128] = L"Initializing...";
 constexpr DWORD ACTION_DELAY = 30, ALT_DELAY = 15;
 int g_selectedTime = 540;
 int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
+int g_restoreMethod = 1; // 0 - Off, 1 - SetForeground, 2 - Alt+Tab
+int g_userSafeMode = 0; // 0 - Off, 1 - Legacy, 2 - Beta
 const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
 bool announcement_isWithNotify = false, announcement_isEnabled = false;
@@ -256,9 +270,9 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         TEXTMETRIC tm13;
         GetTextMetrics(hdc, &tm13);
         SelectObject(hdc, hFont10);
-        RECT version_rect = clientRect;
+        RECT version_rect = clientRect; 
         version_rect.bottom = clientRect.bottom - 7 - 17;
-        DrawTextW(hdc, L"v.2.2.2", -1, &version_rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+        DrawTextW(hdc, g_Version, -1, &version_rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
 
         SelectObject(hdc, hFont12);
         RECT loading_rect = clientRect;
@@ -335,7 +349,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         const int dlgW = 300, dlgH = 352;
 
-        HWND hVersion = CreateWindowW(L"STATIC", L"v.2.2.2", WS_CHILD | WS_VISIBLE | SS_CENTER, 0, 6, dlgW, 20, hwnd, NULL, g_hInst, NULL);
+        HWND hVersion = CreateWindowW(L"STATIC", g_Version, WS_CHILD | WS_VISIBLE | SS_CENTER, 0, 6, dlgW, 20, hwnd, NULL, g_hInst, NULL);
         SendMessage(hVersion, WM_SETFONT, (WPARAM)hFontVersion, TRUE);
 
         HWND hIssue = CreateWindowW(L"STATIC", L"know bug/enchancement? write issue", WS_CHILD | WS_VISIBLE | SS_CENTER, 0, 250, 285, 20, hwnd, NULL, g_hInst, NULL);
@@ -684,6 +698,14 @@ void RestoreForegroundWindow(HWND prevWnd)
     SetWindowPos(prevWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
+void RestorePreviousWindowWithAltTab()
+{
+    keybd_event(VK_MENU, 0, 0, 0);
+    keybd_event(VK_TAB, 0, 0, 0);
+    keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+}
+
 void ShowAllRobloxWindows_Multi()
 {
     auto wins = FindAllRobloxWindows(true);
@@ -743,42 +765,54 @@ void DisableMultiInstanceSupport()
 
 void MonitorUserActivity()
 {
-    g_monitorThreadRunning = true;
-    g_lastActivityTime = GetTickCount64();
-    while (g_monitorThreadRunning)
-    {
-        bool activity = false;
+	g_monitorThreadRunning = true;
+	g_lastActivityTime = GetTickCount64();
 
-        for (int i = 1; i < 256 && !activity; i++)
+	while (g_monitorThreadRunning)
+	{
+        int currentMode = g_userSafeMode; 
+        if (currentMode == 1) 
         {
-            if (GetAsyncKeyState(i) & 0x8000)
+            bool activity = false;
+            for (int i = 1; i < 256; i++)
             {
-                activity = true;
+                if (GetAsyncKeyState(i) & 0x8000)
+                {
+                    activity = true;
+                    break;
+                }
             }
-        }
 
-        if (!activity && (GetAsyncKeyState(VK_LBUTTON) & 0x8000 ||
-            GetAsyncKeyState(VK_RBUTTON) & 0x8000 ||
-            GetAsyncKeyState(VK_MBUTTON) & 0x8000))
-        {
-            activity = true;
-        }
-
-        if (activity)
-        {
-            g_lastActivityTime = GetTickCount64();
-            g_userActive = true;
-        }
-        else
-        {
-            uint64_t currentTime = GetTickCount64();
-            if ((currentTime - g_lastActivityTime) / 1000 >= USER_INACTIVITY_WAIT)
+            if (activity)
+            {
+                g_lastActivityTime = GetTickCount64();
+                g_userActive = true;
+            }
+            else if ((GetTickCount64() - g_lastActivityTime) / 1000 >= USER_INACTIVITY_WAIT)
             {
                 g_userActive = false;
             }
         }
-        Sleep(100);
-    }
+        else if (currentMode == 2) 
+        {
+            LASTINPUTINFO lii;
+            lii.cbSize = sizeof(LASTINPUTINFO);
+            if (GetLastInputInfo(&lii))
+            {
+                if (lii.dwTime != (DWORD)g_lastActivityTime.load())
+                {
+                    g_lastActivityTime = lii.dwTime;
+                    g_userActive = true;
+                }
+                else if ((GetTickCount() - lii.dwTime) / 1000 >= USER_INACTIVITY_WAIT)
+                {
+                    g_userActive = false;
+                }
+            }
+        }
+
+		Sleep(250); 
+	}
 }
 
 void StartActivityMonitor()
@@ -807,9 +841,10 @@ void SaveSettings()
     HKEY hKey;
     DWORD multiSupport = g_multiSupport.load();
     DWORD fishstrapSupport = g_fishstrapSupport.load();
-    DWORD autoUpdate = g_autoUpdate.load();
-    DWORD userSafe = g_userSafe.load();
+    DWORD autoUpdate = g_autoUpdate.load();    
     DWORD autoStartAfk = g_autoStartAfk.load();
+    DWORD autoReconnect = g_autoReconnect.load();
+    DWORD restoreMethod = g_restoreMethod;
     DWORD tutorialShown = g_tutorialShown.load();
 
     if (RegCreateKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS)
@@ -819,8 +854,10 @@ void SaveSettings()
         RegSetValueEx(hKey, L"SelectedTime", 0, REG_DWORD, (const BYTE *)&g_selectedTime, sizeof(DWORD));
         RegSetValueEx(hKey, L"SelectedAction", 0, REG_DWORD, (const BYTE *)&g_selectedAction, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoUpdate", 0, REG_DWORD, (const BYTE *)&autoUpdate, sizeof(DWORD));
-        RegSetValueEx(hKey, L"UserSafe", 0, REG_DWORD, (const BYTE *)&userSafe, sizeof(DWORD));
+        RegSetValueEx(hKey, L"UserSafeMode", 0, REG_DWORD, (const BYTE *)&g_userSafeMode, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoStartAfk", 0, REG_DWORD, (const BYTE *)&autoStartAfk, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AutoReconnect", 0, REG_DWORD, (const BYTE *)&autoReconnect, sizeof(DWORD));
+        RegSetValueEx(hKey, L"RestoreMethod", 0, REG_DWORD, (const BYTE *)&restoreMethod, sizeof(DWORD));
         RegSetValueEx(hKey, L"TutorialShown", 0, REG_DWORD, (const BYTE *)&tutorialShown, sizeof(DWORD));
         RegCloseKey(hKey);
     }
@@ -830,7 +867,7 @@ void LoadSettings()
 {
     HKEY hKey;
     DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, autoStartAfk = 0;
-    DWORD autoUpdate = 1, userSafe = 0, autoLimitRam = 0;
+    DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoLimitRam = 0, restoreMethod = 1;
     DWORD tutorialShown = 0;
     DWORD dataSize = sizeof(DWORD);
 
@@ -841,8 +878,10 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"SelectedTime", NULL, NULL, (LPBYTE)&selectedTime, &dataSize);
         RegQueryValueEx(hKey, L"SelectedAction", NULL, NULL, (LPBYTE)&selectedAction, &dataSize);
         RegQueryValueEx(hKey, L"AutoUpdate", NULL, NULL, (LPBYTE)&autoUpdate, &dataSize);
-        RegQueryValueEx(hKey, L"UserSafe", NULL, NULL, (LPBYTE)&userSafe, &dataSize);
+        RegQueryValueEx(hKey, L"UserSafeMode", NULL, NULL, (LPBYTE)&userSafeMode, &dataSize);
         RegQueryValueEx(hKey, L"AutoStartAfk", NULL, NULL, (LPBYTE)&autoStartAfk, &dataSize);
+        RegQueryValueEx(hKey, L"AutoReconnect", NULL, NULL, (LPBYTE)&autoReconnect, &dataSize);
+        RegQueryValueEx(hKey, L"RestoreMethod", NULL, NULL, (LPBYTE)&restoreMethod, &dataSize);
         RegQueryValueEx(hKey, L"TutorialShown", NULL, NULL, (LPBYTE)&tutorialShown, &dataSize);
         RegCloseKey(hKey);
     }
@@ -852,8 +891,10 @@ void LoadSettings()
     g_selectedTime = selectedTime;
     g_selectedAction = selectedAction;
     g_autoUpdate = autoUpdate;
-    g_userSafe = userSafe;
+    g_userSafeMode = userSafeMode;
     g_autoStartAfk = autoStartAfk;
+    g_autoReconnect = autoReconnect;
+    g_restoreMethod = restoreMethod;
     g_tutorialShown = tutorialShown;
 }
 
@@ -864,8 +905,10 @@ void ResetSettings()
     g_selectedTime = 540;
     g_selectedAction = 0;
     g_autoUpdate = true;
-    g_userSafe = false;
+    g_userSafeMode = 0;
     g_autoStartAfk = false;
+    g_autoReconnect = false;
+    g_restoreMethod = 1;
     g_tutorialShown = false;
 
     if (g_monitorThreadRunning.load())
@@ -896,7 +939,9 @@ void CreateTrayMenu(bool afk)
     AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, L"[Link] - SourceForge");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)InfoMenu, L"AntiAFK-RBX by Agzes");
 
-    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, L"Beta: v.2.2.2 | With ❤️");
+    wchar_t infoText[128];
+    swprintf_s(infoText, L"Beta: %s | With ❤️", g_Version);
+    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, infoText);
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EMULATE_SPACE, L"Test Anti-AFK move");
     AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
@@ -933,10 +978,29 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     HMENU hSettingsSubmenu = CreatePopupMenu();
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_fishstrapSupport.load() ? MF_CHECKED : 0), ID_FISHSTRAP_SUP, L"FishStrap/Shaders Support");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update Checker");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_userSafe.load() ? MF_CHECKED : 0), ID_USER_SAFE, L"User-Safe Mode [see wiki]");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK [new]");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update Checker");    
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect [new] [beta]");
+    
+    HMENU hUserSafeSubmenu = CreatePopupMenu();
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, L"Legacy (Keys/Clicks)");
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, L"Beta (All Input)");
+    const wchar_t* userSafeNames[] = { L"Off", L"Legacy", L"Beta" };
+    wchar_t userSafeLabel[48];
+    swprintf_s(userSafeLabel, L"User-Safe Mode • %s", userSafeNames[g_userSafeMode]);
+    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+
+    HMENU hRestoreSubmenu = CreatePopupMenu();
+    AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, L"Off");
+    AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod == 1 ? MF_CHECKED : 0), ID_RESTORE_FOREGROUND, L"SetForeground");
+    AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, L"Alt+Tab [games]");
+    const wchar_t* restoreNames[] = { L"Off", L"SetFor.", L"Alt+Tab" };
+    wchar_t restoreLabel[48];
+    swprintf_s(restoreLabel, L"Restore Window Method • %s", restoreNames[g_restoreMethod]);
+    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRestoreSubmenu, restoreLabel);
+
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
     AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Support");
@@ -1434,8 +1498,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                 }
                 if (page == 4)
                 {
-                    g_userSafe = true;
-                    if (!g_monitorThreadRunning)
+                    g_userSafeMode = 2; 
+                    if (!g_monitorThreadRunning.load())
                         StartActivityMonitor();
                 }
                 page++;
@@ -1458,8 +1522,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                 }
                 if (page == 4)
                 {
-                    g_userSafe = false;
-                    if (g_monitorThreadRunning)
+                    g_userSafeMode = 0;
+                    if (g_monitorThreadRunning.load())
                         StopActivityMonitor();
                 }
                 page++;
@@ -2032,6 +2096,69 @@ int ShowDarkMessageBox(HWND owner, const wchar_t *text, const wchar_t *caption, 
     return result;
 }
 
+bool CheckAndHandleReconnect(HWND hRobloxWnd)
+{
+    RECT clientRect;
+    if (!GetClientRect(hRobloxWnd, &clientRect)) return false;
+
+    int windowWidth = clientRect.right - clientRect.left;
+    int windowHeight = clientRect.bottom - clientRect.top;
+
+    const int kickWidth = 400;
+    const int kickHeight = 250;
+    int elemX = (windowWidth - kickWidth) / 2;
+    int elemY = (windowHeight - kickHeight) / 2;
+
+    POINT checkPoint = { elemX+10, elemY+10 };
+
+    ClientToScreen(hRobloxWnd, &checkPoint);
+    SetForegroundWindow(hRobloxWnd);
+    Sleep(100);
+
+    HDC hdcScreen = GetDC(NULL);
+    if (!hdcScreen) return false;
+    COLORREF pixelColor = GetPixel(hdcScreen, checkPoint.x, checkPoint.y);
+    ReleaseDC(NULL, hdcScreen);
+
+    if (pixelColor == RGB(57, 59, 61))
+    {
+        const int btnWidth = 161;
+        const int btnHeight = 34;
+
+        int btnRelX = kickWidth - btnWidth - 27;
+        int btnRelY = kickHeight - btnHeight - 21;
+
+        int clickX = elemX + btnRelX + (rand() % btnWidth);
+        int clickY = elemY + btnRelY + (rand() % btnHeight);
+
+        POINT clickPoint = { clickX, clickY };
+        ClientToScreen(hRobloxWnd, &clickPoint);
+
+        POINT oldCursorPos;
+        GetCursorPos(&oldCursorPos);
+
+        SetCursorPos(clickPoint.x, clickPoint.y);
+        Sleep(50); 
+
+        INPUT inputs[2] = {};
+        inputs[0].type = INPUT_MOUSE;
+        inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+
+        inputs[1].type = INPUT_MOUSE;
+        inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+        SendInput(1, &inputs[0], sizeof(INPUT)); 
+        Sleep(100); 
+        SendInput(1, &inputs[1], sizeof(INPUT)); 
+
+        SetCursorPos(oldCursorPos.x, oldCursorPos.y);
+
+        return true;
+    }
+    
+    return false;
+}
+
 void main_thread()
 {
     UpdateSplashStatus(L"Checking for updates...");
@@ -2047,7 +2174,7 @@ void main_thread()
     }
 
     UpdateSplashStatus(L"Preparing user-safe mode...");
-    if (g_userSafe.load())
+    if (g_userSafeMode > 0)
     {
         StartActivityMonitor();
     }
@@ -2121,7 +2248,7 @@ void main_thread()
             }
             else
             {
-                if (g_userSafe.load())
+                if (g_userSafeMode > 0)
                 {
                     uint64_t startWaitTime = GetTickCount64();
                     bool notifiedUser = false;
@@ -2161,7 +2288,9 @@ void main_thread()
                             return;
                     }
                 }
-
+                
+               
+                
                 if (g_multiSupport.load())
                 {
                     for (HWND w : wins)
@@ -2171,6 +2300,8 @@ void main_thread()
                             ShowWindow(w, SW_RESTORE);
 
                         SetForegroundWindow(w);
+                        if (g_autoReconnect.load())
+                            bool reconnectHandled = CheckAndHandleReconnect(w);
                         for (int j = 0; j < 3; j++)
                         {
                             AntiAFK_Action(w);
@@ -2188,6 +2319,8 @@ void main_thread()
                         ShowWindow(w, SW_RESTORE);
 
                     SetForegroundWindow(w);
+                    if (g_autoReconnect.load())
+                        bool reconnectHandled = CheckAndHandleReconnect(w);
                     for (int i = 0; i < 3; i++)
                     {
                         AntiAFK_Action(w);
@@ -2198,7 +2331,18 @@ void main_thread()
                         ShowWindow(w, SW_MINIMIZE);
                     }
                 }
-                RestoreForegroundWindow(user);
+                if (g_restoreMethod > 0)
+                {
+                    if (g_restoreMethod == 1)
+                    {
+                        RestoreForegroundWindow(user);
+                    }
+                    else if (g_restoreMethod == 2)
+                    {
+                        Sleep(50); 
+                        RestorePreviousWindowWithAltTab();
+                    }
+                }
             }
             g_updateInterval = false;
             g_cv.wait_for(lock, std::chrono::seconds(g_selectedTime), []
@@ -2237,7 +2381,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         g_nid.uCallbackMessage = WM_USER + 1;
         g_nid.hIcon = CreateCustomIcon();
-        lstrcpy(g_nid.szTip, L"v2.2 | AntiAFK-RBX");
+        lstrcpy(g_nid.szTip, L"AntiAFK-RBX • Click right mouse button for menu");
         Shell_NotifyIcon(NIM_ADD, &g_nid);
         CreateTrayMenu(g_isAfkStarted.load());
         ShowWindow(hwnd, SW_HIDE);
@@ -2474,22 +2618,36 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 {
                 }
             break;
-        case ID_USER_SAFE:
-            g_userSafe = !g_userSafe.load();
-            if (g_userSafe.load())
+        case ID_USER_SAFE_OFF:
+        case ID_USER_SAFE_LEGACY:
+        case ID_USER_SAFE_BETA:
+            g_userSafeMode = LOWORD(wParam) - ID_USER_SAFE_OFF;
+            if (g_userSafeMode > 0)
             {
-                StartActivityMonitor();
-                ShowTrayNotification(L"User-Safe Mode", L"User-Safe mode enabled. Check wiki for details.");
+                if (!g_monitorThreadRunning.load()) StartActivityMonitor();
+                ShowTrayNotification(L"User-Safe Mode", L"User-Safe mode is now active.");
             }
             else
             {
-                StopActivityMonitor();
+                if (g_monitorThreadRunning.load()) StopActivityMonitor();
             }
             SaveSettings();
-            CreateTrayMenu(g_isAfkStarted.load());
+            CreateTrayMenu(g_isAfkStarted.load());            
             break;
         case ID_AUTO_START_AFK:
             g_autoStartAfk = !g_autoStartAfk.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_AUTO_RECONNECT:
+            g_autoReconnect = !g_autoReconnect.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_RESTORE_OFF:
+        case ID_RESTORE_FOREGROUND:
+        case ID_RESTORE_ALTTAB:
+            g_restoreMethod = LOWORD(wParam) - ID_RESTORE_OFF;
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
