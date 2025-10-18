@@ -1,3 +1,4 @@
+<div align="center"><kbd><a href="https://github.com/Agzes/AntiAFK-RBX/issues/15">📢 • AntiAFK-RBX V.3 • Coming soon</a></kbd></div><br><br>
 
 <div align="center"><kbd></kbd> <kbd>🛡️ 𝗦𝗮𝗳𝗲</kbd> <kbd>🚀 𝗪𝗼𝗿𝗸 𝘄𝗶𝘁𝗵 𝗕𝗹𝗼𝘅𝗦𝘁𝗿𝗮𝗽/𝗙𝗶𝘀𝗵𝗦𝘁𝗿𝗮𝗽/𝗥𝗼𝗯𝗹𝗼𝘅[𝗯𝗮𝘀𝗲/𝘀𝗵𝗮𝗱𝗲𝗿𝘀]</kbd> <kbd>📦 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝗠𝘂𝗹𝘁𝗶-𝗜𝗻𝘀𝘁𝗮𝗻𝗰𝗲</kbd> <kbd>📂 𝗢𝗽𝗲𝗻-𝗦𝗼𝘂𝗿𝗰𝗲</kbd> <kbd></kbd> </div>
 <h1 align="center">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\Huge{\textsf{𝗔𝗻𝘁𝗶𝗔𝗙𝗞-𝗥𝗕𝗫}}$ <sup><sup><kbd>v.2.2</kbd></sup></sup></h1>
