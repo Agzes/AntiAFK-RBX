@@ -1,52 +1,20 @@
-<div align="center"><kbd><a href="https://github.com/Agzes/AntiAFK-RBX/issues/15">📢 • AntiAFK-RBX V.3 • Coming soon</a></kbd></div><br><br>
 
-<div align="center"><kbd></kbd> <kbd>🛡️ 𝗦𝗮𝗳𝗲</kbd> <kbd>🚀 𝗪𝗼𝗿𝗸 𝘄𝗶𝘁𝗵 𝗕𝗹𝗼𝘅𝗦𝘁𝗿𝗮𝗽/𝗙𝗶𝘀𝗵𝗦𝘁𝗿𝗮𝗽/𝗥𝗼𝗯𝗹𝗼𝘅[𝗯𝗮𝘀𝗲/𝘀𝗵𝗮𝗱𝗲𝗿𝘀]</kbd> <kbd>📦 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 𝗠𝘂𝗹𝘁𝗶-𝗜𝗻𝘀𝘁𝗮𝗻𝗰𝗲</kbd> <kbd>📂 𝗢𝗽𝗲𝗻-𝗦𝗼𝘂𝗿𝗰𝗲</kbd> <kbd></kbd> </div>
-<h1 align="center">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $\Huge{\textsf{𝗔𝗻𝘁𝗶𝗔𝗙𝗞-𝗥𝗕𝗫}}$ <sup><sup><kbd>v.2.2</kbd></sup></sup></h1>
+
+<div align="center"><kbd></kbd> 
+<a href="https://github.com/Agzes/AntiAFK-RBX/wiki"><kbd>📖 𝗪𝗶𝗸𝗶</kbd> </a>
+<a href="https://github.com/Agzes/AntiAFK-RBX/releases/latest"><kbd>⏬ 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱</kbd> </a>
+<a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><kbd>⁉️ 𝗪𝗿𝗶𝘁𝗲 𝗶𝘀𝘀𝘂𝗲</kbd> </a>
+<a href="https://github.com/Agzes/AntiAFK-RBX/blob/v.2.2.2/LICENSE"><kbd>🛡️ 𝗠𝗜𝗧 𝗟𝗶𝗰𝗲𝗻𝘀𝗲</kbd> <kbd></kbd> </a>
+</div><h2 align="center">  </h2><br>
 <div align="center">
 
-<kbd>
-<kbd><img width="auto" height="auto" src="https://github.com/user-attachments/assets/863d5cfb-efa3-40c0-b9e9-d3827e16489b"> </kbd>
-<kbd> 𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒  <br><br><br> 
-⏩ fast: optimized and written in c++ <br><br>
-🪶 lightweight: takes up less than ⁓85Kb of disk space <br><br>
-👁️ without focus: does not require your focus on the game window <br><br>
-🚀 all-in-one: you don't need to install multi-instance app or other <br><br>
-🛡️ user-safe: which makes antiafk move even more discreet [wiki] [2.2] <br><br>
-⚙️ settings: change action his interval, supports and other (auto-save) <br><br>
-📦 multi-instance: make multi-instance roblox possible and support it [#6] <br><br>
-🪶 not demanding: requires <4MB of RAM, almost no CPU required, no disk <br><br>
-🛡️ safe: completely safe to use, uses only safe approaches to anti-afk <br><br>
-🛠️ stable: the main task of AntiAFK-RBX is stability, no kick, no lag <br><br>
-🌑 dark-theme: has a completely dark theme for the system tray menu <br><br>
-👁️ hides game: allow you to completely hide the game window <br><br>
-📂 open-source: has open source code on github <br><br>
-<br>𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲//𝐅𝐄𝐀𝐓𝐔𝐑𝐄𝐒//𝖥𝖤𝖠𝖳𝖴𝖱𝖤𝖲</kbd>
-</kbd></div>
-
-
-<div align="center"><kbd align="left">
-𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘<h4> </h4>
-<h4>
-
-* | To use Multi-Instance -> close all roblox instance, then ⤵ <br>
-* | -> enable multi-instance support in AntiAFK-RBX tray menu ⤵  <br>
-* | -> run Roblox instance without limit! <br>
-</h4><h3></h3>
-𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘//𝐌𝐔𝐋𝐓𝐈-𝐈𝐍𝐒𝐓𝐀𝐍𝐂𝐄//𝗛𝗢𝗪 𝗧𝗢 𝗨𝗦𝗘</kbd>
+![AntiAFK-RBX by Agzes v.3.0 Banner ](ReadME/V3-Banner.png)
+![UI, Features: fast, open-source, lightweight, settings, without focus, auto reconnect, multi-instance, 3 antiafk method, easy to use, hides game, safe, custom intervals, all-in-one, stable, bloxstrap integration, user-safe, modern ui, auto-start, dark theme, args run support, auto restore window, 3 restore window mode, not demanding, fps capper, statistics, tray support, smooth, and more...](ReadME/V3-Main.png)
 
 
 
-<kbd align="left">
-𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈<h4> </h4>
-<h4>
-
-* | Wiki -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki) <br>
-* | Tips To Use -> [[Click | Wiki>T-F-U!]](https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use) <br>
-* | UserSafe -> [[Click | Wiki]](https://github.com/Agzes/AntiAFK-RBX/wiki/User%E2%80%90Safe-mode) <br>
-</h4><h3></h3>
-𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈//𝗪𝗜𝗞𝗜//𝐖𝐈𝐊𝐈</kbd>
 <h2 align="center">  </h2>
-
+<br>
 
 <!-- Download widget -->
 <div align="center">
