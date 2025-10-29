@@ -3,7 +3,7 @@
 <div align="center"><kbd></kbd> 
 <a href="https://github.com/Agzes/AntiAFK-RBX/wiki"><kbd>📖 𝗪𝗶𝗸𝗶</kbd> </a>
 <a href="https://github.com/Agzes/AntiAFK-RBX/releases/latest"><kbd>⏬ 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱</kbd> </a>
-<a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><kbd>⁉️ 𝗪𝗿𝗶𝘁𝗲 𝗶𝘀𝘀𝘂𝗲</kbd> </a>
+<a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><kbd>🐞 𝗪𝗿𝗶𝘁𝗲 𝗶𝘀𝘀𝘂𝗲</kbd> </a>
 <a href="https://github.com/Agzes/AntiAFK-RBX/blob/v.2.2.2/LICENSE"><kbd>🛡️ 𝗠𝗜𝗧 𝗟𝗶𝗰𝗲𝗻𝘀𝗲</kbd> <kbd></kbd> </a>
 </div><h2 align="center">  </h2><br>
 <div align="center">
