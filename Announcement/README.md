@@ -1,11 +1,6 @@
 <div align="center"> 
 
-`📂 • This folder is used for Announcements in AntiAFK-RBX.` 
-
-
-<br>
-
-# 📢 Announcements in AntiAFK-RBX
-Announcements are used to notify about known bugs, updates, tips for use, and more
+# **REMOVED FROM ANTIAFK-RBX**
+For security reasons, announcements have been removed from AntiAFK-RBX started from version 3.0
 
 </div>
