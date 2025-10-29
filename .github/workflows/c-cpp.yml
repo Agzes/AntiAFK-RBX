@@ -34,7 +34,7 @@ jobs:
         set(CMAKE_CXX_STANDARD_REQUIRED ON)
         
         set(RESOURCE_FILES
-            resource.rc
+            AntiAFK-RBX.rc
             resource.h
             logo.ico
         )
