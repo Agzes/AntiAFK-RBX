@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.3.0.0/AntiAFK-RBX.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/download.png" alt="Download Now" style="width:60%; min-width:350px; max-width:500px;"></a><br>
+<a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.3.0.0/AntiAFK-RBX.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/download.png" alt="Download Now" style="width:45%; min-width:350px; max-width:500px;"></a><br>
 
 <p align="center" width="100%">
   <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/ideas.png" alt="Got ideas to add?" style="width:30%; min-width:190px;"></a>
