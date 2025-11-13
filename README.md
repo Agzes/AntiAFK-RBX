@@ -4,7 +4,7 @@
 
 
 ![AntiAFK-RBX by Agzes v.3.0 Banner ](ReadME/V3-Banner.png)
-![UI, Features: fast, open-source, lightweight, settings, without focus, auto reconnect, multi-instance, 3 antiafk method, easy to use, hides game, safe, custom intervals, all-in-one, stable, bloxstrap integration, user-safe, modern ui, auto-start, dark theme, args run support, auto restore window, 3 restore window mode, not demanding, fps capper, statistics, tray support, smooth, and more...](ReadME/V3-Main.png)
+![UI, Features: Fast, Modern UI, Lightweight, Configurable, Stable, Safe, Free, Auto restore window, 3 AntiAFK method, Auto-Start, Multi-Instance, Dark Theme, All-in-one, Hides Game, Without focus on game, User-Safe feature, Bloxstrap integration, Open-Source, Smooth, Not demanding, Auto Reconnect, FPS Capper, Easy to use, Statistics of AFK, Tray Support, Args run support, and more...](ReadME/V3-Main.png)
 
 
 <p align="center" width="100%">
