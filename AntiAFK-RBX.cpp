@@ -2,7 +2,7 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30000; // Major*10000 + Minor*100 + Patch or Mini Update
+int currentVersion = 30001; // Major*10000 + Minor*100 + Patch or Mini Update
 const wchar_t* g_Version = L"v.3.0.0";
 
 
@@ -185,7 +185,7 @@ void ShowHelp()
             L"  --user-safe <mode>\t\t\tSet User-Safe mode. Values: off, legacy, beta.\n"
             L"  --restore-window <method>\t\tSet window restore method. Values: off, foreground, alttab.\n"
             L"  --fishstrap-support [on|off]\t\tForce enable or disable support for modified clients.\n"
-            L"  --bloxstrap-integration [on|off]\tForce enable or disable Bloxstrap/Fishstrap integration.\n"
+            L"  --bloxstrap-integration\t\tEnable Bloxstrap/Fishstrap integration. If an instance is already running, it will exit gracefully.\n"
             L"  --unlock-fps-on-focus [on|off]\tForce enable or disable unlocking FPS when Roblox is focused.\n"
             L"  --set-fps-limit <fps>\t\t\tSet the FPS limit (0 to disable).\n\n"
 
@@ -1382,7 +1382,7 @@ void UpdateBloxstrapIntegration(bool enable) {
 
         std::string selfPath = GetSelfExePath();
 
-        std::string integrationJson = "    {\r\n      \"Name\": \"" + integrationName + "\",\r\n      \"Location\": \"" + selfPath + "\",\r\n      \"LaunchArgs\": \"--no-splash --tray --no-notifications --start-afk --force\",\r\n      \"Delay\": 0,\r\n      \"PreLaunch\": false,\r\n      \"AutoClose\": true\r\n    }";
+        std::string integrationJson = "    {\r\n      \"Name\": \"" + integrationName + "\",\r\n      \"Location\": \"" + selfPath + "\",\r\n      \"LaunchArgs\": \"--bloxstrap-integration\",\r\n      \"Delay\": 0,\r\n      \"PreLaunch\": false,\r\n      \"AutoClose\": true\r\n    }";
 
         size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
         if (integrationsArrayPos == std::string::npos) {
@@ -3315,7 +3315,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
             } else if (pData->currentPage == 1) { // Automation
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Automatically starts and stops the Anti-AFK function when Roblox is opened or closed."; }
                 if (i == 1) { title = L"Auto Reconnect"; text = L"Experimental: Automatically tries to Reconnect if you are kicked for being idle."; }
-                if (i == 2) { title = L"Bloxstrap/Fishstrap Integration"; text = L"Automatically launches AntiAFK-RBX when you start Roblox through Bloxstrap or Fishstrap."; }
+                if (i == 2) { title = L"Bloxstrap/Fishstrap Integration"; text = L"Automatically starts AntiAFK-RBX when launching Roblox via Bloxstrap or Fishstrap, but does not start AntiAFK."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"FishStrap/Shaders Support"; text = L"Enables compatibility with modified clients (e.g., FishStrap) that use a different process name."; }
                 if (i == 1) { title = L"Update Checker"; text = L"Automatically checks for new versions on startup and notifies you if an update is available."; }
@@ -5350,6 +5350,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
     bool arg_noSplash = false, arg_tray = false, arg_startAfk = false;
     bool arg_checkUpdatesAndExit = false, arg_resetSettingsAndExit = false;
     bool arg_force = false;
+    bool arg_bloxstrapIntegration_cmd = false;
 
     if (argv) {
         for (int i = 1; i < argc; ++i) {
@@ -5433,6 +5434,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
                 } else {
                     g_bloxstrapIntegration = true;
                 }
+                arg_bloxstrapIntegration_cmd = true;
             }
             else if (arg == L"--unlock-fps-on-focus") {
                 if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
@@ -5453,6 +5455,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
         }
         LocalFree(argv);
     }
+    
+    if (arg_bloxstrapIntegration_cmd) {
+        arg_noSplash = true;
+        arg_tray = true;
+        g_notificationsDisabled = true;
+        arg_startAfk = true;
+    }
 
     HWND hExistingWnd = FindWindow(CLASS_NAME, NULL);
     if (hExistingWnd) {
@@ -5467,6 +5476,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
                     Sleep(500);
                 }
             }
+        } else if (arg_bloxstrapIntegration_cmd) {
+            return 0;
         } else {
             ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK | MB_ICONINFORMATION);
             return 0;
