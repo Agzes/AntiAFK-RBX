@@ -2,8 +2,8 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30001; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3.0.0";
+int currentVersion = 30002; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3 [30002]";
 
 
 #include <windows.h>
@@ -345,70 +345,92 @@ struct SplashData {
     bool isTrackingMouse = false;
     UINT_PTR uTimerId = 0;
 };
-void Splash_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
+void DrawSharedCloseButton(Graphics* g, const RECT& closeButtonRect, bool isHovering) {
     if (isHovering) {
-        HBRUSH hBrush = CreateSolidBrush(RGB(232, 17, 35));
-        FillRect(hdc, &closeButtonRect, hBrush);
-        DeleteObject(hBrush);
+        SolidBrush redBrush(Color(255, 232, 17, 35));
+        g->FillRectangle(&redBrush, (REAL)closeButtonRect.left, (REAL)closeButtonRect.top, (REAL)(closeButtonRect.right - closeButtonRect.left), (REAL)(closeButtonRect.bottom - closeButtonRect.top));
     }
 
-    HPEN hPen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-    int x_center = (closeButtonRect.left + closeButtonRect.right) / 2;
-    int y_center = (closeButtonRect.top + closeButtonRect.bottom) / 2;
-    int cross_size = 5;
-    MoveToEx(hdc, x_center - cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center + cross_size + 1, y_center + cross_size + 1);
-    MoveToEx(hdc, x_center + cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center - cross_size - 1, y_center + cross_size + 1);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hPen);
+    int cx = (closeButtonRect.left + closeButtonRect.right) / 2;
+    int cy = (closeButtonRect.top + closeButtonRect.bottom) / 2;
+    int size = 5;
+
+    Pen pen(Color(255, 255, 255, 255), 1.0f);
+    REAL sizeF = (REAL)size;
+    g->DrawLine(&pen, (REAL)cx - sizeF, (REAL)cy - sizeF, (REAL)cx + sizeF, (REAL)cy + sizeF);
+    g->DrawLine(&pen, (REAL)cx + sizeF, (REAL)cy - sizeF, (REAL)cx - sizeF, (REAL)cy + sizeF);
+}
+
+void Splash_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    DrawSharedCloseButton(&g, closeButtonRect, isHovering);
 }
 void Splash_Paint_DrawTitle(HDC hdc, const RECT& clientRect, HFONT hFont28, HFONT hFont12) {
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont28);
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
 
     const wchar_t* part1 = L"AntiAFK-";
     const wchar_t* part2 = L"RBX";
-    SIZE size1, size2;
-    GetTextExtentPoint32W(hdc, part1, lstrlenW(part1), &size1);
-    GetTextExtentPoint32W(hdc, part2, lstrlenW(part2), &size2);
+    
+    Font font28(hdc, hFont28);
+    RectF s1, s2;
+    PointF origin(0,0);
+    const StringFormat* typographic = StringFormat::GenericTypographic();
+    
+    g.MeasureString(part1, -1, &font28, origin, typographic, &s1);
+    g.MeasureString(part2, -1, &font28, origin, typographic, &s2);
 
-    int totalWidth = size1.cx + size2.cx;
-    int x1 = (clientRect.right - totalWidth) / 2;
-    int y_title = (clientRect.bottom / 2) - 50;
+    REAL totalWidth = s1.Width + s2.Width; 
+    REAL startX = ((REAL)clientRect.right - totalWidth) / 2.0f;
+    REAL y_title = ((REAL)clientRect.bottom / 2.0f) - 50.0f;
 
-    SetTextColor(hdc, RGB(255, 255, 255));
-    TextOutW(hdc, x1, y_title, part1, lstrlenW(part1));
-    SetTextColor(hdc, RGB(0xE2, 0x23, 0x1A));
-    TextOutW(hdc, x1 + size1.cx, y_title, part2, lstrlenW(part2));
+    SolidBrush whiteBrush(Color(255, 255, 255, 255));
+    SolidBrush redBrush(Color(255, 226, 35, 26));
 
-    SelectObject(hdc, hFont12);
-    SetTextColor(hdc, RGB(0x7B, 0x7B, 0x7B));
-    RECT note_rect = { 0, y_title + size1.cy, clientRect.right, clientRect.bottom };
-    DrawTextW(hdc, g_splashStatus, -1, &note_rect, DT_CENTER | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
+    g.DrawString(part1, -1, &font28, PointF(startX, y_title), typographic, &whiteBrush);
+    g.DrawString(part2, -1, &font28, PointF(startX + s1.Width, y_title), typographic, &redBrush);
 
-    SelectObject(hdc, hOldFont);
+    Font font12(hdc, hFont12);
+    SolidBrush grayBrush(Color(255, 123, 123, 123));
+    
+    StringFormat sfCenter;
+    sfCenter.SetAlignment(StringAlignmentCenter);
+    RectF noteRectF((REAL)0, (REAL)y_title + s1.Height, (REAL)clientRect.right, (REAL)clientRect.bottom);
+    g.DrawString(g_splashStatus, -1, &font12, noteRectF, &sfCenter, &grayBrush);
 }
 void Splash_Paint_DrawFooter(HDC hdc, const RECT& clientRect, HFONT hFont10, HFONT hFont12) {
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont10);
-    SetTextColor(hdc, RGB(0x89, 0x89, 0x89));
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
 
     RECT by_rect = { clientRect.left + 10, clientRect.top, clientRect.right, clientRect.bottom - 7 };
-    DrawTextW(hdc, L"by Agzes", -1, &by_rect, DT_LEFT | DT_BOTTOM | DT_SINGLELINE);
+    Font font10(hdc, hFont10);
+    SolidBrush grayBrush(Color(255, 137, 137, 137));
+    StringFormat sfLeftBottom;
+    sfLeftBottom.SetAlignment(StringAlignmentNear);
+    sfLeftBottom.SetLineAlignment(StringAlignmentFar);
+    RectF byRectF((REAL)by_rect.left, (REAL)by_rect.top, (REAL)(by_rect.right - by_rect.left), (REAL)(by_rect.bottom - by_rect.top));
+    g.DrawString(L"by Agzes", -1, &font10, byRectF, &sfLeftBottom, &grayBrush);
 
     RECT version_rect = { clientRect.left, clientRect.top, clientRect.right - 10, clientRect.bottom - 7 };
-    DrawTextW(hdc, g_Version, -1, &version_rect, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE);
+    StringFormat sfRightBottom;
+    sfRightBottom.SetAlignment(StringAlignmentFar);
+    sfRightBottom.SetLineAlignment(StringAlignmentFar);
+    RectF verRectF((REAL)version_rect.left, (REAL)version_rect.top, (REAL)(version_rect.right - version_rect.left), (REAL)(version_rect.bottom - version_rect.top));
+    g.DrawString(g_Version, -1, &font10, verRectF, &sfRightBottom, &grayBrush);
 
-    SelectObject(hdc, hFont12);
     const wchar_t* loadingStr = L"LOADING";
     RECT loading_rect = { clientRect.left, clientRect.top, clientRect.right, clientRect.bottom - 7 };
-
+    
     float sine_wave = (sin(GetTickCount64() * 0.003f) + 1.0f) / 2.0f;
     int brightness = 120 + (int)(sine_wave * 100);
-    SetTextColor(hdc, RGB(brightness, brightness, brightness));
-    DrawTextW(hdc, loadingStr, -1, &loading_rect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-
-    SelectObject(hdc, hOldFont);
+    SolidBrush loadingBrush(Color(255, brightness, brightness, brightness));
+    Font font12(hdc, hFont12);
+    StringFormat sfCenterBottom;
+    sfCenterBottom.SetAlignment(StringAlignmentCenter);
+    sfCenterBottom.SetLineAlignment(StringAlignmentFar);
+    RectF loadRectF((REAL)loading_rect.left, (REAL)loading_rect.top, (REAL)(loading_rect.right - loading_rect.left), (REAL)(loading_rect.bottom - loading_rect.top));
+    g.DrawString(loadingStr, -1, &font12, loadRectF, &sfCenterBottom, &loadingBrush);
 }
 LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -425,10 +447,10 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        pData->hFont28 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        pData->hFont12b = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        pData->hFont12 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont10 = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont28 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        pData->hFont12b = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        pData->hFont12 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont10 = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
@@ -630,104 +652,96 @@ struct AboutData {
     COLORREF updateButtonCurrentColor = RGB(160, 160, 160);
     UINT_PTR uTimerId = 0;
 };
-void About_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
-    if (isHovering) {
-        HBRUSH hBrush = CreateSolidBrush(RGB(232, 17, 35));
-        FillRect(hdc, &closeButtonRect, hBrush);
-        DeleteObject(hBrush);
-    }
 
-    HPEN hPen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-    int x_center = (closeButtonRect.left + closeButtonRect.right) / 2;
-    int y_center = (closeButtonRect.top + closeButtonRect.bottom) / 2;
-    int cross_size = 5;
-    MoveToEx(hdc, x_center - cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center + cross_size + 1, y_center + cross_size + 1);
-    MoveToEx(hdc, x_center + cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center - cross_size - 1, y_center + cross_size + 1);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hPen);
+void About_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    DrawSharedCloseButton(&g, closeButtonRect, isHovering);
 }
 void About_Paint_DrawButtons(HDC hdc, const RECT& githubButtonRect, const RECT& sourceforgeButtonRect, bool isHoveringGithub, bool isHoveringSourceforge, HFONT hFont) {
-    auto drawButton = [&](const RECT& rect, const wchar_t* text, bool isHovering, COLORREF hoverColor) {
-        HPEN hPen;
-        HBRUSH hBrush;
+    auto drawButton = [&](const RECT& rect, const wchar_t* text, bool isHovering, Color hoverColor) {
+        Graphics g(hdc);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+
         if (isHovering) {
-            hBrush = CreateSolidBrush(hoverColor);
-            hPen = CreatePen(PS_NULL, 0, 0);
-            SetTextColor(hdc, RGB(255, 255, 255));
+            SolidBrush bgBrush(hoverColor);
+            GraphicsPath path;
+            path.AddArc((REAL)rect.left, (REAL)rect.top, 8.0f, 8.0f, 180, 90);
+            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.top, 8.0f, 8.0f, 270, 90);
+            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 0, 90);
+            path.AddArc((REAL)rect.left, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&bgBrush, &path);
+        } else {
+            SolidBrush bgBrush(Color(40, 255, 255, 255));
+            GraphicsPath path;
+            path.AddArc((REAL)rect.left, (REAL)rect.top, 8.0f, 8.0f, 180, 90);
+            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.top, 8.0f, 8.0f, 270, 90);
+            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 0, 90);
+            path.AddArc((REAL)rect.left, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&bgBrush, &path);
         }
-        else {
-            hPen = CreatePen(PS_SOLID, 1, RGB(120, 120, 120));
-            hBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
-            SetTextColor(hdc, RGB(200, 200, 200));
-        }
+        
+        Font font(hdc, hFont);
+        SolidBrush textBrush(isHovering ? Color(255, 255, 255, 255) : Color(255, 200, 200, 200));
+        StringFormat sf;
+        sf.SetAlignment(StringAlignmentCenter);
+        sf.SetLineAlignment(StringAlignmentCenter);
+        RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+        g.DrawString(text, -1, &font, rectF, &sf, &textBrush);
+    };
 
-        HPEN oldPen = (HPEN)SelectObject(hdc, hPen);
-        HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, hBrush);
-        RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom, 8, 8);
-        SelectObject(hdc, oldPen);
-        SelectObject(hdc, oldBrush);
-        DeleteObject(hPen);
-        if (isHovering) DeleteObject(hBrush);
-
-        DrawTextW(hdc, text, -1, (LPRECT)&rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        };
-
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
-
-    drawButton(githubButtonRect, L"GitHub", isHoveringGithub, RGB(45, 51, 57));
-
-    drawButton(sourceforgeButtonRect, L"SourceForge", isHoveringSourceforge, RGB(244, 121, 34));
-
-    SelectObject(hdc, hOldFont);
+    drawButton(githubButtonRect, L"GitHub", isHoveringGithub, Color(255, 45, 51, 57));
+    drawButton(sourceforgeButtonRect, L"SourceForge", isHoveringSourceforge, Color(255, 244, 121, 34));
 }
 void About_Paint_DrawContent(HDC hdc, const RECT& clientRect, HFONT hFont28, HFONT hFont12, HFONT hFont10, HFONT hFont12b) {
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hFont12b);
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
 
     RECT headerRect = { clientRect.left, clientRect.top, clientRect.right, clientRect.top + 90 };
-    HBRUSH headerBrush = CreateSolidBrush(RGB(10, 10, 10));
-    FillRect(hdc, &headerRect, headerBrush);
-    DeleteObject(headerBrush);
 
-    HPEN accentPen = CreatePen(PS_SOLID, 1, RGB(0xE2, 0x23, 0x1A));
-    HPEN oldPen = (HPEN)SelectObject(hdc, accentPen);
-    MoveToEx(hdc, headerRect.left, headerRect.bottom, NULL);
-    LineTo(hdc, headerRect.right, headerRect.bottom);
+    SolidBrush bgBrush(Color(100, 10, 10, 10)); 
+    g.FillRectangle(&bgBrush, (REAL)clientRect.left, (REAL)headerRect.bottom, (REAL)(clientRect.right - clientRect.left), (REAL)(clientRect.bottom - headerRect.bottom));
 
-    SelectObject(hdc, hFont28);
+    SolidBrush headerBrush(Color(180, 25, 25, 25)); 
+    g.FillRectangle(&headerBrush, (REAL)headerRect.left, (REAL)headerRect.top, (REAL)(headerRect.right - headerRect.left), (REAL)(headerRect.bottom - headerRect.top));
+
+    Pen accentPen(Color(255, 226, 35, 26), 1);
+    g.DrawLine(&accentPen, (REAL)headerRect.left, (REAL)headerRect.bottom, (REAL)headerRect.right, (REAL)headerRect.bottom);
+
+    Font font28(hdc, hFont28);
     const wchar_t* part1 = L"AntiAFK-";
     const wchar_t* part2 = L"RBX";
-    SIZE size1, size2;
-    GetTextExtentPoint32W(hdc, part1, lstrlenW(part1), &size1);
-    GetTextExtentPoint32W(hdc, part2, lstrlenW(part2), &size2);
+    
+    RectF s1, s2;
+    PointF origin(0,0);
+    g.MeasureString(part1, -1, &font28, origin, &s1);
+    g.MeasureString(part2, -1, &font28, origin, &s2);
+    
+    REAL x_title = 20;
+    REAL y_title = ((REAL)headerRect.bottom - s1.Height) / 2 - 5;
+    
+    SolidBrush whiteBrush(Color(255, 255, 255, 255));
+    SolidBrush redBrush(Color(255, 226, 35, 26));
+    
+    g.DrawString(part1, -1, &font28, PointF(x_title, y_title), &whiteBrush);
+    g.DrawString(part2, -1, &font28, PointF(x_title + s1.Width * 0.9f, y_title), &redBrush);
 
-    int x_title = 20;
-    int y_title = (headerRect.bottom - size1.cy) / 2 - 5;
-    SetTextColor(hdc, RGB(255, 255, 255));
-    TextOutW(hdc, x_title, y_title, part1, lstrlenW(part1));
-    SetTextColor(hdc, RGB(0xE2, 0x23, 0x1A));
-    TextOutW(hdc, x_title + size1.cx, y_title, part2, lstrlenW(part2));
+    Font font12(hdc, hFont12);
+    SolidBrush grayBrush(Color(255, 160, 160, 160));
+    g.DrawString(g_Version, -1, &font12, PointF(x_title, y_title + s1.Height - 6), &grayBrush);
 
-    SelectObject(hdc, hFont12);
-    SetTextColor(hdc, RGB(160, 160, 160));
-    TextOutW(hdc, x_title, y_title + size1.cy - 8, g_Version, lstrlenW(g_Version));
+    int contentY = headerRect.bottom + 30;
+    
+    Font font12_c(hdc, hFont12);
+    SolidBrush textBrush(Color(255, 220, 220, 220));
+    RectF descRectF((REAL)20, (REAL)contentY, (REAL)(clientRect.right - 20), (REAL)50);
+    g.DrawString(L"The program for AntiAFK and Multi-Instance in Roblox.", -1, &font12_c, descRectF, NULL, &textBrush);
 
-    int contentY = headerRect.bottom + 25;
-    SelectObject(hdc, hFont12);
-    SetTextColor(hdc, RGB(200, 200, 200));
-    RECT desc_rect = { 20, contentY, clientRect.right - 20, contentY + 40 };
-    DrawTextW(hdc, L"The program for AntiAFK and Multi-Instance in Roblox.", -1, &desc_rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
-
-    SelectObject(hdc, hFont12b);
-    SelectObject(hdc, hFont10);
-    SetTextColor(hdc, RGB(160, 160, 160));
-    RECT author_rect = { 20, desc_rect.bottom + 10, clientRect.right - 20, desc_rect.bottom + 50 };
-    DrawTextW(hdc, L"Developed by Agzes with ❤️\nLicensed under the MIT License", -1, &author_rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
-
-    SelectObject(hdc, oldPen);
-    DeleteObject(accentPen);
+    Font font12b_c(hdc, hFont12b);
+    RectF authorRectF((REAL)20, (REAL)contentY + 60, (REAL)(clientRect.right - 20), (REAL)100);
+    g.DrawString(L"Developed by Agzes with \u2764\nLicensed under the MIT License", -1, &font12_c, authorRectF, NULL, &grayBrush);
 }
 void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
     if (!pData) return;
@@ -772,14 +786,16 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pData = new AboutData();
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
 
+        EnableAcrylic(hwnd);
+
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        pData->hFont28 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        pData->hFont12b = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont12 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont10 = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont28 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        pData->hFont12b = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont12 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont10 = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
@@ -973,10 +989,17 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         About_Paint_DrawButtons(memDC, pData->githubButtonRect, pData->sourceforgeButtonRect, pData->isHoveringGithub, pData->isHoveringSourceforge, pData->hFont12);
 
         {
-            HFONT hOldFont = (HFONT)SelectObject(memDC, pData->hFont12);
-            SetTextColor(memDC, pData->updateButtonCurrentColor);
-            DrawTextW(memDC, pData->updateButtonText.c_str(), -1, &pData->updateButtonRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            SelectObject(memDC, hOldFont);
+        {
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+            Font font(memDC, pData->hFont12);
+            SolidBrush textBrush(Color(255, GetRValue(pData->updateButtonCurrentColor), GetGValue(pData->updateButtonCurrentColor), GetBValue(pData->updateButtonCurrentColor)));
+            StringFormat sf;
+            sf.SetAlignment(StringAlignmentCenter);
+            sf.SetLineAlignment(StringAlignmentCenter);
+            RectF rectF((REAL)pData->updateButtonRect.left, (REAL)pData->updateButtonRect.top, (REAL)(pData->updateButtonRect.right - pData->updateButtonRect.left), (REAL)(pData->updateButtonRect.bottom - pData->updateButtonRect.top));
+            g.DrawString(pData->updateButtonText.c_str(), -1, &font, rectF, &sf, &textBrush);
+        }
         }
 
         About_Paint_DrawCloseButton(memDC, pData->topCloseButtonRect, pData->isHoveringTopClose);
@@ -1957,6 +1980,8 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         EnableAcrylic(hwnd);
 
+        EnableAcrylic(hwnd);
+
         enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
         const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
@@ -1965,9 +1990,9 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
-        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
@@ -2126,62 +2151,77 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        SetBkMode(memDC, TRANSPARENT);
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        bool needsRedraw = true;
+        SolidBrush bgBrush(Color(200, 35, 35, 35)); 
+        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
 
         HFONT oldFont = (HFONT)SelectObject(memDC, pData->hFontTitle);
-        SetTextColor(memDC, DARK_TEXT);
-        TextOutW(memDC, 8, 6, L"Set Custom Interval", 19);
+        Font fontTitle(memDC, pData->hFontTitle);
+        SolidBrush textBrush_Initial(Color(255, 220, 220, 220));
+        g.DrawString(L"Set Custom Interval", -1, &fontTitle, PointF(8.0f, 6.0f), &textBrush_Initial);
 
-        SelectObject(memDC, pData->hFontText);
-        SetTextColor(memDC, RGB(180, 180, 180));
-        TextOutW(memDC, 8, 30, L"Enter interval in seconds (max 1200):", 37);
+        Font fontText(memDC, pData->hFontText);
+        SolidBrush grayBrush(Color(255, 180, 180, 180));
+        g.DrawString(L"Enter interval in seconds (max 1200):", -1, &fontText, PointF(8.0f, 30.0f), &grayBrush);
 
-        HBRUSH inputBrush = CreateSolidBrush(RGB(20, 20, 20));
-        HPEN inputPen = CreatePen(PS_SOLID, 1, pData->hasFocus ? RGB(0, 122, 204) : RGB(80, 80, 80));
-        SelectObject(memDC, inputBrush);
-        SelectObject(memDC, inputPen);
-        RoundRect(memDC, pData->inputRect.left, pData->inputRect.top, pData->inputRect.right, pData->inputRect.bottom, 5, 5);
-        DeleteObject(inputBrush);
-        DeleteObject(inputPen);
+        SolidBrush inputBrush(Color(255, 50, 50, 50)); 
+        Pen inputPen(pData->hasFocus ? Color(255, 0, 122, 204) : Color(255, 100, 100, 100), 1.0f);
+        
+        GraphicsPath inputPath;
+        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 180, 90);
+        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 270, 90);
+        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
+        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
+        inputPath.CloseFigure();
 
-        SelectObject(memDC, pData->hFontInput);
-        SetTextColor(memDC, DARK_TEXT);
+        g.FillPath(&inputBrush, &inputPath);
+        g.DrawPath(&inputPen, &inputPath);
+
+        Font inputFont(memDC, pData->hFontInput);
+        SolidBrush inputTextBrush(Color(255, 255, 255, 255));
         RECT textRect = pData->inputRect;
         InflateRect(&textRect, -8, 0);
-        DrawTextW(memDC, pData->inputText, -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        StringFormat sf;
+        sf.SetAlignment(StringAlignmentNear);
+        sf.SetLineAlignment(StringAlignmentCenter);
+        RectF textRectF((REAL)textRect.left, (REAL)textRect.top, (REAL)(textRect.right - textRect.left), (REAL)(textRect.bottom - textRect.top));
+        g.DrawString(pData->inputText, -1, &inputFont, textRectF, &sf, &inputTextBrush);
 
         if (pData->hasFocus) {
-            SIZE textSize;
-            HFONT oldInputFont = (HFONT)SelectObject(memDC, pData->hFontInput);
-            GetTextExtentPoint32W(memDC, pData->inputText, (int)wcslen(pData->inputText), &textSize);
-            SelectObject(memDC, oldInputFont);
-
-            int caretX = pData->inputRect.left + 8 + textSize.cx;
-            int caretY = pData->inputRect.top + 4;
-            SetCaretPos(caretX, caretY);
+             RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
+             g.MeasureString(pData->inputText, -1, &inputFont, layout, &size);
+             
+             int caretX = pData->inputRect.left + 8 + (int)size.Width;
+             int caretY = pData->inputRect.top + 5;
+             SetCaretPos(caretX, caretY);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            COLORREF fill = primary ? (hover ? RGB(20, 142, 224) : RGB(0, 122, 204)) : (hover ? RGB(80, 80, 80) : RGB(60, 60, 60));
-            HBRUSH br = CreateSolidBrush(fill);
-            HPEN pen = (HPEN)GetStockObject(NULL_PEN);
-            SelectObject(memDC, br);
-            SelectObject(memDC, pen);
-            RoundRect(memDC, r.left, r.top, r.right, r.bottom, 5, 5);
-            DeleteObject(br);
-            SetTextColor(memDC, DARK_TEXT);
-            SelectObject(memDC, pData->hFontText);
-            DrawTextW(memDC, txt, -1, (LPRECT)&r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
+            SolidBrush br(fill);
+            GraphicsPath path;
+            path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
+            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
+            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
+            path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&br, &path);
+
+            Font font(memDC, pData->hFontText);
+            SolidBrush textBrush(Color(255, 255, 255, 255));
+            StringFormat sf;
+            sf.SetAlignment(StringAlignmentCenter);
+            sf.SetLineAlignment(StringAlignmentCenter);
+            RectF rectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+            g.DrawString(txt, -1, &font, rectF, &sf, &textBrush);
             };
         drawBtn(pData->okButtonRect, L"OK", pData->isHoveringOk, true);
         drawBtn(pData->cancelButtonRect, L"Cancel", pData->isHoveringCancel, false);
 
-        About_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
-
-        SelectObject(memDC, oldFont);
+        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -2286,9 +2326,9 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
-        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
@@ -2349,6 +2389,50 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         }
         return 0;
     }
+    case WM_MOUSEMOVE:
+    {
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        bool hover_ok = PtInRect(&pData->okButtonRect, pt);
+        bool hover_cancel = PtInRect(&pData->cancelButtonRect, pt);
+        bool hover_close = PtInRect(&pData->closeButtonRect, pt);
+        bool hover_input = PtInRect(&pData->inputRect, pt);
+
+        if (hover_ok != pData->isHoveringOk) { pData->isHoveringOk = hover_ok; InvalidateRect(hwnd, &pData->okButtonRect, FALSE); }
+        if (hover_cancel != pData->isHoveringCancel) { pData->isHoveringCancel = hover_cancel; InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE); }
+        if (hover_close != pData->isHoveringClose) { pData->isHoveringClose = hover_close; InvalidateRect(hwnd, &pData->closeButtonRect, FALSE); }
+
+        if (hover_ok || hover_cancel || hover_close) SetCursor(pData->hCursorHand);
+        else if (hover_input) SetCursor(pData->hCursorText);
+        else SetCursor(pData->hCursorArrow);
+
+        if ((hover_ok || hover_cancel || hover_close) && !pData->isTrackingMouse) {
+            TRACKMOUSEEVENT tme = { sizeof(tme) };
+            tme.dwFlags = TME_LEAVE;
+            tme.hwndTrack = hwnd;
+            TrackMouseEvent(&tme);
+            pData->isTrackingMouse = true;
+        }
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        pData->isHoveringOk = pData->isHoveringCancel = pData->isHoveringClose = false;
+        pData->isTrackingMouse = false;
+        InvalidateRect(hwnd, &pData->okButtonRect, FALSE);
+        InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE);
+        InvalidateRect(hwnd, &pData->closeButtonRect, FALSE);
+        SetCursor(pData->hCursorArrow);
+        return 0;
+    case WM_NCHITTEST:
+    {
+        LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
+        if (hit == HTCLIENT) {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            ScreenToClient(hwnd, &pt);
+            RECT dragRect = { 0, 0, pData->closeButtonRect.left, 30 };
+            if (PtInRect(&dragRect, pt)) return HTCAPTION;
+        }
+        return hit;
+    }
     case WM_CHAR:
     {
         if (wParam >= '0' && wParam <= '9') {
@@ -2391,57 +2475,84 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        SetBkMode(memDC, TRANSPARENT);
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+        SolidBrush bgBrush(Color(240, 35, 35, 35));
+        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
 
         HFONT oldFont = (HFONT)SelectObject(memDC, pData->hFontTitle);
-        SetTextColor(memDC, DARK_TEXT);
-        TextOutW(memDC, 8, 6, L"Set Custom FPS Limit", 20);
+        Font fontTitle(memDC, pData->hFontTitle);
+        SolidBrush textBrush_Initial(Color(255, 220, 220, 220));
+        g.DrawString(L"Set Custom FPS Limit", -1, &fontTitle, PointF(8.0f, 6.0f), &textBrush_Initial);
 
-        SelectObject(memDC, pData->hFontText);
-        SetTextColor(memDC, RGB(180, 180, 180));
-        TextOutW(memDC, 8, 30, L"Enter FPS limit (0=off, max 60):", 32);
+        Font fontText(memDC, pData->hFontText);
+        SolidBrush grayBrush(Color(255, 180, 180, 180));
+        g.DrawString(L"Enter FPS limit (0=off, max 60):", -1, &fontText, PointF(8.0f, 30.0f), &grayBrush);
 
-        HBRUSH inputBrush = CreateSolidBrush(RGB(20, 20, 20));
-        HPEN inputPen = CreatePen(PS_SOLID, 1, pData->hasFocus ? RGB(0, 122, 204) : RGB(80, 80, 80));
-        SelectObject(memDC, inputBrush);
-        SelectObject(memDC, inputPen);
-        RoundRect(memDC, pData->inputRect.left, pData->inputRect.top, pData->inputRect.right, pData->inputRect.bottom, 5, 5);
-        DeleteObject(inputBrush);
-        DeleteObject(inputPen);
+        SolidBrush inputBrush(Color(255, 50, 50, 50));
+        Pen inputPen(pData->hasFocus ? Color(255, 0, 122, 204) : Color(255, 100, 100, 100), 1.0f);
+        
+        GraphicsPath inputPath;
+        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 180, 90);
+        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 270, 90);
+        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
+        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
+        inputPath.CloseFigure();
 
-        SelectObject(memDC, pData->hFontInput);
-        SetTextColor(memDC, DARK_TEXT);
-        RECT textRect = pData->inputRect;
-        InflateRect(&textRect, -8, 0);
-        DrawTextW(memDC, pData->inputText, -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        g.FillPath(&inputBrush, &inputPath);
+        g.DrawPath(&inputPen, &inputPath);
+
+        Font inputFont(memDC, pData->hFontInput);
+        SolidBrush inputBrush2(Color(255, 255, 255, 255));
+        
+        StringFormat sf;
+        sf.SetAlignment(StringAlignmentNear);
+        sf.SetLineAlignment(StringAlignmentCenter);
+        
+        RECT rect;
+        rect.top = pData->inputRect.top;
+        rect.bottom = pData->inputRect.bottom;
+        rect.left = pData->inputRect.left;
+        rect.right = pData->inputRect.right;
+        
+        InflateRect(&rect, -8, 0);
+        
+        RectF textRectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+        g.DrawString(pData->inputText, -1, &inputFont, textRectF, &sf, &inputBrush2);
 
         if (pData->hasFocus) {
-            SIZE textSize;
-            HFONT oldInputFont = (HFONT)SelectObject(memDC, pData->hFontInput);
-            GetTextExtentPoint32W(memDC, pData->inputText, (int)wcslen(pData->inputText), &textSize);
-            SelectObject(memDC, oldInputFont);
-
-            int caretX = pData->inputRect.left + 8 + textSize.cx;
-            int caretY = pData->inputRect.top + 4;
+            RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
+            g.MeasureString(pData->inputText, -1, &inputFont, layout, &size);
+            
+            int caretX = pData->inputRect.left + 8 + (int)size.Width;
+            int caretY = pData->inputRect.top + 5;
             SetCaretPos(caretX, caretY);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            COLORREF fill = primary ? (hover ? RGB(20, 142, 224) : RGB(0, 122, 204)) : (hover ? RGB(80, 80, 80) : RGB(60, 60, 60));
-            HBRUSH br = CreateSolidBrush(fill);
-            HPEN pen = (HPEN)GetStockObject(NULL_PEN);
-            SelectObject(memDC, br); SelectObject(memDC, pen);
-            RoundRect(memDC, r.left, r.top, r.right, r.bottom, 5, 5);
-            DeleteObject(br);
-            SetTextColor(memDC, DARK_TEXT);
-            SelectObject(memDC, pData->hFontText);
-            DrawTextW(memDC, txt, -1, (LPRECT)&r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
+            SolidBrush br(fill);
+            GraphicsPath path;
+            path.AddArc((REAL)r.left, (REAL)r.top, 10.0f, 10.0f, 180, 90);
+            path.AddArc((REAL)r.right - 10.0f, (REAL)r.top, 10.0f, 10.0f, 270, 90);
+            path.AddArc((REAL)r.right - 10.0f, (REAL)r.bottom - 10.0f, 10.0f, 10.0f, 0, 90);
+            path.AddArc((REAL)r.left, (REAL)r.bottom - 10.0f, 10.0f, 10.0f, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&br, &path);
+
+            Font font(memDC, pData->hFontText);
+            SolidBrush textBrush(Color(255, 255, 255, 255));
+            StringFormat sf;
+            sf.SetAlignment(StringAlignmentCenter);
+            sf.SetLineAlignment(StringAlignmentCenter);
+            RectF rectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+            g.DrawString(txt, -1, &font, rectF, &sf, &textBrush);
             };
         drawBtn(pData->okButtonRect, L"OK", pData->isHoveringOk, true);
         drawBtn(pData->cancelButtonRect, L"Cancel", pData->isHoveringCancel, false);
 
-        About_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
+        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
 
         SelectObject(memDC, oldFont);
 
@@ -2554,12 +2665,12 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        pData->hFont40 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
-        pData->hFont20 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont14 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont14b = CreateFontW(-MulDiv(13, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont13 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFont11 = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont40 = CreateFontW(-MulDiv(28, dpiY, 72), 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Black");
+        pData->hFont20 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont14 = CreateFontW(-MulDiv(14, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont14b = CreateFontW(-MulDiv(13, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont13 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFont11 = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         const int dlgW = 472, dlgH = 312;
         const int margin = 10;
@@ -2773,48 +2884,55 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (pData->page == 0)
         {
             const int margin = 20;
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+            Font font20(memDC, pData->hFont20);
+            SolidBrush grayBrush(Color(255, 180, 180, 180));
             int y_pos = 60;
-            SetTextColor(memDC, RGB(180, 180, 180));
-            TextOutW(memDC, margin + 3, y_pos+2, L"Welcome to", 10);
+            g.DrawString(L"Welcome to", -1, &font20, PointF((REAL)margin + 3, (REAL)y_pos + 2), &grayBrush);
             
-            SelectObject(memDC, pData->hFont40);
+            Font font40(memDC, pData->hFont40);
             const wchar_t* p1 = L"AntiAFK-";
             const wchar_t* p2 = L"RBX";
-            SIZE s1, s2;
-            GetTextExtentPoint32W(memDC, p1, lstrlenW(p1), &s1);
-            GetTextExtentPoint32W(memDC, p2, lstrlenW(p2), &s2);
-
-            SelectObject(memDC, pData->hFont40);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            TextOutW(memDC, margin, y_pos + 15, p1, lstrlenW(p1));
-            SetTextColor(memDC, RGB(0xE2, 0x23, 0x1A));
-            TextOutW(memDC, margin + s1.cx, y_pos + 15, p2, lstrlenW(p2));
             
-            SelectObject(memDC, pData->hFont13);
-            SetTextColor(memDC, RGB(200, 200, 200));
-            RECT rSub = { margin, y_pos + 15 + s1.cy + 10, clientRect.right - margin, clientRect.bottom - 80 };
-            DrawTextW(memDC, L"This quick tutorial will walk you through the key features and help with the initial setup.", -1, &rSub, DT_LEFT | DT_WORDBREAK);
+            RectF s1;
+            g.MeasureString(p1, -1, &font40, PointF(0,0), &s1);
 
-            SelectObject(memDC, old);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            SolidBrush redBrush(Color(255, 226, 35, 26));
+
+            g.DrawString(p1, -1, &font40, PointF((REAL)margin, (REAL)y_pos + 15), &whiteBrush);
+            g.DrawString(p2, -1, &font40, PointF((REAL)margin + s1.Width, (REAL)y_pos + 15), &redBrush);
+            
+            Font font13(memDC, pData->hFont13);
+            SolidBrush textBrush(Color(255, 200, 200, 200));
+            RectF rSub((REAL)margin, (REAL)y_pos + 15 + s1.Height + 10, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 80);
+            g.DrawString(L"This quick tutorial will walk you through the key features and help with the initial setup.", -1, &font13, rSub, NULL, &textBrush);
         }
         else if (pData->page == 1)
         {
             const int margin = 20;
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            RECT rTitle = { margin, 20, clientRect.right, 55 };
-            DrawTextW(memDC, L"How to Use?", -1, &rTitle, DT_LEFT | DT_TOP | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            SelectObject(memDC, pData->hFont13);
-            RECT rText = { margin, rTitle.bottom + 5, clientRect.right - margin, rTitle.bottom + 80 };
+            Font font20(memDC, pData->hFont20);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            g.DrawString(L"How to Use?", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
+
+            Font font13(memDC, pData->hFont13);
+            RectF rText((REAL)margin, (REAL)55 + 5, (REAL)clientRect.right - margin, (REAL)80);
             const wchar_t* howto = L"AntiAFK-RBX is a tray application with UI. You can open it from the tray menu. The tray icon (next to the clock) shows the current status and provides quick access.";
-            DrawTextW(memDC, howto, -1, &rText, DT_WORDBREAK | DT_LEFT);
+            g.DrawString(howto, -1, &font13, rText, NULL, &whiteBrush);
 
-            RECT rPrevLabel = { 0, rText.bottom + 15, clientRect.right, rText.bottom + 35 };
-            DrawTextW(memDC, L"The tray icon is dynamic and shows the current status:", -1, &rPrevLabel, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            sfCenter.SetLineAlignment(StringAlignmentCenter);
+            
+            RectF rPrevLabel(0, rText.GetBottom() + 15, (REAL)clientRect.right, 20);
+            g.DrawString(L"The tray icon is dynamic and shows the current status:", -1, &font13, rPrevLabel, &sfCenter, &whiteBrush);
 
-            int iconsY = rPrevLabel.bottom + 8;
+            int iconsY = (int)rPrevLabel.GetBottom() + 8;
             int iconSize = 32;
             int gap = 90;
             int totalW = iconSize * 3 + gap * 2;
@@ -2829,112 +2947,124 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             DestroyIcon(icoOnSingle);
             DestroyIcon(icoOnMulti);
 
-            SelectObject(memDC, pData->hFont13);
+            sfCenter.SetLineAlignment(StringAlignmentNear);
+            
             int labelWidth = iconSize + gap;
             int labelY = iconsY + iconSize + 4;
-            RECT rL1 = { startX - (gap - iconSize) / 2, labelY, startX + iconSize + (gap - iconSize) / 2, labelY + 24 };
-            RECT rL2 = { rL1.left + iconSize + gap, labelY, rL1.right + iconSize + gap, labelY + 24 };
-            RECT rL3 = { rL2.left + iconSize + gap, labelY, rL2.right + iconSize + gap, labelY + 24 };
-            SetTextColor(memDC, RGB(255, 255, 255));
-            DrawTextW(memDC, L"ON (Single)", -1, &rL1, DT_CENTER | DT_TOP | DT_SINGLELINE);
-            DrawTextW(memDC, L"OFF", -1, &rL2, DT_CENTER | DT_TOP | DT_SINGLELINE);
-            DrawTextW(memDC, L"ON (Multi)", -1, &rL3, DT_CENTER | DT_TOP | DT_SINGLELINE);
-
-            SelectObject(memDC, old);
+            RectF rL1((REAL)startX - (gap - iconSize) / 2, (REAL)labelY, (REAL)iconSize + gap, 24);
+            RectF rL2((REAL)rL1.GetRight(), (REAL)labelY, (REAL)iconSize + gap, 24);
+            RectF rL3((REAL)rL2.GetRight(), (REAL)labelY, (REAL)iconSize + gap, 24);
+            
+            g.DrawString(L"ON (Single)", -1, &font13, rL1, &sfCenter, &whiteBrush);
+            g.DrawString(L"OFF", -1, &font13, rL2, &sfCenter, &whiteBrush);
+            g.DrawString(L"ON (Multi)", -1, &font13, rL3, &sfCenter, &whiteBrush);
         }
         else if (pData->page == 2)
         {
             const int margin = 20;
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            RECT rTitle = { margin, 20, clientRect.right, 55 };
-            DrawTextW(memDC, L"How It Works?", -1, &rTitle, DT_LEFT | DT_TOP | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            SelectObject(memDC, pData->hFont13);
-            RECT rText = { margin, rTitle.bottom + 5, clientRect.right - margin, clientRect.bottom - 80 };
+            Font font20(memDC, pData->hFont20);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            g.DrawString(L"How it Works?", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
+            
+            Font font13(memDC, pData->hFont13);
+            RectF rText((REAL)margin, (REAL)20 + 55, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 80);
             const wchar_t* workText = L"When the program starts, it starts another thread (AntiAFK thread), which checks whether the roblox window is running, and then performs actions on the user's settings, if the settings change during the process, the thread is restarted.";
-            DrawTextW(memDC, workText, -1, &rText, DT_WORDBREAK | DT_LEFT);
-
-            SelectObject(memDC, old);
+            g.DrawString(workText, -1, &font13, rText, NULL, &whiteBrush);
         }
         else if (pData->page == 3)
         {
             const int margin = 20;
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            RECT rTitle = { margin, 20, clientRect.right, 55 };
-            DrawTextW(memDC, L"Tips To Use", -1, &rTitle, DT_LEFT | DT_TOP | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            SelectObject(memDC, pData->hFont14b);
-            RECT rText = { margin, rTitle.bottom + 25, clientRect.right - margin, clientRect.bottom - 120 };
-            DrawTextW(memDC, L"Enable “Auto-Start”?", -1, &rText, DT_CENTER | DT_TOP);
+            Font font20(memDC, pData->hFont20);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            g.DrawString(L"Tips To Use", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
 
-            SelectObject(memDC, pData->hFont13);
-            rText.top += 30;
+            Font font14b(memDC, pData->hFont14b);
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 120);
+            g.DrawString(L"Enable “Auto-Start”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
+            
+            Font font13(memDC, pData->hFont13);
+            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)clientRect.right - margin, (REAL)100);
             const wchar_t* tipsText = L"This feature will automatically start and stop the Anti-AFK function when you open or close Roblox. It's highly recommended for convenience.";
-            DrawTextW(memDC, tipsText, -1, &rText, DT_WORDBREAK | DT_CENTER);
+            g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
 
-            SelectObject(memDC, pData->hFont11);
-            SetTextColor(memDC, RGB(123, 123, 123));
-            RECT rSubText = { margin, pData->nextButtonRect.top - 30, clientRect.right - margin, pData->nextButtonRect.top - 10 };
-            DrawTextW(memDC, L"You can change this later in the 'Automation' tab.", -1, &rSubText, DT_CENTER | DT_TOP | DT_WORDBREAK);
-
-            SelectObject(memDC, old);
+            Font font11(memDC, pData->hFont11);
+            SolidBrush grayBrush(Color(255, 123, 123, 123));
+            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)clientRect.right - margin, (REAL)20);
+            g.DrawString(L"You can change this later in the 'Automation' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
         }
         else if (pData->page == 4)
         {
             const int margin = 20;
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            RECT rTitle = { margin, 20, clientRect.right, 55 };
-            DrawTextW(memDC, L"Tips To Use", -1, &rTitle, DT_LEFT | DT_TOP | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            SelectObject(memDC, pData->hFont14b);
-            RECT rText = { margin, rTitle.bottom + 25, clientRect.right - margin, clientRect.bottom - 120 };
-            DrawTextW(memDC, L"Enable “User-Safe Mode”?", -1, &rText, DT_CENTER | DT_TOP);
+            Font font20(memDC, pData->hFont20);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            g.DrawString(L"Tips To Use", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
 
-            SelectObject(memDC, pData->hFont13);
-            rText.top += 30;
+            Font font14b(memDC, pData->hFont14b);
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 120);
+            g.DrawString(L"Enable “User-Safe Mode”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
+            
+            Font font13(memDC, pData->hFont13);
+            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)clientRect.right - margin, (REAL)100);
             const wchar_t* tipsText = L"This mode prevents the Anti-AFK action from interrupting you if you are actively using your computer. It will wait for you to be idle. Recommended.";
-            DrawTextW(memDC, tipsText, -1, &rText, DT_WORDBREAK | DT_CENTER);
+            g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
 
-            pData->wikiLinkRect = { 0, rText.top + 65, clientRect.right, rText.top + 85 };
+            pData->wikiLinkRect = { 0, (int)rTextBody.Y + 65, clientRect.right, (int)rTextBody.Y + 85 };
             pData->wikiLinkRect.left = (clientRect.right - 100) / 2;
             pData->wikiLinkRect.right = pData->wikiLinkRect.left + 100;
 
-            SelectObject(memDC, pData->hFont11);
-            SetTextColor(memDC, RGB(123, 123, 123));
-            RECT rSubText = { margin, pData->nextButtonRect.top - 30, clientRect.right - margin, pData->nextButtonRect.top - 10 };
-            DrawTextW(memDC, L"You can change this later in the 'General' tab.", -1, &rSubText, DT_CENTER | DT_TOP | DT_WORDBREAK);
-
-            SelectObject(memDC, old);
+            Font font11(memDC, pData->hFont11);
+            SolidBrush grayBrush(Color(255, 123, 123, 123));
+            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)clientRect.right - margin, (REAL)20);
+            g.DrawString(L"You can change this later in the 'General' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
         }
         else if (pData->page == 5)
         {
-            HFONT old = (HFONT)SelectObject(memDC, pData->hFont20);
-            SetTextColor(memDC, RGB(255, 255, 255));
-            RECT rTop = { 0, 60, clientRect.right, 90 };
-            DrawTextW(memDC, L"Thank for using", -1, &rTop, DT_CENTER | DT_TOP | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-            SelectObject(memDC, pData->hFont40);
+            Font font20(memDC, pData->hFont20);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            
+            RectF rTop((REAL)0, (REAL)60, (REAL)clientRect.right, (REAL)30);
+            g.DrawString(L"Thank for using", -1, &font20, rTop, &sfCenter, &whiteBrush);
+
+            Font font40(memDC, pData->hFont40);
             const wchar_t* p1 = L"AntiAFK-";
             const wchar_t* p2 = L"RBX";
-            SIZE s1, s2;
-            GetTextExtentPoint32W(memDC, p1, lstrlenW(p1), &s1);
-            GetTextExtentPoint32W(memDC, p2, lstrlenW(p2), &s2);
-            int totalW = s1.cx + s2.cx;
-            int startX = (clientRect.right - totalW) / 2;
-            SetTextColor(memDC, RGB(255, 255, 255));
-            TextOutW(memDC, startX, rTop.bottom - 5, p1, lstrlenW(p1));
-            SetTextColor(memDC, RGB(0xE2, 0x23, 0x1A));
-            TextOutW(memDC, startX + s1.cx, rTop.bottom - 5, p2, lstrlenW(p2));
+            
+            RectF s1;
+            g.MeasureString(p1, -1, &font40, PointF(0,0), &s1);
+            RectF s2;
+            g.MeasureString(p2, -1, &font40, PointF(0,0), &s2);
+            
+            REAL totalW = s1.Width + s2.Width;
+            REAL startX = ((REAL)clientRect.right - totalW) / 2;
+            
+            SolidBrush redBrush(Color(255, 226, 35, 26));
 
-            SelectObject(memDC, pData->hFont13);
-            SetTextColor(memDC, RGB(200, 200, 200));
-            RECT rBottom = { 20, rTop.bottom + s1.cy + 25, clientRect.right - 20, clientRect.bottom - 80 };
-            DrawTextW(memDC, L"You're all set! Remember, you can change these settings anytime in the main window. This tutorial can also be reopened from the tray menu.", -1, &rBottom, DT_CENTER | DT_WORDBREAK);
+            g.DrawString(p1, -1, &font40, PointF(startX, (REAL)rTop.GetBottom() - 5), &whiteBrush);
+            g.DrawString(p2, -1, &font40, PointF(startX + s1.Width, (REAL)rTop.GetBottom() - 5), &redBrush);
 
-            SelectObject(memDC, old);
+            Font font13(memDC, pData->hFont13);
+            SolidBrush grayBrush(Color(255, 200, 200, 200));
+            RectF rBottom((REAL)20, (REAL)rTop.GetBottom() + s1.Height + 25, (REAL)clientRect.right - 20, (REAL)clientRect.bottom - 80);
+            g.DrawString(L"You're all set! Remember, you can change these settings anytime in the main window. This tutorial can also be reopened from the tray menu.", -1, &font13, rBottom, &sfCenter, &grayBrush);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
@@ -3178,35 +3308,29 @@ void FillRoundedRectangle(Graphics* g, Brush* brush, REAL x, REAL y, REAL width,
     g->FillPath(brush, &path);
 }
 void MainUI_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
-    if (isHovering) {
-        HBRUSH hBrush = CreateSolidBrush(RGB(232, 17, 35));
-        FillRect(hdc, &closeButtonRect, hBrush);
-        DeleteObject(hBrush);
-    }
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-    HPEN hPen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
     int x_center = (closeButtonRect.left + closeButtonRect.right) / 2;
     int y_center = (closeButtonRect.top + closeButtonRect.bottom) / 2;
     int cross_size = 5;
-    MoveToEx(hdc, x_center - cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center + cross_size + 1, y_center + cross_size + 1);
-    MoveToEx(hdc, x_center + cross_size, y_center - cross_size, NULL);
-    LineTo(hdc, x_center - cross_size - 1, y_center + cross_size + 1);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hPen);
+
+    DrawSharedCloseButton(&g, closeButtonRect, isHovering);
 }
 void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool checked, bool isHovering, float animState) {
-    SetTextColor(hdc, DARK_TEXT);
-    HFONT oldFont = (HFONT)SelectObject(hdc, font); 
-    RECT textRect = { 20, rect.top, rect.left - 10, rect.bottom };
-    DrawTextW(hdc, text, -1, &textRect, DT_VCENTER | DT_SINGLELINE | DT_LEFT);
-    SelectObject(hdc, oldFont);
-    int w = 50, h = 24;
-    RECT toggleBackRect = { rect.left, rect.top + (rect.bottom - rect.top - h) / 2, rect.left + w, rect.top + (rect.bottom - rect.top - h) / 2 + h };
-
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    Font gdiFont(hdc, font);
+    SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF textRectF((REAL)20, (REAL)rect.top, (REAL)(rect.left - 10 - 20), (REAL)(rect.bottom - rect.top));
+    g.DrawString(text, -1, &gdiFont, textRectF, &sf, &textBrush);
+
+    int w = 50, h = 24;
+    RECT toggleBackRect = { rect.left, rect.top + (rect.bottom - rect.top - h) / 2, rect.left + w, rect.top + (rect.bottom - rect.top - h) / 2 + h };
 
     Color baseColor = checked ? Color(255, 0, 122, 204) : Color(255, 80, 80, 80);
     Color hoverColor(baseColor.GetA(), 
@@ -3230,13 +3354,18 @@ void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_
     g.FillEllipse(&knobBrush, knobX, knobY, knobSize, knobSize);
 }
 void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wchar_t* label, const wchar_t* value, bool isHovering) {
-    SetTextColor(hdc, DARK_TEXT);
-    HFONT oldFont = (HFONT)SelectObject(hdc, font);
-    RECT labelRect = { 20, rect.top, rect.left - 15, rect.bottom };
-    DrawTextW(hdc, label, -1, &labelRect, DT_VCENTER | DT_SINGLELINE | DT_LEFT);
-
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
+    
+    Font gdiFont(hdc, font);
+    SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    
+    RectF labelRectF((REAL)20, (REAL)rect.top, (REAL)(rect.left - 15 - 20), (REAL)(rect.bottom - rect.top));
+    g.DrawString(label, -1, &gdiFont, labelRectF, &sf, &textBrush);
+
     SolidBrush backBrush(isHovering ? Color(255, 65, 65, 65) : Color(255, 45, 45, 45));
     Pen borderPen(Color(255, 80, 80, 80));
     
@@ -3245,19 +3374,15 @@ void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wcha
 
     RECT valueRect = rect;
     InflateRect(&valueRect, -8, 0);
-    SetTextColor(hdc, DARK_TEXT);
-    DrawTextW(hdc, value, -1, &valueRect, DT_VCENTER | DT_SINGLELINE | DT_LEFT);
+    RectF valueRectF((REAL)valueRect.left, (REAL)valueRect.top, (REAL)(valueRect.right - valueRect.left), (REAL)(valueRect.bottom - valueRect.top));
+    g.DrawString(value, -1, &gdiFont, valueRectF, &sf, &textBrush);
 
-    HPEN arrowPen = CreatePen(PS_SOLID, 2, DARK_TEXT);
-    SelectObject(hdc, arrowPen);
+    Pen arrowPen(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)), 2.0f);
     int arrowX = rect.right - 15;
     int arrowY = rect.top + (rect.bottom - rect.top) / 2;
-    MoveToEx(hdc, arrowX - 4, arrowY - 2, NULL);
-    LineTo(hdc, arrowX, arrowY + 2);
-    LineTo(hdc, arrowX + 4, arrowY - 2);
-    DeleteObject(arrowPen);
-
-    SelectObject(hdc, oldFont);
+    
+    g.DrawLine(&arrowPen, (REAL)(arrowX - 4), (REAL)(arrowY - 2), (REAL)arrowX, (REAL)(arrowY + 2));
+    g.DrawLine(&arrowPen, (REAL)arrowX, (REAL)(arrowY + 2), (REAL)(arrowX + 4), (REAL)(arrowY - 2));
 }
 void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering) {
     Graphics g(hdc);
@@ -3269,11 +3394,13 @@ void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isH
     g.FillEllipse(&backBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
     g.DrawEllipse(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
 
-    SetTextColor(hdc, DARK_TEXT);
-    HFONT oldFont = (HFONT)SelectObject(hdc, font);
-    SetBkMode(hdc, TRANSPARENT);
-    DrawTextW(hdc, L"?", -1, (LPRECT)&rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, oldFont);
+    Font gdiFont(hdc, font);
+    SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF textRectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g.DrawString(L"?", -1, &gdiFont, textRectF, &sf, &textBrush);
 }
 void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     for (int i = 0; i < pData->navItems.size(); ++i) {
@@ -3309,7 +3436,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
             if (pData->currentPage == 0) { // General
                 if (i == 0) { title = L"Interval"; text = L"How often to perform an Anti-AFK action. \nNote: Roblox kicks you after 20 minutes of inactivity."; }
                 if (i == 1) { title = L"Action"; text = L"The keypress to simulate to prevent being kicked."; }
-                if (i == 2) { title = L"Multi-Instance Support"; text = L"Allows running multiple Roblox clients at once. The Anti-AFK action will apply to all of them."; }
+                if (i == 2) { title = L"Multi-Instance Support"; text = L"Allows running multiple Roblox clients at once. The Anti-AFK action will apply to all of them.\n\nHow to use:\n1. Close all Roblox clients\n2. Open AntiAFK-RBX\n3. Enable Multi-Instance Support\n4. Open Roblox clients"; }
                 if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses the Anti-AFK action if you are actively using your computer to avoid interruptions. It waits for you to be idle before proceeding.\n\n'Legacy': Checks for mouse clicks and key presses.\n'Beta': Checks for any system-wide input, which is more reliable."; }
                 if (i == 4) { title = L"Restore Window"; text = L"How to return focus to your previous window after the action. \n\n'SetForeground' is recommended.\n'Alt+Tab' may work better for fullscreen games."; }
             } else if (pData->currentPage == 1) { // Automation
@@ -3443,6 +3570,9 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     Pen headerLinePen(Color(40, 255, 255, 255));
     g.DrawLine(&headerLinePen, 0, 30, clientRect.right, 30);
 
+    SolidBrush mainBgBrush(Color(100, 10, 10, 10));
+    g.FillRectangle(&mainBgBrush, (REAL)clientRect.left, (REAL)clientRect.top, (REAL)(clientRect.right - clientRect.left), (REAL)(clientRect.bottom - clientRect.top));
+
     if (pData->isHoveringIcon) {
         SolidBrush hoverBrush(Color(255, 70, 70, 70));
         g.FillRectangle(&hoverBrush, (REAL)pData->iconButtonRect.left, (REAL)pData->iconButtonRect.top, (REAL)(pData->iconButtonRect.right - pData->iconButtonRect.left), (REAL)(pData->iconButtonRect.bottom - pData->iconButtonRect.top));
@@ -3523,17 +3653,20 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         bool isSelected = (pData->currentPage == i);
         bool isHovering = (pData->hoveringNavItem == i);
 
+        HFONT fontToUse = pData->hFontNav;
+        Color textColor(255, 160, 160, 160);
+
         if (isSelected) {
-            SelectObject(hdc, pData->hFontNavSelected);
-            SetTextColor(hdc, RGB(255, 255, 255));
+            fontToUse = pData->hFontNavSelected;
+            textColor = Color(255, 255, 255, 255);
         } else if (isHovering) {
-            SelectObject(hdc, pData->hFontNav);
-            SetTextColor(hdc, RGB(230, 230, 230));
-        } else {
-            SelectObject(hdc, pData->hFontNav);
-            SetTextColor(hdc, RGB(160, 160, 160));
+            textColor = Color(255, 230, 230, 230);
         }
-        DrawTextW(hdc, pData->navItems[i].first.c_str(), -1, &pData->navItems[i].second, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        
+        Font navFont(hdc, fontToUse);
+        SolidBrush navBrush(textColor);
+        RectF navItemRect((REAL)pData->navItems[i].second.left, (REAL)pData->navItems[i].second.top, (REAL)(pData->navItems[i].second.right - pData->navItems[i].second.left), (REAL)(pData->navItems[i].second.bottom - pData->navItems[i].second.top));
+        g.DrawString(pData->navItems[i].first.c_str(), -1, &navFont, navItemRect, &sf, &navBrush);
     }
 
     SolidBrush underlineBrush(Color(255, 0, 122, 204));
@@ -3590,22 +3723,21 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             Pen borderPen(Color(128, accentColor.GetR(), accentColor.GetG(), accentColor.GetB()), 1.5f);
             g.DrawPath(&borderPen, &path);
 
-            HFONT iconFont = CreateFontW(-MulDiv(28, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
-            SelectObject(hdc, iconFont);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            RECT iconRect = { cardRect.left + 15, cardRect.top + 15, cardRect.right - 15, cardRect.top + 50 };
-            DrawTextW(hdc, icon, -1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            DeleteObject(iconFont);
+            HFONT iconFontH = CreateFontW(-MulDiv(28, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+            Font iconFont(hdc, iconFontH);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            RectF iconRect((REAL)cardRect.left + 15, (REAL)cardRect.top + 15, (REAL)cardRect.right - 15 - (cardRect.left + 15), (REAL)50 - 15);
+            g.DrawString(icon, -1, &iconFont, iconRect, &sf, &whiteBrush);
+            DeleteObject(iconFontH);
 
-            SetTextColor(hdc, RGB(255, 255, 255));
-            SelectObject(hdc, pData->hFontSection);
-            RECT valueRect = { cardRect.left, cardRect.top + 48, cardRect.right, cardRect.top + 75 };
-            DrawTextW(hdc, value, -1, &valueRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            Font valFont(hdc, pData->hFontSection);
+            RectF valueRect((REAL)cardRect.left, (REAL)cardRect.top + 48, (REAL)cardRect.right - cardRect.left, (REAL)75 - 48);
+            g.DrawString(value, -1, &valFont, valueRect, &sf, &whiteBrush);
 
-            SetTextColor(hdc, RGB(200, 200, 200));
-            SelectObject(hdc, pData->hFontText);
-            RECT labelRect = { cardRect.left, valueRect.bottom - 5, cardRect.right, cardRect.bottom - 10 };
-            DrawTextW(hdc, label, -1, &labelRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            Font lblFont(hdc, pData->hFontText);
+            SolidBrush grayBrush(Color(255, 200, 200, 200));
+            RectF labelRect((REAL)cardRect.left, (REAL)valueRect.GetBottom(), (REAL)cardRect.right - cardRect.left, (REAL)cardRect.bottom - valueRect.GetBottom() - 5);
+            g.DrawString(label, -1, &lblFont, labelRect, &sf, &grayBrush);
         };
 
         const int card_gap = 15;
@@ -3649,9 +3781,11 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         SolidBrush resetStatsBrush(pData->isHoveringResetStats ? Color(150, 90, 90, 90) : Color(100, 70, 70, 70));
         FillRoundedRectangle(&g, &resetStatsBrush, (REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)(pData->resetStatsButtonRect.right - pData->resetStatsButtonRect.left), (REAL)(pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top), 5.0f);
-        SetTextColor(hdc, RGB(220, 220, 220));
-        SelectObject(hdc, pData->hFontSection);
-        DrawTextW(hdc, L"Reset Statistics", -1, &pData->resetStatsButtonRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        
+        Font sectionFont(hdc, pData->hFontSection);
+        SolidBrush textBrush(Color(255, 220, 220, 220));
+        RectF resetStatsRectF((REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)(pData->resetStatsButtonRect.right - pData->resetStatsButtonRect.left), (REAL)(pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top));
+        g.DrawString(L"Reset Statistics", -1, &sectionFont, resetStatsRectF, &sf, &textBrush);
 
     }
     else if (pData->currentPage == 3) { // Advanced
@@ -3672,9 +3806,11 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         SolidBrush resetBrush(pData->isHoveringReset ? Color(150, 90, 90, 90) : Color(100, 70, 70, 70));
         FillRoundedRectangle(&g, &resetBrush, (REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)(pData->resetSettingsButtonRect.right - pData->resetSettingsButtonRect.left), (REAL)(pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top), 5.0f);
-        SetTextColor(hdc, RGB(220, 220, 220));
-        SelectObject(hdc, pData->hFontSection);
-        DrawTextW(hdc, L"Reset All Settings", -1, &pData->resetSettingsButtonRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        
+        Font sectionFont(hdc, pData->hFontSection);
+        SolidBrush textBrush(Color(255, 220, 220, 220));
+        RectF resetRectF((REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)(pData->resetSettingsButtonRect.right - pData->resetSettingsButtonRect.left), (REAL)(pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top));
+        g.DrawString(L"Reset All Settings", -1, &sectionFont, resetRectF, &sf, &textBrush);
     }
     
     SelectObject(hdc, oldFont);
@@ -3689,7 +3825,10 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     } else {
         disclaimerText = L"Closing this window minimizes it to the system tray.";
     }
-    DrawTextW(hdc, disclaimerText, -1, &disclaimerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    Font smallFont(hdc, pData->hFontSmall);
+    SolidBrush disclaimerBrush(Color(255, 128, 128, 128));
+    RectF disclaimerRectF((REAL)0, (REAL)clientRect.bottom - 25, (REAL)clientRect.right, (REAL)20);
+    g.DrawString(disclaimerText, -1, &smallFont, disclaimerRectF, &sf, &disclaimerBrush);
 }
 LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -3706,12 +3845,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
 
-        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontSection = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontText = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontSmall = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontNav = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontNavSelected = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontSection = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontSmall = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontNav = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontNavSelected = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
@@ -4134,8 +4273,8 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
-        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontText = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         HDC hdc = CreateCompatibleDC(screen);
         ReleaseDC(NULL, screen);
@@ -4331,60 +4470,75 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         PAINTSTRUCT ps;
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
+        EnableAcrylic(hwnd); 
         HDC hdc = BeginPaint(hwnd, &ps);
 
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        SetBkMode(memDC, TRANSPARENT);
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        HFONT oldFont = (HFONT)SelectObject(memDC, pData->hFontTitle);
-        SetTextColor(memDC, DARK_TEXT);
-        wchar_t caption[256];
-        GetWindowTextW(hwnd, caption, 128);
-        TextOutW(memDC, 8, 6, caption, lstrlenW(caption));
+        SolidBrush bgBrush(Color(100, 10, 10, 10));
+        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
 
-        const int main_margin = 20;
-        const int icon_size = 32;
-        const int icon_text_gap = 15;
-        int contentY = 30 + main_margin - 5;
-
-        RECT textMeasureRect = { 0, 0, clientRect.right - main_margin * 2 - icon_size - icon_text_gap, 0 };
-        DrawTextW(memDC, pData->params->text, -1, &textMeasureRect, DT_CALCRECT | DT_WORDBREAK);
-        int contentH = max(textMeasureRect.bottom, icon_size);
-
-        if (pData->hIcon) {
-            DrawIconEx(memDC, main_margin, contentY, pData->hIcon, icon_size, icon_size, 0, NULL, DI_NORMAL);
+        SolidBrush headerPaneBrush(Color(120, 20, 20, 20));
+        g.FillRectangle(&headerPaneBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)30);
+        Pen headerPen(Color(15, 255, 255, 255), 1);
+        g.DrawLine(&headerPen, (REAL)0, (REAL)30, (REAL)clientRect.right, (REAL)30);
+        
+        HICON hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
+        if (hAppIcon) {
+             DrawIconEx(memDC, 15, 7, hAppIcon, 16, 16, 0, NULL, DI_NORMAL);
+             DestroyIcon(hAppIcon);
         }
 
-        SelectObject(memDC, pData->hFontText);
-        RECT textRect = { main_margin + (pData->hIcon ? icon_size + icon_text_gap : 0), contentY, clientRect.right - main_margin, clientRect.bottom };
-        DrawTextW(memDC, pData->params->text, -1, &textRect, DT_WORDBREAK | DT_TOP);
+        wchar_t caption[256];
+        GetWindowTextW(hwnd, caption, 128);
+        Font titleFont(memDC, pData->hFontTitle);
+        SolidBrush titleBrush(Color(255, 255, 255, 255));
+        
+        StringFormat sfCenter;
+        sfCenter.SetAlignment(StringAlignmentCenter);
+        sfCenter.SetLineAlignment(StringAlignmentCenter);
+        RectF titleRectF((REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)30); 
+        g.DrawString(caption, -1, &titleFont, titleRectF, &sfCenter, &titleBrush);
+
+        Font textFont(memDC, pData->hFontText);
+        SolidBrush textBrush(Color(255, 220, 220, 220));
+        RectF textRectF((REAL)20, (REAL)40, (REAL)(clientRect.right - 40), (REAL)(clientRect.bottom - 50));
+        
+        StringFormat sf;
+        sf.SetAlignment(StringAlignmentNear);
+        sf.SetLineAlignment(StringAlignmentNear);
+        g.DrawString(pData->params->text, -1, &textFont, textRectF, &sf, &textBrush);
 
         if (!pData->buttonRects.empty()) {
-            RECT buttonPaneRect = { 0, pData->buttonRects[0].second.top - 10, clientRect.right, clientRect.bottom };
-            HBRUSH paneBrush = CreateSolidBrush(RGB(10, 10, 10));
-            FillRect(memDC, &buttonPaneRect, paneBrush);
-            DeleteObject(paneBrush);
+             SolidBrush paneBrush(Color(120, 20, 20, 20));
+             g.FillRectangle(&paneBrush, (REAL)0, (REAL)(pData->buttonRects[0].second.top - 10), (REAL)clientRect.right, (REAL)(clientRect.bottom - (pData->buttonRects[0].second.top - 10)));
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            COLORREF fill = primary ? (hover ? RGB(20, 142, 224) : RGB(0, 122, 204)) : (hover ? RGB(70, 70, 70) : RGB(55, 55, 55));
-            HBRUSH br = CreateSolidBrush(fill);
-            HPEN pen = (HPEN)GetStockObject(NULL_PEN);
-            SelectObject(memDC, br);
-            SelectObject(memDC, pen);
-            RoundRect(memDC, r.left, r.top, r.right, r.bottom, 5, 5);
-            DeleteObject(br);
+             Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
+             SolidBrush br(fill);
+             GraphicsPath path;
+             path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
+             path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
+             path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
+             path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
+             path.CloseFigure();
+             g.FillPath(&br, &path);
 
-            SetTextColor(memDC, DARK_TEXT);
-            SelectObject(memDC, pData->hFontText);
-            DrawTextW(memDC, txt, -1, (LPRECT)&r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            };
+             Font font(memDC, pData->hFontText);
+             SolidBrush btnTextBrush(Color(255, 255, 255, 255));
+             StringFormat sf;
+             sf.SetAlignment(StringAlignmentCenter);
+             sf.SetLineAlignment(StringAlignmentCenter);
+             RectF btnRectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+             g.DrawString(txt, -1, &font, btnRectF, &sf, &btnTextBrush);
+        };
 
-        UINT btnType = pData->params->type & 0x0F;
         for (const auto& btn : pData->buttonRects) {
             const wchar_t* text = L"";
             if (btn.first == IDOK) text = L"OK";
@@ -4396,10 +4550,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             drawBtn(btn.second, text, pData->hoveringButton == btn.first, isPrimary);
         }
 
-        About_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
-
-
-        SelectObject(memDC, oldFont);
+        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
