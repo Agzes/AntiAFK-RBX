@@ -2,8 +2,8 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30002; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3 [30002]";
+int currentVersion = 30003; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3 [30003]";
 
 
 #include <windows.h>
@@ -91,6 +91,7 @@ using namespace std::chrono_literals;
 #define ID_BLOXSTRAP_INTEGRATION 311
 #define ID_RESTORE_METHOD_SUBMENU 400
 #define ID_UNLOCK_FPS_ON_FOCUS 312
+#define ID_AUTO_RESET 313
 #define ID_RESTORE_OFF 401
 #define ID_RESTORE_FOREGROUND 402
 #define ID_RESTORE_ALTTAB 403
@@ -127,7 +128,7 @@ HWND g_hSplashWnd = NULL;
 HWND g_hMainUiWnd = NULL;
 HWND g_hCustomFpsWnd = NULL;
 HWND g_hCustomIntervalWnd = NULL;
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_updateFound(false), g_autoStartAfk(false), g_autoReconnect(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_useLegacyUi(false), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_updateFound(false), g_autoStartAfk(false), g_autoReconnect(false), g_autoReset(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_useLegacyUi(false), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false);
 std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0);
 std::thread g_activityMonitorThread;
 std::thread g_fpsCapperThread;
@@ -1230,8 +1231,26 @@ void AntiAFK_Action(HWND target)
         Sleep(ALT_DELAY);
         keybd_event('O', MapVirtualKey('O', 0), KEYEVENTF_KEYUP, 0);
         break;
-
     }
+}
+// ==========
+
+// Auto Reset
+void AutoReset_Action(HWND target)
+{
+    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, 0), 0, 0);
+    Sleep(ALT_DELAY);
+    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, 0), KEYEVENTF_KEYUP, 0);
+    Sleep(100);
+    
+    keybd_event('R', MapVirtualKey('R', 0), 0, 0);
+    Sleep(ALT_DELAY);
+    keybd_event('R', MapVirtualKey('R', 0), KEYEVENTF_KEYUP, 0);
+    Sleep(100);
+    
+    keybd_event(VK_RETURN, MapVirtualKey(VK_RETURN, 0), 0, 0);
+    Sleep(ALT_DELAY);
+    keybd_event(VK_RETURN, MapVirtualKey(VK_RETURN, 0), KEYEVENTF_KEYUP, 0);
 }
 // ==========
 
@@ -1659,6 +1678,7 @@ void SaveSettings()
     DWORD autoUpdate = g_autoUpdate.load();
     DWORD autoStartAfk = g_autoStartAfk.load();
     DWORD autoReconnect = g_autoReconnect.load();
+    DWORD autoReset = g_autoReset.load();
     DWORD restoreMethod = g_restoreMethod;
     DWORD tutorialShown = g_tutorialShown.load();
     DWORD bloxstrapIntegration = g_bloxstrapIntegration.load();
@@ -1679,6 +1699,7 @@ void SaveSettings()
         RegSetValueEx(hKey, L"UserSafeMode", 0, REG_DWORD, (const BYTE*)&g_userSafeMode, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoStartAfk", 0, REG_DWORD, (const BYTE*)&autoStartAfk, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoReconnect", 0, REG_DWORD, (const BYTE*)&autoReconnect, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AutoReset", 0, REG_DWORD, (const BYTE*)&autoReset, sizeof(DWORD));
         RegSetValueEx(hKey, L"RestoreMethod", 0, REG_DWORD, (const BYTE*)&restoreMethod, sizeof(DWORD));
         RegSetValueEx(hKey, L"TutorialShown", 0, REG_DWORD, (const BYTE*)&tutorialShown, sizeof(DWORD));
         RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&g_totalAfkTimeSeconds, sizeof(uint64_t));
@@ -1696,7 +1717,7 @@ void LoadSettings()
 {
     HKEY hKey;
    DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, autoStartAfk = 0;
-    DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoLimitRam = 0, restoreMethod = 1;
+    DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoReset = 0, autoLimitRam = 0, restoreMethod = 1;
     DWORD tutorialShown = 0, useLegacyUi = 0, bloxstrapIntegration = 0, fpsLimit = 0, unlockFpsOnFocus = 0;
     uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0;
     DWORD dataSize = sizeof(DWORD);
@@ -1712,6 +1733,7 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"UserSafeMode", NULL, NULL, (LPBYTE)&userSafeMode, &dataSize);
         RegQueryValueEx(hKey, L"AutoStartAfk", NULL, NULL, (LPBYTE)&autoStartAfk, &dataSize);
         RegQueryValueEx(hKey, L"AutoReconnect", NULL, NULL, (LPBYTE)&autoReconnect, &dataSize);
+        RegQueryValueEx(hKey, L"AutoReset", NULL, NULL, (LPBYTE)&autoReset, &dataSize);
         RegQueryValueEx(hKey, L"RestoreMethod", NULL, NULL, (LPBYTE)&restoreMethod, &dataSize);
         RegQueryValueEx(hKey, L"TutorialShown", NULL, NULL, (LPBYTE)&tutorialShown, &dataSize);
         RegQueryValueEx(hKey, L"TotalAfkTime", NULL, NULL, (LPBYTE)&totalAfkTime, &dataSize64);
@@ -1732,6 +1754,7 @@ void LoadSettings()
     g_userSafeMode = userSafeMode;
     g_autoStartAfk = autoStartAfk;
     g_autoReconnect = autoReconnect;
+    g_autoReset = autoReset;
     g_restoreMethod = restoreMethod;
     g_tutorialShown = tutorialShown;
     g_totalAfkTimeSeconds = totalAfkTime;
@@ -1752,6 +1775,7 @@ void ResetSettings()
     g_userSafeMode = 0;
     g_autoStartAfk = false;
     g_autoReconnect = false;
+    g_autoReset = false;
     g_restoreMethod = 1;
     g_tutorialShown = false;
     g_totalAfkTimeSeconds = 0;
@@ -1861,6 +1885,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update Checker");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect [new] [beta]");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Bloxstrap/Fishstrap Integration");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS when focus");
 
@@ -3238,6 +3263,7 @@ struct MainUIData {
     RECT autoUpdateToggleRect = { 0 };
     RECT autoStartToggleRect = { 0 };
     RECT autoReconnectToggleRect = { 0 };
+    RECT autoResetToggleRect = { 0 };
     RECT bloxstrapIntegrationToggleRect = { 0 };
     RECT userSafeDropdownRect = { 0 };
     RECT resetStatsButtonRect = { 0 };
@@ -3279,6 +3305,7 @@ struct MainUIData {
     float autoUpdateAnim = 0.0f;
     float autoStartAnim = 0.0f;
     float autoReconnectAnim = 0.0f;
+    float autoResetAnim = 0.0f;
     float bloxstrapIntegrationAnim = 0.0f;
     float unlockFpsOnFocusAnim = 0.0f;
     float legacyUiAnim = 0.0f;
@@ -3442,7 +3469,8 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
             } else if (pData->currentPage == 1) { // Automation
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Automatically starts and stops the Anti-AFK function when Roblox is opened or closed."; }
                 if (i == 1) { title = L"Auto Reconnect"; text = L"Experimental: Automatically tries to Reconnect if you are kicked for being idle."; }
-                if (i == 2) { title = L"Bloxstrap/Fishstrap Integration"; text = L"Automatically starts AntiAFK-RBX when launching Roblox via Bloxstrap or Fishstrap, but does not start AntiAFK."; }
+                if (i == 2) { title = L"Auto Reset"; text = L"Sends Esc → R → Enter keys during each AFK action to reset/respawn your character."; }
+                if (i == 3) { title = L"Bloxstrap/Fishstrap Integration"; text = L"Automatically starts AntiAFK-RBX when launching Roblox via Bloxstrap or Fishstrap, but does not start AntiAFK."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"FishStrap/Shaders Support"; text = L"Enables compatibility with modified clients (e.g., FishStrap) that use a different process name."; }
                 if (i == 1) { title = L"Update Checker"; text = L"Automatically checks for new versions on startup and notifies you if an update is available."; }
@@ -3458,6 +3486,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     if (pData->currentPage == 0 && PtInRect(&pData->multiInstanceToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_MULTI_SUPPORT, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->autoStartToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_START_AFK, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->autoReconnectToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_RECONNECT, 0); return; }
+    if (pData->currentPage == 1 && PtInRect(&pData->autoResetToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_RESET, 0); return; }
 
     if (pData->currentPage == 3 && PtInRect(&pData->unlockFpsOnFocusToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UNLOCK_FPS_ON_FOCUS, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->bloxstrapIntegrationToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_BLOXSTRAP_INTEGRATION, 0); return; }
@@ -3699,6 +3728,7 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     else if (pData->currentPage == 1) { // Automation
         MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Auto-Start AntiAFK", g_autoStartAfk.load(), PtInRect(&pData->autoStartToggleRect, pData->hoverPoint), pData->autoStartAnim);
         MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, L"Auto Reconnect", g_autoReconnect.load(), PtInRect(&pData->autoReconnectToggleRect, pData->hoverPoint), pData->autoReconnectAnim);
+        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Auto Reset (Esc+R+Enter)", g_autoReset.load(), PtInRect(&pData->autoResetToggleRect, pData->hoverPoint), pData->autoResetAnim);
         MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Bloxstrap/Fishstrap Integration", g_bloxstrapIntegration.load(), PtInRect(&pData->bloxstrapIntegrationToggleRect, pData->hoverPoint), pData->bloxstrapIntegrationAnim);
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
@@ -3881,6 +3911,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->autoUpdateAnim = g_autoUpdate.load() ? 1.0f : 0.0f;
         pData->autoStartAnim = g_autoStartAfk.load() ? 1.0f : 0.0f;
         pData->autoReconnectAnim = g_autoReconnect.load() ? 1.0f : 0.0f;
+        pData->autoResetAnim = g_autoReset.load() ? 1.0f : 0.0f;
         pData->bloxstrapIntegrationAnim = g_bloxstrapIntegration.load() ? 1.0f : 0.0f;
         pData->unlockFpsOnFocusAnim = g_unlockFpsOnFocus.load() ? 1.0f : 0.0f;
 
@@ -3941,6 +3972,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         } else if (pData->currentPage == 1) { // Automation
             pData->autoStartToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->autoReconnectToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
+            pData->autoResetToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->bloxstrapIntegrationToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
         } else if (pData->currentPage == 2) { // Statistics
             pData->resetStatsButtonRect = { margin, clientRect.bottom - 40 - 30, clientRect.right - margin, clientRect.bottom - 30 };
@@ -3984,6 +4016,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         anyHover |= PtInRect(&pData->autoUpdateToggleRect, pt) && pData->currentPage == 3;
         anyHover |= PtInRect(&pData->autoStartToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->autoReconnectToggleRect, pt) && pData->currentPage == 1;
+        anyHover |= PtInRect(&pData->autoResetToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->bloxstrapIntegrationToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->unlockFpsOnFocusToggleRect, pt) && pData->currentPage == 3;
         anyHover |= PtInRect(&pData->legacyUiToggleRect, pt) && pData->currentPage == 3;
@@ -4163,6 +4196,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->autoUpdateAnim, g_autoUpdate.load());
         animateToggle(pData->autoStartAnim, g_autoStartAfk.load());
         animateToggle(pData->autoReconnectAnim, g_autoReconnect.load());
+        animateToggle(pData->autoResetAnim, g_autoReset.load());
         animateToggle(pData->unlockFpsOnFocusAnim, g_unlockFpsOnFocus.load());
         animateToggle(pData->bloxstrapIntegrationAnim, g_bloxstrapIntegration.load());
         animateToggle(pData->legacyUiAnim, g_useLegacyUi.load());
@@ -4800,6 +4834,9 @@ void main_thread(bool arg_tray)
                         {
                             AntiAFK_Action(w);
                         }
+                        if (g_autoReset.load()) {
+                            AutoReset_Action(w);
+                        }
 
                         if (wasMinimized)
                             ShowWindow(w, SW_MINIMIZE);
@@ -4823,6 +4860,9 @@ void main_thread(bool arg_tray)
                     for (int i = 0; i < 3; i++)
                     {
                         AntiAFK_Action(w);
+                    }
+                    if (g_autoReset.load()) {
+                        AutoReset_Action(w);
                     }
 
                     if (wasMinimized)
@@ -5309,6 +5349,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_AUTO_RECONNECT:
             g_autoReconnect = !g_autoReconnect.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_AUTO_RESET:
+            g_autoReset = !g_autoReset.load();
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
