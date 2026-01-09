@@ -2,8 +2,8 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30003; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3 [30003]";
+int currentVersion = 30004; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3 [30004]";
 
 
 #include <windows.h>
@@ -107,6 +107,13 @@ using namespace std::chrono_literals;
 #define ID_FPS_CAP_CUSTOM_BASE 600 
 #define ID_FPS_CAP_CUSTOM 507
 
+#define ID_MI_INTERVAL_SUBMENU 700
+#define ID_MI_INTERVAL_0 702
+#define ID_MI_INTERVAL_1 703
+#define ID_MI_INTERVAL_3 704
+#define ID_MI_INTERVAL_5 705
+#define ID_MI_INTERVAL_10 706
+
 #define ID_UPDATE_AVAILABLE 1000
 #define ID_ANNOUNCEMENT_TEXT 1001
 
@@ -144,6 +151,7 @@ int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
 int g_restoreMethod = 1; // 0 - Off, 1 - SetForeground, 2 - Alt+Tab
 int g_userSafeMode = 0; // 0 - Off, 1 - Legacy, 2 - Beta
 int g_fpsLimit = 0; // 0 for OFF
+int g_multiInstanceInterval = 0; // Delay in ms between windows in multi-instance mode (0 = minimum)
 const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
 const COLORREF DARK_BG = RGB(30, 30, 30);
@@ -1710,6 +1718,7 @@ void SaveSettings()
         RegSetValueEx(hKey, L"UseLegacyUI", 0, REG_DWORD, (const BYTE*)&useLegacyUi, sizeof(DWORD));
         RegSetValueEx(hKey, L"FpsLimit", 0, REG_DWORD, (const BYTE*)&fpsLimit, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnlockFpsOnFocus", 0, REG_DWORD, (const BYTE*)&unlockFpsOnFocus, sizeof(DWORD));
+        RegSetValueEx(hKey, L"MultiInstanceInterval", 0, REG_DWORD, (const BYTE*)&g_multiInstanceInterval, sizeof(DWORD));
         RegCloseKey(hKey);
     }
 }
@@ -1719,6 +1728,7 @@ void LoadSettings()
    DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoReset = 0, autoLimitRam = 0, restoreMethod = 1;
     DWORD tutorialShown = 0, useLegacyUi = 0, bloxstrapIntegration = 0, fpsLimit = 0, unlockFpsOnFocus = 0;
+    DWORD multiInstanceInterval = 0;
     uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0;
     DWORD dataSize = sizeof(DWORD);
     DWORD dataSize64 = sizeof(uint64_t);
@@ -1743,6 +1753,7 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"BloxstrapIntegration", NULL, NULL, (LPBYTE)&bloxstrapIntegration, &dataSize);
         RegQueryValueEx(hKey, L"FpsLimit", NULL, NULL, (LPBYTE)&fpsLimit, &dataSize);
         RegQueryValueEx(hKey, L"UnlockFpsOnFocus", NULL, NULL, (LPBYTE)&unlockFpsOnFocus, &dataSize);
+        RegQueryValueEx(hKey, L"MultiInstanceInterval", NULL, NULL, (LPBYTE)&multiInstanceInterval, &dataSize);
         RegCloseKey(hKey);
     }
 
@@ -1764,6 +1775,7 @@ void LoadSettings()
     g_bloxstrapIntegration = bloxstrapIntegration;
     g_fpsLimit = fpsLimit;
     g_unlockFpsOnFocus = unlockFpsOnFocus;
+    g_multiInstanceInterval = multiInstanceInterval;
 }
 void ResetSettings()
 {
@@ -1786,6 +1798,7 @@ void ResetSettings()
     g_bloxstrapIntegration = false;
     g_fpsLimit = 0;
     g_unlockFpsOnFocus = false;
+    g_multiInstanceInterval = 0;
 
     if (g_monitorThreadRunning.load())
     {
@@ -1927,6 +1940,18 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
     AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
     AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Support");
+    
+    HMENU hMiIntervalSubmenu = CreatePopupMenu();
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+    wchar_t miIntervalLabel[48];
+    const wchar_t* miLabelV = g_multiInstanceInterval == 0 ? L"Min" : (g_multiInstanceInterval == 1000 ? L"1s" : (g_multiInstanceInterval == 3000 ? L"3s" : (g_multiInstanceInterval == 5000 ? L"5s" : L"10s")));
+    swprintf_s(miIntervalLabel, L"Multi-Instance Interval • %s", miLabelV);
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
+    
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
         AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⭳] • Update Available");
@@ -3259,6 +3284,7 @@ struct MainUIData {
     RECT intervalDropdownRect = { 0 };
     RECT actionDropdownRect = { 0 };
     RECT multiInstanceToggleRect = { 0 };
+    RECT multiInstanceIntervalDropdownRect = { 0 };
     RECT fishstrapToggleRect = { 0 };
     RECT autoUpdateToggleRect = { 0 };
     RECT autoStartToggleRect = { 0 };
@@ -3288,6 +3314,7 @@ struct MainUIData {
     bool isHoveringUserSafe = false;
     bool isHoveringRestore = false;
     bool isHoveringFpsCapper = false;
+    bool isHoveringMultiInstanceInterval = false;
     int hoveringHelpButton = -1;
 
     std::wstring startButtonErrorText;
@@ -3464,8 +3491,9 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
                 if (i == 0) { title = L"Interval"; text = L"How often to perform an Anti-AFK action. \nNote: Roblox kicks you after 20 minutes of inactivity."; }
                 if (i == 1) { title = L"Action"; text = L"The keypress to simulate to prevent being kicked."; }
                 if (i == 2) { title = L"Multi-Instance Support"; text = L"Allows running multiple Roblox clients at once. The Anti-AFK action will apply to all of them.\n\nHow to use:\n1. Close all Roblox clients\n2. Open AntiAFK-RBX\n3. Enable Multi-Instance Support\n4. Open Roblox clients"; }
-                if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses the Anti-AFK action if you are actively using your computer to avoid interruptions. It waits for you to be idle before proceeding.\n\n'Legacy': Checks for mouse clicks and key presses.\n'Beta': Checks for any system-wide input, which is more reliable."; }
-                if (i == 4) { title = L"Restore Window"; text = L"How to return focus to your previous window after the action. \n\n'SetForeground' is recommended.\n'Alt+Tab' may work better for fullscreen games."; }
+                if (i == 3) { title = L"Multi-Instance Interval"; text = L"Delay between processing each Roblox window in Multi-Instance mode. Use 'Minimum' for fastest switching, or add delays if you experience issues with rapid window switching."; }
+                if (i == 4) { title = L"User-Safe Mode"; text = L"Pauses the Anti-AFK action if you are actively using your computer to avoid interruptions. It waits for you to be idle before proceeding.\n\n'Legacy': Checks for mouse clicks and key presses.\n'Beta': Checks for any system-wide input, which is more reliable."; }
+                if (i == 5) { title = L"Restore Window"; text = L"How to return focus to your previous window after the action. \n\n'SetForeground' is recommended.\n'Alt+Tab' may work better for fullscreen games."; }
             } else if (pData->currentPage == 1) { // Automation
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Automatically starts and stops the Anti-AFK function when Roblox is opened or closed."; }
                 if (i == 1) { title = L"Auto Reconnect"; text = L"Experimental: Automatically tries to Reconnect if you are kicked for being idle."; }
@@ -3530,6 +3558,21 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
             POINT menuPt;
             menuPt.x = pData->actionDropdownRect.left;
             menuPt.y = pData->actionDropdownRect.bottom;
+            ClientToScreen(hwnd, &menuPt);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+            DestroyMenu(hMenu);
+            return;
+        }
+        if (PtInRect(&pData->multiInstanceIntervalDropdownRect, pt)) {
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+            POINT menuPt;
+            menuPt.x = pData->multiInstanceIntervalDropdownRect.left;
+            menuPt.y = pData->multiInstanceIntervalDropdownRect.bottom;
             ClientToScreen(hwnd, &menuPt);
             TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
             DestroyMenu(hMenu);
@@ -3720,6 +3763,14 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         MainUI_Paint_DrawDropdown(hdc, pData->restoreMethodDropdownRect, pData->hFontText, L"Restore Window", restoreNames[g_restoreMethod], pData->isHoveringRestore);
 
         MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance Support", g_multiSupport.load(), PtInRect(&pData->multiInstanceToggleRect, pData->hoverPoint), pData->multiInstanceAnim);
+
+        const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
+        int miIntervalIndex = 0;
+        if (g_multiInstanceInterval == 1000) miIntervalIndex = 1;
+        else if (g_multiInstanceInterval == 3000) miIntervalIndex = 2;
+        else if (g_multiInstanceInterval == 5000) miIntervalIndex = 3;
+        else if (g_multiInstanceInterval == 10000) miIntervalIndex = 4;
+        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Interval", miIntervalNames[miIntervalIndex], pData->isHoveringMultiInstanceInterval);
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
@@ -3967,6 +4018,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->intervalDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->actionDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->multiInstanceToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
+            pData->multiInstanceIntervalDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->userSafeDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
             pData->restoreMethodDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
         } else if (pData->currentPage == 1) { // Automation
@@ -4010,6 +4062,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringAction, pData->actionDropdownRect));
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringRestore, pData->restoreMethodDropdownRect));
+        anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringMultiInstanceInterval, pData->multiInstanceIntervalDropdownRect));
         anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringFpsCapper, pData->fpsCapperDropdownRect));
         anyHover |= PtInRect(&pData->multiInstanceToggleRect, pt) && pData->currentPage == 0;
         anyHover |= PtInRect(&pData->fishstrapToggleRect, pt) && pData->currentPage == 3;
@@ -4817,8 +4870,9 @@ void main_thread(bool arg_tray)
 
                 if (g_multiSupport.load())
                 {
-                    for (HWND w : wins)
+                    for (size_t i = 0; i < wins.size(); i++)
                     {
+                        HWND w = wins[i];
                         bool wasMinimized = IsIconic(w);
                         if (wasMinimized)
                             ShowWindow(w, SW_RESTORE);
@@ -4840,6 +4894,10 @@ void main_thread(bool arg_tray)
 
                         if (wasMinimized)
                             ShowWindow(w, SW_MINIMIZE);
+                        
+                        if (g_multiInstanceInterval > 0 && i < wins.size() - 1) {
+                            Sleep(g_multiInstanceInterval);
+                        }
                         g_isFpsCapperPaused = false;
                     }
                 }
@@ -5415,6 +5473,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_FPS_CAP_CUSTOM:
         {
             ShowCustomFpsDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        }
+        case ID_MI_INTERVAL_0:
+        case ID_MI_INTERVAL_1:
+        case ID_MI_INTERVAL_3:
+        case ID_MI_INTERVAL_5:
+        case ID_MI_INTERVAL_10:
+        {
+            int command = LOWORD(wParam);
+            switch (command) {
+                case ID_MI_INTERVAL_0: g_multiInstanceInterval = 0; break;
+                case ID_MI_INTERVAL_1: g_multiInstanceInterval = 1000; break;
+                case ID_MI_INTERVAL_3: g_multiInstanceInterval = 3000; break;
+                case ID_MI_INTERVAL_5: g_multiInstanceInterval = 5000; break;
+                case ID_MI_INTERVAL_10: g_multiInstanceInterval = 10000; break;
+            }
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
             break;
         }
         case ID_RESET_SETTINGS:
