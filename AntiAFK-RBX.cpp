@@ -2,8 +2,8 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30005; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3 [30005]";
+int currentVersion = 30006; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3 [30006]";
 
 
 #include <windows.h>
@@ -2953,14 +2953,16 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             const wchar_t* p1 = L"AntiAFK-";
             const wchar_t* p2 = L"RBX";
             
-            RectF s1;
-            g.MeasureString(p1, -1, &font40, PointF(0,0), &s1);
+            RectF s1, s2;
+            const StringFormat* typographic = StringFormat::GenericTypographic();
+            g.MeasureString(p1, -1, &font40, PointF(0,0), typographic, &s1);
+            g.MeasureString(p2, -1, &font40, PointF(0,0), typographic, &s2);
 
             SolidBrush whiteBrush(Color(255, 255, 255, 255));
             SolidBrush redBrush(Color(255, 226, 35, 26));
 
-            g.DrawString(p1, -1, &font40, PointF((REAL)margin, (REAL)y_pos + 15), &whiteBrush);
-            g.DrawString(p2, -1, &font40, PointF((REAL)margin + s1.Width, (REAL)y_pos + 15), &redBrush);
+            g.DrawString(p1, -1, &font40, PointF((REAL)margin, (REAL)y_pos + 15), typographic, &whiteBrush);
+            g.DrawString(p2, -1, &font40, PointF((REAL)margin + s1.Width, (REAL)y_pos + 15), typographic, &redBrush);
             
             Font font13(memDC, pData->hFont13);
             SolidBrush textBrush(Color(255, 200, 200, 200));
@@ -3006,11 +3008,10 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
             sfCenter.SetLineAlignment(StringAlignmentNear);
             
-            int labelWidth = iconSize + gap;
             int labelY = iconsY + iconSize + 4;
-            RectF rL1((REAL)startX - (gap - iconSize) / 2, (REAL)labelY, (REAL)iconSize + gap, 24);
-            RectF rL2((REAL)rL1.GetRight(), (REAL)labelY, (REAL)iconSize + gap, 24);
-            RectF rL3((REAL)rL2.GetRight(), (REAL)labelY, (REAL)iconSize + gap, 24);
+            RectF rL1((REAL)(startX + 0 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
+            RectF rL2((REAL)(startX + 1 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
+            RectF rL3((REAL)(startX + 2 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
             
             g.DrawString(L"ON (Single)", -1, &font13, rL1, &sfCenter, &whiteBrush);
             g.DrawString(L"OFF", -1, &font13, rL2, &sfCenter, &whiteBrush);
@@ -3044,17 +3045,17 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             Font font14b(memDC, pData->hFont14b);
             StringFormat sfCenter;
             sfCenter.SetAlignment(StringAlignmentCenter);
-            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 120);
+            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)(clientRect.right - margin * 2), (REAL)clientRect.bottom - 120);
             g.DrawString(L"Enable “Auto-Start”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
             
             Font font13(memDC, pData->hFont13);
-            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)clientRect.right - margin, (REAL)100);
+            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)(clientRect.right - margin * 2), (REAL)100);
             const wchar_t* tipsText = L"This feature will automatically start and stop the Anti-AFK function when you open or close Roblox. It's highly recommended for convenience.";
             g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
 
             Font font11(memDC, pData->hFont11);
             SolidBrush grayBrush(Color(255, 123, 123, 123));
-            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)clientRect.right - margin, (REAL)20);
+            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)(clientRect.right - margin * 2), (REAL)20);
             g.DrawString(L"You can change this later in the 'Automation' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
         }
         else if (pData->page == 4)
@@ -3070,11 +3071,11 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             Font font14b(memDC, pData->hFont14b);
             StringFormat sfCenter;
             sfCenter.SetAlignment(StringAlignmentCenter);
-            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 120);
+            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)(clientRect.right - margin * 2), (REAL)clientRect.bottom - 120);
             g.DrawString(L"Enable “User-Safe Mode”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
             
             Font font13(memDC, pData->hFont13);
-            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)clientRect.right - margin, (REAL)100);
+            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)(clientRect.right - margin * 2), (REAL)100);
             const wchar_t* tipsText = L"This mode prevents the Anti-AFK action from interrupting you if you are actively using your computer. It will wait for you to be idle. Recommended.";
             g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
 
@@ -3084,7 +3085,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
             Font font11(memDC, pData->hFont11);
             SolidBrush grayBrush(Color(255, 123, 123, 123));
-            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)clientRect.right - margin, (REAL)20);
+            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)(clientRect.right - margin * 2), (REAL)20);
             g.DrawString(L"You can change this later in the 'General' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
         }
         else if (pData->page == 5)
@@ -3105,42 +3106,66 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             const wchar_t* p1 = L"AntiAFK-";
             const wchar_t* p2 = L"RBX";
             
-            RectF s1;
-            g.MeasureString(p1, -1, &font40, PointF(0,0), &s1);
-            RectF s2;
-            g.MeasureString(p2, -1, &font40, PointF(0,0), &s2);
+            RectF s1, s2;
+            const StringFormat* typographic = StringFormat::GenericTypographic();
+            g.MeasureString(p1, -1, &font40, PointF(0,0), typographic, &s1);
+            g.MeasureString(p2, -1, &font40, PointF(0,0), typographic, &s2);
             
             REAL totalW = s1.Width + s2.Width;
             REAL startX = ((REAL)clientRect.right - totalW) / 2;
             
             SolidBrush redBrush(Color(255, 226, 35, 26));
 
-            g.DrawString(p1, -1, &font40, PointF(startX, (REAL)rTop.GetBottom() - 5), &whiteBrush);
-            g.DrawString(p2, -1, &font40, PointF(startX + s1.Width, (REAL)rTop.GetBottom() - 5), &redBrush);
+            g.DrawString(p1, -1, &font40, PointF(startX, (REAL)rTop.GetBottom() - 5), typographic, &whiteBrush);
+            g.DrawString(p2, -1, &font40, PointF(startX + s1.Width, (REAL)rTop.GetBottom() - 5), typographic, &redBrush);
 
             Font font13(memDC, pData->hFont13);
             SolidBrush grayBrush(Color(255, 200, 200, 200));
-            RectF rBottom((REAL)20, (REAL)rTop.GetBottom() + s1.Height + 25, (REAL)clientRect.right - 20, (REAL)clientRect.bottom - 80);
+            RectF rBottom((REAL)20, (REAL)rTop.GetBottom() + s1.Height + 25, (REAL)(clientRect.right - 40), (REAL)clientRect.bottom - 80);
             g.DrawString(L"You're all set! Remember, you can change these settings anytime in the main window. This tutorial can also be reopened from the tray menu.", -1, &font13, rBottom, &sfCenter, &grayBrush);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            COLORREF fill = primary ? (hover ? RGB(20, 142, 224) : RGB(0, 122, 204)) : (hover ? RGB(70, 70, 70) : RGB(55, 55, 55));
-            HBRUSH br = CreateSolidBrush(fill);
-            HPEN pen = (HPEN)GetStockObject(NULL_PEN);
-            SelectObject(memDC, br); SelectObject(memDC, pen);
-            RoundRect(memDC, r.left, r.top, r.right, r.bottom, 5, 5);
-            DeleteObject(br);
-            SetTextColor(memDC, DARK_TEXT);
-            SelectObject(memDC, pData->hFont13);
-            DrawTextW(memDC, txt, -1, (LPRECT)&r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+            
+            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 70, 70, 70) : Color(255, 55, 55, 55));
+            SolidBrush br(fill);
+            
+            GraphicsPath path;
+            path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
+            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
+            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
+            path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&br, &path);
+            
+            Font font(memDC, pData->hFont13);
+            SolidBrush textBrush(Color(255, 255, 255, 255));
+            StringFormat sf;
+            sf.SetAlignment(StringAlignmentCenter);
+            sf.SetLineAlignment(StringAlignmentCenter);
+            RectF btnRectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+            g.DrawString(txt, -1, &font, btnRectF, &sf, &textBrush);
         };
 
         auto drawLink = [&](const RECT& r, const wchar_t* txt, bool hover) {
-            SetTextColor(memDC, hover ? RGB(180, 180, 180) : RGB(0x77, 0x77, 0x77));
-            SelectObject(memDC, pData->hFont11);
-            UINT format = (pData->page == 4 || pData->page == 2) ? (DT_CENTER | DT_VCENTER | DT_SINGLELINE) : (DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-            DrawTextW(memDC, txt, -1, (LPRECT)&r, format);
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+            
+            Font font(memDC, pData->hFont11);
+            SolidBrush brush(hover ? Color(255, 180, 180, 180) : Color(255, 119, 119, 119));
+            
+            StringFormat sf;
+            if (pData->page == 4 || pData->page == 2) {
+                sf.SetAlignment(StringAlignmentCenter);
+            } else {
+                sf.SetAlignment(StringAlignmentNear);
+            }
+            sf.SetLineAlignment(StringAlignmentCenter);
+            
+            RectF rectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+            g.DrawString(txt, -1, &font, rectF, &sf, &brush);
         };
 
         drawBtn(pData->nextButtonRect, nextText, pData->isHoveringNext, true);
@@ -3150,26 +3175,27 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (pData->page == 2) drawLink(pData->githubLinkRect, L"See more on GitHub", pData->isHoveringGithub);
         if (pData->page == 4) drawLink(pData->wikiLinkRect, L"More in Wiki", pData->isHoveringWiki);
 
-        const int progressBarHeight = 4;
-        RECT progressBarBgRect = { 0, clientRect.bottom - progressBarHeight, clientRect.right, clientRect.bottom };
-        HBRUSH bgBrush = CreateSolidBrush(RGB(45, 45, 45));
-        FillRect(memDC, &progressBarBgRect, bgBrush);
-        DeleteObject(bgBrush);
+        {
+            Graphics g(memDC);
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+            
+            const int progressBarHeight = 4;
+            SolidBrush bgBrush(Color(255, 45, 45, 45));
+            g.FillRectangle(&bgBrush, (REAL)0, (REAL)(clientRect.bottom - progressBarHeight), (REAL)clientRect.right, (REAL)progressBarHeight);
 
-        float targetProgress = (float)(pData->page + 1) / 6.0f;
-        if (pData->progress < targetProgress) {
-            pData->progress += 0.03f;
-            if (pData->progress > targetProgress) pData->progress = targetProgress;
-        }
-        else if (pData->progress > targetProgress) {
-            pData->progress -= 0.03f;
-            if (pData->progress < targetProgress) pData->progress = targetProgress;
-        }
+            float targetProgress = (float)(pData->page + 1) / 6.0f;
+            if (pData->progress < targetProgress) {
+                pData->progress += 0.03f;
+                if (pData->progress > targetProgress) pData->progress = targetProgress;
+            }
+            else if (pData->progress > targetProgress) {
+                pData->progress -= 0.03f;
+                if (pData->progress < targetProgress) pData->progress = targetProgress;
+            }
 
-        RECT progressBarFgRect = { 0, clientRect.bottom - progressBarHeight, (int)(clientRect.right * pData->progress), clientRect.bottom };
-        HBRUSH fgBrush = CreateSolidBrush(RGB(0, 122, 204));
-        FillRect(memDC, &progressBarFgRect, fgBrush);
-        DeleteObject(fgBrush);
+            SolidBrush fgBrush(Color(255, 0, 122, 204));
+            g.FillRectangle(&fgBrush, (REAL)0, (REAL)(clientRect.bottom - progressBarHeight), (REAL)(clientRect.right * pData->progress), (REAL)progressBarHeight);
+        }
 
         About_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
 
