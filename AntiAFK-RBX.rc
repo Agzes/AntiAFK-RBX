@@ -10,8 +10,8 @@ IDI_TRAY_ON       ICON "Resources/tray-icon-on.ico"
 IDI_TRAY_ON_MULTI ICON "Resources/tray-icon-multi.ico"
 
 VS_VERSION_INFO VERSIONINFO
-	FILEVERSION 0, 3, 0, 0
-	PRODUCTVERSION 0, 3, 0, 0
+	FILEVERSION 0, 3, 1, 0
+	PRODUCTVERSION 0, 3, 1, 0
 	FILEFLAGSMASK 0x3fL
 	FILEFLAGS 0x0L
 	FILEOS 0x4L
@@ -23,13 +23,13 @@ BEGIN
 		BLOCK "040904e4"
 		BEGIN
 			VALUE "CompanyName", "Agzes"
-			VALUE "FileDescription", "AntiAFK-RBX | AntiAFK and Multi-Instance for Roblox"
-			VALUE "FileVersion", "0.3.0.0"
+			VALUE "FileDescription", "AntiAFK-RBX • AntiAFK and Multi-Instance for Roblox"
+			VALUE "FileVersion", "0.3.1.0"
 			VALUE "InternalName", "AntiAFK-RBX.exe"
 			VALUE "LegalCopyright", "© Agzes"
 			VALUE "OriginalFilename", "AntiAFK-RBX.exe"
 			VALUE "ProductName", "AntiAFK-RBX"
-			VALUE "ProductVersion", "0.3.0.0"
+			VALUE "ProductVersion", "0.3.1.0"
 		END
 	END
 	BLOCK "VarFileInfo"

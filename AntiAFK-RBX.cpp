@@ -2,8 +2,8 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30006; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3 [30006]";
+int currentVersion = 30100; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3.1.0";
 
 
 #include <windows.h>
