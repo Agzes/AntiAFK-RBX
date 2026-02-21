@@ -1,11 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Ask a question
-    url: https://github.com/Agzes/AntiAFK-RBX/issues/new?template=question.md
-    about: Ask a question about AntiAFK-RBX.
-  - name: Request a feature
-    url: https://github.com/Agzes/AntiAFK-RBX/issues/new?template=feature_request.md
-    about: Suggest an idea for AntiAFK-RBX.
-  - name: Report a bug
-    url: https://github.com/Agzes/AntiAFK-RBX/issues/new?template=bug_report.md
-    about: Create a report to help improve AntiAFK-RBX.

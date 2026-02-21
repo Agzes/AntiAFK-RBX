@@ -7,9 +7,9 @@
 
 
 <p align="center" width="100%">
-  <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/ideas.png" alt="Got ideas to add?" style="width:32%; min-width:190px;"></a>
+  <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new?template=feature_request.md"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/ideas.png" alt="Got ideas to add?" style="width:32%; min-width:190px;"></a>
   <a href="https://boosty.to/agzes/donate"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/donate.png" alt="Want to support?" style="width:32%; min-width:190px;"></a>
-  <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/bug.png" alt="Bug? Write issue!" style="width:32%; min-width:190px;"></a>
+  <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new?template=bug_report.md"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/bug.png" alt="Bug? Write issue!" style="width:32%; min-width:190px;"></a>
 </p>
 <p align="center" width="100%">
   <a href="https://github.com/Agzes/AntiAFK-RBX/wiki"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/wiki.png" alt="Wiki" style="width:32%; min-width:190px;"></a>
