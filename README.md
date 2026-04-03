@@ -1,5 +1,7 @@
 <div align="center">
 
+·• [antiafk-rbx for linux](https://github.com/Agzes/AntiAFK-RBX-Sober) • [discord server](https://discord.gg/EvmFD8jReF) •·
+
 <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.3.1.0/AntiAFK-RBX.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/download.png" alt="Download Now" style="width:45%; min-width:350px; max-width:500px;"></a><br>
 
 
