@@ -1,8 +1,8 @@
 <div align="center">
 
 <p align="center" width="100%">
-  <a href="https://agzes.github.io/go/to/discord"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/discord-server.png" alt="Join Discord Server" style="width:45%; min-width:350px; max-width:500px;"></a><br>
-  <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.3.2.0/AntiAFK-RBX.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/download.png" alt="Download Now (v.3.2.0)" style="width:45%; min-width:350px; max-width:500px;"></a><br>
+  <a href="https://agzes.github.io/go/to/discord"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/discord-server.png" alt="Join Discord Server" style="width:45%; min-width:190px; max-width:500px;"></a>
+  <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.3.2.0/AntiAFK-RBX.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/download.png" alt="Download Now (v.3.2.0)" style="width:45%; min-width:190px; max-width:500px;"></a>
 </p>
 
 
