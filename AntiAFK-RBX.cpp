@@ -2,14 +2,15 @@
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30100; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3.1.0";
-
+int currentVersion = 30200; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3.2.0";
 
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <commdlg.h>
 #include <ShlObj.h>
+#include <strsafe.h>
 #include "resource.h"
 #include <tlhelp32.h>
 #include <string>
@@ -21,9 +22,11 @@ const wchar_t* g_Version = L"v.3.1.0";
 #include <vector>
 #include <atomic>
 #include <algorithm>
+#include <map>
 #include <cstring>
+#include <cwctype>
 #include <dwmapi.h>
-#include <cmath> 
+#include <cmath>
 #include <winreg.h>
 #include <WinInet.h>
 #include <gdiplus.h>
@@ -32,10 +35,14 @@ const wchar_t* g_Version = L"v.3.1.0";
 #include <fstream>
 #include <sstream>
 #include <io.h>
+#include <mmdeviceapi.h>
+#include <endpointvolume.h>
+#include <audiopolicy.h>
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment (lib, "Gdiplus.lib")
 #pragma comment(lib, "WinInet.lib")
+#pragma comment(lib, "Comdlg32.lib")
 
 
 using namespace Gdiplus;
@@ -54,6 +61,8 @@ using namespace std::chrono_literals;
 #define ID_SETTINGS_MENU 300
 #define ID_MULTI_SUPPORT 7
 #define ID_EXIT 8
+#define ID_GRID_SNAP 9
+#define ID_WINDOW_OPACITY 10
 
 #define ID_ABOUT_MENU 1011
 #define ID_SHOW_TUTORIAL 1012
@@ -86,6 +95,8 @@ using namespace std::chrono_literals;
 #define ID_AUTO_START_AFK 307
 #define ID_RESET_SETTINGS 308
 #define ID_AUTO_RECONNECT 309
+#define ID_IMPORT_SETTINGS 320
+#define ID_EXPORT_SETTINGS 321
 
 #define ID_USE_LEGACY_UI 310
 #define ID_BLOXSTRAP_INTEGRATION 311
@@ -93,6 +104,11 @@ using namespace std::chrono_literals;
 #define ID_UNLOCK_FPS_ON_FOCUS 312
 #define ID_AUTO_RESET 313
 #define ID_AUTO_HIDE 314
+#define ID_I_CAN_FORGET 315
+#define ID_STATUS_BAR 316
+#define ID_AUTO_OPACITY 317
+#define ID_AUTO_GRID 318
+
 #define ID_RESTORE_OFF 401
 #define ID_RESTORE_FOREGROUND 402
 #define ID_RESTORE_ALTTAB 403
@@ -125,6 +141,37 @@ using namespace std::chrono_literals;
 #define ID_BTN_BACK 1202
 #define ID_BTN_SKIP 1203
 #define ID_OPEN_UI 1301
+#define ID_DO_NOT_SLEEP 1302
+#define ID_AUTO_MUTE 1303
+#define ID_UNMUTE_ON_FOCUS 1304
+#define ID_UTILS_CLOSE_ALL 1305
+#define ID_UTILS_RESET_ALL 1306
+#define ID_UTILS_TEST_ACTION 1307
+#define ID_UTILS_TOGGLE_MUTE 1308
+#define ID_UTILS_TOGGLE_FPS 1309
+#define ID_UTILS_SHOW_ALL 1310
+#define ID_UTILS_HIDE_ALL 1311
+#define ID_UTILS_TOGGLE_WINDOW_OPACITY 1312
+#define ID_RESET_STATS 1313
+#define ID_DISCORD_WEBHOOK_ENABLE 1314
+#define ID_DISCORD_WEBHOOK_PASTE 1315
+#define ID_DISCORD_WEBHOOK_CLEAR 1316
+#define ID_DISCORD_WEBHOOK_TEST 1317
+#define ID_DISCORD_NOTIFY_START 1318
+#define ID_DISCORD_NOTIFY_ACTION 1319
+#define ID_DISCORD_NOTIFY_RECONNECT 1320
+#define ID_DISCORD_NOTIFY_ERRORS 1321
+#define ID_DISCORD_DISABLE_EMBED 1322
+#define ID_DISCORD_MENTION_ON_ERRORS 1323
+
+constexpr UINT WM_APP_SHOW_STATUS_BAR = WM_APP + 20;
+constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
+constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
+constexpr UINT STATUS_BAR_DEFAULT_DURATION = 1800;
+constexpr UINT STATUS_BAR_PRE_ACTION_DELAY = 2000;
+constexpr UINT STATUS_BAR_POST_ACTION_DURATION = 1000;
+constexpr DWORD FPS_CAPPER_PRE_ACTION_PAUSE_MS = 1500;
+constexpr UINT STATUS_BAR_ACTION_PENDING_DURATION = 120000;
 
 
 HWND g_hwnd;
@@ -133,16 +180,24 @@ NOTIFYICONDATA g_nid;
 HMENU g_hMenu;
 HANDLE g_hMultiInstanceMutex = NULL;
 HWND g_hSplashWnd = NULL;
+HWND g_hStatusBarWnd = NULL;
 HWND g_hMainUiWnd = NULL;
 HWND g_hCustomFpsWnd = NULL;
 HWND g_hCustomIntervalWnd = NULL;
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_updateFound(false), g_autoStartAfk(false), g_autoReconnect(false), g_autoReset(false), g_autoHideRoblox(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_useLegacyUi(false), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false);
-std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_fishstrapSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(false), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false);
+std::atomic<bool> g_discordWebhookEnabled(false), g_discordNotifyStart(true), g_discordNotifyStop(true), g_discordNotifyAction(false), g_discordNotifyReconnect(true), g_discordNotifyReset(false), g_discordNotifyErrors(true), g_discordDisableEmbed(false), g_discordMentionOnErrors(false);
+std::atomic<int> g_afkReminderState(0); // 0 - no reminder, 1 - reminded at 18min, 2 - AFK started at 19min
+std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0), g_longestAfkSessionSeconds(0), g_discordWebhooksSent(0), g_programLaunches(0), g_afkSessionsCompleted(0);
+std::atomic<DWORD> g_unmutedPid(0);
 std::thread g_activityMonitorThread;
 std::thread g_fpsCapperThread;
 std::condition_variable g_cv;
 std::vector<DWORD> g_manuallyStoppedPids;
+std::mutex g_autoWindowLayoutMutex;
+std::vector<UINT_PTR> g_lastAutoGridWindowSignature;
 std::mutex g_cv_m;
+std::mutex g_discordWebhookMutex;
+std::wstring g_discordWebhookUrl;
 
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX-tray");
 wchar_t g_splashStatus[128] = L"Initializing...";
@@ -152,58 +207,193 @@ int g_selectedAction = 0; // 0 - space, 1 - w&s, 2 - zoom
 int g_restoreMethod = 1; // 0 - Off, 1 - SetForeground, 2 - Alt+Tab
 int g_userSafeMode = 0; // 0 - Off, 1 - Legacy, 2 - Beta
 int g_fpsLimit = 0; // 0 for OFF
-int g_multiInstanceInterval = 0; // Delay in ms between windows in multi-instance mode (0 = minimum)
+int g_multiInstanceInterval = 0; 
+std::atomic<int> g_utilsWindowOpacityOverride(-1); // -1 = use saved setting, 0 = force off, 1 = force on
+std::atomic<int> g_utilsMuteOverride(-1); // -1 = use normal behavior, 0 = force unmute, 1 = force mute
+std::atomic<int> g_utilsFpsLimitOverride(-1); // -1 = use saved setting, >0 = force limit
 const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
+const int AFK_REMINDER_TIME = 18 * 60;
+const int AFK_AUTO_START_TIME = 19 * 60;
+const size_t DISCORD_WEBHOOK_MAX_LENGTH = 2048;
 const COLORREF DARK_BG = RGB(30, 30, 30);
 const COLORREF DARK_TEXT = RGB(235, 235, 235);
 const COLORREF DARK_EDIT_BG = RGB(45, 45, 45);
 
+struct StatusBarPayload {
+    std::wstring text;
+    UINT durationMs;
+    HWND anchorWindow;
+};
+
 
 bool CheckForUpdates(bool showNotification);
+void SaveSettings();
+std::string EscapeJsonStringUtf8(const std::string& input);
+void FpsCapperThread();
+void ShowAllRobloxWindows_Multi();
+void RefreshRobloxWindowOpacity(bool forceDisable);
+void RestoreForegroundWindow(HWND prevWnd);
+bool PauseFpsCapperBeforeAction(DWORD waitMs = FPS_CAPPER_PRE_ACTION_PAUSE_MS, bool allowAbort = false);
+void ResumeFpsCapperAfterAction(bool previousPausedState);
+enum class DiscordWebhookEvent
+{
+    Test,
+    Started,
+    Stopped,
+    Action,
+    AutoReconnect,
+    AutoReset,
+    Error
+};
+void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring& summary, bool bypassEnabledCheck = false);
+uint64_t FinalizeAfkSession();
+std::wstring FormatDurationShort(uint64_t totalSeconds);
+std::wstring GetDiscordWebhookUrlCopy();
+bool IsDiscordWebhookUrl(const std::wstring& url);
+void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL);
+void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL);
+bool TryParseOnOffValue(const std::wstring& value, bool& outValue);
+bool ReadOptionalOnOffArgument(LPWSTR* argv, int argc, int& index, bool defaultValue, bool& outValue);
+void ResetStatisticsCounters();
 
 // Args
 void ShowHelp()
 {
-    if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())
+    bool attachedToParentConsole = AttachConsole(ATTACH_PARENT_PROCESS) != FALSE;
+    bool allocatedConsole = false;
+    if (!attachedToParentConsole)
     {
-        FILE* pCout;
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        _setmode(_fileno(stdout), _O_WTEXT);
+        allocatedConsole = AllocConsole() != FALSE;
+    }
 
+    if (attachedToParentConsole || allocatedConsole)
+    {
         const wchar_t* helpText = L""
-            L"AntiAFK-RBX - Command Line Help\n"
-            L"================================================\n\n"
-            L"Usage: AntiAFK-RBX.exe [options]\n\n"
-            L"Startup & UI:\n"
-            L"  --no-splash\t\t\t\tSkip the splash screen on startup.\n"
-            L"  --tray\t\t\t\tStart minimized to the system tray without showing any UI.\n"
-            L"  --legacy-ui\t\t\t\tForce the old tray-only context menu UI.\n"
-            L"  --no-notifications\t\t\tDisable all non-critical tray notifications.\n"
-            L"  --no-update-check\t\t\tSkip checking for updates on startup.\n"
-            L"  --help, -?\t\t\t\tShow this help message and exit.\n\n"
+            L"\r\n\r\n"
+            L"AntiAFK-RBX - Command Line Help\r\n"
+            L"================================================\r\n\r\n"
+            L"Usage: AntiAFK-RBX.exe [options]\r\n\r\n"
+            L"Startup & UI:\r\n"
+            L"  --no-splash\r\n"
+            L"      Skip the splash screen on startup.\r\n"
+            L"  --tray\r\n"
+            L"      Start minimized to the system tray without showing any UI.\r\n"
+            L"  --legacy-ui [on|off]\r\n"
+            L"      Force enable or disable the tray-only Legacy UI.\r\n"
+            L"  --status-bar [on|off]\r\n"
+            L"      Force enable or disable the Status Bar overlay.\r\n"
+            L"  --no-notifications\r\n"
+            L"      Disable all non-critical tray notifications.\r\n"
+            L"  --auto-update [on|off]\r\n"
+            L"      Force enable or disable update checking.\r\n"
+            L"  --no-update-check\r\n"
+            L"      Skip checking for updates on startup.\r\n"
+            L"  --help, -?\r\n"
+            L"      Show this help message and exit.\r\n\r\n"
 
-            L"Anti-AFK Control:\n"
-            L"  --start-afk\t\t\t\tStart the Anti-AFK function immediately on launch.\n"
-            L"  --set-interval <seconds>\t\tSet the AFK interval in seconds (e.g., --set-interval 300).\n"
-            L"  --set-action <action>\t\t\tSet the AFK action. Values: space, ws, zoom.\n\n"
+            L"Anti-AFK Control:\r\n"
+            L"  --start-afk\r\n"
+            L"      Start the Anti-AFK function immediately on launch.\r\n"
+            L"  --set-interval <seconds>\r\n"
+            L"      Set the AFK interval in seconds (example: --set-interval 300).\r\n"
+            L"  --set-action <action>\r\n"
+            L"      Set the AFK action. Values: space, ws, zoom.\r\n\r\n"
 
-            L"Settings Override (these override saved settings for the current session):\n"
-            L"  --multi-instance [on|off]\t\tForce enable or disable multi-instance support.\n"
-            L"  --auto-start [on|off]\t\t\tForce enable or disable the 'Auto-Start' feature.\n"
-            L"  --auto-reconnect [on|off]\t\tForce enable or disable the 'Auto Reconnect' feature.\n"
-            L"  --user-safe <mode>\t\t\tSet User-Safe mode. Values: off, legacy, beta.\n"
-            L"  --restore-window <method>\t\tSet window restore method. Values: off, foreground, alttab.\n"
-            L"  --fishstrap-support [on|off]\t\tForce enable or disable support for modified clients.\n"
-            L"  --bloxstrap-integration\t\tEnable Bloxstrap/Fishstrap integration. If an instance is already running, it will exit gracefully.\n"
-            L"  --unlock-fps-on-focus [on|off]\tForce enable or disable unlocking FPS when Roblox is focused.\n"
-            L"  --set-fps-limit <fps>\t\t\tSet the FPS limit (0 to disable).\n\n"
+            L"Settings Override (current session only):\r\n"
+            L"  --multi-instance [on|off]\r\n"
+            L"      Force enable or disable multi-instance support.\r\n"
+            L"  --multi-instance-interval <0|1|3|5|10>\r\n"
+            L"      Set delay between Roblox windows in seconds.\r\n"
+            L"  --auto-start [on|off]\r\n"
+            L"      Force enable or disable the Auto-Start feature.\r\n"
+            L"  --auto-reconnect [on|off]\r\n"
+            L"      Force enable or disable the Auto Reconnect feature.\r\n"
+            L"  --auto-reset [on|off]\r\n"
+            L"      Force enable or disable the Auto Reset feature.\r\n"
+            L"  --auto-hide [on|off]\r\n"
+            L"      Force enable or disable auto-hiding Roblox.\r\n"
+            L"  --auto-opacity [on|off]\r\n"
+            L"      Force enable or disable auto opacity.\r\n"
+            L"  --auto-grid [on|off]\r\n"
+            L"      Force enable or disable auto grid.\r\n"
+            L"  --user-safe <mode>\r\n"
+            L"      Set User-Safe mode. Values: off, legacy, beta.\r\n"
+            L"  --restore-window <method>\r\n"
+            L"      Set restore method. Values: off, foreground, alttab.\r\n"
+            L"  --fishstrap-support [on|off]\r\n"
+            L"      Force enable or disable support for modified clients.\r\n"
+            L"  --bloxstrap-integration [on|off]\r\n"
+            L"      Force enable or disable Fish/Void/Bloxstrap integration.\r\n"
+            L"  --do-not-sleep [on|off]\r\n"
+            L"      Force enable or disable sleep prevention.\r\n"
+            L"  --unlock-fps-on-focus [on|off]\r\n"
+            L"      Force enable or disable unlocking FPS when Roblox is focused.\r\n"
+            L"  --set-fps-limit <fps>\r\n"
+            L"      Set the FPS limit (0 to disable).\r\n"
+            L"  --auto-mute [on|off]\r\n"
+            L"      Force enable or disable automatic Roblox mute.\r\n"
+            L"  --unmute-on-focus [on|off]\r\n"
+            L"      Force enable or disable temporary unmute on focus.\r\n\r\n"
 
+            L"Discord Webhook:\r\n"
+            L"  --discord-webhook [on|off]\r\n"
+            L"      Force enable or disable webhook sending.\r\n"
+            L"  --discord-webhook-url <url>\r\n"
+            L"      Set the Discord webhook URL for this session.\r\n"
+            L"  --discord-notify-start [on|off]\r\n"
+            L"      Force enable or disable Start / Stop webhook events.\r\n"
+            L"  --discord-notify-action [on|off]\r\n"
+            L"      Force enable or disable Action webhook events.\r\n"
+            L"  --discord-notify-reconnect [on|off]\r\n"
+            L"      Force enable or disable Reconnect webhook events.\r\n"
+            L"  --discord-notify-errors [on|off]\r\n"
+            L"      Force enable or disable Error webhook events.\r\n"
+            L"  --discord-disable-embed [on|off]\r\n"
+            L"      Force enable or disable embed payloads.\r\n"
+            L"  --discord-mention-on-errors [on|off]\r\n"
+            L"      Force enable or disable @everyone mentions on errors.\r\n\r\n"
 
-            L"================================================\n";
+            L"Utils:\r\n"
+            L"  --utils-show-all\r\n"
+            L"      Show all Roblox windows.\r\n"
+            L"  --utils-hide-all\r\n"
+            L"      Hide all Roblox windows.\r\n"
+            L"  --utils-grid-snap\r\n"
+            L"      Arrange Roblox windows into the grid layout.\r\n"
+            L"  --utils-window-opacity [on|off]\r\n"
+            L"      Set the session-only Roblox opacity override.\r\n"
+            L"  --utils-mute [on|off]\r\n"
+            L"      Set the session-only Roblox mute override.\r\n"
+            L"  --utils-fps [on|off]\r\n"
+            L"      Set the session-only FPS override.\r\n"
+            L"  --utils-test-action\r\n"
+            L"      Run the manual AntiAFK test action on Roblox.\r\n"
+            L"  --utils-reset-all\r\n"
+            L"      Send Reset to all detected Roblox windows.\r\n"
+            L"  --utils-close-all\r\n"
+            L"      Close all detected Roblox clients.\r\n\r\n"
 
-        std::wcout << helpText << std::endl;
-        FreeConsole();
+            L"Notes:\r\n"
+            L"  Features marked with * in the UI are experimental.\r\n"
+            L"  Auto Reconnect*: may occasionally fail to click the reconnect button.\r\n"
+            L"  Auto Grid*: in rare cases can mess up Roblox window positions.\r\n"
+            L"  Grid Snap Roblox*: in rare cases can also misplace window positions.\r\n"
+            L"  FPS Capper*: limits process timing rather than exact FPS.\r\n"
+            L"  Status Bar*: experimental UI overlay.\r\n\r\n"
+            L"================================================\r\n\r\n";
+
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hOut != INVALID_HANDLE_VALUE && hOut != NULL)
+        {
+            DWORD charsWritten = 0;
+            WriteConsoleW(hOut, helpText, (DWORD)wcslen(helpText), &charsWritten, NULL);
+        }
+
+        if (attachedToParentConsole || allocatedConsole)
+        {
+            FreeConsole();
+        }
     }
 }
 // ==========
@@ -328,8 +518,8 @@ void ShowTrayNotification(const wchar_t* title, const wchar_t* msg)
     info.hWnd = g_hwnd;
     info.uID = ID_TRAY_ICON;
     info.uFlags = NIF_INFO;
-    lstrcpy(info.szInfoTitle, title);
-    lstrcpy(info.szInfo, msg);
+    StringCchCopyW(info.szInfoTitle, _countof(info.szInfoTitle), title ? title : L"");
+    StringCchCopyW(info.szInfo, _countof(info.szInfo), msg ? msg : L"");
     info.dwInfoFlags = NIIF_INFO;
     Shell_NotifyIcon(NIM_MODIFY, &info);
 }
@@ -369,6 +559,158 @@ void DrawSharedCloseButton(Graphics* g, const RECT& closeButtonRect, bool isHove
     REAL sizeF = (REAL)size;
     g->DrawLine(&pen, (REAL)cx - sizeF, (REAL)cy - sizeF, (REAL)cx + sizeF, (REAL)cy + sizeF);
     g->DrawLine(&pen, (REAL)cx + sizeF, (REAL)cy - sizeF, (REAL)cx - sizeF, (REAL)cy + sizeF);
+}
+static void Popup_DrawActionButton(Graphics* g, HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary) {
+    Color fillColor = isPrimary
+        ? (isHovering ? Color(170, 20, 142, 224) : Color(140, 0, 122, 204))
+        : (isHovering ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
+    Color borderColor = isPrimary ? Color(180, 0, 122, 204) : Color(80, 70, 70, 70);
+
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+    g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawRectangle(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left - 1), (REAL)(rect.bottom - rect.top - 1));
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawString(text, -1, &textFont, rectF, &sf, &textBrush);
+}
+static void Popup_DrawActionButtonWithoutTopBorder(Graphics* g, HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary) {
+    Color fillColor = isPrimary
+        ? (isHovering ? Color(120, 20, 142, 224) : Color(90, 0, 122, 204))
+        : (isHovering ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
+    Color borderColor = isPrimary ? Color(180, 0, 122, 204) : Color(80, 70, 70, 70);
+
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+    g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawLine(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)rect.left, (REAL)(rect.bottom - 1));
+    g->DrawLine(&borderPen, (REAL)(rect.right - 1), (REAL)rect.top, (REAL)(rect.right - 1), (REAL)(rect.bottom - 1));
+    g->DrawLine(&borderPen, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)(rect.right - 1), (REAL)(rect.bottom - 1));
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawString(text, -1, &textFont, rectF, &sf, &textBrush);
+}
+static void Popup_DrawTextInput(Graphics* g, HDC hdc, const RECT& rect, HFONT inputFont, const wchar_t* value, const wchar_t* placeholder, bool isHovering, bool isFocused) {
+    Color fillColor = isFocused ? Color(140, 55, 55, 55) : (isHovering ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45));
+    Color borderColor = isFocused ? Color(180, 0, 122, 204) : Color(180, 80, 80, 80);
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+
+    g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawRectangle(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left - 1), (REAL)(rect.bottom - rect.top - 1));
+
+    Font textFont(hdc, inputFont);
+    SolidBrush textBrush((value && value[0] != L'\0') ? Color(255, 255, 255, 255) : Color(255, 130, 130, 130));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    sf.SetFormatFlags(StringFormatFlagsNoWrap);
+    RectF textRect((REAL)(rect.left + 12), (REAL)rect.top, (REAL)(rect.right - rect.left - 24), (REAL)(rect.bottom - rect.top));
+    g->DrawString((value && value[0] != L'\0') ? value : placeholder, -1, &textFont, textRect, &sf, &textBrush);
+}
+static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT& rect, HFONT inputFont, const wchar_t* value, const wchar_t* placeholder, bool isHovering, bool isFocused) {
+    Color fillColor = isFocused ? Color(140, 55, 55, 55) : (isHovering ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45));
+    Color borderColor = isFocused ? Color(180, 0, 122, 204) : Color(180, 80, 80, 80);
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+
+    g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawLine(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - 1), (REAL)rect.top);
+    g->DrawLine(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)rect.left, (REAL)(rect.bottom - 1));
+    g->DrawLine(&borderPen, (REAL)(rect.right - 1), (REAL)rect.top, (REAL)(rect.right - 1), (REAL)(rect.bottom - 1));
+    g->DrawLine(&borderPen, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)(rect.right - 1), (REAL)(rect.bottom - 1));
+
+    Font textFont(hdc, inputFont);
+    SolidBrush textBrush((value && value[0] != L'\0') ? Color(255, 255, 255, 255) : Color(255, 130, 130, 130));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    sf.SetFormatFlags(StringFormatFlagsNoWrap);
+    RectF textRect((REAL)(rect.left + 12), (REAL)rect.top, (REAL)(rect.right - rect.left - 24), (REAL)(rect.bottom - rect.top));
+    g->DrawString((value && value[0] != L'\0') ? value : placeholder, -1, &textFont, textRect, &sf, &textBrush);
+}
+static void Popup_DrawInfoBanner(Graphics* g, HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, COLORREF iconColor, const wchar_t* text) {
+    SolidBrush infoBgBrush(Color(60, 45, 45, 45));
+    Pen infoBorderPen(Color(180, 80, 80, 80), 1.0f);
+    g->FillRectangle(&infoBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawRectangle(&infoBorderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left - 1), (REAL)(rect.bottom - rect.top - 1));
+
+    HFONT iconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+    Font iconFont(hdc, iconFontH);
+    SolidBrush iconBrush(Color(255, GetRValue(iconColor), GetGValue(iconColor), GetBValue(iconColor)));
+    RectF iconRect((REAL)(rect.left + 6), (REAL)rect.top, 20.0f, (REAL)(rect.bottom - rect.top));
+    StringFormat sfIcon;
+    sfIcon.SetAlignment(StringAlignmentCenter);
+    sfIcon.SetLineAlignment(StringAlignmentCenter);
+    g->DrawString(icon, -1, &iconFont, iconRect, &sfIcon, &iconBrush);
+    DeleteObject(iconFontH);
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 140, 140, 140));
+    RectF textRect((REAL)(rect.left + 30), (REAL)rect.top, (REAL)(rect.right - rect.left - 38), (REAL)(rect.bottom - rect.top));
+    StringFormat sfText;
+    sfText.SetAlignment(StringAlignmentNear);
+    sfText.SetLineAlignment(StringAlignmentCenter);
+    g->DrawString(text, -1, &textFont, textRect, &sfText, &textBrush);
+}
+static void Popup_DrawInfoBannerNoBottomBorder(Graphics* g, HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, COLORREF iconColor, const wchar_t* text) {
+    SolidBrush infoBgBrush(Color(60, 45, 45, 45));
+    Pen infoBorderPen(Color(180, 80, 80, 80), 1.0f);
+    g->FillRectangle(&infoBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g->DrawLine(&infoBorderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - 1), (REAL)rect.top);
+    g->DrawLine(&infoBorderPen, (REAL)rect.left, (REAL)rect.top, (REAL)rect.left, (REAL)(rect.bottom - 1));
+    g->DrawLine(&infoBorderPen, (REAL)(rect.right - 1), (REAL)rect.top, (REAL)(rect.right - 1), (REAL)(rect.bottom - 1));
+
+    HFONT iconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+    Font iconFont(hdc, iconFontH);
+    SolidBrush iconBrush(Color(255, GetRValue(iconColor), GetGValue(iconColor), GetBValue(iconColor)));
+    RectF iconRect((REAL)(rect.left + 6), (REAL)rect.top, 20.0f, (REAL)(rect.bottom - rect.top));
+    StringFormat sfIcon;
+    sfIcon.SetAlignment(StringAlignmentCenter);
+    sfIcon.SetLineAlignment(StringAlignmentCenter);
+    g->DrawString(icon, -1, &iconFont, iconRect, &sfIcon, &iconBrush);
+    DeleteObject(iconFontH);
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 140, 140, 140));
+    RectF textRect((REAL)(rect.left + 30), (REAL)rect.top, (REAL)(rect.right - rect.left - 38), (REAL)(rect.bottom - rect.top));
+    StringFormat sfText;
+    sfText.SetAlignment(StringAlignmentNear);
+    sfText.SetLineAlignment(StringAlignmentCenter);
+    g->DrawString(text, -1, &textFont, textRect, &sfText, &textBrush);
+}
+static void Popup_DrawChrome(Graphics* g, HDC hdc, const RECT& clientRect, const RECT& closeButtonRect, HFONT titleFont, const wchar_t* title, bool isHoveringClose) {
+    SolidBrush bgBrush(Color(100, 10, 10, 10));
+    g->FillRectangle(&bgBrush, (REAL)clientRect.left, (REAL)clientRect.top, (REAL)(clientRect.right - clientRect.left), (REAL)(clientRect.bottom - clientRect.top));
+
+    Pen headerLinePen(Color(40, 255, 255, 255), 1.0f);
+    g->DrawLine(&headerLinePen, 0.0f, 30.0f, (REAL)clientRect.right, 30.0f);
+
+    HICON hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
+    if (hAppIcon) {
+        DrawIconEx(hdc, 15, 7, hAppIcon, 16, 16, 0, NULL, DI_NORMAL);
+        DestroyIcon(hAppIcon);
+    }
+
+    Font popupTitleFont(hdc, titleFont);
+    SolidBrush titleBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF titleRect(0.0f, 0.0f, (REAL)clientRect.right, 30.0f);
+    g->DrawString(title, -1, &popupTitleFont, titleRect, &sf, &titleBrush);
+
+    DrawSharedCloseButton(g, closeButtonRect, isHoveringClose);
 }
 
 void Splash_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
@@ -658,7 +1000,7 @@ struct AboutData {
     HCURSOR hCursorHand = NULL;
     HCURSOR hCursorArrow = NULL;
     std::wstring updateButtonText = L"Check for Updates";
-    int updateCheckState = 0; // 0: idle, 1: checking, 2: found, 3: not found/error
+    int updateCheckState = 0; // 0: idle, 1: checking, 2: found, 3: not found, 4: error
     COLORREF updateButtonCurrentColor = RGB(160, 160, 160);
     UINT_PTR uTimerId = 0;
 };
@@ -669,41 +1011,57 @@ void About_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHo
     DrawSharedCloseButton(&g, closeButtonRect, isHovering);
 }
 void About_Paint_DrawButtons(HDC hdc, const RECT& githubButtonRect, const RECT& sourceforgeButtonRect, bool isHoveringGithub, bool isHoveringSourceforge, HFONT hFont) {
-    auto drawButton = [&](const RECT& rect, const wchar_t* text, bool isHovering, Color hoverColor) {
-        Graphics g(hdc);
-        g.SetSmoothingMode(SmoothingModeAntiAlias);
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        if (isHovering) {
-            SolidBrush bgBrush(hoverColor);
-            GraphicsPath path;
-            path.AddArc((REAL)rect.left, (REAL)rect.top, 8.0f, 8.0f, 180, 90);
-            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.top, 8.0f, 8.0f, 270, 90);
-            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 0, 90);
-            path.AddArc((REAL)rect.left, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 90, 90);
-            path.CloseFigure();
-            g.FillPath(&bgBrush, &path);
-        } else {
-            SolidBrush bgBrush(Color(40, 255, 255, 255));
-            GraphicsPath path;
-            path.AddArc((REAL)rect.left, (REAL)rect.top, 8.0f, 8.0f, 180, 90);
-            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.top, 8.0f, 8.0f, 270, 90);
-            path.AddArc((REAL)rect.right - 8.0f, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 0, 90);
-            path.AddArc((REAL)rect.left, (REAL)rect.bottom - 8.0f, 8.0f, 8.0f, 90, 90);
-            path.CloseFigure();
-            g.FillPath(&bgBrush, &path);
-        }
-        
-        Font font(hdc, hFont);
-        SolidBrush textBrush(isHovering ? Color(255, 255, 255, 255) : Color(255, 200, 200, 200));
-        StringFormat sf;
-        sf.SetAlignment(StringAlignmentCenter);
-        sf.SetLineAlignment(StringAlignmentCenter);
-        RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
-        g.DrawString(text, -1, &font, rectF, &sf, &textBrush);
-    };
+    RECT groupRect = { githubButtonRect.left, githubButtonRect.top, sourceforgeButtonRect.right, githubButtonRect.bottom };
+    Color groupBorderColor(80, 70, 70, 70);
+    Color githubFill = isHoveringGithub ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50);
+    Color sourceforgeFill = isHoveringSourceforge ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50);
 
-    drawButton(githubButtonRect, L"GitHub", isHoveringGithub, Color(255, 45, 51, 57));
-    drawButton(sourceforgeButtonRect, L"SourceForge", isHoveringSourceforge, Color(255, 244, 121, 34));
+    SolidBrush githubBrush(githubFill);
+    SolidBrush sourceforgeBrush(sourceforgeFill);
+    Pen borderPen(groupBorderColor, 1.0f);
+
+    g.FillRectangle(&githubBrush, (REAL)githubButtonRect.left, (REAL)githubButtonRect.top, (REAL)(githubButtonRect.right - githubButtonRect.left), (REAL)(githubButtonRect.bottom - githubButtonRect.top));
+    g.FillRectangle(&sourceforgeBrush, (REAL)sourceforgeButtonRect.left, (REAL)sourceforgeButtonRect.top, (REAL)(sourceforgeButtonRect.right - sourceforgeButtonRect.left), (REAL)(sourceforgeButtonRect.bottom - sourceforgeButtonRect.top));
+
+    g.DrawLine(&borderPen, (REAL)groupRect.left, (REAL)groupRect.top, (REAL)groupRect.left, (REAL)(groupRect.bottom - 1));
+    g.DrawLine(&borderPen, (REAL)(groupRect.right - 1), (REAL)groupRect.top, (REAL)(groupRect.right - 1), (REAL)(groupRect.bottom - 1));
+    g.DrawLine(&borderPen, (REAL)groupRect.left, (REAL)(groupRect.bottom - 1), (REAL)(groupRect.right - 1), (REAL)(groupRect.bottom - 1));
+    g.DrawLine(&borderPen, (REAL)sourceforgeButtonRect.left, (REAL)groupRect.top, (REAL)sourceforgeButtonRect.left, (REAL)(groupRect.bottom - 1));
+
+    Font textFont(hdc, hFont);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+
+    RectF githubRectF((REAL)githubButtonRect.left, (REAL)githubButtonRect.top, (REAL)(githubButtonRect.right - githubButtonRect.left), (REAL)(githubButtonRect.bottom - githubButtonRect.top));
+    RectF sourceforgeRectF((REAL)sourceforgeButtonRect.left, (REAL)sourceforgeButtonRect.top, (REAL)(sourceforgeButtonRect.right - sourceforgeButtonRect.left), (REAL)(sourceforgeButtonRect.bottom - sourceforgeButtonRect.top));
+    g.DrawString(L"GitHub", -1, &textFont, githubRectF, &sf, &textBrush);
+    g.DrawString(L"SourceForge", -1, &textFont, sourceforgeRectF, &sf, &textBrush);
+}
+void About_Paint_DrawUpdateLine(HDC hdc, const RECT& updateRect, HFONT hFont, const std::wstring& text, COLORREF color, bool isHovering) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    if (isHovering) {
+        SolidBrush hoverBrush(Color(35, 55, 55, 55));
+        g.FillRectangle(&hoverBrush, (REAL)updateRect.left, (REAL)updateRect.top, (REAL)(updateRect.right - updateRect.left), (REAL)(updateRect.bottom - updateRect.top));
+    }
+
+    Pen linePen(Color(100, 80, 80, 80), 1.0f);
+    g.DrawLine(&linePen, (REAL)updateRect.left, (REAL)updateRect.top, (REAL)updateRect.right, (REAL)updateRect.top);
+    g.DrawLine(&linePen, (REAL)updateRect.left, (REAL)(updateRect.bottom - 1), (REAL)updateRect.right, (REAL)(updateRect.bottom - 1));
+
+    Font font(hdc, hFont);
+    SolidBrush textBrush(Color(255, GetRValue(color), GetGValue(color), GetBValue(color)));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF rectF((REAL)updateRect.left, (REAL)updateRect.top, (REAL)(updateRect.right - updateRect.left), (REAL)(updateRect.bottom - updateRect.top));
+    g.DrawString(text.c_str(), -1, &font, rectF, &sf, &textBrush);
 }
 void About_Paint_DrawContent(HDC hdc, const RECT& clientRect, HFONT hFont28, HFONT hFont12, HFONT hFont10, HFONT hFont12b) {
     Graphics g(hdc);
@@ -761,6 +1119,7 @@ void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
     case 1: targetColor = RGB(180, 180, 180); break;
     case 2: targetColor = RGB(252, 142, 54); break; 
     case 3: targetColor = RGB(0, 150, 136); break;
+    case 4: targetColor = RGB(210, 110, 90); break;
     default: targetColor = pData->isHoveringUpdate ? RGB(255, 255, 255) : RGB(160, 160, 160); break;
     }
 
@@ -809,15 +1168,14 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int btnWidth = 130, btnHeight = 32, btnGap = 10, margin = 20;
-        int totalButtonsWidth = btnWidth * 2 + btnGap;
-        int startX = margin;
-        int btnY = clientRect.bottom - btnHeight - margin;
-        pData->githubButtonRect = { startX, btnY, startX + btnWidth, btnY + btnHeight };
-        pData->sourceforgeButtonRect = { clientRect.right - margin - btnWidth, btnY, clientRect.right - margin, btnY + btnHeight };
-        
-        int updateBtnY = btnY - btnHeight/2 - btnGap - 5; 
-        pData->updateButtonRect = { (clientRect.right - (btnWidth + 60)) / 2, updateBtnY, (clientRect.right + (btnWidth + 60)) / 2, updateBtnY + btnHeight };
+        const int btnHeight = 36, btnGap = 0, margin = 0, updateHeight = 22;
+        int btnY = clientRect.bottom - btnHeight;
+        int halfWidth = (clientRect.right - btnGap) / 2;
+        pData->githubButtonRect = { 0, btnY, halfWidth, btnY + btnHeight };
+        pData->sourceforgeButtonRect = { pData->githubButtonRect.right + btnGap, btnY, clientRect.right, btnY + btnHeight };
+
+        int updateBtnY = btnY - updateHeight;
+        pData->updateButtonRect = { 0, updateBtnY, clientRect.right, updateBtnY + updateHeight };
         pData->topCloseButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
 
         enum DWM_WINDOW_CORNER_PREFERENCE {
@@ -843,7 +1201,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_APP + 3:
         if (pData) {
             pData->updateCheckState = wParam; 
-            pData->updateButtonText = (wParam == 2) ? L"Update Found!" : L"You are up to date!";
+            pData->updateButtonText = (wParam == 2) ? L"Update Found!" : ((wParam == 4) ? L"Error to check" : L"You are up to date!");
             InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
         }
         return 0;
@@ -946,7 +1304,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 std::thread([hwnd]() {
                     bool found = CheckForUpdates(false);
                     if (IsWindow(hwnd)) {
-                        PostMessage(hwnd, WM_APP + 3, found ? 2 : 3, 0);
+                        PostMessage(hwnd, WM_APP + 3, found ? 2 : (g_updateCheckFailed.load() ? 4 : 3), 0);
                     }
                 }).detach();
             }
@@ -998,19 +1356,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         About_Paint_DrawContent(memDC, clientRect, pData->hFont28, pData->hFont12, pData->hFont10, pData->hFont12b);
         About_Paint_DrawButtons(memDC, pData->githubButtonRect, pData->sourceforgeButtonRect, pData->isHoveringGithub, pData->isHoveringSourceforge, pData->hFont12);
 
-        {
-        {
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-            Font font(memDC, pData->hFont12);
-            SolidBrush textBrush(Color(255, GetRValue(pData->updateButtonCurrentColor), GetGValue(pData->updateButtonCurrentColor), GetBValue(pData->updateButtonCurrentColor)));
-            StringFormat sf;
-            sf.SetAlignment(StringAlignmentCenter);
-            sf.SetLineAlignment(StringAlignmentCenter);
-            RectF rectF((REAL)pData->updateButtonRect.left, (REAL)pData->updateButtonRect.top, (REAL)(pData->updateButtonRect.right - pData->updateButtonRect.left), (REAL)(pData->updateButtonRect.bottom - pData->updateButtonRect.top));
-            g.DrawString(pData->updateButtonText.c_str(), -1, &font, rectF, &sf, &textBrush);
-        }
-        }
+        About_Paint_DrawUpdateLine(memDC, pData->updateButtonRect, pData->hFont12, pData->updateButtonText, pData->updateButtonCurrentColor, pData->isHoveringUpdate);
 
         About_Paint_DrawCloseButton(memDC, pData->topCloseButtonRect, pData->isHoveringTopClose);
 
@@ -1130,6 +1476,412 @@ std::vector<HWND> FindAllRobloxWindows(bool includeHidden = false)
     CloseHandle(snap);
     return wins;
 }
+void MuteProcessByPid(DWORD pid, bool mute)
+{
+    HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
+    IMMDeviceEnumerator* pEnumerator = NULL;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
+    if (FAILED(hr) || !pEnumerator) { if (SUCCEEDED(hrCom)) CoUninitialize(); return; }
+
+    IMMDevice* pDevice = NULL;
+    hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    if (FAILED(hr) || !pDevice) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return; }
+
+    IAudioSessionManager2* pSessionManager = NULL;
+    hr = pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&pSessionManager);
+    pDevice->Release();
+    if (FAILED(hr) || !pSessionManager) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return; }
+
+    IAudioSessionEnumerator* pSessionEnumerator = NULL;
+    hr = pSessionManager->GetSessionEnumerator(&pSessionEnumerator);
+    pSessionManager->Release();
+    if (FAILED(hr) || !pSessionEnumerator) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return; }
+
+    int sessionCount = 0;
+    hr = pSessionEnumerator->GetCount(&sessionCount);
+    if (SUCCEEDED(hr)) {
+        for (int i = 0; i < sessionCount; i++) {
+            IAudioSessionControl* pSessionControl = NULL;
+            hr = pSessionEnumerator->GetSession(i, &pSessionControl);
+            if (FAILED(hr)) continue;
+
+            IAudioSessionControl2* pSessionControl2 = NULL;
+            hr = pSessionControl->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&pSessionControl2);
+            pSessionControl->Release();
+            if (FAILED(hr) || !pSessionControl2) continue;
+
+            DWORD sessionPid = 0;
+            hr = pSessionControl2->GetProcessId(&sessionPid);
+            if (SUCCEEDED(hr) && sessionPid == pid) {
+                ISimpleAudioVolume* pAudioVolume = NULL;
+                hr = pSessionControl2->QueryInterface(__uuidof(ISimpleAudioVolume), (void**)&pAudioVolume);
+                if (SUCCEEDED(hr) && pAudioVolume) {
+                    pAudioVolume->SetMute(mute, NULL);
+                    pAudioVolume->Release();
+                }
+            }
+            pSessionControl2->Release();
+        }
+    }
+    pSessionEnumerator->Release();
+    pEnumerator->Release();
+    if (SUCCEEDED(hrCom)) CoUninitialize();
+}
+void MuteAllRoblox(bool mute)
+{
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32 pe = { 0 };
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    if (Process32First(snap, &pe))
+    {
+        do
+        {
+            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0 || (g_fishstrapSupport.load() && _wcsicmp(pe.szExeFile, L"eurotrucks2.exe") == 0))
+            {
+                MuteProcessByPid(pe.th32ProcessID, mute);
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+}
+void MuteUnmutedPid()
+{
+    DWORD pid = g_unmutedPid.load();
+    if (pid > 0) {
+        MuteProcessByPid(pid, true);
+        g_unmutedPid = 0;
+    }
+}
+std::vector<DWORD> FindAllRobloxProcessIds()
+{
+    std::vector<DWORD> pids;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return pids;
+
+    PROCESSENTRY32 pe = { 0 };
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    if (Process32First(snap, &pe))
+    {
+        do
+        {
+            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0 || (g_fishstrapSupport.load() && _wcsicmp(pe.szExeFile, L"eurotrucks2.exe") == 0))
+            {
+                if (std::find(pids.begin(), pids.end(), pe.th32ProcessID) == pids.end()) {
+                    pids.push_back(pe.th32ProcessID);
+                }
+            }
+        } while (Process32Next(snap, &pe));
+    }
+
+    CloseHandle(snap);
+    return pids;
+}
+bool IsProcessMutedByPid(DWORD pid)
+{
+    HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    bool foundSession = false;
+    bool isMuted = false;
+
+    IMMDeviceEnumerator* pEnumerator = NULL;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
+    if (FAILED(hr) || !pEnumerator) { if (SUCCEEDED(hrCom)) CoUninitialize(); return false; }
+
+    IMMDevice* pDevice = NULL;
+    hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    if (FAILED(hr) || !pDevice) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return false; }
+
+    IAudioSessionManager2* pSessionManager = NULL;
+    hr = pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&pSessionManager);
+    pDevice->Release();
+    if (FAILED(hr) || !pSessionManager) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return false; }
+
+    IAudioSessionEnumerator* pSessionEnumerator = NULL;
+    hr = pSessionManager->GetSessionEnumerator(&pSessionEnumerator);
+    pSessionManager->Release();
+    if (FAILED(hr) || !pSessionEnumerator) { pEnumerator->Release(); if (SUCCEEDED(hrCom)) CoUninitialize(); return false; }
+
+    int sessionCount = 0;
+    hr = pSessionEnumerator->GetCount(&sessionCount);
+    if (SUCCEEDED(hr))
+    {
+        for (int i = 0; i < sessionCount; i++)
+        {
+            IAudioSessionControl* pSessionControl = NULL;
+            hr = pSessionEnumerator->GetSession(i, &pSessionControl);
+            if (FAILED(hr) || !pSessionControl) continue;
+
+            IAudioSessionControl2* pSessionControl2 = NULL;
+            hr = pSessionControl->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&pSessionControl2);
+            pSessionControl->Release();
+            if (FAILED(hr) || !pSessionControl2) continue;
+
+            DWORD sessionPid = 0;
+            hr = pSessionControl2->GetProcessId(&sessionPid);
+            if (SUCCEEDED(hr) && sessionPid == pid)
+            {
+                ISimpleAudioVolume* pAudioVolume = NULL;
+                hr = pSessionControl2->QueryInterface(__uuidof(ISimpleAudioVolume), (void**)&pAudioVolume);
+                if (SUCCEEDED(hr) && pAudioVolume)
+                {
+                    BOOL muted = FALSE;
+                    if (SUCCEEDED(pAudioVolume->GetMute(&muted))) {
+                        foundSession = true;
+                        isMuted = muted != FALSE;
+                    }
+                    pAudioVolume->Release();
+                }
+            }
+
+            pSessionControl2->Release();
+
+            if (foundSession) {
+                break;
+            }
+        }
+    }
+
+    pSessionEnumerator->Release();
+    pEnumerator->Release();
+    if (SUCCEEDED(hrCom)) CoUninitialize();
+    return foundSession && isMuted;
+}
+bool AreAllRobloxMuted()
+{
+    auto pids = FindAllRobloxProcessIds();
+    bool foundMutedState = false;
+    for (DWORD pid : pids)
+    {
+        if (!IsProcessMutedByPid(pid)) {
+            return false;
+        }
+        foundMutedState = true;
+    }
+    return foundMutedState;
+}
+bool IsUtilsWindowOpacityEnabled()
+{
+    int overrideValue = g_utilsWindowOpacityOverride.load();
+    if (overrideValue != -1) {
+        return overrideValue != 0;
+    }
+    return g_windowOpacity.load();
+}
+bool IsUtilsSessionWindowOpacityEnabled()
+{
+    return g_utilsWindowOpacityOverride.load() == 1;
+}
+bool ShouldMuteRobloxNow()
+{
+    int overrideValue = g_utilsMuteOverride.load();
+    if (overrideValue == 1) {
+        return true;
+    }
+    if (overrideValue == 0) {
+        return false;
+    }
+    return g_autoMute.load() && g_isAfkStarted.load();
+}
+bool IsUtilsSessionMuteEnabled()
+{
+    return g_utilsMuteOverride.load() == 1;
+}
+int GetEffectiveFpsLimit()
+{
+    int overrideValue = g_utilsFpsLimitOverride.load();
+    if (overrideValue != -1) {
+        return (std::max)(0, overrideValue);
+    }
+    return g_fpsLimit;
+}
+bool IsUtilsSessionFpsLimitEnabled()
+{
+    return g_utilsFpsLimitOverride.load() > 0;
+}
+bool ShouldRunFpsCapperNow()
+{
+    return IsUtilsSessionFpsLimitEnabled() || g_isAfkStarted.load();
+}
+void RestartFpsCapperForEffectiveLimit()
+{
+    if (g_isFpsCapperRunning.load()) {
+        g_isFpsCapperRunning = false;
+        if (g_fpsCapperThread.joinable()) {
+            g_fpsCapperThread.join();
+        }
+    }
+
+    if (GetEffectiveFpsLimit() > 0) {
+        g_fpsCapperThread = std::thread(FpsCapperThread);
+    }
+}
+void ResetRobloxSessionEffectsOnExit()
+{
+    ShowAllRobloxWindows_Multi();
+    RefreshRobloxWindowOpacity(true);
+    MuteAllRoblox(false);
+    g_unmutedPid = 0;
+
+    g_utilsWindowOpacityOverride = -1;
+    g_utilsMuteOverride = -1;
+    g_utilsFpsLimitOverride = -1;
+    RestartFpsCapperForEffectiveLimit();
+}
+// ==========
+void GridSnapRobloxWindows()
+{
+    auto allWins = FindAllRobloxWindows(true);
+    std::vector<HWND> wins;
+    wins.reserve(allWins.size());
+
+    auto isGridCandidate = [](HWND w) -> bool {
+        if (!IsWindow(w)) return false;
+        if (GetWindow(w, GW_OWNER) != NULL) return false;
+
+        LONG exStyle = GetWindowLong(w, GWL_EXSTYLE);
+        if (exStyle & WS_EX_TOOLWINDOW) return false;
+
+        wchar_t title[256] = { 0 };
+        GetWindowTextW(w, title, ARRAYSIZE(title));
+        if (title[0] == L'\0') return false;
+        if (_wcsicmp(title, L"Default IME") == 0) return false;
+
+        wchar_t className[128] = { 0 };
+        GetClassNameW(w, className, ARRAYSIZE(className));
+        if (_wcsicmp(className, L"IME") == 0) return false;
+        if (_wcsicmp(className, L"MSCTFIME UI") == 0) return false;
+
+        RECT rc = { 0 };
+        if (!GetWindowRect(w, &rc)) return false;
+        int wpx = rc.right - rc.left;
+        int hpx = rc.bottom - rc.top;
+        if (wpx < 220 || hpx < 160) return false;
+
+        return true;
+    };
+
+    for (HWND w : allWins) {
+        if (!isGridCandidate(w)) {
+            continue;
+        }
+
+        if (IsIconic(w)) {
+            ShowWindow(w, SW_RESTORE);
+        } else if (!IsWindowVisible(w)) {
+            ShowWindow(w, SW_SHOWNOACTIVATE);
+        }
+
+        SetWindowPos(w, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        Sleep(20);
+
+        if (isGridCandidate(w) && IsWindowVisible(w) && !IsIconic(w)) {
+            wins.push_back(w);
+        }
+    }
+
+    if (wins.empty()) return;
+
+    std::sort(wins.begin(), wins.end(), [](HWND a, HWND b) {
+        return reinterpret_cast<UINT_PTR>(a) < reinterpret_cast<UINT_PTR>(b);
+    });
+    wins.erase(std::unique(wins.begin(), wins.end()), wins.end());
+
+    RECT workArea;
+    if (!SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0)) {
+        GetWindowRect(GetDesktopWindow(), &workArea);
+    }
+
+    int edgeMargin = 8;
+    int windowGap = 14;
+    int screenWidth = workArea.right - workArea.left;
+    int screenHeight = workArea.bottom - workArea.top;
+
+    int count = (int)wins.size();
+    if (screenWidth <= edgeMargin * 2 || screenHeight <= edgeMargin * 2) return;
+
+    std::sort(wins.begin(), wins.end(), [](HWND a, HWND b) {
+        RECT ra{ 0 }, rb{ 0 };
+        bool gotA = GetWindowRect(a, &ra) != FALSE;
+        bool gotB = GetWindowRect(b, &rb) != FALSE;
+
+        if (gotA && gotB) {
+            if (ra.top != rb.top) return ra.top < rb.top;
+            if (ra.left != rb.left) return ra.left < rb.left;
+        }
+
+        return reinterpret_cast<UINT_PTR>(a) < reinterpret_cast<UINT_PTR>(b);
+    });
+
+    const int preferredWinW = 800;
+    const int preferredWinH = 600;
+    int cols = 1;
+    while (cols * cols < count) {
+        cols++;
+    }
+    int rows = (count + cols - 1) / cols;
+
+    int usableWidth = screenWidth - edgeMargin * 2;
+    int usableHeight = screenHeight - edgeMargin * 2;
+    int availableWidth = usableWidth - (cols - 1) * windowGap;
+    int availableHeight = usableHeight - (rows - 1) * windowGap;
+    if (availableWidth <= 0 || availableHeight <= 0) {
+        return;
+    }
+
+    int winWidth = preferredWinW;
+    int winHeight = preferredWinH;
+
+    if (cols * winWidth > availableWidth || rows * winHeight > availableHeight) {
+        double scaleW = (double)availableWidth / (double)(cols * preferredWinW);
+        double scaleH = (double)availableHeight / (double)(rows * preferredWinH);
+        double scale = (std::min)(scaleW, scaleH);
+        if (scale <= 0.0) {
+            scale = 1.0;
+        }
+
+        winWidth = (std::max)(220, (int)(preferredWinW * scale));
+        winHeight = (std::max)(165, (int)(preferredWinH * scale));
+    }
+
+    int startX = workArea.left + edgeMargin;
+    int startY = workArea.top + edgeMargin;
+
+    for (size_t i = 0; i < wins.size(); ++i) {
+        int col = (int)(i % cols);
+        int row = (int)(i / cols);
+        int x = startX + col * (winWidth + windowGap);
+        int y = startY + row * (winHeight + windowGap);
+
+        SetWindowPos(
+            wins[i],
+            NULL,
+            x,
+            y,
+            winWidth,
+            winHeight,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+
+    for (HWND w : wins) {
+        if (!IsWindow(w)) continue;
+        BringWindowToTop(w);
+        SetForegroundWindow(w);
+        Sleep(25);
+    }
+}
+std::vector<UINT_PTR> BuildRobloxWindowSignature(const std::vector<HWND>& wins)
+{
+    std::vector<UINT_PTR> signature;
+    signature.reserve(wins.size());
+    for (HWND w : wins)
+    {
+        signature.push_back(reinterpret_cast<UINT_PTR>(w));
+    }
+    std::sort(signature.begin(), signature.end());
+    return signature;
+}
 HWND FindWindowByProcessName(const wchar_t* processName)
 {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -1183,16 +1935,161 @@ void RestorePreviousWindowWithAltTab()
     keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
     keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
 }
+void RestoreUserWindowAfterRobloxAction(HWND previousWindow)
+{
+    if (g_restoreMethod == 1)
+    {
+        RestoreForegroundWindow(previousWindow);
+    }
+    else if (g_restoreMethod == 2)
+    {
+        Sleep(50);
+        RestorePreviousWindowWithAltTab();
+    }
+}
 void ShowAllRobloxWindows_Multi()
 {
     auto wins = FindAllRobloxWindows(true);
     for (HWND w : wins)
     {
-        if (!IsWindowVisible(w) || IsIconic(w))
+        if (IsIconic(w))
+        {
+            ShowWindow(w, SW_RESTORE);
+        }
+        else if (!IsWindowVisible(w))
         {
             ShowWindow(w, SW_SHOW);
         }
     }
+}
+void HideAllRobloxWindows()
+{
+    auto wins = FindAllRobloxWindows(true);
+    for (HWND w : wins)
+    {
+        ShowWindow(w, SW_HIDE);
+    }
+}
+void RefreshRobloxWindowOpacity(bool forceDisable)
+{
+    auto wins = FindAllRobloxWindows(true);
+    bool shouldApplyOpacity = !forceDisable && (IsUtilsWindowOpacityEnabled() || (g_autoOpacity.load() && g_isAfkStarted.load()));
+    for (HWND w : wins)
+    {
+        if (shouldApplyOpacity)
+        {
+            SetWindowLong(w, GWL_EXSTYLE, GetWindowLong(w, GWL_EXSTYLE) | WS_EX_LAYERED);
+            SetLayeredWindowAttributes(w, 0, 180, LWA_ALPHA);
+        }
+        else
+        {
+            SetWindowLong(w, GWL_EXSTYLE, GetWindowLong(w, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+            RedrawWindow(w, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
+        }
+    }
+}
+void ApplyAutoRobloxWindowLayout()
+{
+    auto wins = FindAllRobloxWindows(true);
+    std::lock_guard<std::mutex> guard(g_autoWindowLayoutMutex);
+
+    if (wins.empty())
+    {
+        g_lastAutoGridWindowSignature.clear();
+        return;
+    }
+
+    if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load())
+    {
+        RefreshRobloxWindowOpacity(false);
+    }
+
+    if (g_autoGrid.load())
+    {
+        auto signature = BuildRobloxWindowSignature(wins);
+        if (signature != g_lastAutoGridWindowSignature)
+        {
+            GridSnapRobloxWindows();
+            g_lastAutoGridWindowSignature = std::move(signature);
+        }
+    }
+    else
+    {
+        g_lastAutoGridWindowSignature.clear();
+    }
+}
+bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount)
+{
+    auto wins = FindAllRobloxWindows(true);
+    if (!action || repeatCount <= 0 || wins.empty()) {
+        return false;
+    }
+
+    HWND previousWindow = GetForegroundWindow();
+    bool wasFpsCapperPaused = PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, false);
+
+    for (HWND w : wins)
+    {
+        bool wasVisible = IsWindowVisible(w) != FALSE;
+        bool wasMinimized = IsIconic(w);
+
+        if (!wasVisible) {
+            ShowWindow(w, SW_SHOW);
+        }
+        if (wasMinimized) {
+            ShowWindow(w, SW_RESTORE);
+        }
+
+        SetForegroundWindow(w);
+        Sleep(50);
+
+        for (int i = 0; i < repeatCount; ++i) {
+            action(w);
+        }
+
+        if (!wasVisible) {
+            ShowWindow(w, SW_HIDE);
+        }
+        else if (wasMinimized) {
+            ShowWindow(w, SW_MINIMIZE);
+        }
+    }
+
+    ResumeFpsCapperAfterAction(wasFpsCapperPaused);
+    RestoreUserWindowAfterRobloxAction(previousWindow);
+    return true;
+}
+int CloseAllRobloxInstances()
+{
+    auto wins = FindAllRobloxWindows(true);
+    for (HWND w : wins)
+    {
+        PostMessage(w, WM_CLOSE, 0, 0);
+    }
+
+    if (!wins.empty()) {
+        Sleep(800);
+    }
+
+    int terminatedCount = 0;
+    auto pids = FindAllRobloxProcessIds();
+    for (DWORD pid : pids)
+    {
+        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pid);
+        if (!hProcess) {
+            continue;
+        }
+
+        if (TerminateProcess(hProcess, 0))
+        {
+            terminatedCount++;
+            WaitForSingleObject(hProcess, 1500);
+        }
+
+        CloseHandle(hProcess);
+    }
+
+    return terminatedCount;
 }
 // ==========
 
@@ -1350,7 +2247,7 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
 }
 // ==========
 
-// Bloxstrap integration
+// Fish/Void/Bloxstrap integration
 std::string GetBloxstrapSettingsPath() {
     HKEY hKey;
     if (RegOpenKeyExW(HKEY_CLASSES_ROOT, L"roblox-player\\DefaultIcon", 0, KEY_READ | KEY_WOW64_64KEY, &hKey) != ERROR_SUCCESS) {
@@ -1383,12 +2280,23 @@ std::string GetBloxstrapSettingsPath() {
 
     std::wstring dir_path_w = exe_path_w.substr(0, last_slash);
     
-    int len = WideCharToMultiByte(CP_UTF8, 0, (dir_path_w + L"\\Settings.json").c_str(), -1, NULL, 0, NULL, NULL);
-    std::string settings_path(len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, (dir_path_w + L"\\Settings.json").c_str(), -1, &settings_path[0], len, NULL, NULL);
-    settings_path.pop_back(); 
+    const std::wstring candidates[] = {
+        dir_path_w + L"\\Settings.json",
+        dir_path_w + L"\\AppSettings.json"
+    };
 
-    return settings_path;
+    for (const auto& candidate_w : candidates) {
+        DWORD attrs = GetFileAttributesW(candidate_w.c_str());
+        if (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+            int len = WideCharToMultiByte(CP_UTF8, 0, candidate_w.c_str(), -1, NULL, 0, NULL, NULL);
+            std::string settings_path(len, 0);
+            WideCharToMultiByte(CP_UTF8, 0, candidate_w.c_str(), -1, &settings_path[0], len, NULL, NULL);
+            settings_path.pop_back();
+            return settings_path;
+        }
+    }
+
+    return "";
 }
 std::string GetSelfExePath() {
     wchar_t path[MAX_PATH];
@@ -1406,14 +2314,14 @@ std::string GetSelfExePath() {
 void UpdateBloxstrapIntegration(bool enable) {
     std::string settingsPath = GetBloxstrapSettingsPath();
     if (settingsPath.empty()) {
-        ShowTrayNotification(L"Bloxstrap Integration Error", L"Could not find Bloxstrap installation path in registry.");
+        ShowTrayNotification(L"Fish/Void/Bloxstrap Integration Error", L"Could not find launcher installation path in registry.");
         g_bloxstrapIntegration = false;
         return;
     }
 
     std::ifstream inFile(settingsPath, std::ios::binary);
     if (!inFile.is_open()) {
-        ShowTrayNotification(L"Bloxstrap Integration Error", L"Could not find/open Bloxstrap's Settings.json file.");
+        ShowTrayNotification(L"Fish/Void/Bloxstrap Integration Error", L"Could not find/open the launcher settings file.");
         g_bloxstrapIntegration = false;
         return;
     }
@@ -1431,13 +2339,13 @@ void UpdateBloxstrapIntegration(bool enable) {
             return;
         }
 
-        std::string selfPath = GetSelfExePath();
+        std::string selfPath = EscapeJsonStringUtf8(GetSelfExePath());
 
-        std::string integrationJson = "    {\r\n      \"Name\": \"" + integrationName + "\",\r\n      \"Location\": \"" + selfPath + "\",\r\n      \"LaunchArgs\": \"--bloxstrap-integration\",\r\n      \"Delay\": 0,\r\n      \"PreLaunch\": false,\r\n      \"AutoClose\": true\r\n    }";
+        std::string integrationJson = "    {\r\n      \"Name\": \"" + integrationName + "\",\r\n      \"Location\": \"" + selfPath + "\",\r\n      \"LaunchArgs\": \"--bloxstrap-integration\",\r\n      \"Delay\": 0,\r\n      \"PreLaunch\": true,\r\n      \"AutoClose\": true\r\n    }";
 
         size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
         if (integrationsArrayPos == std::string::npos) {
-            ShowTrayNotification(L"Bloxstrap Integration Error", L"Could not find 'CustomIntegrations' array in Settings.json.");
+            ShowTrayNotification(L"Fish/Void/Bloxstrap Integration Error", L"Could not find 'CustomIntegrations' array in the launcher settings file.");
             g_bloxstrapIntegration = false;
             return;
         }
@@ -1487,7 +2395,7 @@ void UpdateBloxstrapIntegration(bool enable) {
         outFile << content;
         outFile.close();
     } else {
-        ShowTrayNotification(L"Bloxstrap Integration Error", L"Failed to write to Settings.json. Check permissions.");
+        ShowTrayNotification(L"Fish/Void/Bloxstrap Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
         g_bloxstrapIntegration = false;
     }
 }
@@ -1502,13 +2410,14 @@ void FpsCapperThread()
     std::mutex handlesMutex;
     auto last_update = std::chrono::steady_clock::now();
 
-    while (g_isFpsCapperRunning && g_fpsLimit > 0)
+    while (g_isFpsCapperRunning)
     {
-        if (!g_isAfkStarted.load() || g_isFpsCapperPaused.load() || g_fpsLimit <= 0) {
+        int effectiveFpsLimit = GetEffectiveFpsLimit();
+        if (!ShouldRunFpsCapperNow() || g_isFpsCapperPaused.load() || effectiveFpsLimit <= 0) {
             Sleep(250);
             continue;
         }
-        long long frame_duration_ms = 1000LL / g_fpsLimit;
+        long long frame_duration_ms = 1000LL / effectiveFpsLimit;
 
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_update).count();
@@ -1605,7 +2514,45 @@ void FpsCapperThread()
 }
 // ==========
 
-// UserSafe 
+bool PauseFpsCapperBeforeAction(DWORD waitMs, bool allowAbort)
+{
+    bool wasFpsCapperPaused = g_isFpsCapperPaused.load();
+    if (GetEffectiveFpsLimit() <= 0 || !g_isFpsCapperRunning.load()) {
+        return wasFpsCapperPaused;
+    }
+
+    g_isFpsCapperPaused = true;
+
+    DWORD waited = 0;
+    while (waited < waitMs)
+    {
+        if (allowAbort)
+        {
+            if (g_stopThread.load() || !g_isAfkStarted.load())
+            {
+                break;
+            }
+        }
+
+        DWORD waitChunk = (std::min)((DWORD)50, waitMs - waited);
+        Sleep(waitChunk);
+        waited += waitChunk;
+    }
+
+    return wasFpsCapperPaused;
+}
+
+void ResumeFpsCapperAfterAction(bool previousPausedState)
+{
+    g_isFpsCapperPaused = previousPausedState;
+}
+// ==========
+
+// Forward declarations for MonitorUserActivity
+void CreateTrayMenu(bool afk);
+void UpdateTrayIcon();
+
+// UserSafe
 void MonitorUserActivity()
 {
     g_monitorThreadRunning = true;
@@ -1614,42 +2561,87 @@ void MonitorUserActivity()
     while (g_monitorThreadRunning)
     {
         int currentMode = g_userSafeMode;
-        if (currentMode == 1)
+
+        LASTINPUTINFO lii;
+        lii.cbSize = sizeof(LASTINPUTINFO);
+        if (GetLastInputInfo(&lii))
         {
-            bool activity = false;
-            for (int i = 1; i < 256; i++)
+            if (lii.dwTime != (DWORD)g_lastActivityTime.load())
             {
-                if (GetAsyncKeyState(i) & 0x8000)
-                {
-                    activity = true;
-                    break;
+                g_lastActivityTime = lii.dwTime;
+                if (!g_userActive.load()) {
+                    g_userActive = true;
+                    g_afkReminderState = 0;
                 }
             }
-
-            if (activity)
-            {
-                g_lastActivityTime = GetTickCount64();
-                g_userActive = true;
-            }
-            else if ((GetTickCount64() - g_lastActivityTime) / 1000 >= USER_INACTIVITY_WAIT)
+            else if ((GetTickCount() - lii.dwTime) / 1000 >= USER_INACTIVITY_WAIT)
             {
                 g_userActive = false;
             }
         }
-        else if (currentMode == 2)
+
+        if (currentMode == 1)
         {
-            LASTINPUTINFO lii;
-            lii.cbSize = sizeof(LASTINPUTINFO);
-            if (GetLastInputInfo(&lii))
+            bool keyActivity = false;
+            for (int i = 1; i < 256; i++)
             {
-                if (lii.dwTime != (DWORD)g_lastActivityTime.load())
+                if (GetAsyncKeyState(i) & 0x8000)
                 {
-                    g_lastActivityTime = lii.dwTime;
-                    g_userActive = true;
+                    keyActivity = true;
+                    break;
                 }
-                else if ((GetTickCount() - lii.dwTime) / 1000 >= USER_INACTIVITY_WAIT)
+            }
+
+            if (keyActivity)
+            {
+                g_lastActivityTime = GetTickCount64();
+                g_userActive = true;
+                g_afkReminderState = 0; 
+            }
+        }
+
+        if (g_afkReminderEnabled.load() && !g_userActive.load() && !g_isAfkStarted.load())
+        {
+            auto wins = FindAllRobloxWindows(true);
+            if (wins.empty())
+            {
+                if (g_afkReminderState.load() > 0) {
+                    g_afkReminderState = 0;
+                }
+            }
+            else
+            {
+                uint64_t inactiveTime = (GetTickCount64() - g_lastActivityTime.load()) / 1000;
+
+                if (inactiveTime >= AFK_REMINDER_TIME && g_afkReminderState.load() == 0)
                 {
-                    g_userActive = false;
+                    ShowTrayNotification(L"AntiAFK | Reminder", L"You've been inactive for 18 minutes. Starting AFK prevention soon.");
+                    g_afkReminderState = 1;
+                }
+
+                if (inactiveTime >= AFK_AUTO_START_TIME && g_afkReminderState.load() < 2)
+                {
+                    ShowTrayNotification(L"AntiAFK | Auto-Started", L"No activity detected for 19 minutes. Starting AFK prevention.");
+                    g_afkStartTime = GetTickCount64();
+                    g_isAfkStarted = true;
+                    g_manuallyStoppedPids.clear();
+                    CreateTrayMenu(true);
+                    UpdateTrayIcon();
+                    g_afkReminderState = 2;
+                    g_cv.notify_all();
+
+                    if (ShouldMuteRobloxNow()) {
+                        MuteAllRoblox(true);
+                    }
+
+                    if (g_autoHideRoblox.load()) {
+                        for (HWND w : wins) {
+                            ShowWindow(w, SW_HIDE);
+                        }
+                    }
+
+                    QueueStatusBarOverlay(L"Auto-started after inactivity", 2200, wins.front());
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started after inactivity.", false);
                 }
             }
         }
@@ -1661,6 +2653,9 @@ void StartActivityMonitor()
 {
     if (!g_monitorThreadRunning)
     {
+        g_lastActivityTime = GetTickCount64();
+        g_userActive = true;
+        g_afkReminderState = 0;
         if (g_activityMonitorThread.joinable())
         {
             g_activityMonitorThread.join();
@@ -1678,6 +2673,909 @@ void StopActivityMonitor()
 }
 // ==========
 
+std::wstring NormalizeDiscordWebhookUrl(const std::wstring& value)
+{
+    std::wstring normalized;
+    normalized.reserve(value.size());
+    for (wchar_t ch : value)
+    {
+        if (!iswspace(ch))
+        {
+            normalized.push_back(ch);
+        }
+    }
+    if (normalized.size() > DISCORD_WEBHOOK_MAX_LENGTH)
+    {
+        normalized.resize(DISCORD_WEBHOOK_MAX_LENGTH);
+    }
+    return normalized;
+}
+
+std::wstring GetDiscordWebhookUrlCopy()
+{
+    std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
+    return g_discordWebhookUrl;
+}
+
+void SetDiscordWebhookUrl(const std::wstring& value)
+{
+    std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
+    g_discordWebhookUrl = NormalizeDiscordWebhookUrl(value);
+}
+
+bool IsDiscordWebhookUrl(const std::wstring& url)
+{
+    std::wstring normalized = NormalizeDiscordWebhookUrl(url);
+    if (normalized.empty()) return false;
+
+    URL_COMPONENTS components = { 0 };
+    wchar_t host[256] = { 0 };
+    wchar_t path[2048] = { 0 };
+    components.dwStructSize = sizeof(components);
+    components.lpszHostName = host;
+    components.dwHostNameLength = _countof(host);
+    components.lpszUrlPath = path;
+    components.dwUrlPathLength = _countof(path);
+
+    if (!InternetCrackUrlW(normalized.c_str(), 0, 0, &components))
+    {
+        return false;
+    }
+
+    std::wstring hostName(components.lpszHostName, components.dwHostNameLength);
+    std::wstring urlPath(components.lpszUrlPath, components.dwUrlPathLength);
+    std::transform(hostName.begin(), hostName.end(), hostName.begin(), towlower);
+
+    bool isHttps = components.nScheme == INTERNET_SCHEME_HTTPS;
+    bool isDiscordHost = hostName == L"discord.com" || hostName == L"discordapp.com" ||
+        hostName == L"canary.discord.com" || hostName == L"ptb.discord.com";
+
+    return isHttps && isDiscordHost && urlPath.find(L"/api/webhooks/") == 0;
+}
+
+std::wstring Utf8ToWide(const std::string& input)
+{
+    if (input.empty()) return L"";
+
+    int needed = MultiByteToWideChar(CP_UTF8, 0, input.data(), (int)input.size(), NULL, 0);
+    if (needed <= 0) return L"";
+
+    std::wstring output(needed, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, input.data(), (int)input.size(), &output[0], needed);
+    return output;
+}
+
+std::string WideToUtf8(const std::wstring& input)
+{
+    if (input.empty()) return "";
+
+    int needed = WideCharToMultiByte(CP_UTF8, 0, input.data(), (int)input.size(), NULL, 0, NULL, NULL);
+    if (needed <= 0) return "";
+
+    std::string output(needed, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, input.data(), (int)input.size(), &output[0], needed, NULL, NULL);
+    return output;
+}
+
+std::string EscapeJsonStringUtf8(const std::string& input)
+{
+    std::string escaped;
+    escaped.reserve(input.size() + 16);
+
+    for (unsigned char ch : input)
+    {
+        switch (ch)
+        {
+        case '\"': escaped += "\\\""; break;
+        case '\\': escaped += "\\\\"; break;
+        case '\b': escaped += "\\b"; break;
+        case '\f': escaped += "\\f"; break;
+        case '\n': escaped += "\\n"; break;
+        case '\r': escaped += "\\r"; break;
+        case '\t': escaped += "\\t"; break;
+        default:
+            if (ch < 0x20)
+            {
+                char buffer[7];
+                sprintf_s(buffer, "\\u%04X", ch);
+                escaped += buffer;
+            }
+            else
+            {
+                escaped.push_back((char)ch);
+            }
+            break;
+        }
+    }
+
+    return escaped;
+}
+
+static int ClampInt(int value, int minValue, int maxValue)
+{
+    if (value < minValue) return minValue;
+    if (value > maxValue) return maxValue;
+    return value;
+}
+
+static int NormalizeSelectedTimeValue(int value)
+{
+    return ClampInt(value, 1, 24 * 60 * 60);
+}
+
+static int NormalizeSelectedAction(int value)
+{
+    return ClampInt(value, 0, 2);
+}
+
+static int NormalizeUserSafeMode(int value)
+{
+    return ClampInt(value, 0, 2);
+}
+
+static int NormalizeRestoreMethod(int value)
+{
+    return ClampInt(value, 0, 2);
+}
+
+static int NormalizeFpsLimitValue(int value)
+{
+    return ClampInt(value, 0, 60);
+}
+
+static int NormalizeMultiInstanceIntervalValue(int value)
+{
+    switch (value)
+    {
+    case 0:
+    case 1000:
+    case 3000:
+    case 5000:
+    case 10000:
+        return value;
+    default:
+        return 0;
+    }
+}
+
+std::wstring GetWin32ErrorText(DWORD error)
+{
+    if (error == 0) return L"Unknown error.";
+
+    LPWSTR buffer = NULL;
+    DWORD length = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        error,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPWSTR)&buffer,
+        0,
+        NULL);
+
+    std::wstring message = (length > 0 && buffer) ? buffer : L"Unknown error.";
+    if (buffer)
+    {
+        LocalFree(buffer);
+    }
+
+    while (!message.empty() && (message.back() == L'\r' || message.back() == L'\n'))
+    {
+        message.pop_back();
+    }
+    return message;
+}
+
+std::wstring GetDiscordEventLabel(DiscordWebhookEvent eventType)
+{
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Test: return L"Test";
+    case DiscordWebhookEvent::Started: return L"Started";
+    case DiscordWebhookEvent::Stopped: return L"Stopped";
+    case DiscordWebhookEvent::Action: return L"AFK Action";
+    case DiscordWebhookEvent::AutoReconnect: return L"Auto Reconnect";
+    case DiscordWebhookEvent::AutoReset: return L"Auto Reset";
+    case DiscordWebhookEvent::Error: return L"Error";
+    }
+    return L"Unknown";
+}
+
+DWORD GetDiscordEventColor(DiscordWebhookEvent eventType)
+{
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Test: return 0x007ACC;
+    case DiscordWebhookEvent::Started: return 0x007ACC;
+    case DiscordWebhookEvent::Stopped: return 0xC81E1E;
+    case DiscordWebhookEvent::Action: return 0x007ACC;
+    case DiscordWebhookEvent::AutoReconnect: return 0x007ACC;
+    case DiscordWebhookEvent::AutoReset: return 0x007ACC;
+    case DiscordWebhookEvent::Error: return 0xC81E1E;
+    }
+    return 0x007ACC;
+}
+
+std::wstring GetDiscordUtcTimestamp()
+{
+    SYSTEMTIME utcTime = { 0 };
+    GetSystemTime(&utcTime);
+
+    wchar_t buffer[64];
+    swprintf_s(
+        buffer,
+        L"%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+        utcTime.wYear,
+        utcTime.wMonth,
+        utcTime.wDay,
+        utcTime.wHour,
+        utcTime.wMinute,
+        utcTime.wSecond);
+    return buffer;
+}
+
+std::wstring GetDiscordDisplayTimeLabel()
+{
+    SYSTEMTIME localTime = { 0 };
+    GetLocalTime(&localTime);
+
+    wchar_t buffer[64];
+    swprintf_s(buffer, L"today at %02d:%02d", localTime.wHour, localTime.wMinute);
+    return buffer;
+}
+
+std::wstring GetDiscordActionCompactLabel()
+{
+    switch (g_selectedAction)
+    {
+    case 0: return L"Jump";
+    case 1: return L"W/S";
+    case 2: return L"Zoom";
+    default: return L"Action";
+    }
+}
+
+std::wstring GetDiscordIntervalCompactLabel()
+{
+    wchar_t buffer[32];
+    if (g_selectedTime % 60 == 0)
+    {
+        swprintf_s(buffer, L"%d min", g_selectedTime / 60);
+    }
+    else
+    {
+        swprintf_s(buffer, L"%d sec", g_selectedTime);
+    }
+    return buffer;
+}
+
+std::wstring BuildDiscordStartedDetailsLine()
+{
+    std::wstring line = GetDiscordActionCompactLabel();
+    line += L" \u2022 ";
+    line += GetDiscordIntervalCompactLabel();
+
+    if (g_autoReconnect.load())
+    {
+        line += L" \u2022 **Reconnect**";
+    }
+    if (g_autoReset.load())
+    {
+        line += L" \u2022 **Reset**";
+    }
+    if (g_doNotSleep.load())
+    {
+        line += L" \u2022 **Do Not Sleep**";
+    }
+    if (g_fpsLimit > 0)
+    {
+        line += L" \u2022 **FPS Capper**";
+    }
+
+    return line;
+}
+
+std::wstring BuildDiscordStartedInstancesLine()
+{
+    auto wins = FindAllRobloxWindows(false);
+    std::vector<DWORD> uniquePids;
+    uniquePids.reserve(wins.size());
+
+    for (HWND w : wins)
+    {
+        if (!IsWindowVisible(w) || IsIconic(w))
+        {
+            continue;
+        }
+
+        DWORD pid = 0;
+        GetWindowThreadProcessId(w, &pid);
+        if (pid != 0 && std::find(uniquePids.begin(), uniquePids.end(), pid) == uniquePids.end())
+        {
+            uniquePids.push_back(pid);
+        }
+    }
+
+    size_t count = uniquePids.size();
+
+    wchar_t buffer[96];
+    swprintf_s(buffer, L"Started \u2022 Found %zu %s", count, count == 1 ? L"Window" : L"Windows");
+    return buffer;
+}
+
+std::wstring BuildDiscordStartedCompactInstancesLabel()
+{
+    std::wstring fullLabel = BuildDiscordStartedInstancesLine();
+    const std::wstring prefix = L"Started \u2022 Found ";
+    if (fullLabel.rfind(prefix, 0) == 0)
+    {
+        std::wstring suffix = fullLabel.substr(prefix.size());
+        return suffix + L" found";
+    }
+    return fullLabel;
+}
+
+std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const std::wstring& summary)
+{
+    std::wstring description;
+    description.reserve(256);
+
+    auto appendLine = [&](const std::wstring& line)
+    {
+        if (!description.empty())
+        {
+            description += L"\n";
+        }
+        description += line;
+    };
+
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Started:
+        appendLine(BuildDiscordStartedInstancesLine());
+        appendLine(BuildDiscordStartedDetailsLine());
+        break;
+    case DiscordWebhookEvent::Stopped:
+        if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
+        {
+            appendLine(L"Stopped \u2022 Manual stop");
+        }
+        else if (summary.find(L"Roblox not found") != std::wstring::npos)
+        {
+            appendLine(L"Stopped \u2022 Roblox not found");
+        }
+        else if (!summary.empty())
+        {
+            appendLine(std::wstring(L"Stopped \u2022 ") + summary);
+        }
+        else
+        {
+            appendLine(L"Stopped");
+        }
+        break;
+    case DiscordWebhookEvent::Error:
+        if (summary.find(L"Roblox not found") != std::wstring::npos)
+        {
+            appendLine(L"Error \u2022 Roblox not found");
+        }
+        else if (!summary.empty())
+        {
+            appendLine(std::wstring(L"Error \u2022 ") + summary);
+        }
+        else
+        {
+            appendLine(L"Error");
+        }
+        break;
+    case DiscordWebhookEvent::AutoReconnect:
+        appendLine(L"Reconnected \u2022 Roblox");
+        break;
+    case DiscordWebhookEvent::Action:
+        appendLine(std::wstring(L"Action \u2022 ") + GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel());
+        break;
+    case DiscordWebhookEvent::Test:
+        appendLine(L"Test \u2022 Webhook connected");
+        break;
+    case DiscordWebhookEvent::AutoReset:
+        appendLine(L"Reset");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    default:
+        appendLine(GetDiscordEventLabel(eventType));
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    }
+
+    return description;
+}
+
+std::wstring GetDiscordCompactVersionLabel()
+{
+    std::wstring version = g_Version ? g_Version : L"v";
+    if (version.rfind(L"v.", 0) == 0)
+    {
+        version.erase(1, 1);
+    }
+    if (version.size() > 2 && version.rfind(L".0") == version.size() - 2)
+    {
+        version.resize(version.size() - 2);
+    }
+    return version;
+}
+
+std::wstring GetDiscordInviteUrl()
+{
+    return L"https://agzes.github.io/go/to/discord";
+}
+
+std::wstring GetGithubRepoUrl()
+{
+    return L"https://github.com/Agzes/AntiAFK-RBX";
+}
+
+std::wstring GetDiscordAuthorIconUrl()
+{
+    return L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Resources/tray-icon-off.png";
+}
+
+std::wstring BuildDiscordEmbedTitle(DiscordWebhookEvent eventType)
+{
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Started: return L"AntiAFK Started";
+    case DiscordWebhookEvent::Stopped: return L"AntiAFK Stopped";
+    case DiscordWebhookEvent::Action: return L"AntiAFK Action";
+    case DiscordWebhookEvent::AutoReconnect: return L"AntiAFK Reconnect";
+    case DiscordWebhookEvent::AutoReset: return L"AntiAFK Reset";
+    case DiscordWebhookEvent::Error: return L"AntiAFK Error";
+    case DiscordWebhookEvent::Test: return L"AntiAFK Test";
+    }
+    return L"AntiAFK Update";
+}
+
+std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const std::wstring& summary)
+{
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Started:
+        return BuildDiscordStartedCompactInstancesLabel() + L" \u2022 " + BuildDiscordStartedDetailsLine();
+    case DiscordWebhookEvent::Stopped:
+        if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
+        {
+            return L"Manual stop";
+        }
+        if (summary.find(L"Roblox not found") != std::wstring::npos)
+        {
+            return L"Roblox not found";
+        }
+        return summary.empty() ? L"Stopped" : summary;
+    case DiscordWebhookEvent::Error:
+        if (summary.find(L"Roblox not found") != std::wstring::npos)
+        {
+            return L"Roblox not found";
+        }
+        return summary.empty() ? L"Unknown error" : summary;
+    case DiscordWebhookEvent::AutoReconnect:
+        return summary.empty() ? L"Reconnect triggered" : summary;
+    case DiscordWebhookEvent::Action:
+        return GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel();
+    case DiscordWebhookEvent::Test:
+        return L"Webhook connected";
+    case DiscordWebhookEvent::AutoReset:
+        return summary.empty() ? L"Reset triggered" : summary;
+    default:
+        return summary.empty() ? GetDiscordEventLabel(eventType) : summary;
+    }
+}
+
+bool ShouldMentionDiscordEvent(DiscordWebhookEvent eventType)
+{
+    if (!g_discordMentionOnErrors.load())
+    {
+        return false;
+    }
+
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Error:
+    case DiscordWebhookEvent::AutoReconnect:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::wstring BuildDiscordPlainContentLine(DiscordWebhookEvent eventType, const std::wstring& summary)
+{
+    if (eventType == DiscordWebhookEvent::Started)
+    {
+        return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" \u2022 Started \u2022 " + BuildDiscordStartedCompactInstancesLabel();
+    }
+
+    std::wstring content = BuildDiscordAsciiDescription(eventType, summary);
+    for (wchar_t& ch : content)
+    {
+        if (ch == L'\n' || ch == L'\r')
+        {
+            ch = L' ';
+        }
+    }
+
+    std::wstring compact;
+    compact.reserve(content.size());
+    bool previousWasSpace = false;
+    for (wchar_t ch : content)
+    {
+        bool isSpace = iswspace(ch) != 0;
+        if (isSpace)
+        {
+            if (!previousWasSpace)
+            {
+                compact.push_back(L' ');
+            }
+        }
+        else
+        {
+            compact.push_back(ch);
+        }
+        previousWasSpace = isSpace;
+    }
+
+    while (!compact.empty() && compact.front() == L' ')
+    {
+        compact.erase(compact.begin());
+    }
+    while (!compact.empty() && compact.back() == L' ')
+    {
+        compact.pop_back();
+    }
+
+    compact = std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" \u2022 " + compact;
+    return compact;
+}
+
+std::string BuildDiscordWebhookPayloadJson(DiscordWebhookEvent eventType, const std::wstring& summary)
+{
+    std::wstring mentionText = ShouldMentionDiscordEvent(eventType) ? L"@everyone" : L"";
+    std::string mentionUtf8 = EscapeJsonStringUtf8(WideToUtf8(mentionText));
+    const char* allowedMentionsJson = mentionText.empty()
+        ? "{\"parse\":[]}"
+        : "{\"parse\":[\"everyone\"]}";
+
+    if (g_discordDisableEmbed.load())
+    {
+        std::wstring content = BuildDiscordPlainContentLine(eventType, summary);
+        if (!mentionText.empty())
+        {
+            content = mentionText + L" " + content;
+        }
+        std::string contentUtf8 = EscapeJsonStringUtf8(WideToUtf8(content));
+
+        std::ostringstream json;
+        json
+            << "{\"username\":\"AntiAFK-RBX\",\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":\""
+            << contentUtf8
+            << "\"}";
+        return json.str();
+    }
+
+    std::wstring title = BuildDiscordEmbedTitle(eventType);
+    std::wstring description = BuildDiscordEmbedDescription(eventType, summary);
+    std::wstring authorName = L"AntiAFK-RBX " + GetDiscordCompactVersionLabel();
+    std::wstring authorUrl = GetGithubRepoUrl();
+    std::wstring authorIconUrl = GetDiscordAuthorIconUrl();
+
+    std::string titleUtf8 = EscapeJsonStringUtf8(WideToUtf8(title));
+    std::string descriptionUtf8 = EscapeJsonStringUtf8(WideToUtf8(description));
+    std::string authorNameUtf8 = EscapeJsonStringUtf8(WideToUtf8(authorName));
+    std::string authorUrlUtf8 = EscapeJsonStringUtf8(WideToUtf8(authorUrl));
+    std::string authorIconUrlUtf8 = EscapeJsonStringUtf8(WideToUtf8(authorIconUrl));
+
+    std::ostringstream json;
+    json
+        << "{\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":";
+    if (!mentionText.empty())
+    {
+        json << "\"" << mentionUtf8 << "\"";
+    }
+    else
+    {
+        json << "null";
+    }
+    json
+        << ",\"embeds\":[{"
+        << "\"title\":\"" << titleUtf8 << "\","
+        << "\"description\":\"" << descriptionUtf8 << "\","
+        << "\"author\":{\"name\":\"" << authorNameUtf8 << "\",\"url\":\"" << authorUrlUtf8 << "\",\"icon_url\":\"" << authorIconUrlUtf8 << "\"},"
+        << "\"color\":" << GetDiscordEventColor(eventType)
+        << "}],\"attachments\":[]}";
+    return json.str();
+}
+
+uint64_t FinalizeAfkSession()
+{
+    uint64_t startTime = g_afkStartTime.exchange(0);
+    if (startTime == 0)
+    {
+        return 0;
+    }
+
+    uint64_t sessionSeconds = (GetTickCount64() - startTime) / 1000;
+    g_totalAfkTimeSeconds += sessionSeconds;
+    g_afkSessionsCompleted++;
+
+    uint64_t longestSession = g_longestAfkSessionSeconds.load();
+    while (sessionSeconds > longestSession && !g_longestAfkSessionSeconds.compare_exchange_weak(longestSession, sessionSeconds))
+    {
+    }
+
+    return sessionSeconds;
+}
+
+std::wstring FormatDurationShort(uint64_t totalSeconds)
+{
+    uint64_t hours = totalSeconds / 3600;
+    uint64_t minutes = (totalSeconds % 3600) / 60;
+
+    wchar_t buffer[64];
+    swprintf_s(buffer, L"%llu h %llu min", hours, minutes);
+    return buffer;
+}
+
+bool ShouldSendDiscordWebhookEvent(DiscordWebhookEvent eventType, bool bypassEnabledCheck = false)
+{
+    if (eventType == DiscordWebhookEvent::Test)
+    {
+        return true;
+    }
+
+    if (!bypassEnabledCheck && !g_discordWebhookEnabled.load())
+    {
+        return false;
+    }
+
+    switch (eventType)
+    {
+    case DiscordWebhookEvent::Started: return g_discordNotifyStart.load();
+    case DiscordWebhookEvent::Stopped: return g_discordNotifyStart.load();
+    case DiscordWebhookEvent::Action: return g_discordNotifyAction.load();
+    case DiscordWebhookEvent::AutoReconnect: return g_discordNotifyReconnect.load();
+    case DiscordWebhookEvent::AutoReset: return false;
+    case DiscordWebhookEvent::Error: return g_discordNotifyErrors.load();
+    case DiscordWebhookEvent::Test: return true;
+    }
+    return false;
+}
+
+bool ReadUnicodeTextFromClipboard(HWND owner, std::wstring& outText)
+{
+    outText.clear();
+    if (!OpenClipboard(owner))
+    {
+        return false;
+    }
+
+    HANDLE clipboardData = GetClipboardData(CF_UNICODETEXT);
+    if (!clipboardData)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    const wchar_t* rawText = (const wchar_t*)GlobalLock(clipboardData);
+    if (!rawText)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    outText = rawText;
+    GlobalUnlock(clipboardData);
+    CloseClipboard();
+    return true;
+}
+
+bool TryParseOnOffValue(const std::wstring& value, bool& outValue)
+{
+    if (value == L"on")
+    {
+        outValue = true;
+        return true;
+    }
+    if (value == L"off")
+    {
+        outValue = false;
+        return true;
+    }
+    return false;
+}
+
+bool ReadOptionalOnOffArgument(LPWSTR* argv, int argc, int& index, bool defaultValue, bool& outValue)
+{
+    outValue = defaultValue;
+    if (index + 1 >= argc)
+    {
+        return false;
+    }
+
+    bool parsedValue = false;
+    if (!TryParseOnOffValue(argv[index + 1], parsedValue))
+    {
+        return false;
+    }
+
+    outValue = parsedValue;
+    ++index;
+    return true;
+}
+
+void ResetStatisticsCounters()
+{
+    g_totalAfkTimeSeconds = 0;
+    g_afkActionsPerformed = 0;
+    g_autoReconnectsPerformed = 0;
+    g_longestAfkSessionSeconds = 0;
+    g_discordWebhooksSent = 0;
+    g_programLaunches = 0;
+    g_afkSessionsCompleted = 0;
+    SaveSettings();
+}
+
+bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEvent eventType, const std::wstring& summary, std::wstring* errorOut = nullptr, DWORD* statusCodeOut = nullptr)
+{
+    std::wstring normalizedUrl = NormalizeDiscordWebhookUrl(webhookUrl);
+    if (!IsDiscordWebhookUrl(normalizedUrl))
+    {
+        if (errorOut) *errorOut = L"Webhook URL is empty or invalid.";
+        return false;
+    }
+
+    URL_COMPONENTS components = { 0 };
+    wchar_t host[256] = { 0 };
+    wchar_t path[2048] = { 0 };
+    wchar_t extraInfo[2048] = { 0 };
+    components.dwStructSize = sizeof(components);
+    components.lpszHostName = host;
+    components.dwHostNameLength = _countof(host);
+    components.lpszUrlPath = path;
+    components.dwUrlPathLength = _countof(path);
+    components.lpszExtraInfo = extraInfo;
+    components.dwExtraInfoLength = _countof(extraInfo);
+
+    if (!InternetCrackUrlW(normalizedUrl.c_str(), 0, 0, &components))
+    {
+        if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());
+        return false;
+    }
+
+    std::wstring requestPath(path, components.dwUrlPathLength);
+    requestPath.append(extraInfo, components.dwExtraInfoLength);
+
+    HINTERNET hInternet = InternetOpenW(L"AntiAFK-RBX/3.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet)
+    {
+        if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());    
+        return false;
+    }
+
+    bool success = false;
+    HINTERNET hConnect = NULL;
+    HINTERNET hRequest = NULL;
+
+    do
+    {
+        hConnect = InternetConnectW(
+            hInternet,
+            host,
+            components.nPort,
+            NULL,
+            NULL,
+            INTERNET_SERVICE_HTTP,
+            0,
+            0);
+        if (!hConnect)
+        {
+            if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());
+            break;
+        }
+
+        const wchar_t* acceptTypes[] = { L"*/*", NULL };
+        hRequest = HttpOpenRequestW(
+            hConnect,
+            L"POST",
+            requestPath.c_str(),
+            NULL,
+            NULL,
+            acceptTypes,
+            INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI,
+            0);
+        if (!hRequest)
+        {
+            if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());
+            break;
+        }
+
+        std::string jsonBody = BuildDiscordWebhookPayloadJson(eventType, summary);
+
+        const wchar_t* headers = L"Content-Type: application/json\r\n";
+        if (!HttpSendRequestW(hRequest, headers, -1, (LPVOID)jsonBody.data(), (DWORD)jsonBody.size()))
+        {
+            if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());
+            break;
+        }
+
+        DWORD statusCode = 0;
+        DWORD statusSize = sizeof(statusCode);
+        if (!HttpQueryInfoW(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusSize, NULL))
+        {
+            if (errorOut) *errorOut = GetWin32ErrorText(GetLastError());
+            break;
+        }
+
+        if (statusCodeOut) *statusCodeOut = statusCode;
+
+        if (statusCode >= 200 && statusCode < 300)
+        {
+            success = true;
+            g_discordWebhooksSent++;
+            break;
+        }
+
+        std::string responseBody;
+        char buffer[512];
+        DWORD bytesRead = 0;
+        while (InternetReadFile(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+        {
+            responseBody.append(buffer, bytesRead);
+            bytesRead = 0;
+        }
+
+        if (errorOut)
+        {
+            std::wstringstream errorStream;
+            errorStream << L"Discord returned HTTP " << statusCode;
+            if (!responseBody.empty())
+            {
+                std::wstring bodyText = Utf8ToWide(responseBody);
+                if (!bodyText.empty())
+                {
+                    errorStream << L": " << bodyText;
+                }
+            }
+            *errorOut = errorStream.str();
+        }
+    } while (false);
+
+    if (hRequest) InternetCloseHandle(hRequest);
+    if (hConnect) InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+    return success;
+}
+
+void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring& summary, bool bypassEnabledCheck)
+{
+    if (!ShouldSendDiscordWebhookEvent(eventType, bypassEnabledCheck))
+    {
+        return;
+    }
+
+    std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
+    if (!IsDiscordWebhookUrl(webhookUrl))
+    {
+        return;
+    }
+
+    std::thread([webhookUrl, eventType, summary]() {
+        SendDiscordWebhookRequest(webhookUrl, eventType, summary, nullptr, nullptr);
+        }).detach();
+}
+// ==========
+
 // Settings
 void SaveSettings()
 {
@@ -1689,14 +3587,37 @@ void SaveSettings()
     DWORD autoReconnect = g_autoReconnect.load();
     DWORD autoReset = g_autoReset.load();
     DWORD autoHideRoblox = g_autoHideRoblox.load();
+    DWORD autoOpacity = g_autoOpacity.load();
+    DWORD autoGrid = g_autoGrid.load();
     DWORD restoreMethod = g_restoreMethod;
     DWORD tutorialShown = g_tutorialShown.load();
     DWORD bloxstrapIntegration = g_bloxstrapIntegration.load();
+    DWORD statusBarEnabled = g_statusBarEnabled.load();
     DWORD unlockFpsOnFocus = g_unlockFpsOnFocus.load();
     uint64_t afkActions = g_afkActionsPerformed.load();
     uint64_t autoReconnects = g_autoReconnectsPerformed.load();
     DWORD useLegacyUi = g_useLegacyUi.load();
     DWORD fpsLimit = g_fpsLimit;
+    DWORD windowOpacity = g_windowOpacity.load();
+    DWORD afkReminder = g_afkReminderEnabled.load();
+    DWORD doNotSleep = g_doNotSleep.load();
+    DWORD autoMute = g_autoMute.load();
+    DWORD unmuteOnFocus = g_unmuteOnFocus.load();
+    DWORD discordWebhookEnabled = g_discordWebhookEnabled.load();
+    DWORD discordNotifyStart = g_discordNotifyStart.load();
+    DWORD discordNotifyStop = g_discordNotifyStart.load();
+    DWORD discordNotifyAction = g_discordNotifyAction.load();
+    DWORD discordNotifyReconnect = g_discordNotifyReconnect.load();
+    DWORD discordNotifyReset = g_discordNotifyReset.load();
+    DWORD discordNotifyErrors = g_discordNotifyErrors.load();
+    DWORD discordDisableEmbed = g_discordDisableEmbed.load();
+    DWORD discordMentionOnErrors = g_discordMentionOnErrors.load();
+    uint64_t totalAfkTime = g_totalAfkTimeSeconds.load();
+    uint64_t longestAfkSession = g_longestAfkSessionSeconds.load();
+    uint64_t discordWebhooksSent = g_discordWebhooksSent.load();
+    uint64_t programLaunches = g_programLaunches.load();
+    uint64_t afkSessionsCompleted = g_afkSessionsCompleted.load();
+    std::wstring discordWebhookUrl = GetDiscordWebhookUrlCopy();
 
 
     if (RegCreateKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS)
@@ -1711,17 +3632,39 @@ void SaveSettings()
         RegSetValueEx(hKey, L"AutoReconnect", 0, REG_DWORD, (const BYTE*)&autoReconnect, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoReset", 0, REG_DWORD, (const BYTE*)&autoReset, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoHideRoblox", 0, REG_DWORD, (const BYTE*)&autoHideRoblox, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AutoOpacity", 0, REG_DWORD, (const BYTE*)&autoOpacity, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AutoGrid", 0, REG_DWORD, (const BYTE*)&autoGrid, sizeof(DWORD));
         RegSetValueEx(hKey, L"RestoreMethod", 0, REG_DWORD, (const BYTE*)&restoreMethod, sizeof(DWORD));
         RegSetValueEx(hKey, L"TutorialShown", 0, REG_DWORD, (const BYTE*)&tutorialShown, sizeof(DWORD));
-        RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&g_totalAfkTimeSeconds, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&totalAfkTime, sizeof(uint64_t));
         RegSetValueEx(hKey, L"AfkActions", 0, REG_QWORD, (const BYTE*)&afkActions, sizeof(uint64_t));
         RegSetValueEx(hKey, L"AutoReconnects", 0, REG_QWORD, (const BYTE*)&autoReconnects, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"LongestAfkSession", 0, REG_QWORD, (const BYTE*)&longestAfkSession, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"DiscordWebhooksSent", 0, REG_QWORD, (const BYTE*)&discordWebhooksSent, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"ProgramLaunches", 0, REG_QWORD, (const BYTE*)&programLaunches, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"AfkSessionsCompleted", 0, REG_QWORD, (const BYTE*)&afkSessionsCompleted, sizeof(uint64_t));
 
         RegSetValueEx(hKey, L"BloxstrapIntegration", 0, REG_DWORD, (const BYTE*)&bloxstrapIntegration, sizeof(DWORD));
         RegSetValueEx(hKey, L"UseLegacyUI", 0, REG_DWORD, (const BYTE*)&useLegacyUi, sizeof(DWORD));
+        RegSetValueEx(hKey, L"StatusBarEnabled", 0, REG_DWORD, (const BYTE*)&statusBarEnabled, sizeof(DWORD));
         RegSetValueEx(hKey, L"FpsLimit", 0, REG_DWORD, (const BYTE*)&fpsLimit, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnlockFpsOnFocus", 0, REG_DWORD, (const BYTE*)&unlockFpsOnFocus, sizeof(DWORD));
         RegSetValueEx(hKey, L"MultiInstanceInterval", 0, REG_DWORD, (const BYTE*)&g_multiInstanceInterval, sizeof(DWORD));
+        RegSetValueEx(hKey, L"WindowOpacity", 0, REG_DWORD, (const BYTE*)&windowOpacity, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AfkReminder", 0, REG_DWORD, (const BYTE*)&afkReminder, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DoNotSleep", 0, REG_DWORD, (const BYTE*)&doNotSleep, sizeof(DWORD));
+        RegSetValueEx(hKey, L"AutoMute", 0, REG_DWORD, (const BYTE*)&autoMute, sizeof(DWORD));
+        RegSetValueEx(hKey, L"UnmuteOnFocus", 0, REG_DWORD, (const BYTE*)&unmuteOnFocus, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordWebhookEnabled", 0, REG_DWORD, (const BYTE*)&discordWebhookEnabled, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyStart", 0, REG_DWORD, (const BYTE*)&discordNotifyStart, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyStop", 0, REG_DWORD, (const BYTE*)&discordNotifyStop, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyAction", 0, REG_DWORD, (const BYTE*)&discordNotifyAction, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyReconnect", 0, REG_DWORD, (const BYTE*)&discordNotifyReconnect, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyReset", 0, REG_DWORD, (const BYTE*)&discordNotifyReset, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordNotifyErrors", 0, REG_DWORD, (const BYTE*)&discordNotifyErrors, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordDisableEmbed", 0, REG_DWORD, (const BYTE*)&discordDisableEmbed, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DiscordMentionOnErrors", 0, REG_DWORD, (const BYTE*)&discordMentionOnErrors, sizeof(DWORD));
+        RegSetValueExW(hKey, L"DiscordWebhookUrl", 0, REG_SZ, (const BYTE*)discordWebhookUrl.c_str(), (DWORD)((discordWebhookUrl.size() + 1) * sizeof(wchar_t)));
         RegCloseKey(hKey);
     }
 }
@@ -1729,12 +3672,14 @@ void LoadSettings()
 {
     HKEY hKey;
    DWORD multiSupport = 0, fishstrapSupport = 0, selectedTime = 540, selectedAction = 0, autoStartAfk = 0;
-    DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoReset = 0, autoHideRoblox = 0, autoLimitRam = 0, restoreMethod = 1;
-    DWORD tutorialShown = 0, useLegacyUi = 0, bloxstrapIntegration = 0, fpsLimit = 0, unlockFpsOnFocus = 0;
-    DWORD multiInstanceInterval = 0;
-    uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0;
+    DWORD autoUpdate = 1, userSafeMode = 0, autoReconnect = 0, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, autoLimitRam = 0, restoreMethod = 1;
+    DWORD tutorialShown = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
+    DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0;
+    DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordDisableEmbed = 0, discordMentionOnErrors = 0;
+    uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0, longestAfkSession = 0, discordWebhooksSent = 0, programLaunches = 0, afkSessionsCompleted = 0;
     DWORD dataSize = sizeof(DWORD);
     DWORD dataSize64 = sizeof(uint64_t);
+    std::wstring discordWebhookUrl;
 
     if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
     {
@@ -1748,39 +3693,96 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"AutoReconnect", NULL, NULL, (LPBYTE)&autoReconnect, &dataSize);
         RegQueryValueEx(hKey, L"AutoReset", NULL, NULL, (LPBYTE)&autoReset, &dataSize);
         RegQueryValueEx(hKey, L"AutoHideRoblox", NULL, NULL, (LPBYTE)&autoHideRoblox, &dataSize);
+        RegQueryValueEx(hKey, L"AutoOpacity", NULL, NULL, (LPBYTE)&autoOpacity, &dataSize);
+        RegQueryValueEx(hKey, L"AutoGrid", NULL, NULL, (LPBYTE)&autoGrid, &dataSize);
         RegQueryValueEx(hKey, L"RestoreMethod", NULL, NULL, (LPBYTE)&restoreMethod, &dataSize);
         RegQueryValueEx(hKey, L"TutorialShown", NULL, NULL, (LPBYTE)&tutorialShown, &dataSize);
         RegQueryValueEx(hKey, L"TotalAfkTime", NULL, NULL, (LPBYTE)&totalAfkTime, &dataSize64);
         RegQueryValueEx(hKey, L"AfkActions", NULL, NULL, (LPBYTE)&afkActions, &dataSize64);
         RegQueryValueEx(hKey, L"AutoReconnects", NULL, NULL, (LPBYTE)&autoReconnects, &dataSize64);
+        RegQueryValueEx(hKey, L"LongestAfkSession", NULL, NULL, (LPBYTE)&longestAfkSession, &dataSize64);
+        RegQueryValueEx(hKey, L"DiscordWebhooksSent", NULL, NULL, (LPBYTE)&discordWebhooksSent, &dataSize64);
+        RegQueryValueEx(hKey, L"ProgramLaunches", NULL, NULL, (LPBYTE)&programLaunches, &dataSize64);
+        RegQueryValueEx(hKey, L"AfkSessionsCompleted", NULL, NULL, (LPBYTE)&afkSessionsCompleted, &dataSize64);
         RegQueryValueEx(hKey, L"UseLegacyUI", NULL, NULL, (LPBYTE)&useLegacyUi, &dataSize);
         RegQueryValueEx(hKey, L"BloxstrapIntegration", NULL, NULL, (LPBYTE)&bloxstrapIntegration, &dataSize);
+        RegQueryValueEx(hKey, L"StatusBarEnabled", NULL, NULL, (LPBYTE)&statusBarEnabled, &dataSize);
         RegQueryValueEx(hKey, L"FpsLimit", NULL, NULL, (LPBYTE)&fpsLimit, &dataSize);
         RegQueryValueEx(hKey, L"UnlockFpsOnFocus", NULL, NULL, (LPBYTE)&unlockFpsOnFocus, &dataSize);
         RegQueryValueEx(hKey, L"MultiInstanceInterval", NULL, NULL, (LPBYTE)&multiInstanceInterval, &dataSize);
+        RegQueryValueEx(hKey, L"WindowOpacity", NULL, NULL, (LPBYTE)&windowOpacity, &dataSize);
+        RegQueryValueEx(hKey, L"AfkReminder", NULL, NULL, (LPBYTE)&afkReminder, &dataSize);
+        RegQueryValueEx(hKey, L"DoNotSleep", NULL, NULL, (LPBYTE)&doNotSleep, &dataSize);
+        RegQueryValueEx(hKey, L"AutoMute", NULL, NULL, (LPBYTE)&autoMute, &dataSize);
+        RegQueryValueEx(hKey, L"UnmuteOnFocus", NULL, NULL, (LPBYTE)&unmuteOnFocus, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordWebhookEnabled", NULL, NULL, (LPBYTE)&discordWebhookEnabled, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyStart", NULL, NULL, (LPBYTE)&discordNotifyStart, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyStop", NULL, NULL, (LPBYTE)&discordNotifyStop, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyAction", NULL, NULL, (LPBYTE)&discordNotifyAction, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyReconnect", NULL, NULL, (LPBYTE)&discordNotifyReconnect, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyReset", NULL, NULL, (LPBYTE)&discordNotifyReset, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordNotifyErrors", NULL, NULL, (LPBYTE)&discordNotifyErrors, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordDisableEmbed", NULL, NULL, (LPBYTE)&discordDisableEmbed, &dataSize);
+        RegQueryValueEx(hKey, L"DiscordMentionOnErrors", NULL, NULL, (LPBYTE)&discordMentionOnErrors, &dataSize);
+
+        DWORD webhookUrlSize = 0;
+        if (RegQueryValueExW(hKey, L"DiscordWebhookUrl", NULL, NULL, NULL, &webhookUrlSize) == ERROR_SUCCESS && webhookUrlSize >= sizeof(wchar_t))
+        {
+            std::wstring urlBuffer(webhookUrlSize / sizeof(wchar_t), L'\0');
+            if (RegQueryValueExW(hKey, L"DiscordWebhookUrl", NULL, NULL, (LPBYTE)&urlBuffer[0], &webhookUrlSize) == ERROR_SUCCESS)
+            {
+                if (!urlBuffer.empty() && urlBuffer.back() == L'\0')
+                {
+                    urlBuffer.pop_back();
+                }
+                discordWebhookUrl = NormalizeDiscordWebhookUrl(urlBuffer);
+            }
+        }
         RegCloseKey(hKey);
     }
 
-    g_multiSupport = multiSupport;
-    g_fishstrapSupport = fishstrapSupport;
-    g_selectedTime = selectedTime;
-    g_selectedAction = selectedAction;
-    g_autoUpdate = autoUpdate;
-    g_userSafeMode = userSafeMode;
-    g_autoStartAfk = autoStartAfk;
-    g_autoReconnect = autoReconnect;
-    g_autoReset = autoReset;
-    g_autoHideRoblox = autoHideRoblox;
-    g_restoreMethod = restoreMethod;
-    g_tutorialShown = tutorialShown;
+    g_multiSupport = (multiSupport != 0);
+    g_fishstrapSupport = (fishstrapSupport != 0);
+    g_selectedTime = NormalizeSelectedTimeValue((int)selectedTime);
+    g_selectedAction = NormalizeSelectedAction((int)selectedAction);
+    g_autoUpdate = (autoUpdate != 0);
+    g_userSafeMode = NormalizeUserSafeMode((int)userSafeMode);
+    g_autoStartAfk = (autoStartAfk != 0);
+    g_autoReconnect = (autoReconnect != 0);
+    g_autoReset = (autoReset != 0);
+    g_autoHideRoblox = (autoHideRoblox != 0);
+    g_autoOpacity = (autoOpacity != 0);
+    g_autoGrid = (autoGrid != 0);
+    g_restoreMethod = NormalizeRestoreMethod((int)restoreMethod);
+    g_tutorialShown = (tutorialShown != 0);
     g_totalAfkTimeSeconds = totalAfkTime;
     g_afkActionsPerformed = afkActions;
     g_autoReconnectsPerformed = autoReconnects;
-    g_useLegacyUi = useLegacyUi;
-    g_bloxstrapIntegration = bloxstrapIntegration;
-    g_fpsLimit = fpsLimit;
-    g_unlockFpsOnFocus = unlockFpsOnFocus;
-    g_multiInstanceInterval = multiInstanceInterval;
+    g_longestAfkSessionSeconds = longestAfkSession;
+    g_discordWebhooksSent = discordWebhooksSent;
+    g_programLaunches = programLaunches;
+    g_afkSessionsCompleted = afkSessionsCompleted;
+    g_useLegacyUi = (useLegacyUi != 0);
+    g_bloxstrapIntegration = (bloxstrapIntegration != 0);
+    g_statusBarEnabled = (statusBarEnabled != 0);
+    g_fpsLimit = NormalizeFpsLimitValue((int)fpsLimit);
+    g_unlockFpsOnFocus = (unlockFpsOnFocus != 0);
+    g_multiInstanceInterval = NormalizeMultiInstanceIntervalValue((int)multiInstanceInterval);
+    g_windowOpacity = (windowOpacity != 0);
+    g_afkReminderEnabled = (afkReminder != 0);
+    g_doNotSleep = (doNotSleep != 0);
+    g_autoMute = (autoMute != 0);
+    g_unmuteOnFocus = (unmuteOnFocus != 0);
+    g_discordWebhookEnabled = (discordWebhookEnabled != 0);
+    g_discordNotifyStart = (discordNotifyStart != 0) || (discordNotifyStop != 0);
+    g_discordNotifyStop = g_discordNotifyStart.load();
+    g_discordNotifyAction = (discordNotifyAction != 0);
+    g_discordNotifyReconnect = (discordNotifyReconnect != 0);
+    g_discordNotifyReset = (discordNotifyReset != 0);
+    g_discordNotifyErrors = (discordNotifyErrors != 0);
+    g_discordDisableEmbed = (discordDisableEmbed != 0);
+    g_discordMentionOnErrors = (discordMentionOnErrors != 0);
+    SetDiscordWebhookUrl(discordWebhookUrl);
 }
 void ResetSettings()
 {
@@ -1794,18 +3796,42 @@ void ResetSettings()
     g_autoReconnect = false;
     g_autoReset = false;
     g_autoHideRoblox = false;
+    g_autoOpacity = false;
+    g_autoGrid = false;
     g_restoreMethod = 1;
     g_tutorialShown = false;
     g_totalAfkTimeSeconds = 0;
     g_afkActionsPerformed = 0;
     g_autoReconnectsPerformed = 0;
+    g_longestAfkSessionSeconds = 0;
+    g_discordWebhooksSent = 0;
+    g_programLaunches = 0;
+    g_afkSessionsCompleted = 0;
     g_manuallyStoppedPids.clear();
     g_useLegacyUi = false;
     g_bloxstrapIntegration = false;
+    g_statusBarEnabled = true;
     g_fpsLimit = 0;
     g_unlockFpsOnFocus = false;
     g_multiInstanceInterval = 0;
-
+    g_windowOpacity = false;
+    g_afkReminderEnabled = false;
+    g_afkReminderState = 0;
+    g_doNotSleep = false;
+    SetThreadExecutionState(ES_CONTINUOUS);
+    g_autoMute = false;
+    g_unmuteOnFocus = false;
+    g_unmutedPid = 0;
+    g_discordWebhookEnabled = false;
+    g_discordNotifyStart = true;
+    g_discordNotifyStop = true;
+    g_discordNotifyAction = false;
+    g_discordNotifyReconnect = true;
+    g_discordNotifyReset = false;
+    g_discordNotifyErrors = true;
+    g_discordDisableEmbed = false;
+    g_discordMentionOnErrors = false;
+    SetDiscordWebhookUrl(L"");
     if (g_monitorThreadRunning.load())
     {
         StopActivityMonitor();
@@ -1822,6 +3848,423 @@ void ResetSettings()
     }
 
     RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
+}
+
+struct SettingsSnapshot {
+    bool multiSupport = false;
+    bool fishstrapSupport = false;
+    int selectedTime = 540;
+    int selectedAction = 0;
+    bool autoUpdate = true;
+    int userSafeMode = 0;
+    bool autoStartAfk = false;
+    bool autoReconnect = false;
+    bool autoReset = false;
+    bool autoHideRoblox = false;
+    bool autoOpacity = false;
+    bool autoGrid = false;
+    int restoreMethod = 1;
+    bool tutorialShown = false;
+    uint64_t totalAfkTime = 0;
+    uint64_t afkActions = 0;
+    uint64_t autoReconnects = 0;
+    uint64_t longestAfkSession = 0;
+    uint64_t discordWebhooksSent = 0;
+    uint64_t programLaunches = 0;
+    uint64_t afkSessionsCompleted = 0;
+    bool useLegacyUi = false;
+    bool bloxstrapIntegration = false;
+    bool statusBarEnabled = true;
+    int fpsLimit = 0;
+    bool unlockFpsOnFocus = false;
+    int multiInstanceInterval = 0;
+    bool windowOpacity = false;
+    bool afkReminder = false;
+    bool doNotSleep = false;
+    bool autoMute = false;
+    bool unmuteOnFocus = false;
+    bool discordWebhookEnabled = false;
+    bool discordNotifyStart = true;
+    bool discordNotifyStop = true;
+    bool discordNotifyAction = false;
+    bool discordNotifyReconnect = true;
+    bool discordNotifyReset = false;
+    bool discordNotifyErrors = true;
+    bool discordDisableEmbed = false;
+    bool discordMentionOnErrors = false;
+    std::wstring discordWebhookUrl;
+};
+
+SettingsSnapshot CaptureSettingsSnapshot()
+{
+    SettingsSnapshot s;
+    s.multiSupport = g_multiSupport.load();
+    s.fishstrapSupport = g_fishstrapSupport.load();
+    s.selectedTime = g_selectedTime;
+    s.selectedAction = g_selectedAction;
+    s.autoUpdate = g_autoUpdate.load();
+    s.userSafeMode = g_userSafeMode;
+    s.autoStartAfk = g_autoStartAfk.load();
+    s.autoReconnect = g_autoReconnect.load();
+    s.autoReset = g_autoReset.load();
+    s.autoHideRoblox = g_autoHideRoblox.load();
+    s.autoOpacity = g_autoOpacity.load();
+    s.autoGrid = g_autoGrid.load();
+    s.restoreMethod = g_restoreMethod;
+    s.tutorialShown = g_tutorialShown.load();
+    s.totalAfkTime = g_totalAfkTimeSeconds.load();
+    s.afkActions = g_afkActionsPerformed.load();
+    s.autoReconnects = g_autoReconnectsPerformed.load();
+    s.longestAfkSession = g_longestAfkSessionSeconds.load();
+    s.discordWebhooksSent = g_discordWebhooksSent.load();
+    s.programLaunches = g_programLaunches.load();
+    s.afkSessionsCompleted = g_afkSessionsCompleted.load();
+    s.useLegacyUi = g_useLegacyUi.load();
+    s.bloxstrapIntegration = g_bloxstrapIntegration.load();
+    s.statusBarEnabled = g_statusBarEnabled.load();
+    s.fpsLimit = g_fpsLimit;
+    s.unlockFpsOnFocus = g_unlockFpsOnFocus.load();
+    s.multiInstanceInterval = g_multiInstanceInterval;
+    s.windowOpacity = g_windowOpacity.load();
+    s.afkReminder = g_afkReminderEnabled.load();
+    s.doNotSleep = g_doNotSleep.load();
+    s.autoMute = g_autoMute.load();
+    s.unmuteOnFocus = g_unmuteOnFocus.load();
+    s.discordWebhookEnabled = g_discordWebhookEnabled.load();
+    s.discordNotifyStart = g_discordNotifyStart.load();
+    s.discordNotifyStop = g_discordNotifyStop.load();
+    s.discordNotifyAction = g_discordNotifyAction.load();
+    s.discordNotifyReconnect = g_discordNotifyReconnect.load();
+    s.discordNotifyReset = g_discordNotifyReset.load();
+    s.discordNotifyErrors = g_discordNotifyErrors.load();
+    s.discordDisableEmbed = g_discordDisableEmbed.load();
+    s.discordMentionOnErrors = g_discordMentionOnErrors.load();
+    s.discordWebhookUrl = GetDiscordWebhookUrlCopy();
+    return s;
+}
+
+static std::wstring JsonEscape(const std::wstring& input)
+{
+    std::wstring out;
+    out.reserve(input.size() + 8);
+    for (wchar_t ch : input) {
+        switch (ch) {
+        case L'\\': out += L"\\\\"; break;
+        case L'\"': out += L"\\\""; break;
+        case L'\b': out += L"\\b"; break;
+        case L'\f': out += L"\\f"; break;
+        case L'\n': out += L"\\n"; break;
+        case L'\r': out += L"\\r"; break;
+        case L'\t': out += L"\\t"; break;
+        default: out.push_back(ch); break;
+        }
+    }
+    return out;
+}
+
+static void AppendJsonBool(std::wstringstream& ss, const wchar_t* key, bool value, bool& first)
+{
+    ss << (first ? L"" : L",\r\n");
+    first = false;
+    ss << L"  \"" << key << L"\": " << (value ? L"true" : L"false");
+}
+
+static void AppendJsonInt(std::wstringstream& ss, const wchar_t* key, int value, bool& first)
+{
+    ss << (first ? L"" : L",\r\n");
+    first = false;
+    ss << L"  \"" << key << L"\": " << value;
+}
+
+static void AppendJsonUInt64(std::wstringstream& ss, const wchar_t* key, uint64_t value, bool& first)
+{
+    ss << (first ? L"" : L",\r\n");
+    first = false;
+    ss << L"  \"" << key << L"\": " << value;
+}
+
+static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
+{
+    std::wstringstream ss;
+    ss << L"{\r\n";
+    bool first = true;
+    AppendJsonBool(ss, L"MultiSupport", s.multiSupport, first);
+    AppendJsonBool(ss, L"FishstrapSupport", s.fishstrapSupport, first);
+    AppendJsonInt(ss, L"SelectedTime", s.selectedTime, first);
+    AppendJsonInt(ss, L"SelectedAction", s.selectedAction, first);
+    AppendJsonBool(ss, L"AutoUpdate", s.autoUpdate, first);
+    AppendJsonInt(ss, L"UserSafeMode", s.userSafeMode, first);
+    AppendJsonBool(ss, L"AutoStartAfk", s.autoStartAfk, first);
+    AppendJsonBool(ss, L"AutoReconnect", s.autoReconnect, first);
+    AppendJsonBool(ss, L"AutoReset", s.autoReset, first);
+    AppendJsonBool(ss, L"AutoHideRoblox", s.autoHideRoblox, first);
+    AppendJsonBool(ss, L"AutoOpacity", s.autoOpacity, first);
+    AppendJsonBool(ss, L"AutoGrid", s.autoGrid, first);
+    AppendJsonInt(ss, L"RestoreMethod", s.restoreMethod, first);
+    AppendJsonBool(ss, L"TutorialShown", s.tutorialShown, first);
+    AppendJsonUInt64(ss, L"TotalAfkTime", s.totalAfkTime, first);
+    AppendJsonUInt64(ss, L"AfkActions", s.afkActions, first);
+    AppendJsonUInt64(ss, L"AutoReconnects", s.autoReconnects, first);
+    AppendJsonUInt64(ss, L"LongestAfkSession", s.longestAfkSession, first);
+    AppendJsonUInt64(ss, L"DiscordWebhooksSent", s.discordWebhooksSent, first);
+    AppendJsonUInt64(ss, L"ProgramLaunches", s.programLaunches, first);
+    AppendJsonUInt64(ss, L"AfkSessionsCompleted", s.afkSessionsCompleted, first);
+    AppendJsonBool(ss, L"UseLegacyUI", s.useLegacyUi, first);
+    AppendJsonBool(ss, L"BloxstrapIntegration", s.bloxstrapIntegration, first);
+    AppendJsonBool(ss, L"StatusBarEnabled", s.statusBarEnabled, first);
+    AppendJsonInt(ss, L"FpsLimit", s.fpsLimit, first);
+    AppendJsonBool(ss, L"UnlockFpsOnFocus", s.unlockFpsOnFocus, first);
+    AppendJsonInt(ss, L"MultiInstanceInterval", s.multiInstanceInterval, first);
+    AppendJsonBool(ss, L"WindowOpacity", s.windowOpacity, first);
+    AppendJsonBool(ss, L"AfkReminder", s.afkReminder, first);
+    AppendJsonBool(ss, L"DoNotSleep", s.doNotSleep, first);
+    AppendJsonBool(ss, L"AutoMute", s.autoMute, first);
+    AppendJsonBool(ss, L"UnmuteOnFocus", s.unmuteOnFocus, first);
+    AppendJsonBool(ss, L"DiscordWebhookEnabled", s.discordWebhookEnabled, first);
+    AppendJsonBool(ss, L"DiscordNotifyStart", s.discordNotifyStart, first);
+    AppendJsonBool(ss, L"DiscordNotifyStop", s.discordNotifyStop, first);
+    AppendJsonBool(ss, L"DiscordNotifyAction", s.discordNotifyAction, first);
+    AppendJsonBool(ss, L"DiscordNotifyReconnect", s.discordNotifyReconnect, first);
+    AppendJsonBool(ss, L"DiscordNotifyReset", s.discordNotifyReset, first);
+    AppendJsonBool(ss, L"DiscordNotifyErrors", s.discordNotifyErrors, first);
+    AppendJsonBool(ss, L"DiscordDisableEmbed", s.discordDisableEmbed, first);
+    AppendJsonBool(ss, L"DiscordMentionOnErrors", s.discordMentionOnErrors, first);
+    ss << (first ? L"" : L",\r\n");
+    ss << L"  \"DiscordWebhookUrl\": \"" << JsonEscape(s.discordWebhookUrl) << L"\"\r\n";
+    ss << L"}\r\n";
+    return ss.str();
+}
+
+static bool SaveTextFileUtf8(const std::wstring& path, const std::wstring& content)
+{
+    std::ofstream outFile(path, std::ios::binary);
+    if (!outFile.is_open()) return false;
+    int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, NULL, 0, NULL, NULL);
+    if (bytesNeeded <= 0) return false;
+    std::string utf8(bytesNeeded - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, &utf8[0], bytesNeeded, NULL, NULL);
+    outFile.write(utf8.data(), (std::streamsize)utf8.size());
+    return outFile.good();
+}
+
+static bool LoadTextFileUtf8(const std::wstring& path, std::wstring& content)
+{
+    std::ifstream inFile(path, std::ios::binary);
+    if (!inFile.is_open()) return false;
+    std::string bytes((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
+    if (bytes.empty()) return false;
+    int charsNeeded = MultiByteToWideChar(CP_UTF8, 0, bytes.c_str(), (int)bytes.size(), NULL, 0);
+    if (charsNeeded <= 0) return false;
+    content.resize(charsNeeded);
+    MultiByteToWideChar(CP_UTF8, 0, bytes.c_str(), (int)bytes.size(), &content[0], charsNeeded);
+    return true;
+}
+
+static bool FindJsonValue(const std::wstring& json, const std::wstring& key, std::wstring& rawValue)
+{
+    size_t pos = json.find(L"\"" + key + L"\"");
+    if (pos == std::wstring::npos) return false;
+    pos = json.find(L':', pos);
+    if (pos == std::wstring::npos) return false;
+    ++pos;
+    while (pos < json.size() && iswspace(json[pos])) ++pos;
+    size_t end = pos;
+    if (pos < json.size() && json[pos] == L'"') {
+        ++pos;
+        end = pos;
+        bool escape = false;
+        while (end < json.size()) {
+            if (!escape && json[end] == L'"') break;
+            escape = (!escape && json[end] == L'\\');
+            if (escape && json[end] != L'\\') escape = false;
+            ++end;
+        }
+        if (end >= json.size()) return false;
+        rawValue = json.substr(pos, end - pos);
+        return true;
+    }
+    while (end < json.size() && json[end] != L',' && json[end] != L'}' && json[end] != L'\r' && json[end] != L'\n') ++end;
+    rawValue = json.substr(pos, end - pos);
+    rawValue.erase(0, rawValue.find_first_not_of(L" \t"));
+    rawValue.erase(rawValue.find_last_not_of(L" \t") + 1);
+    return !rawValue.empty();
+}
+
+static bool ParseJsonBool(const std::wstring& json, const std::wstring& key, bool& value)
+{
+    std::wstring raw;
+    if (!FindJsonValue(json, key, raw)) return false;
+    for (auto& ch : raw) ch = (wchar_t)towlower(ch);
+    if (raw == L"true" || raw == L"1") { value = true; return true; }
+    if (raw == L"false" || raw == L"0") { value = false; return true; }
+    return false;
+}
+
+static bool ParseJsonInt(const std::wstring& json, const std::wstring& key, int& value)
+{
+    std::wstring raw;
+    if (!FindJsonValue(json, key, raw)) return false;
+    try { value = std::stoi(raw); return true; } catch (...) { return false; }
+}
+
+static bool ParseJsonUInt64(const std::wstring& json, const std::wstring& key, uint64_t& value)
+{
+    std::wstring raw;
+    if (!FindJsonValue(json, key, raw)) return false;
+    try { value = std::stoull(raw); return true; } catch (...) { return false; }
+}
+
+static bool ParseJsonString(const std::wstring& json, const std::wstring& key, std::wstring& value)
+{
+    std::wstring raw;
+    if (!FindJsonValue(json, key, raw)) return false;
+    if (raw.empty()) {
+        value.clear();
+        return true;
+    }
+    std::wstring out;
+    out.reserve(raw.size());
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (raw[i] == L'\\' && i + 1 < raw.size()) {
+            wchar_t next = raw[++i];
+            switch (next) {
+            case L'\\': out.push_back(L'\\'); break;
+            case L'"': out.push_back(L'"'); break;
+            case L'n': out.push_back(L'\n'); break;
+            case L'r': out.push_back(L'\r'); break;
+            case L't': out.push_back(L'\t'); break;
+            case L'b': out.push_back(L'\b'); break;
+            case L'f': out.push_back(L'\f'); break;
+            default: out.push_back(next); break;
+            }
+        } else {
+            out.push_back(raw[i]);
+        }
+    }
+    value = out;
+    return true;
+}
+
+static void ApplySettingsSnapshot(const SettingsSnapshot& s)
+{
+    g_multiSupport = s.multiSupport;
+    g_fishstrapSupport = s.fishstrapSupport;
+    g_selectedTime = NormalizeSelectedTimeValue(s.selectedTime);
+    g_selectedAction = NormalizeSelectedAction(s.selectedAction);
+    g_autoUpdate = s.autoUpdate;
+    g_userSafeMode = NormalizeUserSafeMode(s.userSafeMode);
+    g_autoStartAfk = s.autoStartAfk;
+    g_autoReconnect = s.autoReconnect;
+    g_autoReset = s.autoReset;
+    g_autoHideRoblox = s.autoHideRoblox;
+    g_autoOpacity = s.autoOpacity;
+    g_autoGrid = s.autoGrid;
+    g_restoreMethod = NormalizeRestoreMethod(s.restoreMethod);
+    g_tutorialShown = s.tutorialShown;
+    g_totalAfkTimeSeconds = s.totalAfkTime;
+    g_afkActionsPerformed = s.afkActions;
+    g_autoReconnectsPerformed = s.autoReconnects;
+    g_longestAfkSessionSeconds = s.longestAfkSession;
+    g_discordWebhooksSent = s.discordWebhooksSent;
+    g_programLaunches = s.programLaunches;
+    g_afkSessionsCompleted = s.afkSessionsCompleted;
+    g_useLegacyUi = s.useLegacyUi;
+    g_bloxstrapIntegration = s.bloxstrapIntegration;
+    g_statusBarEnabled = s.statusBarEnabled;
+    g_fpsLimit = NormalizeFpsLimitValue(s.fpsLimit);
+    g_unlockFpsOnFocus = s.unlockFpsOnFocus;
+    g_multiInstanceInterval = NormalizeMultiInstanceIntervalValue(s.multiInstanceInterval);
+    g_windowOpacity = s.windowOpacity;
+    g_afkReminderEnabled = s.afkReminder;
+    g_doNotSleep = s.doNotSleep;
+    g_autoMute = s.autoMute;
+    g_unmuteOnFocus = s.unmuteOnFocus;
+    g_discordWebhookEnabled = s.discordWebhookEnabled;
+    g_discordNotifyStart = s.discordNotifyStart || s.discordNotifyStop;
+    g_discordNotifyStop = g_discordNotifyStart.load();
+    g_discordNotifyAction = s.discordNotifyAction;
+    g_discordNotifyReconnect = s.discordNotifyReconnect;
+    g_discordNotifyReset = s.discordNotifyReset;
+    g_discordNotifyErrors = s.discordNotifyErrors;
+    g_discordDisableEmbed = s.discordDisableEmbed;
+    g_discordMentionOnErrors = s.discordMentionOnErrors;
+    SetDiscordWebhookUrl(s.discordWebhookUrl);
+}
+
+static bool ExportSettingsToFile(HWND owner)
+{
+    wchar_t fileName[MAX_PATH] = L"AntiAFK-RBX-settings.json";
+    OPENFILENAME ofn = { sizeof(ofn) };
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+    ofn.lpstrFile = fileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"json";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    if (!GetSaveFileName(&ofn)) return false;
+    return SaveTextFileUtf8(fileName, BuildSettingsJson(CaptureSettingsSnapshot()));
+}
+
+static bool ImportSettingsFromFile(HWND owner)
+{
+    wchar_t fileName[MAX_PATH] = L"";
+    OPENFILENAME ofn = { sizeof(ofn) };
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+    ofn.lpstrFile = fileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    if (!GetOpenFileName(&ofn)) return false;
+
+    std::wstring json;
+    if (!LoadTextFileUtf8(fileName, json)) return false;
+
+    SettingsSnapshot s = CaptureSettingsSnapshot();
+    ParseJsonBool(json, L"MultiSupport", s.multiSupport);
+    ParseJsonBool(json, L"FishstrapSupport", s.fishstrapSupport);
+    ParseJsonInt(json, L"SelectedTime", s.selectedTime);
+    ParseJsonInt(json, L"SelectedAction", s.selectedAction);
+    ParseJsonBool(json, L"AutoUpdate", s.autoUpdate);
+    ParseJsonInt(json, L"UserSafeMode", s.userSafeMode);
+    ParseJsonBool(json, L"AutoStartAfk", s.autoStartAfk);
+    ParseJsonBool(json, L"AutoReconnect", s.autoReconnect);
+    ParseJsonBool(json, L"AutoReset", s.autoReset);
+    ParseJsonBool(json, L"AutoHideRoblox", s.autoHideRoblox);
+    ParseJsonBool(json, L"AutoOpacity", s.autoOpacity);
+    ParseJsonBool(json, L"AutoGrid", s.autoGrid);
+    ParseJsonInt(json, L"RestoreMethod", s.restoreMethod);
+    ParseJsonBool(json, L"TutorialShown", s.tutorialShown);
+    ParseJsonUInt64(json, L"TotalAfkTime", s.totalAfkTime);
+    ParseJsonUInt64(json, L"AfkActions", s.afkActions);
+    ParseJsonUInt64(json, L"AutoReconnects", s.autoReconnects);
+    ParseJsonUInt64(json, L"LongestAfkSession", s.longestAfkSession);
+    ParseJsonUInt64(json, L"DiscordWebhooksSent", s.discordWebhooksSent);
+    ParseJsonUInt64(json, L"ProgramLaunches", s.programLaunches);
+    ParseJsonUInt64(json, L"AfkSessionsCompleted", s.afkSessionsCompleted);
+    ParseJsonBool(json, L"UseLegacyUI", s.useLegacyUi);
+    ParseJsonBool(json, L"BloxstrapIntegration", s.bloxstrapIntegration);
+    ParseJsonBool(json, L"StatusBarEnabled", s.statusBarEnabled);
+    ParseJsonInt(json, L"FpsLimit", s.fpsLimit);
+    ParseJsonBool(json, L"UnlockFpsOnFocus", s.unlockFpsOnFocus);
+    ParseJsonInt(json, L"MultiInstanceInterval", s.multiInstanceInterval);
+    ParseJsonBool(json, L"WindowOpacity", s.windowOpacity);
+    ParseJsonBool(json, L"AfkReminder", s.afkReminder);
+    ParseJsonBool(json, L"DoNotSleep", s.doNotSleep);
+    ParseJsonBool(json, L"AutoMute", s.autoMute);
+    ParseJsonBool(json, L"UnmuteOnFocus", s.unmuteOnFocus);
+    ParseJsonBool(json, L"DiscordWebhookEnabled", s.discordWebhookEnabled);
+    ParseJsonBool(json, L"DiscordNotifyStart", s.discordNotifyStart);
+    ParseJsonBool(json, L"DiscordNotifyStop", s.discordNotifyStop);
+    ParseJsonBool(json, L"DiscordNotifyAction", s.discordNotifyAction);
+    ParseJsonBool(json, L"DiscordNotifyReconnect", s.discordNotifyReconnect);
+    ParseJsonBool(json, L"DiscordNotifyReset", s.discordNotifyReset);
+    ParseJsonBool(json, L"DiscordNotifyErrors", s.discordNotifyErrors);
+    ParseJsonBool(json, L"DiscordDisableEmbed", s.discordDisableEmbed);
+    ParseJsonBool(json, L"DiscordMentionOnErrors", s.discordMentionOnErrors);
+    ParseJsonString(json, L"DiscordWebhookUrl", s.discordWebhookUrl);
+    ApplySettingsSnapshot(s);
+    SaveSettings();
+    return true;
 }
 // ==========
 
@@ -1852,18 +4295,20 @@ void CreateTrayMenu(bool afk)
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
         AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
+        AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
+        AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING, ID_OPEN_UI, L"Open AntiAFK-RBX");
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
         if (g_updateFound)
-            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⭳] • Update Available");
+            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⤓] • Update Available");
         AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
         return;
     }
 
     wchar_t infoText[128];
-    swprintf_s(infoText, L"Beta: %s | With ❤️", g_Version);
+    swprintf_s(infoText, L"Legacy UI • %s", g_Version);
     AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, infoText);
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EMULATE_SPACE, L"Test Anti-AFK move");
@@ -1872,7 +4317,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
 
     HMENU hTimeSubmenu = CreatePopupMenu();
-    AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, L"⏱️ Custom interval >");
+    AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, L"Custom interval...");
     AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, L"3 minutes");
     AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, L"6 minutes");
     AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, L"9 minutes");
@@ -1898,16 +4343,25 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
     AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
+    AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
+    AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     HMENU hSettingsSubmenu = CreatePopupMenu();
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_fishstrapSupport.load() ? MF_CHECKED : 0), ID_FISHSTRAP_SUP, L"FishStrap/Shaders Support");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update Checker");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect [new] [beta]");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Bloxstrap/Fishstrap Integration");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, L"Auto Opacity (70%)");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox*");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS when focus");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I can forget (smart auto-start)");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, L"Do not sleep");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"AutoMute Roblox");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on focus");
 
     HMENU hUserSafeSubmenu = CreatePopupMenu();
     AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
@@ -1943,8 +4397,69 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
 
 
+    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
+
+    HMENU hUtilsSubmenu = CreatePopupMenu();
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_SHOW_ALL, L"Show All Roblox");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_HIDE_ALL, L"Hide All Roblox");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
+    AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsSessionWindowOpacityEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_WINDOW_OPACITY, L"Session Window Opacity");
+    AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsSessionMuteEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_MUTE, L"Session Mute Roblox");
+    AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsSessionFpsLimitEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_FPS, L"Session FPS Limit*");
+    AppendMenu(hUtilsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_TEST_ACTION, L"Test AntiAFK Action");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_RESET_ALL, L"Reset All Roblox");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_CLOSE_ALL, L"Close All Roblox");
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, L"Utils");
+
+    HMENU hStatsSubmenu = CreatePopupMenu();
+    {
+        wchar_t statText[128];
+        std::wstring totalAfk = FormatDurationShort(g_totalAfkTimeSeconds.load());
+        swprintf_s(statText, L"Total AFK Time • %s", totalAfk.c_str());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        swprintf_s(statText, L"AFK Actions • %llu", g_afkActionsPerformed.load());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        swprintf_s(statText, L"Auto Reconnects • %llu", g_autoReconnectsPerformed.load());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        swprintf_s(statText, L"Webhook Events • %llu", g_discordWebhooksSent.load());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        swprintf_s(statText, L"Sessions Completed • %llu", g_afkSessionsCompleted.load());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        swprintf_s(statText, L"Program Launches • %llu", g_programLaunches.load());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        std::wstring longestAfk = FormatDurationShort(g_longestAfkSessionSeconds.load());
+        swprintf_s(statText, L"Longest Session • %s", longestAfk.c_str());
+        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+    }
+    AppendMenu(hStatsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, L"Reset Statistics");
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
+
+    HMENU hDiscordSubmenu = CreatePopupMenu();
+    {
+        const std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
+        const bool webhookConfigured = IsDiscordWebhookUrl(webhookUrl);
+        AppendMenu(hDiscordSubmenu, MF_STRING | MF_GRAYED, 0, webhookConfigured ? L"Webhook URL • Configured" : L"Webhook URL • Not set");
+        AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordWebhookEnabled.load() ? MF_CHECKED : 0), ID_DISCORD_WEBHOOK_ENABLE, L"Enable Webhook");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordNotifyStart.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_START, L"Notify Start / Stop");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordNotifyAction.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ACTION, L"Notify Action");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordNotifyReconnect.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RECONNECT, L"Notify Reconnect");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordNotifyErrors.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ERRORS, L"Notify Errors");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordDisableEmbed.load() ? MF_CHECKED : 0), ID_DISCORD_DISABLE_EMBED, L"Disable Embed");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (g_discordMentionOnErrors.load() ? MF_CHECKED : 0), ID_DISCORD_MENTION_ON_ERRORS, L"Mention on Errors");
+        AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hDiscordSubmenu, MF_STRING, ID_DISCORD_WEBHOOK_PASTE, L"Paste URL from Clipboard");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (webhookUrl.empty() ? MF_GRAYED : 0), ID_DISCORD_WEBHOOK_CLEAR, L"Clear Webhook URL");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, L"Send Test Webhook");
+    }
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, L"Discord Webhook");
+
     AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
     AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Support");
     
@@ -1961,7 +4476,7 @@ void CreateTrayMenu(bool afk)
     
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
-        AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⭳] • Update Available");
+        AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[⤓] • Update Available");
     AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
 }
 void UpdateTrayIcon()
@@ -1974,14 +4489,28 @@ void UpdateTrayIcon()
 bool CheckForUpdates(bool showNotification = true)
 {
     bool updateFound = false;
-    HINTERNET hInternet = InternetOpen(L"AntiAFK-RBX/2.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-    if (!hInternet)
+    DWORD timeoutMs = 5000;
+    g_updateFound = false;
+    g_updateCheckFailed = false;
+    HINTERNET hInternet = InternetOpen(L"AntiAFK-RBX/3.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) {
+        g_updateCheckFailed = true;
         return false;
+    }
+
+    InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+    InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+    InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+
     HINTERNET hConnect = InternetOpenUrl(hInternet, L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/version", NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
     if (!hConnect) {
+        g_updateCheckFailed = true;
         InternetCloseHandle(hInternet);
         return false;
     }
+
+    InternetSetOption(hConnect, INTERNET_OPTION_SEND_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+    InternetSetOption(hConnect, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
 
     char buffer[16] = { 0 };
     DWORD bytesRead = 0;
@@ -2004,9 +4533,15 @@ bool CheckForUpdates(bool showNotification = true)
             }
         }
         catch (const std::invalid_argument& ia) {
+            g_updateCheckFailed = true;
         }
         catch (const std::out_of_range& oor) {
+            g_updateCheckFailed = true;
         }
+    }
+    else
+    {
+        g_updateCheckFailed = true;
     }
 
     InternetCloseHandle(hConnect);
@@ -2018,7 +4553,7 @@ bool CheckForUpdates(bool showNotification = true)
 struct CustomIntervalData {
     HFONT hFontTitle = NULL, hFontText = NULL, hFontInput = NULL;
     RECT closeButtonRect = { 0 }, okButtonRect = { 0 }, cancelButtonRect = { 0 }, inputRect = { 0 };
-    bool isHoveringClose = false, isHoveringOk = false, isHoveringCancel = false;
+    bool isHoveringClose = false, isHoveringOk = false, isHoveringCancel = false, isHoveringInput = false;
     bool isTrackingMouse = false;
     bool hasFocus = false; 
     wchar_t inputText[10] = { 0 };
@@ -2037,8 +4572,6 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         EnableAcrylic(hwnd);
 
-        EnableAcrylic(hwnd);
-
         enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
         const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
@@ -2047,23 +4580,25 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
-        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int margin = 8, btnH = 30, btnGap = 8, inputH = 28;
+        const int inputMargin = 0, btnH = 30, btnGap = 0, inputH = 30, topBarH = 30, infoH = 23;
 
-        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
+        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, topBarH };
 
-        int btnY = clientRect.bottom - margin - btnH;
-        pData->inputRect = { margin, btnY - btnGap - inputH, clientRect.right - margin, btnY - btnGap };
-        int totalWidth = clientRect.right - (margin * 2);
+        int inputTop = 53;
+        int inputBottom = inputTop + inputH;
+        int btnY = inputBottom - 1;
+        pData->inputRect = { inputMargin, inputTop, clientRect.right - inputMargin, inputBottom };
+        int totalWidth = clientRect.right;
         int btnWidth = (totalWidth - btnGap) / 2;
 
-        pData->cancelButtonRect = { margin, btnY, margin + btnWidth, btnY + btnH };
-        pData->okButtonRect = { margin + btnWidth + btnGap, btnY, margin + btnWidth + btnGap + btnWidth, btnY + btnH };
+        pData->cancelButtonRect = { 0, btnY, btnWidth, btnY + btnH };
+        pData->okButtonRect = { btnWidth + btnGap, btnY, btnWidth + btnGap + btnWidth, btnY + btnH };
 
         _itow_s(g_selectedTime, pData->inputText, 10);
 
@@ -2164,12 +4699,13 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         if (hover_ok != pData->isHoveringOk) { pData->isHoveringOk = hover_ok; InvalidateRect(hwnd, &pData->okButtonRect, FALSE); }
         if (hover_cancel != pData->isHoveringCancel) { pData->isHoveringCancel = hover_cancel; InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE); }
         if (hover_close != pData->isHoveringClose) { pData->isHoveringClose = hover_close; InvalidateRect(hwnd, &pData->closeButtonRect, FALSE); }
+        if (hover_input != pData->isHoveringInput) { pData->isHoveringInput = hover_input; InvalidateRect(hwnd, &pData->inputRect, FALSE); }
 
         if (hover_ok || hover_cancel || hover_close) SetCursor(pData->hCursorHand);
         else if (hover_input) SetCursor(pData->hCursorText);
         else SetCursor(pData->hCursorArrow);
 
-        if ((hover_ok || hover_cancel || hover_close) && !pData->isTrackingMouse) {
+        if ((hover_ok || hover_cancel || hover_close || hover_input) && !pData->isTrackingMouse) {
             TRACKMOUSEEVENT tme = { sizeof(tme) };
             tme.dwFlags = TME_LEAVE;
             tme.hwndTrack = hwnd;
@@ -2179,11 +4715,12 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         return 0;
     }
     case WM_MOUSELEAVE:
-        pData->isHoveringOk = pData->isHoveringCancel = pData->isHoveringClose = false;
+        pData->isHoveringOk = pData->isHoveringCancel = pData->isHoveringClose = pData->isHoveringInput = false;
         pData->isTrackingMouse = false;
         InvalidateRect(hwnd, &pData->okButtonRect, FALSE);
         InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE);
         InvalidateRect(hwnd, &pData->closeButtonRect, FALSE);
+        InvalidateRect(hwnd, &pData->inputRect, FALSE);
         SetCursor(pData->hCursorArrow);
         return 0;
     case WM_NCHITTEST:
@@ -2211,74 +4748,24 @@ LRESULT CALLBACK CustomIntervalWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        SolidBrush bgBrush(Color(200, 35, 35, 35)); 
-        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"Set Custom Interval", pData->isHoveringClose);
 
-        HFONT oldFont = (HFONT)SelectObject(memDC, pData->hFontTitle);
-        Font fontTitle(memDC, pData->hFontTitle);
-        SolidBrush textBrush_Initial(Color(255, 220, 220, 220));
-        g.DrawString(L"Set Custom Interval", -1, &fontTitle, PointF(8.0f, 6.0f), &textBrush_Initial);
-
-        Font fontText(memDC, pData->hFontText);
-        SolidBrush grayBrush(Color(255, 180, 180, 180));
-        g.DrawString(L"Enter interval in seconds (max 1200):", -1, &fontText, PointF(8.0f, 30.0f), &grayBrush);
-
-        SolidBrush inputBrush(Color(255, 50, 50, 50)); 
-        Pen inputPen(pData->hasFocus ? Color(255, 0, 122, 204) : Color(255, 100, 100, 100), 1.0f);
-        
-        GraphicsPath inputPath;
-        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 180, 90);
-        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 270, 90);
-        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
-        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
-        inputPath.CloseFigure();
-
-        g.FillPath(&inputBrush, &inputPath);
-        g.DrawPath(&inputPen, &inputPath);
-
-        Font inputFont(memDC, pData->hFontInput);
-        SolidBrush inputTextBrush(Color(255, 255, 255, 255));
-        RECT textRect = pData->inputRect;
-        InflateRect(&textRect, -8, 0);
-
-        StringFormat sf;
-        sf.SetAlignment(StringAlignmentNear);
-        sf.SetLineAlignment(StringAlignmentCenter);
-        RectF textRectF((REAL)textRect.left, (REAL)textRect.top, (REAL)(textRect.right - textRect.left), (REAL)(textRect.bottom - textRect.top));
-        g.DrawString(pData->inputText, -1, &inputFont, textRectF, &sf, &inputTextBrush);
+        RECT infoRect = { 0, 30, clientRect.right, 53 };
+        Popup_DrawInfoBannerNoBottomBorder(&g, memDC, infoRect, pData->hFontText, L"\uE916", RGB(0, 122, 204), L"Enter interval in seconds. Maximum value is 1200.");
+        Popup_DrawTextInputJoinedToButtons(&g, memDC, pData->inputRect, pData->hFontInput, pData->inputText, L"60", pData->isHoveringInput, pData->hasFocus);
 
         if (pData->hasFocus) {
+             Font inputFont(memDC, pData->hFontInput);
              RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
              g.MeasureString(pData->inputText, -1, &inputFont, layout, &size);
              
-             int caretX = pData->inputRect.left + 8 + (int)size.Width;
+             int caretX = pData->inputRect.left + 12 + (int)size.Width;
              int caretY = pData->inputRect.top + 5;
              SetCaretPos(caretX, caretY);
         }
 
-        auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
-            SolidBrush br(fill);
-            GraphicsPath path;
-            path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
-            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
-            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
-            path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
-            path.CloseFigure();
-            g.FillPath(&br, &path);
-
-            Font font(memDC, pData->hFontText);
-            SolidBrush textBrush(Color(255, 255, 255, 255));
-            StringFormat sf;
-            sf.SetAlignment(StringAlignmentCenter);
-            sf.SetLineAlignment(StringAlignmentCenter);
-            RectF rectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
-            g.DrawString(txt, -1, &font, rectF, &sf, &textBrush);
-            };
-        drawBtn(pData->okButtonRect, L"OK", pData->isHoveringOk, true);
-        drawBtn(pData->cancelButtonRect, L"Cancel", pData->isHoveringCancel, false);
-
-        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -2332,11 +4819,15 @@ void ShowCustomIntervalDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
 
-    const int dlgW = 300, dlgH = 122;
+    const int dlgW = 344, dlgH = 112;
     RECT ownerRect = { 0 };
-    if (owner) GetWindowRect(owner, &ownerRect);
-    int x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
-    int y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    int x = (GetSystemMetrics(SM_CXSCREEN) - dlgW) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - dlgH) / 2;
+    if (owner) {
+        GetWindowRect(owner, &ownerRect);
+        x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
+        y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    }
 
 
     g_hCustomIntervalWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-CustomInterval",
@@ -2356,7 +4847,7 @@ void ShowCustomIntervalDialog(HWND owner)
 struct CustomFpsData {
     HFONT hFontTitle = NULL, hFontText = NULL, hFontInput = NULL;
     RECT closeButtonRect = { 0 }, okButtonRect = { 0 }, cancelButtonRect = { 0 }, inputRect = { 0 };
-    bool isHoveringClose = false, isHoveringOk = false, isHoveringCancel = false;
+    bool isHoveringClose = false, isHoveringOk = false, isHoveringCancel = false, isHoveringInput = false;
     bool isTrackingMouse = false;
     bool hasFocus = false;
     wchar_t inputText[10] = { 0 };
@@ -2383,23 +4874,25 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
         ReleaseDC(NULL, screen);
-        pData->hFontTitle = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontInput = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int margin = 8, btnH = 30, btnGap = 8, inputH = 28;
+        const int inputMargin = 0, btnH = 30, btnGap = 0, inputH = 30, topBarH = 30, infoH = 23;
 
-        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
+        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, topBarH };
 
-        int btnY = clientRect.bottom - margin - btnH;
-        pData->inputRect = { margin, btnY - btnGap - inputH, clientRect.right - margin, btnY - btnGap };
-        int totalWidth = clientRect.right - (margin * 2);
+        int inputTop = 53;
+        int inputBottom = inputTop + inputH;
+        int btnY = inputBottom - 1;
+        pData->inputRect = { inputMargin, inputTop, clientRect.right - inputMargin, inputBottom };
+        int totalWidth = clientRect.right;
         int btnWidth = (totalWidth - btnGap) / 2;
 
-        pData->cancelButtonRect = { margin, btnY, margin + btnWidth, btnY + btnH };
-        pData->okButtonRect = { margin + btnWidth + btnGap, btnY, margin + btnWidth + btnGap + btnWidth, btnY + btnH };
+        pData->cancelButtonRect = { 0, btnY, btnWidth, btnY + btnH };
+        pData->okButtonRect = { btnWidth + btnGap, btnY, btnWidth + btnGap + btnWidth, btnY + btnH };
 
         _itow_s(g_fpsLimit, pData->inputText, 10);
 
@@ -2457,12 +4950,13 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         if (hover_ok != pData->isHoveringOk) { pData->isHoveringOk = hover_ok; InvalidateRect(hwnd, &pData->okButtonRect, FALSE); }
         if (hover_cancel != pData->isHoveringCancel) { pData->isHoveringCancel = hover_cancel; InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE); }
         if (hover_close != pData->isHoveringClose) { pData->isHoveringClose = hover_close; InvalidateRect(hwnd, &pData->closeButtonRect, FALSE); }
+        if (hover_input != pData->isHoveringInput) { pData->isHoveringInput = hover_input; InvalidateRect(hwnd, &pData->inputRect, FALSE); }
 
         if (hover_ok || hover_cancel || hover_close) SetCursor(pData->hCursorHand);
         else if (hover_input) SetCursor(pData->hCursorText);
         else SetCursor(pData->hCursorArrow);
 
-        if ((hover_ok || hover_cancel || hover_close) && !pData->isTrackingMouse) {
+        if ((hover_ok || hover_cancel || hover_close || hover_input) && !pData->isTrackingMouse) {
             TRACKMOUSEEVENT tme = { sizeof(tme) };
             tme.dwFlags = TME_LEAVE;
             tme.hwndTrack = hwnd;
@@ -2472,11 +4966,12 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         return 0;
     }
     case WM_MOUSELEAVE:
-        pData->isHoveringOk = pData->isHoveringCancel = pData->isHoveringClose = false;
+        pData->isHoveringOk = pData->isHoveringCancel = pData->isHoveringClose = pData->isHoveringInput = false;
         pData->isTrackingMouse = false;
         InvalidateRect(hwnd, &pData->okButtonRect, FALSE);
         InvalidateRect(hwnd, &pData->cancelButtonRect, FALSE);
         InvalidateRect(hwnd, &pData->closeButtonRect, FALSE);
+        InvalidateRect(hwnd, &pData->inputRect, FALSE);
         SetCursor(pData->hCursorArrow);
         return 0;
     case WM_NCHITTEST:
@@ -2535,83 +5030,24 @@ LRESULT CALLBACK CustomFpsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        SolidBrush bgBrush(Color(240, 35, 35, 35));
-        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"Set Custom FPS Limit", pData->isHoveringClose);
 
-        HFONT oldFont = (HFONT)SelectObject(memDC, pData->hFontTitle);
-        Font fontTitle(memDC, pData->hFontTitle);
-        SolidBrush textBrush_Initial(Color(255, 220, 220, 220));
-        g.DrawString(L"Set Custom FPS Limit", -1, &fontTitle, PointF(8.0f, 6.0f), &textBrush_Initial);
-
-        Font fontText(memDC, pData->hFontText);
-        SolidBrush grayBrush(Color(255, 180, 180, 180));
-        g.DrawString(L"Enter FPS limit (0=off, max 60):", -1, &fontText, PointF(8.0f, 30.0f), &grayBrush);
-
-        SolidBrush inputBrush(Color(255, 50, 50, 50));
-        Pen inputPen(pData->hasFocus ? Color(255, 0, 122, 204) : Color(255, 100, 100, 100), 1.0f);
-        
-        GraphicsPath inputPath;
-        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 180, 90);
-        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.top, 5.0f * 2, 5.0f * 2, 270, 90);
-        inputPath.AddArc((REAL)pData->inputRect.right - 5.0f * 2, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
-        inputPath.AddArc((REAL)pData->inputRect.left, (REAL)pData->inputRect.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
-        inputPath.CloseFigure();
-
-        g.FillPath(&inputBrush, &inputPath);
-        g.DrawPath(&inputPen, &inputPath);
-
-        Font inputFont(memDC, pData->hFontInput);
-        SolidBrush inputBrush2(Color(255, 255, 255, 255));
-        
-        StringFormat sf;
-        sf.SetAlignment(StringAlignmentNear);
-        sf.SetLineAlignment(StringAlignmentCenter);
-        
-        RECT rect;
-        rect.top = pData->inputRect.top;
-        rect.bottom = pData->inputRect.bottom;
-        rect.left = pData->inputRect.left;
-        rect.right = pData->inputRect.right;
-        
-        InflateRect(&rect, -8, 0);
-        
-        RectF textRectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
-        g.DrawString(pData->inputText, -1, &inputFont, textRectF, &sf, &inputBrush2);
+        RECT infoRect = { 0, 30, clientRect.right, 53 };
+        Popup_DrawInfoBannerNoBottomBorder(&g, memDC, infoRect, pData->hFontText, L"\uF272", RGB(0, 122, 204), L"Set FPS cap from 0 to 60. Use 0 to turn it off.");
+        Popup_DrawTextInputJoinedToButtons(&g, memDC, pData->inputRect, pData->hFontInput, pData->inputText, L"0", pData->isHoveringInput, pData->hasFocus);
 
         if (pData->hasFocus) {
+            Font inputFont(memDC, pData->hFontInput);
             RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
             g.MeasureString(pData->inputText, -1, &inputFont, layout, &size);
             
-            int caretX = pData->inputRect.left + 8 + (int)size.Width;
+            int caretX = pData->inputRect.left + 12 + (int)size.Width;
             int caretY = pData->inputRect.top + 5;
             SetCaretPos(caretX, caretY);
         }
 
-        auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
-            SolidBrush br(fill);
-            GraphicsPath path;
-            path.AddArc((REAL)r.left, (REAL)r.top, 10.0f, 10.0f, 180, 90);
-            path.AddArc((REAL)r.right - 10.0f, (REAL)r.top, 10.0f, 10.0f, 270, 90);
-            path.AddArc((REAL)r.right - 10.0f, (REAL)r.bottom - 10.0f, 10.0f, 10.0f, 0, 90);
-            path.AddArc((REAL)r.left, (REAL)r.bottom - 10.0f, 10.0f, 10.0f, 90, 90);
-            path.CloseFigure();
-            g.FillPath(&br, &path);
-
-            Font font(memDC, pData->hFontText);
-            SolidBrush textBrush(Color(255, 255, 255, 255));
-            StringFormat sf;
-            sf.SetAlignment(StringAlignmentCenter);
-            sf.SetLineAlignment(StringAlignmentCenter);
-            RectF rectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
-            g.DrawString(txt, -1, &font, rectF, &sf, &textBrush);
-            };
-        drawBtn(pData->okButtonRect, L"OK", pData->isHoveringOk, true);
-        drawBtn(pData->cancelButtonRect, L"Cancel", pData->isHoveringCancel, false);
-
-        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
-
-        SelectObject(memDC, oldFont);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -2668,14 +5104,18 @@ void ShowCustomFpsDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
 
-    const int dlgW = 300, dlgH = 122;
+    const int dlgW = 344, dlgH = 112;
     RECT ownerRect = { 0 };
-    if (owner) GetWindowRect(owner, &ownerRect);
-    int x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
-    int y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    int x = (GetSystemMetrics(SM_CXSCREEN) - dlgW) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - dlgH) / 2;
+    if (owner) {
+        GetWindowRect(owner, &ownerRect);
+        x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
+        y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    }
 
     g_hCustomFpsWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CUSTOM_FPS_CLASS_NAME,
-        L"Set Custom FPS", WS_POPUP,
+        L"Set Custom FPS Limit", WS_POPUP,
         x, y, dlgW, dlgH, owner, NULL, g_hInst, NULL);
     if (g_hCustomFpsWnd)
     {
@@ -2688,14 +5128,18 @@ void ShowCustomFpsDialog(HWND owner)
 // ==========
 
 // Tutorial Window
+void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool checked, bool isHovering, float animState, bool hasRightNeighbor, const wchar_t* icon);
+void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering);
 struct TutorialData {
-    HFONT hFont40 = NULL, hFont20 = NULL, hFont14 = NULL, hFont13 = NULL, hFont11 = NULL, hFont14b = NULL;
-    RECT nextButtonRect = { 0 }, backButtonRect = { 0 }, noButtonRect = { 0 };
+    HFONT hFont40 = NULL, hFont20 = NULL, hFont14 = NULL, hFont13 = NULL, hFont11 = NULL, hFont14b = NULL, hFontTitle = NULL;
+    RECT nextButtonRect = { 0 }, backButtonRect = { 0 };
     RECT skipLinkRect = { 0 }, githubLinkRect = { 0 }, wikiLinkRect = { 0 }, closeButtonRect = { 0 };
-    bool isHoveringNext = false, isHoveringBack = false, isHoveringNo = false;
+    RECT demoHelpButtonRect = { 0 }, discordLinkRect = { 0 };
+    bool isHoveringNext = false, isHoveringBack = false;
     bool isHoveringSkip = false, isHoveringGithub = false, isHoveringWiki = false, isHoveringClose = false;
+    bool isHoveringDemoHelp = false, isHoveringDiscordLink = false;
     bool isTrackingMouse = false;
-    int page = 0; // 0: welcome, 1: htu, 2: htw, 3: tips, 4: usersafe, 5: final
+    int page = 0; // 0: welcome, 1: basics, 2: help, 3: workflow, 4: settings, 5: final
     float progress = 0.0f;
     UINT_PTR uTimerId = 0;
     HCURSOR hCursorHand = NULL, hCursorArrow = NULL;
@@ -2728,17 +5172,17 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         pData->hFont14b = CreateFontW(-MulDiv(13, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFont13 = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFont11 = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
         const int dlgW = 472, dlgH = 312;
-        const int margin = 10;
-        const int btnW = 131, btnH = 32, progressBarHeight = 4;
-        int y_pos = dlgH - margin - btnH - progressBarHeight;
+        const int btnH = 32, progressBarHeight = 4;
+        int y_pos = dlgH - btnH - progressBarHeight;
 
-        pData->nextButtonRect = { dlgW - margin - btnW, y_pos, dlgW - margin, y_pos + btnH };
-        pData->backButtonRect = { margin, y_pos, margin + btnW, y_pos + btnH };
-        pData->skipLinkRect = { dlgW - margin - btnW - 10 - 48, y_pos + 4, dlgW - margin - btnW - 10, y_pos + 4 + 24 };
-        pData->githubLinkRect = { pData->backButtonRect.right, y_pos, pData->nextButtonRect.left, y_pos + btnH };
-        pData->wikiLinkRect = { margin, 220, margin + 250, 220 + 20 };
+        pData->backButtonRect = { 0, y_pos, dlgW / 2, y_pos + btnH };
+        pData->skipLinkRect = { 0, y_pos, 96, y_pos + btnH };
+        pData->nextButtonRect = { 96, y_pos, dlgW, y_pos + btnH };
+        pData->githubLinkRect = { 0, 0, 0, 0 };
+        pData->wikiLinkRect = { 0, 0, 0, 0 };
         pData->closeButtonRect = { dlgW - 46, 0, dlgW, 30 };
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
@@ -2787,8 +5231,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (pData->page > 0) anyHover |= checkHover(pData->isHoveringBack, pData->backButtonRect);
         if (pData->page == 0) anyHover |= checkHover(pData->isHoveringSkip, pData->skipLinkRect);
         if (pData->page == 2) anyHover |= checkHover(pData->isHoveringGithub, pData->githubLinkRect);
-        if (pData->page == 4) anyHover |= checkHover(pData->isHoveringWiki, pData->wikiLinkRect);
-        if (pData->page == 3 || pData->page == 4) anyHover |= checkHover(pData->isHoveringNo, pData->noButtonRect);
+        if (pData->page == 2) anyHover |= checkHover(pData->isHoveringDemoHelp, pData->demoHelpButtonRect);
+        if (pData->page == 5) anyHover |= checkHover(pData->isHoveringDiscordLink, pData->discordLinkRect);
 
         SetCursor(anyHover ? pData->hCursorHand : pData->hCursorArrow);
 
@@ -2803,8 +5247,9 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     }
     case WM_MOUSELEAVE:
         if (!pData) break;
-        pData->isHoveringNext = pData->isHoveringBack = pData->isHoveringNo = false;
+        pData->isHoveringNext = pData->isHoveringBack = false;
         pData->isHoveringSkip = pData->isHoveringGithub = pData->isHoveringWiki = pData->isHoveringClose = false;
+        pData->isHoveringDemoHelp = pData->isHoveringDiscordLink = false;
         pData->isTrackingMouse = false;
         InvalidateRect(hwnd, NULL, FALSE);
         SetCursor(pData->hCursorArrow);
@@ -2818,9 +5263,18 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (pData->page == 0 && PtInRect(&pData->skipLinkRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_BTN_SKIP, 0); return 0; }
         if (PtInRect(&pData->nextButtonRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_BTN_NEXT, 0); return 0; }
         if (pData->page > 0 && PtInRect(&pData->backButtonRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_BTN_BACK, 0); return 0; }
-        if ((pData->page == 3 || pData->page == 4) && PtInRect(&pData->noButtonRect, pt)) { PostMessage(hwnd, WM_COMMAND, IDNO, 0); return 0; }
         if (pData->page == 2 && PtInRect(&pData->githubLinkRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_LINKGITHUB, 0); return 0; }
-        if (pData->page == 4 && PtInRect(&pData->wikiLinkRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_LINKWIKI_TUTORIAL, 0); return 0; }
+        if (pData->page == 2 && PtInRect(&pData->demoHelpButtonRect, pt)) {
+            ShowDarkMessageBox(hwnd,
+                L"These help buttons explain what a setting does, when to use it, and whether it is recommended.\n\nIf you are unsure, click the ? button next to a setting before changing it.",
+                L"Tutorial Help Example",
+                MB_OK | MB_ICONINFORMATION);
+            return 0;
+        }
+        if (pData->page == 5 && PtInRect(&pData->discordLinkRect, pt)) {
+            ShellExecute(NULL, L"open", L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
+            return 0;
+        }
 
         break;
     }
@@ -2861,16 +5315,6 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             }
             else
             {
-                if (pData->page == 3)
-                {
-                    g_autoStartAfk = true;
-                }
-                if (pData->page == 4)
-                {
-                    g_userSafeMode = 2;
-                    if (!g_monitorThreadRunning.load())
-                        StartActivityMonitor();
-                }
                 pData->page++;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -2879,23 +5323,6 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             if (pData->page > 0)
             {
                 pData->page--;
-                InvalidateRect(hwnd, NULL, FALSE);
-            }
-            break;
-        case IDNO:
-            if (pData->page == 3 || pData->page == 4)
-            {
-                if (pData->page == 3)
-                {
-                    g_autoStartAfk = false;
-                }
-                if (pData->page == 4)
-                {
-                    g_userSafeMode = 0;
-                    if (g_monitorThreadRunning.load())
-                        StopActivityMonitor();
-                }
-                pData->page++;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             break;
@@ -2926,24 +5353,40 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         const int dlgW = clientRect.right;
         const int dlgH = clientRect.bottom;
 
-        const wchar_t* nextText = L"Next";
-        if (pData->page == 3 || pData->page == 4) nextText = L"Yes";
-        else if (pData->page == 5) nextText = L"Got it!";
+        const wchar_t* nextText = (pData->page == 5) ? L"Got it!" : L"Next";
+        const int btnH = 32;
+        const int progressBarHeight = 4;
+        const int btnTop = dlgH - btnH - progressBarHeight;
 
-        if (pData->page == 3 || pData->page == 4) {
-            const int margin = 10, btnW = 131, btnH = 32, gap = 10, progressBarHeight = 4;
-            int y_pos = dlgH - margin - btnH - progressBarHeight;
-            int x_next = dlgW - margin - btnW;
-            int x_no = x_next - btnW - gap;
-            pData->noButtonRect = { x_no, y_pos, x_no + btnW, y_pos + btnH }; 
+        if (pData->page == 0) {
+            pData->skipLinkRect = { 0, btnTop, 96, btnTop + btnH };
+            pData->nextButtonRect = { 96, btnTop, dlgW, btnTop + btnH };
+            pData->backButtonRect = { 0, 0, 0, 0 };
+        } else {
+            pData->backButtonRect = { 0, btnTop, dlgW / 2, btnTop + btnH };
+            pData->nextButtonRect = { dlgW / 2, btnTop, dlgW, btnTop + btnH };
+            pData->skipLinkRect = { 0, 0, 0, 0 };
         }
+
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"AntiAFK-RBX • Tutorial", pData->isHoveringClose);
+
+        auto drawTextBlock = [&](const wchar_t* title, const wchar_t* body) {
+            Font titleFont(memDC, pData->hFont20);
+            Font bodyFont(memDC, pData->hFont13);
+            SolidBrush titleBrush(Color(255, 255, 255, 255));
+            SolidBrush bodyBrush(Color(255, 210, 210, 210));
+
+            RectF titleRect(28.0f, 46.0f, (REAL)(clientRect.right - 56), 24.0f);
+            RectF bodyRect(28.0f, 78.0f, (REAL)(clientRect.right - 56), 136.0f);
+            g.DrawString(title, -1, &titleFont, titleRect, NULL, &titleBrush);
+            g.DrawString(body, -1, &bodyFont, bodyRect, NULL, &bodyBrush);
+        };
 
         if (pData->page == 0)
         {
             const int margin = 20;
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
             Font font20(memDC, pData->hFont20);
             SolidBrush grayBrush(Color(255, 180, 180, 180));
             int y_pos = 60;
@@ -2971,27 +5414,26 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         }
         else if (pData->page == 1)
         {
-            const int margin = 20;
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
-            Font font20(memDC, pData->hFont20);
-            SolidBrush whiteBrush(Color(255, 255, 255, 255));
-            g.DrawString(L"How to Use?", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
-
-            Font font13(memDC, pData->hFont13);
-            RectF rText((REAL)margin, (REAL)55 + 5, (REAL)clientRect.right - margin, (REAL)80);
-            const wchar_t* howto = L"AntiAFK-RBX is a tray application with UI. You can open it from the tray menu. The tray icon (next to the clock) shows the current status and provides quick access.";
-            g.DrawString(howto, -1, &font13, rText, NULL, &whiteBrush);
-
             StringFormat sfCenter;
             sfCenter.SetAlignment(StringAlignmentCenter);
             sfCenter.SetLineAlignment(StringAlignmentCenter);
-            
-            RectF rPrevLabel(0, rText.GetBottom() + 15, (REAL)clientRect.right, 20);
-            g.DrawString(L"The tray icon is dynamic and shows the current status:", -1, &font13, rPrevLabel, &sfCenter, &whiteBrush);
+            Font titleFont(memDC, pData->hFont20);
+            Font font13(memDC, pData->hFont13);
+            SolidBrush whiteBrush(Color(255, 255, 255, 255));
+            SolidBrush bodyBrush(Color(255, 210, 210, 210));
 
-            int iconsY = (int)rPrevLabel.GetBottom() + 8;
+            g.DrawString(L"Start Here", -1, &titleFont, PointF(28.0f, 46.0f), &whiteBrush);
+            RectF introRect(28.0f, 78.0f, (REAL)(clientRect.right - 56), 90.0f);
+            g.DrawString(
+                L"1. Open the main window from the tray icon near the clock.\n"
+                L"2. Configurate settings in the General tab.\n"
+                L"3. Press Start when Roblox is open.",
+                -1, &font13, introRect, NULL, &bodyBrush);
+
+            RectF rPrevLabel(0, 182.0f, (REAL)clientRect.right, 20.0f);
+            g.DrawString(L"Tray icon status view:", -1, &font13, rPrevLabel, &sfCenter, &whiteBrush);
+
+            int iconsY = 208;
             int iconSize = 32;
             int gap = 90;
             int totalW = iconSize * 3 + gap * 2;
@@ -3005,94 +5447,67 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             DestroyIcon(icoOff);
             DestroyIcon(icoOnSingle);
             DestroyIcon(icoOnMulti);
-
-            sfCenter.SetLineAlignment(StringAlignmentNear);
-            
-            int labelY = iconsY + iconSize + 4;
-            RectF rL1((REAL)(startX + 0 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
-            RectF rL2((REAL)(startX + 1 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
-            RectF rL3((REAL)(startX + 2 * (iconSize + gap) - gap / 2), (REAL)labelY, (REAL)(iconSize + gap), 24);
-            
-            g.DrawString(L"ON (Single)", -1, &font13, rL1, &sfCenter, &whiteBrush);
-            g.DrawString(L"OFF", -1, &font13, rL2, &sfCenter, &whiteBrush);
-            g.DrawString(L"ON (Multi)", -1, &font13, rL3, &sfCenter, &whiteBrush);
         }
         else if (pData->page == 2)
         {
-            const int margin = 20;
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
-            Font font20(memDC, pData->hFont20);
+            Font titleFont(memDC, pData->hFont20);
+            Font bodyFont(memDC, pData->hFont13);
+            Font smallFont(memDC, pData->hFont11);
             SolidBrush whiteBrush(Color(255, 255, 255, 255));
-            g.DrawString(L"How it Works?", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
-            
-            Font font13(memDC, pData->hFont13);
-            RectF rText((REAL)margin, (REAL)20 + 55, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 80);
-            const wchar_t* workText = L"When the program starts, it starts another thread (AntiAFK thread), which checks whether the roblox window is running, and then performs actions on the user's settings, if the settings change during the process, the thread is restarted.";
-            g.DrawString(workText, -1, &font13, rText, NULL, &whiteBrush);
+            SolidBrush bodyBrush(Color(255, 210, 210, 210));
+            SolidBrush noteBrush(Color(255, 140, 140, 140));
+            g.DrawString(L"Use Help Buttons", -1, &titleFont, PointF(28.0f, 46.0f), &whiteBrush);
+
+            RectF introRect(28.0f, 78.0f, (REAL)(clientRect.right - 56), 70.0f);
+            g.DrawString(L"When you see a small ? button next to a setting, click it. It explains what the option does and when you may want to use it.", -1, &bodyFont, introRect, NULL, &bodyBrush);
+
+            const int demoTop = 172;
+            const int demoRowH = 30;
+            const int helpSize = 24;
+            const int demoRight = clientRect.right - 28;
+            RECT toggleDemoRect = { 28, demoTop, demoRight - helpSize, demoTop + demoRowH };
+            MainUI_Paint_DrawToggle(memDC, toggleDemoRect, pData->hFont13, L"Auto-Start AntiAFK", true, false, 1.0f, true, L"\uE768");
+
+            pData->demoHelpButtonRect = { demoRight - helpSize, demoTop + ((demoRowH - helpSize) / 2) + 4, demoRight, demoTop + ((demoRowH - helpSize) / 2) + helpSize + 4 };
+            MainUI_Paint_DrawHelpButton(memDC, pData->demoHelpButtonRect, pData->hFont13, pData->isHoveringDemoHelp);
+
+            RectF noteRect(28.0f, 220.0f, (REAL)(clientRect.right - 56), 22.0f);
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            g.DrawString(L"Try clicking the demo ? button.", -1, &smallFont, noteRect, &sfCenter, &noteBrush);
         }
         else if (pData->page == 3)
         {
-            const int margin = 20;
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
-            Font font20(memDC, pData->hFont20);
-            SolidBrush whiteBrush(Color(255, 255, 255, 255));
-            g.DrawString(L"Tips To Use", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
-
-            Font font14b(memDC, pData->hFont14b);
-            StringFormat sfCenter;
-            sfCenter.SetAlignment(StringAlignmentCenter);
-            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)(clientRect.right - margin * 2), (REAL)clientRect.bottom - 120);
-            g.DrawString(L"Enable “Auto-Start”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
-            
-            Font font13(memDC, pData->hFont13);
-            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)(clientRect.right - margin * 2), (REAL)100);
-            const wchar_t* tipsText = L"This feature will automatically start and stop the Anti-AFK function when you open or close Roblox. It's highly recommended for convenience.";
-            g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
-
-            Font font11(memDC, pData->hFont11);
-            SolidBrush grayBrush(Color(255, 123, 123, 123));
-            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)(clientRect.right - margin * 2), (REAL)20);
-            g.DrawString(L"You can change this later in the 'Automation' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
+            drawTextBlock(
+                L"Simple Workflow",
+                L"Use this simple routine:\n\n"
+                L"Open Roblox.\n"
+                L"Open AntiAFK-RBX.\n"
+                L"Configurate settings in the General tab.\n"
+                L"Press Start.\n\n"
+                L"If something feels wrong, stop the app, change one option, and test again.");
         }
         else if (pData->page == 4)
         {
-            const int margin = 20;
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
-            Font font20(memDC, pData->hFont20);
+            Font titleFont(memDC, pData->hFont20);
+            Font bodyFont(memDC, pData->hFont11);
             SolidBrush whiteBrush(Color(255, 255, 255, 255));
-            g.DrawString(L"Tips To Use", -1, &font20, PointF((REAL)margin, 20), &whiteBrush);
+            SolidBrush bodyBrush(Color(255, 210, 210, 210));
+            g.DrawString(L"Recommended Settings", -1, &titleFont, PointF(28.0f, 46.0f), &whiteBrush);
 
-            Font font14b(memDC, pData->hFont14b);
-            StringFormat sfCenter;
-            sfCenter.SetAlignment(StringAlignmentCenter);
-            RectF rTextTitle((REAL)margin, (REAL)20 + 55 + 25, (REAL)(clientRect.right - margin * 2), (REAL)clientRect.bottom - 120);
-            g.DrawString(L"Enable “User-Safe Mode”?", -1, &font14b, rTextTitle, &sfCenter, &whiteBrush);
-            
-            Font font13(memDC, pData->hFont13);
-            RectF rTextBody((REAL)margin, (REAL)rTextTitle.Y + 30, (REAL)(clientRect.right - margin * 2), (REAL)100);
-            const wchar_t* tipsText = L"This mode prevents the Anti-AFK action from interrupting you if you are actively using your computer. It will wait for you to be idle. Recommended.";
-            g.DrawString(tipsText, -1, &font13, rTextBody, &sfCenter, &whiteBrush);
-
-            pData->wikiLinkRect = { 0, (int)rTextBody.Y + 65, clientRect.right, (int)rTextBody.Y + 85 };
-            pData->wikiLinkRect.left = (clientRect.right - 100) / 2;
-            pData->wikiLinkRect.right = pData->wikiLinkRect.left + 100;
-
-            Font font11(memDC, pData->hFont11);
-            SolidBrush grayBrush(Color(255, 123, 123, 123));
-            RectF rSubText((REAL)margin, (REAL)pData->nextButtonRect.top - 30, (REAL)(clientRect.right - margin * 2), (REAL)20);
-            g.DrawString(L"You can change this later in the 'General' tab.", -1, &font11, rSubText, &sfCenter, &grayBrush);
+            RectF bodyRect(28.0f, 78.0f, (REAL)(clientRect.right - 56), 164.0f);
+            g.DrawString(
+                L"Try these first:\n\n"
+                L"\"Multi-Instance\" for multiple Roblox windows.\n"
+                L"\"User-Safe Mode\" for safer behavior.\n"
+                L"\"Auto-Start\" for launching with Windows.\n"
+                L"\"Auto-Reconnect\" for reconnects after disconnects.\n"
+                L"\"I can forget\" for full automation.\n"
+                L"\"FPS Capper\" for reduce CPU and GPU usage.",
+                -1, &bodyFont, bodyRect, NULL, &bodyBrush);
         }
         else if (pData->page == 5)
         {
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-
             Font font20(memDC, pData->hFont20);
             SolidBrush whiteBrush(Color(255, 255, 255, 255));
             
@@ -3121,32 +5536,27 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
             Font font13(memDC, pData->hFont13);
             SolidBrush grayBrush(Color(255, 200, 200, 200));
-            RectF rBottom((REAL)20, (REAL)rTop.GetBottom() + s1.Height + 25, (REAL)(clientRect.right - 40), (REAL)clientRect.bottom - 80);
-            g.DrawString(L"You're all set! Remember, you can change these settings anytime in the main window. This tutorial can also be reopened from the tray menu.", -1, &font13, rBottom, &sfCenter, &grayBrush);
+            RectF rBottom((REAL)20, (REAL)rTop.GetBottom() + s1.Height + 12, (REAL)(clientRect.right - 40), 48.0f);
+            g.DrawString(L"You're all set! You can change settings later in the main window and reopen this tutorial from the tray menu.", -1, &font13, rBottom, &sfCenter, &grayBrush);
+
+            pData->discordLinkRect = { 0, btnTop - 24, clientRect.right, btnTop };
+            if (pData->isHoveringDiscordLink) {
+                SolidBrush hoverBrush(Color(35, 55, 55, 55));
+                g.FillRectangle(&hoverBrush, (REAL)pData->discordLinkRect.left, (REAL)pData->discordLinkRect.top, (REAL)(pData->discordLinkRect.right - pData->discordLinkRect.left), (REAL)(pData->discordLinkRect.bottom - pData->discordLinkRect.top));
+            }
+            Pen discordLinePen(Color(100, 80, 80, 80), 1.0f);
+            g.DrawLine(&discordLinePen, (REAL)pData->discordLinkRect.left, (REAL)pData->discordLinkRect.top, (REAL)pData->discordLinkRect.right, (REAL)pData->discordLinkRect.top);
+            Font linkFont(memDC, pData->hFont11);
+            SolidBrush linkBrush(Color(255, 140, 170, 255));
+            RectF linkRectF((REAL)pData->discordLinkRect.left, (REAL)pData->discordLinkRect.top, (REAL)(pData->discordLinkRect.right - pData->discordLinkRect.left), (REAL)(pData->discordLinkRect.bottom - pData->discordLinkRect.top));
+            StringFormat linkCenter;
+            linkCenter.SetAlignment(StringAlignmentCenter);
+            linkCenter.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(L"Need help or have an idea? Join our Discord", -1, &linkFont, linkRectF, &linkCenter, &linkBrush);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-            Graphics g(memDC);
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-            
-            Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 70, 70, 70) : Color(255, 55, 55, 55));
-            SolidBrush br(fill);
-            
-            GraphicsPath path;
-            path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
-            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
-            path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
-            path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
-            path.CloseFigure();
-            g.FillPath(&br, &path);
-            
-            Font font(memDC, pData->hFont13);
-            SolidBrush textBrush(Color(255, 255, 255, 255));
-            StringFormat sf;
-            sf.SetAlignment(StringAlignmentCenter);
-            sf.SetLineAlignment(StringAlignmentCenter);
-            RectF btnRectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
-            g.DrawString(txt, -1, &font, btnRectF, &sf, &textBrush);
+            Popup_DrawActionButton(&g, memDC, r, pData->hFont13, txt, hover, primary);
         };
 
         auto drawLink = [&](const RECT& r, const wchar_t* txt, bool hover) {
@@ -3157,7 +5567,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SolidBrush brush(hover ? Color(255, 180, 180, 180) : Color(255, 119, 119, 119));
             
             StringFormat sf;
-            if (pData->page == 4 || pData->page == 2) {
+            if (pData->page == 0 || pData->page == 4 || pData->page == 2) {
                 sf.SetAlignment(StringAlignmentCenter);
             } else {
                 sf.SetAlignment(StringAlignmentNear);
@@ -3170,10 +5580,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
         drawBtn(pData->nextButtonRect, nextText, pData->isHoveringNext, true);
         if (pData->page > 0) drawBtn(pData->backButtonRect, L"Back", pData->isHoveringBack, false);
-        if (pData->page == 3 || pData->page == 4) drawBtn(pData->noButtonRect, L"No", pData->isHoveringNo, false);
-        if (pData->page == 0) drawLink(pData->skipLinkRect, L"Skip", pData->isHoveringSkip);
-        if (pData->page == 2) drawLink(pData->githubLinkRect, L"See more on GitHub", pData->isHoveringGithub);
-        if (pData->page == 4) drawLink(pData->wikiLinkRect, L"More in Wiki", pData->isHoveringWiki);
+        if (pData->page == 0) drawBtn(pData->skipLinkRect, L"Skip", pData->isHoveringSkip, false);
 
         {
             Graphics g(memDC);
@@ -3221,6 +5628,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             if (pData->hFont14b) DeleteObject(pData->hFont14b);
             if (pData->hFont13) DeleteObject(pData->hFont13);
             if (pData->hFont11) DeleteObject(pData->hFont11);
+            if (pData->hFontTitle) DeleteObject(pData->hFontTitle);
             if (pData->hCursorHand) DestroyCursor(pData->hCursorHand);
             if (pData->hCursorArrow) DestroyCursor(pData->hCursorArrow);
             delete pData;
@@ -3272,15 +5680,15 @@ void ShowMainUIDialog(HWND owner)
         wc.lpfnWndProc = MainUIWndProc;
         wc.hInstance = g_hInst;
         wc.lpszClassName = MAINUI_CLASS_NAME;
-        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        wc.hbrBackground = NULL;
         wc.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_MAIN));
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         registered = RegisterClass(&wc) != 0;
     }
 
     int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
-    int winW = 380, winH = 460;
-    int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
+    int winW = 380, winH = 520;
+    int x = (screenW - winW) / 2, y = (screenH - winH) / 2 + 15;
 
     g_hMainUiWnd = CreateWindowEx(WS_EX_APPWINDOW, MAINUI_CLASS_NAME,
         L"AntiAFK-RBX Settings", WS_POPUP,
@@ -3302,18 +5710,26 @@ void ShowMainUIDialog(HWND owner)
         UpdateWindow(g_hMainUiWnd);
     }
 }
+struct NavItem {
+    std::wstring title;
+    std::wstring icon;
+    RECT rect;
+    float currentWidth;
+};
+
 struct MainUIData {
-    HFONT hFontTitle = NULL, hFontSection = NULL, hFontText = NULL, hFontSmall = NULL, hFontNav = NULL, hFontNavSelected = NULL;
+    HFONT hFontTitle = NULL, hFontSection = NULL, hFontText = NULL, hFontSmall = NULL, hFontNav = NULL, hFontNavSelected = NULL, hFontNavIcon = NULL;
     RECT closeButtonRect = { 0 };
     RECT iconButtonRect = { 0 };
     RECT startButtonRect = { 0 };
 
-    int currentPage = 0; // 0: General, 1: Automation, 2: Stats, 3: Advanced
-    std::vector<std::pair<std::wstring, RECT>> navItems;
+    int currentPage = 0; // 0: General, 1: Automation, 2: Stats, 3: Advanced, 4: Utils, 5: Discord
+    std::vector<NavItem> navItems;
     int hoveringNavItem = -1;
     float navIndicatorX = 0.0f;
     float navIndicatorWidth = 0.0f;
 
+    std::vector<RECT> rowRects;
     RECT intervalDropdownRect = { 0 };
     RECT actionDropdownRect = { 0 };
     RECT multiInstanceToggleRect = { 0 };
@@ -3324,15 +5740,52 @@ struct MainUIData {
     RECT autoReconnectToggleRect = { 0 };
     RECT autoResetToggleRect = { 0 };
     RECT autoHideToggleRect = { 0 };
+    RECT autoOpacityToggleRect = { 0 };
+    RECT autoGridToggleRect = { 0 };
     RECT bloxstrapIntegrationToggleRect = { 0 };
     RECT userSafeDropdownRect = { 0 };
     RECT resetStatsButtonRect = { 0 };
+    RECT statRowRects[4] = { 0 };
+    RECT backupMessageRect = { 0 };
+    RECT importSettingsRect = { 0 };
+    RECT exportSettingsRect = { 0 };
     RECT unlockFpsOnFocusToggleRect = { 0 };
     RECT restoreMethodDropdownRect = { 0 };
     RECT legacyUiToggleRect = { 0 };
+    RECT statusBarToggleRect = { 0 };
+    RECT iCanForgetToggleRect = { 0 };
+    RECT doNotSleepToggleRect = { 0 };
+    RECT autoMuteToggleRect = { 0 };
+    RECT unmuteOnFocusToggleRect = { 0 };
     std::vector<RECT> helpButtonRects;
     RECT fpsCapperDropdownRect = { 0 };
     RECT resetSettingsButtonRect = { 0 };
+    RECT updateBannerRect = { 0 };
+    RECT discordButtonRect = { 0 };
+    RECT discordWebhookEnableToggleRect = { 0 };
+    RECT discordWebhookInputRect = { 0 };
+    RECT discordWebhookPasteRect = { 0 };
+    RECT discordWebhookClearRect = { 0 };
+    RECT discordWebhookTestRect = { 0 };
+    RECT discordNotifyStartToggleRect = { 0 };
+    RECT discordNotifyStopToggleRect = { 0 };
+    RECT discordNotifyActionToggleRect = { 0 };
+    RECT discordNotifyReconnectToggleRect = { 0 };
+    RECT discordNotifyResetToggleRect = { 0 };
+    RECT discordNotifyErrorsToggleRect = { 0 };
+    RECT discordDisableEmbedToggleRect = { 0 };
+    RECT discordMentionOnErrorsToggleRect = { 0 };
+    RECT discordPayloadInfoRect = { 0 };
+    RECT disclaimerRect = { 0 };
+    RECT utilsShowRobloxRect = { 0 };
+    RECT utilsHideRobloxRect = { 0 };
+    RECT utilsGridSnapRect = { 0 };
+    RECT utilsWindowOpacityRect = { 0 };
+    RECT utilsCloseAllRect = { 0 };
+    RECT utilsResetAllRect = { 0 };
+    RECT utilsTestActionRect = { 0 };
+    RECT utilsMuteToggleRect = { 0 };
+    RECT utilsFpsToggleRect = { 0 };
 
     POINT hoverPoint = { 0 };
     bool isHoveringClose = false;
@@ -3341,8 +5794,29 @@ struct MainUIData {
     float startButtonScale = 1.0f;
     float startButtonVelocity = 0.0f;
     bool isPressingStart = false;
+    bool isHoveringDiscord = false;
+    bool isHoveringUpdateBanner = false;
     bool isHoveringReset = false;
+    bool isHoveringImportSettings = false;
+    bool isHoveringExportSettings = false;
     bool isHoveringResetStats = false;
+    bool isHoveringDisclaimer = false;
+    bool isHoveringDiscordWebhookInput = false;
+    bool isHoveringDiscordWebhookPaste = false;
+    bool isHoveringDiscordWebhookClear = false;
+    bool isHoveringDiscordWebhookTest = false;
+    bool isHoveringUtilsShowRoblox = false;
+    bool isHoveringUtilsHideRoblox = false;
+    bool isHoveringUtilsGridSnap = false;
+    bool isHoveringUtilsWindowOpacity = false;
+    bool isHoveringUtilsCloseAll = false;
+    bool isHoveringUtilsResetAll = false;
+    bool isHoveringUtilsTestAction = false;
+    bool isHoveringUtilsMuteToggle = false;
+    bool isHoveringUtilsFpsToggle = false;
+    bool isDiscordWebhookInputFocused = false;
+    size_t discordWebhookCaretPos = 0;
+    size_t discordWebhookViewOffset = 0;
     bool isHoveringInterval = false;
     bool isHoveringAction = false;
     bool isHoveringUserSafe = false;
@@ -3358,7 +5832,7 @@ struct MainUIData {
 
     UINT_PTR uTimerId = 0;
     bool isTrackingMouse = false;
-    HCURSOR hCursorHand = NULL, hCursorArrow = NULL;
+    HCURSOR hCursorHand = NULL, hCursorArrow = NULL, hCursorText = NULL;
     HICON hIcon = NULL;
 
     float multiInstanceAnim = 0.0f;
@@ -3368,9 +5842,28 @@ struct MainUIData {
     float autoReconnectAnim = 0.0f;
     float autoResetAnim = 0.0f;
     float autoHideAnim = 0.0f;
+    float autoOpacityAnim = 0.0f;
+    float autoGridAnim = 0.0f;
     float bloxstrapIntegrationAnim = 0.0f;
     float unlockFpsOnFocusAnim = 0.0f;
     float legacyUiAnim = 0.0f;
+    float statusBarAnim = 0.0f;
+    float iCanForgetAnim = 0.0f;
+    float doNotSleepAnim = 0.0f;
+    float autoMuteAnim = 0.0f;
+    float unmuteOnFocusAnim = 0.0f;
+    float utilsWindowOpacityAnim = 0.0f;
+    float utilsMuteAnim = 0.0f;
+    float utilsFpsAnim = 0.0f;
+    float discordWebhookEnableAnim = 0.0f;
+    float discordNotifyStartAnim = 0.0f;
+    float discordNotifyStopAnim = 0.0f;
+    float discordNotifyActionAnim = 0.0f;
+    float discordNotifyReconnectAnim = 0.0f;
+    float discordNotifyResetAnim = 0.0f;
+    float discordNotifyErrorsAnim = 0.0f;
+    float discordDisableEmbedAnim = 0.0f;
+    float discordMentionOnErrorsAnim = 0.0f;
 
     bool previousAfkStartedState = false;
     float stateChangeProgress = 0.0f;
@@ -3396,6 +5889,447 @@ void FillRoundedRectangle(Graphics* g, Brush* brush, REAL x, REAL y, REAL width,
     path.CloseFigure();
     g->FillPath(brush, &path);
 }
+
+struct StatusBarData {
+    HFONT hFontBrand = NULL;
+    HFONT hFontText = NULL;
+    HICON hIcon = NULL;
+    std::wstring message = L"Ready";
+    RECT targetBounds = { 0 };
+    BYTE currentAlpha = 0;
+    BYTE targetAlpha = 0;
+};
+
+LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+int MeasureTextWidth(HDC hdc, HFONT font, const std::wstring& text)
+{
+    if (!hdc || !font || text.empty()) {
+        return 0;
+    }
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, font);
+    SIZE size = { 0 };
+    GetTextExtentPoint32W(hdc, text.c_str(), (int)text.size(), &size);
+    SelectObject(hdc, oldFont);
+    return size.cx;
+}
+
+int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY)
+{
+    HDC hdc = GetDC(NULL);
+    if (!hdc) {
+        return 360;
+    }
+
+    HFONT brandFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    HFONT textFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+
+    int brandWidth = MeasureTextWidth(hdc, brandFont, L"AntiAFK-RBX");
+    int separatorWidth = MeasureTextWidth(hdc, textFont, L" \u2022 ");
+    int messageWidth = MeasureTextWidth(hdc, textFont, message);
+
+    if (brandFont) DeleteObject(brandFont);
+    if (textFont) DeleteObject(textFont);
+    ReleaseDC(NULL, hdc);
+
+    return MulDiv(10, dpiY, 96) + MulDiv(14, dpiY, 96) + MulDiv(10, dpiY, 96)
+        + brandWidth + separatorWidth + messageWidth + MulDiv(26, dpiY, 96);
+}
+
+HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
+{
+    if (anchorWindow && IsWindow(anchorWindow)) {
+        return MonitorFromWindow(anchorWindow, MONITOR_DEFAULTTONEAREST);
+    }
+
+    POINT cursorPt = { 0 };
+    if (GetCursorPos(&cursorPt)) {
+        return MonitorFromPoint(cursorPt, MONITOR_DEFAULTTONEAREST);
+    }
+
+    HWND fg = GetForegroundWindow();
+    if (fg && IsWindow(fg)) {
+        return MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+    }
+
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        return MonitorFromWindow(g_hMainUiWnd, MONITOR_DEFAULTTONEAREST);
+    }
+
+    if (g_hwnd && IsWindow(g_hwnd)) {
+        return MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
+    }
+
+    return MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+}
+
+RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
+{
+    HDC screen = GetDC(NULL);
+    int dpiX = GetDeviceCaps(screen, LOGPIXELSX);
+    int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+    ReleaseDC(NULL, screen);
+
+    MONITORINFO mi = { sizeof(mi) };
+    HMONITOR hMon = ResolveStatusBarMonitor(anchorWindow);
+    GetMonitorInfo(hMon, &mi);
+
+    int workWidth = mi.rcWork.right - mi.rcWork.left;
+    int minWidth = MulDiv(332, dpiX, 96);
+    int width = (std::max)(minWidth, MeasureStatusBarContentWidth(message, dpiY));
+    int height = MulDiv(34, dpiY, 96);
+    width = (std::min)(width, workWidth - MulDiv(54, dpiX, 96));
+    width = (std::max)(width, minWidth);
+
+    int x = mi.rcWork.left + (workWidth - width) / 2;
+    int y = mi.rcWork.top + MulDiv(14, dpiY, 96);
+    return { x, y, x + width, y + height };
+}
+
+void UpdateStatusBarWindowRegion(HWND hwnd)
+{
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    int width = rc.right - rc.left;
+    int height = rc.bottom - rc.top;
+    HDC wndDC = GetDC(hwnd);
+    int dpiY = wndDC ? GetDeviceCaps(wndDC, LOGPIXELSY) : 96;
+    if (wndDC) ReleaseDC(hwnd, wndDC);
+    int radius = (std::min)(MulDiv(10, dpiY, 96), height / 2);
+    HRGN region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
+    SetWindowRgn(hwnd, region, TRUE);
+}
+
+void UpdateStatusBarPlacement(HWND hwnd, StatusBarData* pData)
+{
+    if (!pData) {
+        return;
+    }
+
+    int width = pData->targetBounds.right - pData->targetBounds.left;
+    int height = pData->targetBounds.bottom - pData->targetBounds.top;
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+
+    SetWindowPos(hwnd, HWND_TOPMOST,
+        pData->targetBounds.left, pData->targetBounds.top,
+        width, height,
+        SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+
+    UpdateStatusBarWindowRegion(hwnd);
+}
+
+void HideStatusBarOverlay(bool animate = false)
+{
+    if (!g_hStatusBarWnd || !IsWindow(g_hStatusBarWnd)) {
+        return;
+    }
+
+    KillTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER);
+    StatusBarData* pData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
+    if (!pData || !animate || !IsWindowVisible(g_hStatusBarWnd)) {
+        KillTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER);
+        if (pData) {
+            pData->currentAlpha = 0;
+            pData->targetAlpha = 0;
+        }
+        SetLayeredWindowAttributes(g_hStatusBarWnd, 0, 0, LWA_ALPHA);
+        ShowWindow(g_hStatusBarWnd, SW_HIDE);
+        return;
+    }
+    pData->targetAlpha = 0;
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 16, NULL);
+}
+
+void EnsureStatusBarWindow()
+{
+    if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
+        return;
+    }
+
+    const wchar_t STATUS_BAR_CLASS_NAME[] = L"AntiAFK-RBX-StatusBar";
+    static bool registered = false;
+
+    if (!registered) {
+        WNDCLASS wc = { 0 };
+        wc.lpfnWndProc = StatusBarWndProc;
+        wc.hInstance = g_hInst;
+        wc.lpszClassName = STATUS_BAR_CLASS_NAME;
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        if (!RegisterClass(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+            return;
+        }
+        registered = true;
+    }
+
+    g_hStatusBarWnd = CreateWindowEx(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+        STATUS_BAR_CLASS_NAME,
+        L"",
+        WS_POPUP,
+        0, 0, 360, 40,
+        NULL, NULL, g_hInst, NULL);
+}
+
+void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow)
+{
+    if (!g_statusBarEnabled.load()) {
+        return;
+    }
+
+    if (!g_hwnd || !IsWindow(g_hwnd)) {
+        return;
+    }
+
+    StatusBarPayload* payload = new StatusBarPayload{ message, durationMs, anchorWindow };
+    if (!PostMessage(g_hwnd, WM_APP_SHOW_STATUS_BAR, reinterpret_cast<WPARAM>(payload), 0)) {
+        delete payload;
+    }
+}
+
+void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow)
+{
+    if (!g_statusBarEnabled.load()) {
+        HideStatusBarOverlay(false);
+        return;
+    }
+
+    EnsureStatusBarWindow();
+    if (!g_hStatusBarWnd || !IsWindow(g_hStatusBarWnd)) {
+        return;
+    }
+
+    StatusBarData* pData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
+    if (!pData) {
+        return;
+    }
+
+    pData->message = message;
+    if (pData->hIcon) {
+        DestroyIcon(pData->hIcon);
+        pData->hIcon = NULL;
+    }
+    pData->hIcon = CreateCustomIcon();
+    pData->targetBounds = CalculateStatusBarBounds(anchorWindow, message);
+    bool wasVisible = IsWindowVisible(g_hStatusBarWnd) != FALSE;
+    UpdateStatusBarPlacement(g_hStatusBarWnd, pData);
+    KillTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER);
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER, (std::max)(durationMs, (UINT)700), NULL);
+
+    pData->targetAlpha = 255;
+    if (!wasVisible) {
+        pData->currentAlpha = 0;
+        SetLayeredWindowAttributes(g_hStatusBarWnd, 0, 0, LWA_ALPHA);
+        ShowWindow(g_hStatusBarWnd, SW_SHOWNOACTIVATE);
+    }
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 16, NULL);
+    InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
+    UpdateWindow(g_hStatusBarWnd);
+}
+
+void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
+{
+    if (!pData) {
+        return;
+    }
+
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+    g.SetPixelOffsetMode(PixelOffsetModeDefault);
+
+    const REAL width = (REAL)(clientRect.right - clientRect.left);
+    const REAL height = (REAL)(clientRect.bottom - clientRect.top);
+    const REAL radius = 9.0f;
+    const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+    const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+    const int iconLeftPx = MulDiv(10, dpiX, 96);
+    const int iconSizePx = MulDiv(14, dpiY, 96);
+    const int iconGapPx = MulDiv(10, dpiX, 96);
+    const int horizontalPaddingPx = MulDiv(12, dpiX, 96);
+
+    SolidBrush bodyBrush(Color(90, 16, 16, 16));
+    Pen borderPen(Color(58, 255, 255, 255), 1.0f);
+
+    FillRoundedRectangle(&g, &bodyBrush, 0.0f, 0.0f, width, height, radius);
+    DrawRoundedRectangle(&g, &borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f, radius);
+
+    Font brandFont(hdc, pData->hFontBrand);
+    Font textFont(hdc, pData->hFontText);
+    SolidBrush brandBrush(Color(255, 255, 255, 255));
+    SolidBrush textBrush(Color(255, 220, 220, 220));
+
+    const wchar_t* brand = L"AntiAFK-RBX";
+    const wchar_t* separator = L" \u2022 ";
+
+    REAL y = 0.0f;
+
+    StringFormat sfFixed;
+    sfFixed.SetAlignment(StringAlignmentNear);
+    sfFixed.SetLineAlignment(StringAlignmentCenter);
+    sfFixed.SetTrimming(StringTrimmingNone);
+    sfFixed.SetFormatFlags(StringFormatFlagsNoWrap);
+
+    StringFormat sfStatus;
+    sfStatus.SetAlignment(StringAlignmentNear);
+    sfStatus.SetLineAlignment(StringAlignmentCenter);
+    sfStatus.SetTrimming(StringTrimmingEllipsisCharacter);
+    sfStatus.SetFormatFlags(StringFormatFlagsNoWrap);
+
+    int brandWidthPx = MeasureTextWidth(hdc, pData->hFontBrand, brand);
+    int separatorWidthPx = MeasureTextWidth(hdc, pData->hFontText, separator);
+    int messageWidthPx = MeasureTextWidth(hdc, pData->hFontText, pData->message);
+
+    const REAL fixedTextLeft = (REAL)(iconLeftPx + iconSizePx + iconGapPx);
+    REAL availableTextWidth = (std::max)(0.0f, width - fixedTextLeft - (REAL)horizontalPaddingPx);
+    REAL textBlockWidth = (REAL)brandWidthPx + (REAL)separatorWidthPx + (REAL)messageWidthPx;
+    REAL x = fixedTextLeft;
+    if (textBlockWidth < availableTextWidth) {
+        x += (availableTextWidth - textBlockWidth) / 2.0f;
+    }
+
+    if (pData->hIcon) {
+        DrawIconEx(hdc, iconLeftPx, (int)((height - (REAL)iconSizePx) / 2.0f), pData->hIcon, iconSizePx, iconSizePx, 0, NULL, DI_NORMAL);
+    }
+
+    RectF brandRect(x, y, (REAL)brandWidthPx + 8.0f, height);
+    g.DrawString(brand, -1, &brandFont, brandRect, &sfFixed, &brandBrush);
+
+    x += (REAL)brandWidthPx;
+
+    RectF separatorRect(x, y, (REAL)separatorWidthPx + 4.0f, height);
+    g.DrawString(separator, -1, &textFont, separatorRect, &sfFixed, &textBrush);
+
+    x += (REAL)separatorWidthPx;
+
+    RectF statusRect(x, y, width - x - (REAL)horizontalPaddingPx, height);
+    g.DrawString(pData->message.c_str(), -1, &textFont, statusRect, &sfStatus, &textBrush);
+}
+
+LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    StatusBarData* pData = (StatusBarData*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+
+    switch (msg)
+    {
+    case WM_CREATE:
+    {
+        pData = new StatusBarData();
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
+
+        HDC screen = GetDC(NULL);
+        int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+        ReleaseDC(NULL, screen);
+
+        pData->hFontBrand = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hIcon = CreateCustomIcon();
+        pData->currentAlpha = 0;
+        pData->targetAlpha = 0;
+
+        EnableAcrylic(hwnd);
+        UpdateStatusBarWindowRegion(hwnd);
+        SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+
+        enum DWM_WINDOW_CORNER_PREFERENCE {
+            DWMWCP_DEFAULT = 0,
+            DWMWCP_DONOTROUND = 1,
+            DWMWCP_ROUND = 2,
+            DWMWCP_ROUNDSMALL = 3
+        };
+        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        return 0;
+    }
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_SIZE:
+        UpdateStatusBarWindowRegion(hwnd);
+        return 0;
+    case WM_MOUSEACTIVATE:
+        return MA_NOACTIVATE;
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;
+    case WM_TIMER:
+        if (!pData) {
+            return 0;
+        }
+
+        if (wParam == STATUS_BAR_HIDE_TIMER) {
+            KillTimer(hwnd, STATUS_BAR_HIDE_TIMER);
+            HideStatusBarOverlay(true);
+            return 0;
+        }
+        if (wParam == STATUS_BAR_ANIM_TIMER) {
+            int currentAlpha = (int)pData->currentAlpha;
+            int targetAlpha = (int)pData->targetAlpha;
+
+            if (currentAlpha < targetAlpha) {
+                currentAlpha = (std::min)(targetAlpha, currentAlpha + 28);
+            }
+            else if (currentAlpha > targetAlpha) {
+                currentAlpha = (std::max)(targetAlpha, currentAlpha - 24);
+            }
+
+            pData->currentAlpha = (BYTE)currentAlpha;
+            SetLayeredWindowAttributes(hwnd, 0, pData->currentAlpha, LWA_ALPHA);
+
+            if (pData->currentAlpha == pData->targetAlpha) {
+                KillTimer(hwnd, STATUS_BAR_ANIM_TIMER);
+                if (pData->currentAlpha == 0) {
+                    ShowWindow(hwnd, SW_HIDE);
+                }
+            }
+            return 0;
+        }
+        break;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        RECT clientRect;
+        GetClientRect(hwnd, &clientRect);
+
+        HDC hdc = BeginPaint(hwnd, &ps);
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
+        HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+
+        HBRUSH backBrush = CreateSolidBrush(RGB(16, 16, 16));
+        FillRect(memDC, &clientRect, backBrush);
+        DeleteObject(backBrush);
+        StatusBar_Paint(memDC, clientRect, pData);
+
+        BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
+
+        SelectObject(memDC, oldBMP);
+        DeleteObject(memBMP);
+        DeleteDC(memDC);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_DESTROY:
+        if (pData) {
+            KillTimer(hwnd, STATUS_BAR_HIDE_TIMER);
+            KillTimer(hwnd, STATUS_BAR_ANIM_TIMER);
+            if (pData->hIcon) DestroyIcon(pData->hIcon);
+            if (pData->hFontBrand) DeleteObject(pData->hFontBrand);
+            if (pData->hFontText) DeleteObject(pData->hFontText);
+            delete pData;
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)NULL);
+        }
+        g_hStatusBarWnd = NULL;
+        return 0;
+    default:
+        break;
+    }
+
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
 void MainUI_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -3406,82 +6340,412 @@ void MainUI_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isH
 
     DrawSharedCloseButton(&g, closeButtonRect, isHovering);
 }
-void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool checked, bool isHovering, float animState) {
+void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool checked, bool isHovering, float animState, bool hasRightNeighbor, const wchar_t* icon = nullptr) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
 
+    int iconOffset = 0;
+    if (icon) {
+        HFONT iconFontH = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font iconFont(hdc, iconFontH);
+        SolidBrush iconBrush(Color(255, 150, 150, 150));
+        int iconSize = 16;
+        int iconPadding = 3;
+        int iconY = rect.top + (rect.bottom - rect.top - iconSize) / 2 + 5 - iconPadding;
+        RectF iconRectF((REAL)16, (REAL)iconY, (REAL)(iconSize + iconPadding * 2), (REAL)(iconSize + iconPadding * 2));
+        StringFormat sfIcon;
+        sfIcon.SetAlignment(StringAlignmentCenter);
+        sfIcon.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(icon, -1, &iconFont, iconRectF, &sfIcon, &iconBrush);
+        DeleteObject(iconFontH);
+        iconOffset = iconSize + 10;
+    }
+
     Font gdiFont(hdc, font);
     SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-    StringFormat sf;
-    sf.SetAlignment(StringAlignmentNear);
-    sf.SetLineAlignment(StringAlignmentCenter);
-    RectF textRectF((REAL)20, (REAL)rect.top, (REAL)(rect.left - 10 - 20), (REAL)(rect.bottom - rect.top));
-    g.DrawString(text, -1, &gdiFont, textRectF, &sf, &textBrush);
+    StringFormat sfLeft;
+    sfLeft.SetAlignment(StringAlignmentNear);
+    sfLeft.SetLineAlignment(StringAlignmentCenter);
+    int labelWidth = rect.right - rect.left - 66 - iconOffset;
+    int labelMargin = 16 + iconOffset;
+    RectF labelRectF((REAL)labelMargin, (REAL)rect.top + 4, (REAL)labelWidth, (REAL)(rect.bottom - rect.top));
+    g.DrawString(text, -1, &gdiFont, labelRectF, &sfLeft, &textBrush);
 
-    int w = 50, h = 24;
-    RECT toggleBackRect = { rect.left, rect.top + (rect.bottom - rect.top - h) / 2, rect.left + w, rect.top + (rect.bottom - rect.top - h) / 2 + h };
+    int toggleW = 50, toggleH = 24;
+    int toggleX = rect.right - toggleW;
+    int toggleY = rect.top + (rect.bottom - rect.top - toggleH) / 2 + 4;
+    RECT toggleBackRect = { toggleX, toggleY, toggleX + toggleW, toggleY + toggleH };
 
-    Color baseColor = checked ? Color(255, 0, 122, 204) : Color(255, 80, 80, 80);
-    Color hoverColor(baseColor.GetA(), 
-                     static_cast<BYTE>(baseColor.GetR() * 0.85f), 
-                     static_cast<BYTE>(baseColor.GetG() * 0.85f), 
-                     static_cast<BYTE>(baseColor.GetB() * 0.85f));
+    SolidBrush backBrush(isHovering ? Color(140, 65, 65, 65) : Color(140, 45, 45, 45));
+    Pen borderPen(checked ? Color(255, 0, 122, 204) : Color(180, 80, 80, 80), checked ? 1.5f : 1.0f);
 
-    SolidBrush backBrush(isHovering ? hoverColor : baseColor);
     GraphicsPath path;
-    path.AddArc(toggleBackRect.left, toggleBackRect.top, h, h, 90, 180);
-    path.AddArc(toggleBackRect.right - h, toggleBackRect.top, h, h, 270, 180);
+    REAL r = 6.0f;
+    path.AddArc((REAL)toggleBackRect.left, (REAL)toggleBackRect.top, r * 2, r * 2, 180, 90);
+    path.AddLine((REAL)(toggleBackRect.left + r), (REAL)toggleBackRect.top, (REAL)toggleBackRect.right, (REAL)toggleBackRect.top);
+    path.AddLine((REAL)toggleBackRect.right, (REAL)toggleBackRect.top, (REAL)toggleBackRect.right, (REAL)toggleBackRect.bottom);
+    path.AddLine((REAL)toggleBackRect.right, (REAL)toggleBackRect.bottom, (REAL)(toggleBackRect.left + r), (REAL)toggleBackRect.bottom);
+    path.AddArc((REAL)toggleBackRect.left, (REAL)(toggleBackRect.bottom - r * 2), r * 2, r * 2, 90, 90);
     path.CloseFigure();
     g.FillPath(&backBrush, &path);
+    g.DrawPath(&borderPen, &path);
 
-    SolidBrush knobBrush(Color(255, 255, 255, 255));
-    int knobSize = h - 6;
-    int startX = toggleBackRect.left + 3;
-    int endX = toggleBackRect.right - knobSize - 3;
+    SolidBrush knobBrush(checked ? Color(255, 0, 122, 204) : Color(255, 140, 140, 140));
+    int knobSize = toggleH - 8;
+    int startX = toggleBackRect.left + 4;
+    int endX = toggleBackRect.right - knobSize - 4;
     int knobX = startX + (int)((endX - startX) * animState);
-    int knobY = toggleBackRect.top + 3;
+    int knobY = toggleBackRect.top + 4;
     g.FillEllipse(&knobBrush, knobX, knobY, knobSize, knobSize);
 }
-void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wchar_t* label, const wchar_t* value, bool isHovering) {
+void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wchar_t* label, const wchar_t* value, bool isHovering, bool hasRightNeighbor, const wchar_t* icon = nullptr) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
-    
+
     Font gdiFont(hdc, font);
     SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-    StringFormat sf;
-    sf.SetAlignment(StringAlignmentNear);
-    sf.SetLineAlignment(StringAlignmentCenter);
-    
-    RectF labelRectF((REAL)20, (REAL)rect.top, (REAL)(rect.left - 15 - 20), (REAL)(rect.bottom - rect.top));
-    g.DrawString(label, -1, &gdiFont, labelRectF, &sf, &textBrush);
+    StringFormat sfLeft;
+    sfLeft.SetAlignment(StringAlignmentNear);
+    sfLeft.SetLineAlignment(StringAlignmentCenter);
 
-    SolidBrush backBrush(isHovering ? Color(255, 65, 65, 65) : Color(255, 45, 45, 45));
-    Pen borderPen(Color(255, 80, 80, 80));
-    
-    FillRoundedRectangle(&g, &backBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top), 5);
-    DrawRoundedRectangle(&g, &borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top), 5);
+    int iconOffset = 0;
+    if (icon) {
+        HFONT iconFontH = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font iconFont(hdc, iconFontH);
+        SolidBrush iconBrush(Color(255, 150, 150, 150));
+        int iconSize = 16;
+        int iconPadding = 3;
+        int iconY = rect.top + (rect.bottom - rect.top - iconSize) / 2 + 1 - iconPadding;
+        RectF iconRectF((REAL)16, (REAL)iconY, (REAL)(iconSize + iconPadding * 2), (REAL)(iconSize + iconPadding * 2));
+        StringFormat sfIcon;
+        sfIcon.SetAlignment(StringAlignmentCenter);
+        sfIcon.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(icon, -1, &iconFont, iconRectF, &sfIcon, &iconBrush);
+        DeleteObject(iconFontH);
+        iconOffset = iconSize + 10;
+    }
+
+    int labelWidth = 150;
+    RectF labelRectF((REAL)(16 + iconOffset), (REAL)rect.top, (REAL)labelWidth, (REAL)(rect.bottom - rect.top));
+    g.DrawString(label, -1, &gdiFont, labelRectF, &sfLeft, &textBrush);
+
+    SolidBrush backBrush(isHovering ? Color(140, 65, 65, 65) : Color(140, 45, 45, 45));
+    Pen borderPen(Color(180, 80, 80, 80));
+
+    if (hasRightNeighbor) {
+        GraphicsPath path;
+        REAL r = 5.0f;
+        path.AddArc((REAL)rect.left, (REAL)rect.top, r * 2, r * 2, 180, 90);
+        path.AddLine((REAL)(rect.left + r), (REAL)rect.top, (REAL)rect.right, (REAL)rect.top);
+        path.AddLine((REAL)rect.right, (REAL)rect.top, (REAL)rect.right, (REAL)rect.bottom);
+        path.AddLine((REAL)rect.right, (REAL)rect.bottom, (REAL)(rect.left + r), (REAL)rect.bottom);
+        path.AddArc((REAL)rect.left, (REAL)(rect.bottom - r * 2), r * 2, r * 2, 90, 90);
+        path.CloseFigure();
+        g.FillPath(&backBrush, &path);
+        g.DrawPath(&borderPen, &path);
+    } else {
+        FillRoundedRectangle(&g, &backBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top), 5);
+        DrawRoundedRectangle(&g, &borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top), 5);
+    }
 
     RECT valueRect = rect;
     InflateRect(&valueRect, -8, 0);
     RectF valueRectF((REAL)valueRect.left, (REAL)valueRect.top, (REAL)(valueRect.right - valueRect.left), (REAL)(valueRect.bottom - valueRect.top));
-    g.DrawString(value, -1, &gdiFont, valueRectF, &sf, &textBrush);
+    g.DrawString(value, -1, &gdiFont, valueRectF, &sfLeft, &textBrush);
 
     Pen arrowPen(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)), 2.0f);
     int arrowX = rect.right - 15;
     int arrowY = rect.top + (rect.bottom - rect.top) / 2;
-    
     g.DrawLine(&arrowPen, (REAL)(arrowX - 4), (REAL)(arrowY - 2), (REAL)arrowX, (REAL)(arrowY + 2));
     g.DrawLine(&arrowPen, (REAL)arrowX, (REAL)(arrowY + 2), (REAL)(arrowX + 4), (REAL)(arrowY - 2));
+
+    if (hasRightNeighbor) {
+        Pen sepPen(Color(180, 80, 80, 80), 1.0f);
+        g.DrawLine(&sepPen, (REAL)rect.right, (REAL)(rect.top + 4), (REAL)rect.right, (REAL)(rect.bottom - 4));
+    }
+}
+void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    Color fillColor = isPrimary
+        ? (isHovering ? Color(170, 20, 142, 224) : Color(140, 0, 122, 204))
+        : (isHovering ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
+    Color borderColor = isPrimary ? Color(180, 0, 122, 204) : Color(80, 70, 70, 70);
+
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+    g.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g.DrawRectangle(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left - 1), (REAL)(rect.bottom - rect.top - 1));
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g.DrawString(text, -1, &textFont, rectF, &sf, &textBrush);
+}
+void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, const wchar_t* icon = nullptr)
+{
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    if (isHovering) {
+        SolidBrush hoverBrush(Color(45, 60, 60, 60));
+        g.FillRectangle(&hoverBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    }
+
+    HFONT iconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+    HFONT overlayIconFontH = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+    Font iconFont(hdc, iconFontH);
+    Font overlayIconFont(hdc, overlayIconFontH);
+    Font textFont(hdc, font);
+
+    SolidBrush iconBrush(Color(255, 150, 150, 150));
+    SolidBrush textBrush(Color(255, 220, 220, 220));
+    SolidBrush arrowBrush(Color(255, 150, 150, 150));
+
+    int contentLeft = rect.left + 20;
+    if (icon && icon[0] != L'\0') {
+        RectF iconRect((REAL)contentLeft, (REAL)rect.top, 16.0f, (REAL)(rect.bottom - rect.top));
+        StringFormat sfIcon;
+        sfIcon.SetAlignment(StringAlignmentCenter);
+        sfIcon.SetLineAlignment(StringAlignmentCenter);
+        size_t iconLen = wcslen(icon);
+        if (iconLen >= 2) {
+            wchar_t baseGlyph[2] = { icon[0], L'\0' };
+            wchar_t overlayGlyph[2] = { icon[1], L'\0' };
+            SolidBrush overlayBrush(Color(255, 150, 150, 150));
+            g.DrawString(baseGlyph, -1, &iconFont, iconRect, &sfIcon, &iconBrush);
+            PointF overlayPos((REAL)contentLeft - 2.0f, (REAL)rect.top + 14.0f);
+            g.DrawString(overlayGlyph, -1, &overlayIconFont, overlayPos, &overlayBrush);
+        } else {
+            g.DrawString(icon, -1, &iconFont, iconRect, &sfIcon, &iconBrush);
+        }
+        contentLeft += 24;
+    }
+
+    RectF textRect((REAL)contentLeft, (REAL)rect.top, (REAL)(rect.right - contentLeft - 40), (REAL)(rect.bottom - rect.top));
+    StringFormat sfText;
+    sfText.SetAlignment(StringAlignmentNear);
+    sfText.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(text, -1, &textFont, textRect, &sfText, &textBrush);
+
+    RectF arrowRect((REAL)(rect.right - 24), (REAL)rect.top, 12.0f, (REAL)(rect.bottom - rect.top));
+    StringFormat sfArrow;
+    sfArrow.SetAlignment(StringAlignmentCenter);
+    sfArrow.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE76C", -1, &iconFont, arrowRect, &sfArrow, &arrowBrush);
+
+    DeleteObject(iconFontH);
+    DeleteObject(overlayIconFontH);
+}
+
+void MainUI_Paint_DrawBackupCard(HDC hdc, const RECT& cardRect, HFONT font, bool importHover, bool exportHover)
+{
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    SolidBrush cardBrush(Color(90, 35, 35, 35));
+    Pen cardPen(Color(90, 80, 80, 80), 1.0f);
+    FillRoundedRectangle(&g, &cardBrush, (REAL)cardRect.left, (REAL)cardRect.top, (REAL)(cardRect.right - cardRect.left), (REAL)(cardRect.bottom - cardRect.top), 8);
+    DrawRoundedRectangle(&g, &cardPen, (REAL)cardRect.left, (REAL)cardRect.top, (REAL)(cardRect.right - cardRect.left), (REAL)(cardRect.bottom - cardRect.top), 8);
+
+    Font titleFont(hdc, font);
+    SolidBrush titleBrush(Color(255, 220, 220, 220));
+    StringFormat titleFmt;
+    titleFmt.SetAlignment(StringAlignmentCenter);
+    titleFmt.SetLineAlignment(StringAlignmentCenter);
+    RECT titleRect = { cardRect.left, cardRect.top + 2, cardRect.right, cardRect.top + 18 };
+    RectF titleRectF((REAL)titleRect.left, (REAL)titleRect.top, (REAL)(titleRect.right - titleRect.left), (REAL)(titleRect.bottom - titleRect.top));
+    g.DrawString(L"settings backups", -1, &titleFont, titleRectF, &titleFmt, &titleBrush);
+
+    int innerPadding = 6;
+    int gap = 1;
+    RECT importRect = { cardRect.left + innerPadding, cardRect.top + 20, cardRect.left + (cardRect.right - cardRect.left - innerPadding - gap) / 2, cardRect.bottom - innerPadding };
+    RECT exportRect = { importRect.right + gap, cardRect.top + 20, cardRect.right - innerPadding, cardRect.bottom - innerPadding };
+
+    MainUI_Paint_DrawActionButton(hdc, importRect, font, L"Import", importHover, false);
+    MainUI_Paint_DrawActionButton(hdc, exportRect, font, L"Export", exportHover, true);
+}
+
+void MainUI_Paint_DrawBackupButtonsRow(HDC hdc, const RECT& importRect, const RECT& exportRect, HFONT font, bool importHover, bool exportHover)
+{
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    RECT groupRect = { importRect.left, importRect.top, exportRect.right, importRect.bottom };
+    Color groupBorderColor(92, 72, 72, 72);
+    Color importFill = importHover ? Color(108, 58, 58, 58) : Color(84, 42, 42, 42);
+    Color exportFill = exportHover ? Color(108, 58, 58, 58) : Color(84, 42, 42, 42);
+
+    SolidBrush importBrush(importFill);
+    SolidBrush exportBrush(exportFill);
+    Pen borderPen(groupBorderColor, 1.0f);
+
+    g.FillRectangle(&importBrush, (REAL)importRect.left, (REAL)importRect.top, (REAL)(importRect.right - importRect.left), (REAL)(importRect.bottom - importRect.top));
+    g.FillRectangle(&exportBrush, (REAL)exportRect.left, (REAL)exportRect.top, (REAL)(exportRect.right - exportRect.left), (REAL)(exportRect.bottom - exportRect.top));
+
+    g.DrawRectangle(&borderPen, (REAL)groupRect.left, (REAL)groupRect.top, (REAL)(groupRect.right - groupRect.left - 1), (REAL)(groupRect.bottom - groupRect.top - 1));
+    g.DrawLine(&borderPen, (REAL)exportRect.left, (REAL)(groupRect.top + 1), (REAL)exportRect.left, (REAL)(groupRect.bottom - 2));
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+
+    RectF importRectF((REAL)importRect.left, (REAL)importRect.top, (REAL)(importRect.right - importRect.left), (REAL)(importRect.bottom - importRect.top));
+    RectF exportRectF((REAL)exportRect.left, (REAL)exportRect.top, (REAL)(exportRect.right - exportRect.left), (REAL)(exportRect.bottom - exportRect.top));
+    g.DrawString(L"Import", -1, &textFont, importRectF, &sf, &textBrush);
+    g.DrawString(L"Export", -1, &textFont, exportRectF, &sf, &textBrush);
+}
+void MainUI_Paint_DrawTripleActionButtonsRow(HDC hdc, const RECT& leftRect, const RECT& middleRect, const RECT& rightRect, HFONT font,
+    const wchar_t* leftText, const wchar_t* middleText, const wchar_t* rightText,
+    bool leftHover, bool middleHover, bool rightHover, bool rightPrimary)
+{
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    RECT groupRect = { leftRect.left, leftRect.top, rightRect.right, leftRect.bottom };
+    Color groupBorderColor(92, 72, 72, 72);
+    Color leftFill = leftHover ? Color(108, 58, 58, 58) : Color(84, 42, 42, 42);
+    Color middleFill = middleHover ? Color(108, 58, 58, 58) : Color(84, 42, 42, 42);
+    Color rightFill = rightPrimary
+        ? (rightHover ? Color(140, 20, 142, 224) : Color(110, 0, 122, 204))
+        : (rightHover ? Color(108, 58, 58, 58) : Color(84, 42, 42, 42));
+
+    SolidBrush leftBrush(leftFill);
+    SolidBrush middleBrush(middleFill);
+    SolidBrush rightBrush(rightFill);
+    Pen borderPen(groupBorderColor, 1.0f);
+    Pen primaryDividerPen(rightPrimary ? Color(150, 0, 122, 204) : groupBorderColor, 1.0f);
+
+    g.FillRectangle(&leftBrush, (REAL)leftRect.left, (REAL)leftRect.top, (REAL)(leftRect.right - leftRect.left), (REAL)(leftRect.bottom - leftRect.top));
+    g.FillRectangle(&middleBrush, (REAL)middleRect.left, (REAL)middleRect.top, (REAL)(middleRect.right - middleRect.left), (REAL)(middleRect.bottom - middleRect.top));
+    g.FillRectangle(&rightBrush, (REAL)rightRect.left, (REAL)rightRect.top, (REAL)(rightRect.right - rightRect.left), (REAL)(rightRect.bottom - rightRect.top));
+
+    g.DrawRectangle(&borderPen, (REAL)groupRect.left, (REAL)groupRect.top, (REAL)(groupRect.right - groupRect.left - 1), (REAL)(groupRect.bottom - groupRect.top - 1));
+    g.DrawLine(&borderPen, (REAL)middleRect.left, (REAL)(groupRect.top + 1), (REAL)middleRect.left, (REAL)(groupRect.bottom - 2));
+    g.DrawLine(&primaryDividerPen, (REAL)rightRect.left, (REAL)(groupRect.top + 1), (REAL)rightRect.left, (REAL)(groupRect.bottom - 2));
+
+    Font textFont(hdc, font);
+    SolidBrush textBrush(Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+
+    RectF leftRectF((REAL)leftRect.left, (REAL)leftRect.top, (REAL)(leftRect.right - leftRect.left), (REAL)(leftRect.bottom - leftRect.top));
+    RectF middleRectF((REAL)middleRect.left, (REAL)middleRect.top, (REAL)(middleRect.right - middleRect.left), (REAL)(middleRect.bottom - middleRect.top));
+    RectF rightRectF((REAL)rightRect.left, (REAL)rightRect.top, (REAL)(rightRect.right - rightRect.left), (REAL)(rightRect.bottom - rightRect.top));
+    g.DrawString(leftText, -1, &textFont, leftRectF, &sf, &textBrush);
+    g.DrawString(middleText, -1, &textFont, middleRectF, &sf, &textBrush);
+    g.DrawString(rightText, -1, &textFont, rightRectF, &sf, &textBrush);
+}
+static int MainUI_MeasureTextWidth(HDC hdc, HFONT font, const std::wstring& text) {
+    if (text.empty()) {
+        return 0;
+    }
+
+    HGDIOBJ oldFont = SelectObject(hdc, font);
+    SIZE textSize = { 0 };
+    GetTextExtentPoint32W(hdc, text.c_str(), (int)text.size(), &textSize);
+    SelectObject(hdc, oldFont);
+    return textSize.cx;
+}
+void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFONT inputFont, const wchar_t* label, const std::wstring& value, bool isHovering, bool isFocused, size_t* caretPos = nullptr, size_t* viewOffset = nullptr, const wchar_t* placeholder = nullptr) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    Font gdiInputFont(hdc, inputFont);
+    if (label && label[0] != L'\0') {
+        Font gdiLabelFont(hdc, labelFont);
+        SolidBrush labelBrush(Color(255, 170, 170, 170));
+        g.DrawString(label, -1, &gdiLabelFont, PointF((REAL)rect.left, (REAL)(rect.top - 18)), &labelBrush);
+    }
+
+    Color fillColor = isFocused ? Color(140, 55, 55, 55) : (isHovering ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45));
+    Color borderColor = isFocused ? Color(180, 0, 122, 204) : Color(180, 80, 80, 80);
+    SolidBrush fillBrush(fillColor);
+    Pen borderPen(borderColor, 1.0f);
+
+    g.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    g.DrawRectangle(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left - 1), (REAL)(rect.bottom - rect.top - 1));
+
+    const int textPaddingX = 12;
+    const int textAreaWidth = max(0, rect.right - rect.left - textPaddingX * 2);
+
+    size_t effectiveCaretPos = value.size();
+    size_t effectiveViewOffset = 0;
+    if (caretPos) {
+        effectiveCaretPos = min(*caretPos, value.size());
+        *caretPos = effectiveCaretPos;
+    }
+    if (viewOffset) {
+        effectiveViewOffset = min(*viewOffset, value.size());
+    }
+
+    if (isFocused && !value.empty()) {
+        if (effectiveCaretPos < effectiveViewOffset) {
+            effectiveViewOffset = effectiveCaretPos;
+        }
+        while (effectiveViewOffset < effectiveCaretPos) {
+            std::wstring caretWindow = value.substr(effectiveViewOffset, effectiveCaretPos - effectiveViewOffset);
+            if (MainUI_MeasureTextWidth(hdc, inputFont, caretWindow) <= textAreaWidth - 2) {
+                break;
+            }
+            ++effectiveViewOffset;
+        }
+    }
+    if (viewOffset) {
+        *viewOffset = effectiveViewOffset;
+    }
+
+    std::wstring visibleValue = value;
+    if (isFocused && effectiveViewOffset < value.size()) {
+        visibleValue = value.substr(effectiveViewOffset);
+        while (!visibleValue.empty() && MainUI_MeasureTextWidth(hdc, inputFont, visibleValue) > textAreaWidth) {
+            visibleValue.pop_back();
+        }
+    }
+
+    const wchar_t* effectivePlaceholder = placeholder ? placeholder : L"https://discord.com/api/webhooks/...";
+    std::wstring displayText = value.empty() ? effectivePlaceholder : visibleValue;
+    SolidBrush textBrush(value.empty() ? Color(255, 130, 130, 130) : Color(255, 255, 255, 255));
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    sf.SetFormatFlags(StringFormatFlagsNoWrap);
+    RectF textRect((REAL)(rect.left + textPaddingX), (REAL)rect.top, (REAL)(rect.right - rect.left - textPaddingX * 2), (REAL)(rect.bottom - rect.top));
+    g.DrawString(displayText.c_str(), -1, &gdiInputFont, textRect, &sf, &textBrush);
+
+    if (isFocused) {
+        std::wstring caretPrefix;
+        if (!value.empty() && effectiveCaretPos >= effectiveViewOffset) {
+            caretPrefix = value.substr(effectiveViewOffset, effectiveCaretPos - effectiveViewOffset);
+        }
+        REAL caretX = (REAL)(rect.left + textPaddingX) + min((REAL)textAreaWidth, (REAL)MainUI_MeasureTextWidth(hdc, inputFont, caretPrefix));
+        Pen caretPen(Color(255, 255, 255, 255), 1.0f);
+        g.DrawLine(&caretPen, caretX, (REAL)rect.top + 8.0f, caretX, (REAL)rect.bottom - 8.0f);
+    }
 }
 void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-    SolidBrush backBrush(isHovering ? Color(255, 80, 80, 80) : Color(255, 55, 55, 55));
-    Pen borderPen(Color(255, 90, 90, 90));
+    SolidBrush backBrush(isHovering ? Color(140, 80, 80, 80) : Color(140, 55, 55, 55));
+    Pen borderPen(Color(180, 90, 90, 90));
 
-    g.FillEllipse(&backBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
-    g.DrawEllipse(&borderPen, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    GraphicsPath path;
+    REAL r = 5.0f;
+    path.AddLine((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - r), (REAL)rect.top);
+    path.AddArc((REAL)(rect.right - r * 2), (REAL)rect.top, r * 2, r * 2, 270, 90);
+    path.AddArc((REAL)(rect.right - r * 2), (REAL)(rect.bottom - r * 2), r * 2, r * 2, 0, 90);
+    path.AddLine((REAL)(rect.right - r), (REAL)rect.bottom, (REAL)rect.left, (REAL)rect.bottom);
+    path.CloseFigure();
+    g.FillPath(&backBrush, &path);
+    g.DrawPath(&borderPen, &path);
 
     Font gdiFont(hdc, font);
     SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
@@ -3491,13 +6755,106 @@ void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isH
     RectF textRectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
     g.DrawString(L"?", -1, &gdiFont, textRectF, &sf, &textBrush);
 }
+void MainUI_Paint_DrawTableRow(HDC hdc, const RECT& rowRect, HFONT font, const wchar_t* label, bool isOddRow, const wchar_t* controlValue, bool isControlHovering, bool hasToggle, bool toggleChecked, float toggleAnim, bool hasDropdown, bool hasHelpButton, const RECT& helpButtonRect, bool isHelpHovering, const RECT& dropdownRect, bool isDropdownHovering, const RECT& toggleRect) {
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    Color rowBgColor = isOddRow ? Color(60, 55, 55, 55) : Color(40, 40, 40, 40);
+    SolidBrush rowBrush(rowBgColor);
+    g.FillRectangle(&rowBrush, (REAL)rowRect.left, (REAL)rowRect.top, (REAL)(rowRect.right - rowRect.left), (REAL)(rowRect.bottom - rowRect.top));
+    Pen sepPen(Color(80, 80, 80, 80), 1.0f);
+    g.DrawLine(&sepPen, (REAL)rowRect.left + 10, (REAL)rowRect.bottom, (REAL)rowRect.right, (REAL)rowRect.bottom);
+
+    Font gdiFont(hdc, font);
+    SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+    StringFormat sfLeft;
+    sfLeft.SetAlignment(StringAlignmentNear);
+    sfLeft.SetLineAlignment(StringAlignmentCenter);
+
+    int labelWidth = rowRect.right - rowRect.left - 70;
+    int labelMargin = 20;
+    RectF labelRectF((REAL)labelMargin, (REAL)rowRect.top, (REAL)labelWidth, (REAL)(rowRect.bottom - rowRect.top));
+    g.DrawString(label, -1, &gdiFont, labelRectF, &sfLeft, &textBrush);
+
+    int controlAreaLeft = labelMargin + labelWidth + 5;
+    int controlWidth = rowRect.right - controlAreaLeft - (hasHelpButton ? 32 : 10);
+
+    if (hasDropdown) {
+        SolidBrush ddBg(isControlHovering ? Color(140, 65, 65, 65) : Color(120, 45, 45, 45));
+        Pen ddBorder(Color(180, 80, 80, 80));
+        FillRoundedRectangle(&g, &ddBg, (REAL)dropdownRect.left, (REAL)dropdownRect.top, (REAL)(dropdownRect.right - dropdownRect.left), (REAL)(dropdownRect.bottom - dropdownRect.top), 5);
+        DrawRoundedRectangle(&g, &ddBorder, (REAL)dropdownRect.left, (REAL)dropdownRect.top, (REAL)(dropdownRect.right - dropdownRect.left), (REAL)(dropdownRect.bottom - dropdownRect.top), 5);
+
+        StringFormat sfDd;
+        sfDd.SetAlignment(StringAlignmentNear);
+        sfDd.SetLineAlignment(StringAlignmentCenter);
+        RectF ddValueRectF((REAL)(dropdownRect.left + 8), (REAL)dropdownRect.top, (REAL)(dropdownRect.right - dropdownRect.left - 25), (REAL)(dropdownRect.bottom - dropdownRect.top));
+        g.DrawString(controlValue, -1, &gdiFont, ddValueRectF, &sfDd, &textBrush);
+
+        Pen arrowPen(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)), 2.0f);
+        int arrowX = dropdownRect.right - 12;
+        int arrowY = dropdownRect.top + (dropdownRect.bottom - dropdownRect.top) / 2;
+        g.DrawLine(&arrowPen, (REAL)(arrowX - 4), (REAL)(arrowY - 2), (REAL)arrowX, (REAL)(arrowY + 2));
+        g.DrawLine(&arrowPen, (REAL)arrowX, (REAL)(arrowY + 2), (REAL)(arrowX + 4), (REAL)(arrowY - 2));
+    }
+    else if (hasToggle) {
+        int toggleW = 50, toggleH = 24;
+        int toggleX = toggleRect.right - toggleW;
+        int toggleY = toggleRect.top + (toggleRect.bottom - toggleRect.top - toggleH) / 2 + 4;
+        RECT toggleBackRect = { toggleX, toggleY, toggleX + toggleW, toggleY + toggleH };
+
+        SolidBrush toggleBrush(toggleChecked ? Color(255, 0, 122, 204) : Color(140, 80, 80, 80));
+        Pen toggleBorderPen(toggleChecked ? Color(255, 0, 122, 204) : Color(180, 80, 80, 80), toggleChecked ? 1.5f : 1.0f);
+
+        GraphicsPath path;
+        REAL r = 6.0f;
+        path.AddArc((REAL)toggleBackRect.left, (REAL)toggleBackRect.top, r * 2, r * 2, 180, 90);
+        path.AddLine((REAL)(toggleBackRect.left + r), (REAL)toggleBackRect.top, (REAL)toggleBackRect.right, (REAL)toggleBackRect.top);
+        path.AddLine((REAL)toggleBackRect.right, (REAL)toggleBackRect.top, (REAL)toggleBackRect.right, (REAL)toggleBackRect.bottom);
+        path.AddLine((REAL)toggleBackRect.right, (REAL)toggleBackRect.bottom, (REAL)(toggleBackRect.left + r), (REAL)toggleBackRect.bottom);
+        path.AddArc((REAL)toggleBackRect.left, (REAL)(toggleBackRect.bottom - r * 2), r * 2, r * 2, 90, 90);
+        path.CloseFigure();
+        g.FillPath(&toggleBrush, &path);
+        g.DrawPath(&toggleBorderPen, &path);
+
+        SolidBrush knobBrush(Color(255, 255, 255, 255));
+        int knobSize = toggleH - 8;
+        int startX = toggleBackRect.left + 4;
+        int endX = toggleBackRect.right - knobSize - 4;
+        int knobX = startX + (int)((endX - startX) * toggleAnim);
+        int knobY = toggleBackRect.top + 4;
+        g.FillEllipse(&knobBrush, knobX, knobY, knobSize, knobSize);
+    }
+    else if (!hasToggle && !hasDropdown && controlValue != nullptr && controlValue[0] != 0) {
+        int valueRightMargin = 20;
+        int valueWidth = 160;
+        int valueX = rowRect.right - valueWidth - valueRightMargin;
+        RectF valueRect((REAL)valueX, (REAL)rowRect.top, (REAL)valueWidth, (REAL)(rowRect.bottom - rowRect.top));
+        StringFormat sfValue;
+        sfValue.SetAlignment(StringAlignmentFar);
+        sfValue.SetLineAlignment(StringAlignmentCenter);
+        SolidBrush valueBrush(Color(255, 255, 255, 255));
+        g.DrawString(controlValue, -1, &gdiFont, valueRect, &sfValue, &valueBrush);
+    }
+
+    if (hasHelpButton) {
+        MainUI_Paint_DrawHelpButton(hdc, helpButtonRect, font, isHelpHovering);
+    }
+}
 void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     for (int i = 0; i < pData->navItems.size(); ++i) {
-        if (PtInRect(&pData->navItems[i].second, pt)) {
+        if (PtInRect(&pData->navItems[i].rect, pt)) {
+            pData->isDiscordWebhookInputFocused = false;
             pData->currentPage = i;
-            PostMessage(hwnd, WM_SIZE, 0, 0); 
+            InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
+    }
+
+    bool clickedDiscordInput = (pData->currentPage == 5 && PtInRect(&pData->discordWebhookInputRect, pt));
+    if (pData->isDiscordWebhookInputFocused && !clickedDiscordInput) {
+        pData->isDiscordWebhookInputFocused = false;
+        InvalidateRect(hwnd, &pData->discordWebhookInputRect, FALSE);
     }
 
     if (PtInRect(&pData->iconButtonRect, pt)) {
@@ -3514,8 +6871,113 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     }
 
     if (pData->currentPage == 2 && PtInRect(&pData->resetStatsButtonRect, pt)) {
-        PostMessage(g_hwnd, WM_APP + 12, 0, 0); 
+        PostMessage(g_hwnd, WM_APP + 12, 0, 0);
         return;
+    }
+
+    if (pData->currentPage == 0 && PtInRect(&pData->discordButtonRect, pt)) {
+        ShellExecute(NULL, L"open", L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
+        return;
+    }
+
+    if (pData->currentPage == 0 && PtInRect(&pData->importSettingsRect, pt)) {
+        PostMessage(g_hwnd, WM_COMMAND, ID_IMPORT_SETTINGS, 0);
+        return;
+    }
+
+    if (pData->currentPage == 0 && PtInRect(&pData->exportSettingsRect, pt)) {
+        PostMessage(g_hwnd, WM_COMMAND, ID_EXPORT_SETTINGS, 0);
+        return;
+    }
+
+    if (pData->currentPage == 0 && g_updateFound.load() && PtInRect(&pData->updateBannerRect, pt)) {
+        PostMessage(g_hwnd, WM_COMMAND, ID_UPDATE_AVAILABLE, 0);
+        return;
+    }
+
+    auto toggleDiscordFlag = [&](std::atomic<bool>& flag) {
+        flag = !flag.load();
+        if (&flag == &g_discordNotifyStart) {
+            g_discordNotifyStop = g_discordNotifyStart.load();
+        }
+        SaveSettings();
+        InvalidateRect(hwnd, NULL, FALSE);
+        };
+
+    if (pData->currentPage == 5) {
+        if (PtInRect(&pData->discordWebhookEnableToggleRect, pt)) {
+            toggleDiscordFlag(g_discordWebhookEnabled);
+            return;
+        }
+        if (PtInRect(&pData->discordWebhookInputRect, pt)) {
+            pData->isDiscordWebhookInputFocused = true;
+            pData->discordWebhookCaretPos = GetDiscordWebhookUrlCopy().size();
+            pData->discordWebhookViewOffset = min(pData->discordWebhookViewOffset, pData->discordWebhookCaretPos);
+            SetFocus(hwnd);
+            InvalidateRect(hwnd, &pData->discordWebhookInputRect, FALSE);
+            return;
+        }
+
+        if (PtInRect(&pData->discordWebhookPasteRect, pt)) {
+            std::wstring clipboardText;
+            if (!ReadUnicodeTextFromClipboard(hwnd, clipboardText)) {
+                ShowDarkMessageBox(hwnd, L"Clipboard does not contain Unicode text right now.", L"Discord Webhook", MB_OK | MB_ICONWARNING);
+                return;
+            }
+
+            SetDiscordWebhookUrl(clipboardText);
+            SaveSettings();
+            pData->isDiscordWebhookInputFocused = true;
+            pData->discordWebhookCaretPos = GetDiscordWebhookUrlCopy().size();
+            pData->discordWebhookViewOffset = pData->discordWebhookCaretPos;
+            SetFocus(hwnd);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+
+        if (PtInRect(&pData->discordWebhookClearRect, pt)) {
+            SetDiscordWebhookUrl(L"");
+            SaveSettings();
+            pData->isDiscordWebhookInputFocused = true;
+            pData->discordWebhookCaretPos = 0;
+            pData->discordWebhookViewOffset = 0;
+            SetFocus(hwnd);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+
+        if (PtInRect(&pData->discordWebhookTestRect, pt)) {
+            std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
+            if (!IsDiscordWebhookUrl(webhookUrl)) {
+                ShowDarkMessageBox(hwnd, L"Enter a valid Discord webhook URL first.", L"Discord Webhook", MB_OK | MB_ICONWARNING);
+                return;
+            }
+
+            std::wstring errorText;
+            DWORD statusCode = 0;
+            bool sent = SendDiscordWebhookRequest(
+                webhookUrl,
+                DiscordWebhookEvent::Test,
+                L"Manual test message from the Discord tab.",
+                &errorText,
+                &statusCode);
+
+            if (sent) {
+                wchar_t successMessage[96];
+                swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
+                ShowDarkMessageBox(hwnd, successMessage, L"Discord Webhook", MB_OK | MB_ICONINFORMATION);
+            } else {
+                ShowDarkMessageBox(hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"Discord Webhook", MB_OK | MB_ICONERROR);
+            }
+            return;
+        }
+
+        if (PtInRect(&pData->discordNotifyStartToggleRect, pt)) { toggleDiscordFlag(g_discordNotifyStart); return; }
+        if (PtInRect(&pData->discordNotifyActionToggleRect, pt)) { toggleDiscordFlag(g_discordNotifyAction); return; }
+        if (PtInRect(&pData->discordNotifyReconnectToggleRect, pt)) { toggleDiscordFlag(g_discordNotifyReconnect); return; }
+        if (PtInRect(&pData->discordNotifyErrorsToggleRect, pt)) { toggleDiscordFlag(g_discordNotifyErrors); return; }
+        if (PtInRect(&pData->discordDisableEmbedToggleRect, pt)) { toggleDiscordFlag(g_discordDisableEmbed); return; }
+        if (PtInRect(&pData->discordMentionOnErrorsToggleRect, pt)) { toggleDiscordFlag(g_discordMentionOnErrors); return; }
     }
 
     for (int i = 0; i < pData->helpButtonRects.size(); ++i) {
@@ -3523,24 +6985,43 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
             const wchar_t* title = L"Help";
             const wchar_t* text = L"No help text available for this setting.";
             if (pData->currentPage == 0) { // General
-                if (i == 0) { title = L"Interval"; text = L"How often to perform an Anti-AFK action. \nNote: Roblox kicks you after 20 minutes of inactivity."; }
-                if (i == 1) { title = L"Action"; text = L"The keypress to simulate to prevent being kicked."; }
-                if (i == 2) { title = L"Multi-Instance Support"; text = L"Allows running multiple Roblox clients at once. The Anti-AFK action will apply to all of them.\n\nHow to use:\n1. Close all Roblox clients\n2. Open AntiAFK-RBX\n3. Enable Multi-Instance Support\n4. Open Roblox clients"; }
-                if (i == 3) { title = L"Multi-Instance Interval"; text = L"Delay between processing each Roblox window in Multi-Instance mode. Use 'Minimum' for fastest switching, or add delays if you experience issues with rapid window switching."; }
-                if (i == 4) { title = L"User-Safe Mode"; text = L"Pauses the Anti-AFK action if you are actively using your computer to avoid interruptions. It waits for you to be idle before proceeding.\n\n'Legacy': Checks for mouse clicks and key presses.\n'Beta': Checks for any system-wide input, which is more reliable."; }
-                if (i == 5) { title = L"Restore Window"; text = L"How to return focus to your previous window after the action. \n\n'SetForeground' is recommended.\n'Alt+Tab' may work better for fullscreen games."; }
+                if (i == 0) { title = L"Interval"; text = L"Sets how often AntiAFK-RBX will do an action in Roblox so you are not marked as idle.\n\nRoblox usually kicks for inactivity after about 20 minutes, so this value should stay below that limit.\n\nRecommended: 9 minutes.\n\nA shorter interval means more frequent protection. A longer interval means fewer actions, but if it is too close to 20 minutes there is a higher chance of an AFK kick."; }
+                if (i == 1) { title = L"Action"; text = L"Selects which input AntiAFK-RBX will simulate to keep your Roblox session active.\n\nUse the option that behaves most naturally in your game. If one action is ignored or causes unwanted behavior, switch to another and test again."; }
+                if (i == 2) { title = L"Multi-Instance Support"; text = L"Enables Anti-AFK protection for multiple Roblox windows at the same time.\n\nWhen this is on, the app cycles through every detected Roblox client and performs the selected anti-idle action for each one.\n\nRecommended setup:\n1. Close all Roblox clients\n2. Open AntiAFK-RBX\n3. Turn on Multi-Instance Support\n4. Launch the Roblox clients you want to keep active"; }
+                if (i == 3) { title = L"Multi-Instance Interval"; text = L"Adds a delay between handling each Roblox window while Multi-Instance Support is enabled.\n\nUse 'Minimum' for the fastest switching speed. Increase the delay if windows are skipped, focus changes feel unstable, or Roblox does not react reliably on your PC."; }
+                if (i == 4) { title = L"User-Safe Mode"; text = L"Prevents AntiAFK-RBX from acting while you are actively using the computer.\n\nThis helps avoid interruptions when you are typing, clicking, or controlling the system yourself. The app waits until your input stops, then performs the anti-idle action.\n\nLegacy: checks keyboard and mouse activity.\nBeta: checks wider system input and is usually more reliable."; }
+                if (i == 5) { title = L"Restore Window"; text = L"Chooses how AntiAFK-RBX returns focus after briefly interacting with Roblox.\n\nSetForeground is the recommended default and works best for normal desktop use.\nAlt+Tab can work better in some fullscreen situations, but it is more intrusive because it simulates task switching.\nOff leaves focus behavior unchanged."; }
             } else if (pData->currentPage == 1) { // Automation
-                if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Automatically starts and stops the Anti-AFK function when Roblox is opened or closed."; }
-                if (i == 1) { title = L"Auto Reconnect"; text = L"Experimental: Automatically tries to Reconnect if you are kicked for being idle."; }
-                if (i == 2) { title = L"Auto Reset"; text = L"Sends Esc → R → Enter keys during each AFK action to reset/respawn your character."; }
-                if (i == 3) { title = L"Auto-Hide Roblox"; text = L"Automatically hides (does not minimize) all Roblox windows when Anti-AFK starts. This is useful for running Roblox in the background. You can also toggle window visibility via the tray menu without stopping or running Anti-AFK."; }
-                if (i == 4) { title = L"Bloxstrap/Fishstrap Integration"; text = L"Automatically starts AntiAFK-RBX when launching Roblox via Bloxstrap or Fishstrap, but does not start AntiAFK."; }
+                if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Automatically turns Anti-AFK on when Roblox is detected and turns it off again when Roblox closes.\n\nUse this if you want the protection to manage itself without pressing Start each time."; }
+                if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental feature (*) that tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nThis is useful for unattended sessions, but it depends on the reconnect screen being visible and detected correctly.\n\nNote: sometimes it may fail to click the reconnect button even when the screen is shown."; }
+                if (i == 2) { title = L"Auto Reset"; text = L"During each Anti-AFK cycle, the app sends the reset sequence: Esc, R, Enter.\n\nThis can respawn your character instead of only simulating a small movement or key press. Use it only in games where resetting is safe and intentional."; }
+                if (i == 3) { title = L"Auto-Hide Roblox"; text = L"Hides Roblox windows when Anti-AFK starts so they can run in the background without staying visible on screen.\n\nThis hides the windows instead of minimizing them. You can show them again later from the tray controls or the Utils tab."; }
+                if (i == 4) { title = L"Auto Opacity"; text = L"Automatically applies the 70% Roblox window opacity effect while AntiAFK-RBX is managing your session.\n\nUseful when new Roblox windows appear later and you want them to match the same translucent look without toggling opacity manually each time."; }
+                if (i == 5) { title = L"Auto Grid*"; text = L"Experimental feature (*) that automatically arranges Roblox windows into the grid layout when the set of detected Roblox windows changes.\n\nThis is especially helpful for multi-instance setups because newly opened clients will be snapped into place without using the tray action manually.\n\nNote: in rare cases it may bug or misplace windows. If that happens, disable it and use the manual Grid Snap action."; }
+                if (i == 6) { title = L"Fish/Void/Bloxstrap Integration"; text = L"When enabled, AntiAFK-RBX run and starts automatically when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap."; }
+                if (i == 7) { title = L"I can forget (smart auto-start)"; text = L"A safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for long inactivity. Around 18 minutes, it shows a reminder. Around 19 minutes, it starts Anti-AFK automatically to help avoid the 20-minute idle kick."; }
+                if (i == 8) { title = L"Do not sleep"; text = L"Stops Windows from putting the PC to sleep while Anti-AFK is active.\n\nUseful for long unattended sessions. On laptops, this can also prevent sleep-related behavior that would otherwise interrupt Roblox."; }
             } else if (pData->currentPage == 3) { // Advanced
-                if (i == 0) { title = L"FishStrap/Shaders Support"; text = L"Enables compatibility with modified clients (e.g., FishStrap) that use a different process name."; }
-                if (i == 1) { title = L"Update Checker"; text = L"Automatically checks for new versions on startup and notifies you if an update is available."; }
-                if (i == 2) { title = L"Use Legacy UI (Tray)"; text = L"Switches to the classic right-click tray menu. To return to new UI turn off \"Use Legacy UI (tray)\" in tray settings."; }
-                if (i == 3) { title = L"FPS Capper*"; text = L"Experimental & Beta: Limits Roblox's FPS to reduce CPU/GPU usage. \n\nWarning: This feature works by limiting the process's refresh rate, not the FPS directly. Therefore, the actual in-game FPS might fluctuate slightly (or not) from the set limit. "; }
-                if (i == 4) { title = L"Unlock FPS when focus"; text = L"Temporarily disables the FPS Capper* for the Roblox window you are currently playing on."; }
+                if (i == 0) { title = L"FishStrap/Shaders Support"; text = L"Legacy compatibility option.\n\nThis was mainly needed back when Fishstrap/shader-based setups were commonly used and Roblox detection could break.\n\nToday it usually has no benefit, but it is kept for older/edge setups. Leave it off unless you specifically need it."; }
+                if (i == 1) { title = L"Update Checker"; text = L"Checks for newer AntiAFK-RBX versions when the app starts and shows a notice if an update is available.\n\nDisable this only if you prefer to check for updates manually."; }
+                if (i == 2) { title = L"Use Legacy UI (Tray)"; text = L"Switches from the modern window interface to the older tray-menu style interface.\n\nThis is useful if you prefer the classic compact workflow. You can switch back later from the tray settings."; }
+                if (i == 3) { title = L"Status Bar*"; text = L"Experimental feature (*) that shows a small on-screen overlay for important events such as start, stop, reconnect actions, and other Anti-AFK status updates.\n\nThis is just an experimental UI feature. Disable it if you want a quieter experience with tray notifications only."; }
+                if (i == 4) { title = L"FPS Capper*"; text = L"Experimental feature (*) that reduces Roblox's frame rate to lower CPU and GPU usage.\n\nThis can save power and reduce heat during background sessions.\n\nNote: it works by limiting/influencing the Roblox process timing rather than enforcing an exact in-game FPS lock, so the FPS you see may fluctuate."; }
+                if (i == 5) { title = L"Unlock FPS when focus"; text = L"Temporarily disables the FPS cap for the Roblox window you are currently using.\n\nThis lets you keep low resource usage in the background while still getting normal responsiveness when you return to the game."; }
+                if (i == 6) { title = L"AutoMute Roblox"; text = L"Mutes Roblox automatically when Anti-AFK starts and restores audio when Anti-AFK stops.\n\nUseful if Roblox is running in the background and you do not want game sounds playing the whole time."; }
+                if (i == 7) { title = L"Unmute on focus"; text = L"Temporarily unmutes Roblox when you click back into a Roblox window, then mutes it again when focus is lost.\n\nThis works best together with AutoMute Roblox."; }
+            } else if (pData->currentPage == 4) { // Utils
+                if (i == 0) { title = L"Window Opacity"; text = L"Temporarily enables or disables the Roblox window opacity effect for this session only.\n\nThis does not change the saved setting from the other tabs and resets when the app is restarted."; }
+                if (i == 1) { title = L"Mute/UnMute Roblox"; text = L"Temporarily forces Roblox audio on or off for the current session.\n\nThis override does not save to settings and takes priority over the normal AutoMute behavior until the app is restarted."; }
+                if (i == 2) { title = L"Limit/Unlimit FPS*"; text = L"Experimental feature (*) that temporarily enables a session-only FPS limit for Roblox.\n\nThis Utils toggle works even if AntiAFK has not been started.\n\nWhen enabled, it uses the FPS value from Advanced -> FPS Capper. If Advanced FPS Capper is Off, it falls back to 5 FPS for this session.\n\nIf Unlock FPS when focus is enabled in Advanced, that behavior still applies here too.\n\nNote: the FPS limiting behavior works by influencing Roblox process timing, so the FPS you see may fluctuate.\n\nWhen you turn it off again, control returns to the normal Advanced -> FPS Capper setting.\n\nThis override does not change the saved Advanced setting and resets when AntiAFK-RBX is restarted."; }
+            } else if (pData->currentPage == 5) { // Discord
+                if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn this off if you want to keep the URL and options saved, but temporarily stop all webhook traffic."; }
+                if (i == 1) { title = L"Start / Stop"; text = L"Sends a Discord notification when AntiAFK starts and another when it stops.\n\nGood for basic remote monitoring without too many messages."; }
+                if (i == 2) { title = L"Action"; text = L"Sends a Discord notification after every Anti-AFK cycle.\n\nThis provides the most detailed activity log, but it can create a lot of messages if your interval is short."; }
+                if (i == 3) { title = L"Reconnect"; text = L"Sends a Discord notification whenever Auto Reconnect attempts to press the reconnect button.\n\nUseful if you want to know when Roblox needed recovery while you were away."; }
+                if (i == 4) { title = L"Errors"; text = L"Sends a Discord notification for important problems, such as Roblox not being found or a feature failing to run.\n\nRecommended if you want to be alerted only when something needs attention."; }
+                if (i == 5) { title = L"Disable embed"; text = L"Sends Discord webhook messages as plain one-line text instead of rich embeds.\n\nUseful for simple log channels, mobile previews, or webhook destinations where embeds are filtered or look too large."; }
+                if (i == 6) { title = L"Mention on errors"; text = L"Adds an @everyone mention only for Error and Reconnect webhook events.\n\nUseful if you want the whole channel to notice failures without pinging on normal status updates."; }
             }
             ShowDarkMessageBox(hwnd, text, title, MB_OK | MB_ICONINFORMATION);
             return;
@@ -3552,11 +7033,17 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     if (pData->currentPage == 1 && PtInRect(&pData->autoReconnectToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_RECONNECT, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->autoResetToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_RESET, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->autoHideToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_HIDE, 0); return; }
+    if (pData->currentPage == 1 && PtInRect(&pData->autoOpacityToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_OPACITY, 0); return; }
+    if (pData->currentPage == 1 && PtInRect(&pData->autoGridToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_GRID, 0); return; }
+    if (pData->currentPage == 1 && PtInRect(&pData->doNotSleepToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_DO_NOT_SLEEP, 0); return; }
 
     if (pData->currentPage == 3 && PtInRect(&pData->unlockFpsOnFocusToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UNLOCK_FPS_ON_FOCUS, 0); return; }
+    if (pData->currentPage == 3 && PtInRect(&pData->autoMuteToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_MUTE, 0); return; }
+    if (pData->currentPage == 3 && PtInRect(&pData->unmuteOnFocusToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UNMUTE_ON_FOCUS, 0); return; }
     if (pData->currentPage == 1 && PtInRect(&pData->bloxstrapIntegrationToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_BLOXSTRAP_INTEGRATION, 0); return; }
     if (pData->currentPage == 3 && PtInRect(&pData->fishstrapToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_FISHSTRAP_SUP, 0); return; }
     if (pData->currentPage == 3 && PtInRect(&pData->autoUpdateToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_UPDATE, 0); return; }
+    if (pData->currentPage == 3 && PtInRect(&pData->statusBarToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR, 0); return; }
     if (pData->currentPage == 3 && PtInRect(&pData->legacyUiToggleRect, pt)) {
         int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to switch to the legacy tray UI?\n\nThe modern UI window will be closed. To open it again, you will need to disable 'Use Legacy UI' from the tray menu and restart the application.", L"Switch to Legacy UI?", MB_YESNO | MB_ICONQUESTION);
         if (result == IDYES) {
@@ -3565,6 +7052,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
         }
         return;
     }
+    if (pData->currentPage == 1 && PtInRect(&pData->iCanForgetToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_I_CAN_FORGET, 0); return; }
 
 
     if (pData->currentPage == 0) { 
@@ -3669,11 +7157,46 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
         PostMessage(g_hwnd, WM_COMMAND, ID_RESET_SETTINGS, 0);
         return;
     }
+
+    if (pData->currentPage == 4) {
+        if (PtInRect(&pData->utilsShowRobloxRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_SHOW_ALL, 0); return; }
+        if (PtInRect(&pData->utilsHideRobloxRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_HIDE_ALL, 0); return; }
+        if (PtInRect(&pData->utilsGridSnapRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_GRID_SNAP, 0); return; }
+        if (PtInRect(&pData->utilsWindowOpacityRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_WINDOW_OPACITY, 0); return; }
+        if (PtInRect(&pData->utilsCloseAllRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_CLOSE_ALL, 0); return; }
+        if (PtInRect(&pData->utilsResetAllRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_RESET_ALL, 0); return; }
+        if (PtInRect(&pData->utilsTestActionRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TEST_ACTION, 0); return; }
+        if (PtInRect(&pData->utilsMuteToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_MUTE, 0); return; }
+        if (PtInRect(&pData->utilsFpsToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_FPS, 0); return; }
+    }
 }
 void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData) 
 {
+    bool needsRedraw = false;
+    const float animSpeed = 0.2f;
+
+    auto animateToggle = [&](float& val, bool target) {
+        float targetVal = target ? 1.0f : 0.0f;
+        if (abs(val - targetVal) > 0.001f) {
+            val += (targetVal - val) * animSpeed;
+            needsRedraw = true;
+            if (abs(val - targetVal) < 0.01f) val = targetVal;
+        }
+    };
+    auto animateFloat = [&](float& val, float targetVal) {
+        if (abs(val - targetVal) > 0.5f) {
+            val += (targetVal - val) * animSpeed;
+            needsRedraw = true;
+        } else {
+            val = targetVal;
+        }
+    };
+
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingMode::SmoothingModeAntiAlias);
+
+    pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
+    pData->iconButtonRect = { 0, 0, 46, 30 };
 
     RECT topBarRect = { 0, 0, clientRect.right, 30 };
     Pen headerLinePen(Color(40, 255, 255, 255));
@@ -3689,6 +7212,16 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     if (pData->hIcon) {
         DrawIconEx(hdc, pData->iconButtonRect.left + (pData->iconButtonRect.right - pData->iconButtonRect.left - 16) / 2, (pData->iconButtonRect.bottom - 16) / 2, pData->hIcon, 16, 16, 0, NULL, DI_NORMAL);
     }
+
+    if (pData->isHoveringClose) {
+        SolidBrush closeHoverBrush(Color(255, 232, 17, 35));
+        g.FillRectangle(&closeHoverBrush, (REAL)pData->closeButtonRect.left, (REAL)pData->closeButtonRect.top, (REAL)(pData->closeButtonRect.right - pData->closeButtonRect.left), (REAL)(pData->closeButtonRect.bottom - pData->closeButtonRect.top));
+    }
+    Pen closePen(Color(255, 255, 255, 255), 1.0f);
+    int cx = pData->closeButtonRect.left + 23;
+    int cy = 15;
+    g.DrawLine(&closePen, cx - 5, cy - 5, cx + 5, cy + 5);
+    g.DrawLine(&closePen, cx + 5, cy - 5, cx - 5, cy + 5);
 
     HFONT oldFont = (HFONT)SelectObject(hdc, pData->hFontTitle);
     SetTextColor(hdc, DARK_TEXT);
@@ -3723,83 +7256,417 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     BYTE r = (BYTE)(r_state * (1.0f - progress) + GetRValue(errorColor) * progress);
     BYTE gr = (BYTE)(g_state * (1.0f - progress) + GetGValue(errorColor) * progress);
     BYTE b = (BYTE)(b_state * (1.0f - progress) + GetBValue(errorColor) * progress);
-    SolidBrush startBrush(Color(255, r, gr, b));
+    SolidBrush startBrush(Color(100, r, gr, b));
 
-    RECT baseRect = pData->startButtonRect;
-    float scale = pData->startButtonScale;
-    int newWidth = (int)((baseRect.right - baseRect.left) * scale);
-    int newHeight = (int)((baseRect.bottom - baseRect.top) * scale);
-    int centerX = baseRect.left + (baseRect.right - baseRect.left) / 2;
-    int centerY = baseRect.top + (baseRect.bottom - baseRect.top) / 2;
+    g.FillRectangle(&startBrush, (REAL)pData->startButtonRect.left, (REAL)pData->startButtonRect.top, (REAL)(pData->startButtonRect.right - pData->startButtonRect.left), (REAL)(pData->startButtonRect.bottom - pData->startButtonRect.top));
+    
+    HFONT oldFont2 = (HFONT)SelectObject(hdc, pData->hFontSection);
+    StringFormat sfStart;
+    sfStart.SetAlignment(StringAlignmentCenter);
+    sfStart.SetLineAlignment(StringAlignmentCenter);
+    RectF startTextRectF((REAL)pData->startButtonRect.left, (REAL)pData->startButtonRect.top, (REAL)(pData->startButtonRect.right - pData->startButtonRect.left), (REAL)(pData->startButtonRect.bottom - pData->startButtonRect.top));
+    Font gdiSectionFont2(hdc, pData->hFontSection);
 
-    RECT scaledRect = { centerX - newWidth / 2, centerY - newHeight / 2, centerX + newWidth / 2, centerY + newHeight / 2 };
-
-    FillRoundedRectangle(&g, &startBrush, (REAL)scaledRect.left, (REAL)scaledRect.top, (REAL)(scaledRect.right - scaledRect.left), (REAL)(scaledRect.bottom - scaledRect.top), 8.0f * scale);
-    oldFont = (HFONT)SelectObject(hdc, pData->hFontSection);
-
-    RectF textRectF((REAL)scaledRect.left, (REAL)scaledRect.top, (REAL)(scaledRect.right - scaledRect.left), (REAL)(scaledRect.bottom - scaledRect.top));
-    Font gdiSectionFont(hdc, pData->hFontSection);
-
-   if (stateProgress < 1.0f) {
+    if (stateProgress < 1.0f) {
         SolidBrush prevTextBrush(Color((BYTE)(255 * (1.0f - stateProgress) * (1.0f - progress)), 255, 255, 255));
-        g.DrawString(prevText, -1, &gdiSectionFont, textRectF, &sf, &prevTextBrush);
+        g.DrawString(prevText, -1, &gdiSectionFont2, startTextRectF, &sfStart, &prevTextBrush);
     }
     if (stateProgress > 0.0f) {
         SolidBrush currentTextBrush(Color((BYTE)(255 * stateProgress * (1.0f - progress)), 255, 255, 255));
-        g.DrawString(startText, -1, &gdiSectionFont, textRectF, &sf, &currentTextBrush);
+        g.DrawString(startText, -1, &gdiSectionFont2, startTextRectF, &sfStart, &currentTextBrush);
     }
 
     if (progress > 0.0f && !pData->startButtonErrorText.empty()) {
         SolidBrush errorTextBrush(Color((BYTE)(255 * progress), 255, 255, 255));
-        g.DrawString(pData->startButtonErrorText.c_str(), -1, &gdiSectionFont, textRectF, &sf, &errorTextBrush);
+        g.DrawString(pData->startButtonErrorText.c_str(), -1, &gdiSectionFont2, startTextRectF, &sfStart, &errorTextBrush);
     }
+
+    SelectObject(hdc, oldFont2);
 
     RECT navBarRect = { 0, 30, clientRect.right, 60 };
     SolidBrush navBrush(Color(100, 35, 35, 35));
     g.FillRectangle(&navBrush, (REAL)navBarRect.left, (REAL)navBarRect.top, (REAL)(navBarRect.right - navBarRect.left), (REAL)(navBarRect.bottom - navBarRect.top));
 
+    const int margin = 20, rowH = 32, vGap = 10;
+    const int nav_bar_y = 30, nav_bar_h = 30;
+    const int startBtnH = 40;
+    const int content_y_start = nav_bar_y + nav_bar_h;
+    const int disclaimerH = 26;
+    int help_btn_size = 24;
+    int ctrlStartX = margin;
+    int ctrlEndX = clientRect.right - 20;
+    int y = content_y_start;
+
+    pData->helpButtonRects.clear();
+    pData->rowRects.clear();
+    
+    pData->startButtonRect = { 0, clientRect.bottom - startBtnH, clientRect.right, clientRect.bottom };
+    pData->disclaimerRect = { 0, clientRect.bottom - startBtnH - disclaimerH + 1, clientRect.right, clientRect.bottom - startBtnH + 1 };
+
+    if (pData->currentPage == 0) { // General
+        int ddW_interval = 166, ddW_action = 144, ddW_mi_interval = 143, ddW_user_safe = 181, ddW_restore = 161;
+        
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->intervalDropdownRect = { ctrlEndX - ddW_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->actionDropdownRect = { ctrlEndX - ddW_action - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->multiInstanceToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->multiInstanceIntervalDropdownRect = { ctrlEndX - ddW_mi_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->userSafeDropdownRect = { ctrlEndX - ddW_user_safe - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->restoreMethodDropdownRect = { ctrlEndX - ddW_restore - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+        pData->updateBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
+    } else if (pData->currentPage == 1) { // Automation
+        int toggleW = ctrlEndX - ctrlStartX - help_btn_size;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoStartToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoReconnectToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoResetToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoHideToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoOpacityToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoGridToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->bloxstrapIntegrationToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->iCanForgetToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->doNotSleepToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+    } else if (pData->currentPage == 2) { // Statistics
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        y += rowH + vGap;
+
+        pData->resetStatsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+    } else if (pData->currentPage == 3) { // Advanced
+        int ddW_fps = 173;
+        int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->fishstrapToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoUpdateToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->legacyUiToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->statusBarToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->fpsCapperDropdownRect = { ctrlEndX - ddW_fps - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->unlockFpsOnFocusToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->autoMuteToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->unmuteOnFocusToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+        } else if (pData->currentPage == 5) { // Discord
+            const int noteH = 26;
+            const int buttonGap = 0;
+            int toggleW = ctrlEndX - ctrlStartX - help_btn_size;
+            int buttonW = clientRect.right / 3;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordWebhookEnableToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->discordPayloadInfoRect = { 0, y, clientRect.right, y + noteH };
+            y += noteH - 1;
+
+            pData->discordWebhookInputRect = { 0, y, clientRect.right, y + rowH };
+            y += rowH - 1;
+
+            pData->discordWebhookPasteRect = { 0, y, buttonW, y + rowH };
+            pData->discordWebhookClearRect = { pData->discordWebhookPasteRect.right + buttonGap, y, pData->discordWebhookPasteRect.right + buttonGap + buttonW, y + rowH };
+            pData->discordWebhookTestRect = { pData->discordWebhookClearRect.right + buttonGap, y, clientRect.right, y + rowH };
+            y += rowH;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyStartToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyActionToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyReconnectToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyErrorsToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordDisableEmbedToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordMentionOnErrorsToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+    } else if (pData->currentPage == 4) { // Utils
+        int toggleCtrlW = ctrlEndX - ctrlStartX - help_btn_size;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsShowRobloxRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsHideRobloxRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsGridSnapRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsWindowOpacityRect = { ctrlStartX, y, ctrlStartX + toggleCtrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsCloseAllRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsResetAllRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsTestActionRect = { 0, y, clientRect.right, y + rowH + vGap };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsMuteToggleRect = { ctrlStartX, y, ctrlStartX + toggleCtrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->utilsFpsToggleRect = { ctrlStartX, y, ctrlStartX + toggleCtrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+    }
+
+    const int total_nav_w = clientRect.right;
+    const int collapsed_w = 48;
+
+    const bool isHoveringAnotherTab = pData->hoveringNavItem != -1 && pData->hoveringNavItem != pData->currentPage;
+    auto shouldExpandNavItem = [&](size_t index) {
+        if (pData->hoveringNavItem != -1) {
+            return pData->hoveringNavItem == (int)index;
+        }
+        return pData->currentPage == (int)index;
+    };
+
+    int num_expanded = 0;
+    for (size_t i = 0; i < pData->navItems.size(); ++i) {
+        if (shouldExpandNavItem(i)) {
+            num_expanded++;
+        }
+    }
+
+    int expanded_w = num_expanded > 0 ? (total_nav_w - (int)(pData->navItems.size() - num_expanded) * collapsed_w) / num_expanded : total_nav_w / (int)pData->navItems.size();
+
+    int current_x = 0;
+    for (size_t i = 0; i < pData->navItems.size(); ++i) {
+        int target_w = shouldExpandNavItem(i) ? expanded_w : collapsed_w;
+
+        if (pData->navItems[i].currentWidth == 0.0f) pData->navItems[i].currentWidth = (float)target_w;
+        
+        if (abs(pData->navItems[i].currentWidth - (float)target_w) > 0.5f) {
+            pData->navItems[i].currentWidth += ((float)target_w - pData->navItems[i].currentWidth) * animSpeed;
+            needsRedraw = true;
+        } else {
+            pData->navItems[i].currentWidth = (float)target_w;
+        }
+
+        int draw_w = (int)pData->navItems[i].currentWidth;
+        if (i == pData->navItems.size() - 1) draw_w = total_nav_w - current_x;
+
+        pData->navItems[i].rect = { current_x, nav_bar_y, current_x + draw_w, nav_bar_y + nav_bar_h };
+        current_x += draw_w;
+    }
+
     for (size_t i = 0; i < pData->navItems.size(); ++i) {
         bool isSelected = (pData->currentPage == i);
         bool isHovering = (pData->hoveringNavItem == i);
+        bool isExpanded = shouldExpandNavItem(i);
 
         HFONT fontToUse = pData->hFontNav;
         Color textColor(255, 160, 160, 160);
 
         if (isSelected) {
             fontToUse = pData->hFontNavSelected;
-            textColor = Color(255, 255, 255, 255);
+            textColor = isHoveringAnotherTab ? Color(255, 220, 220, 220) : Color(255, 255, 255, 255);
         } else if (isHovering) {
             textColor = Color(255, 230, 230, 230);
         }
-        
+
         Font navFont(hdc, fontToUse);
         SolidBrush navBrush(textColor);
-        RectF navItemRect((REAL)pData->navItems[i].second.left, (REAL)pData->navItems[i].second.top, (REAL)(pData->navItems[i].second.right - pData->navItems[i].second.left), (REAL)(pData->navItems[i].second.bottom - pData->navItems[i].second.top));
-        g.DrawString(pData->navItems[i].first.c_str(), -1, &navFont, navItemRect, &sf, &navBrush);
+        RectF navItemRect((REAL)pData->navItems[i].rect.left, (REAL)pData->navItems[i].rect.top, (REAL)(pData->navItems[i].rect.right - pData->navItems[i].rect.left), (REAL)(pData->navItems[i].rect.bottom - pData->navItems[i].rect.top));
+
+        StringFormat sfIcon;
+        sfIcon.SetAlignment(StringAlignmentCenter);
+        sfIcon.SetLineAlignment(StringAlignmentCenter);
+
+        Font navIconFont(hdc, pData->hFontNavIcon);
+
+        if (isExpanded && pData->navItems[i].currentWidth > collapsed_w + 10) {
+            RectF iconRect = navItemRect;
+            iconRect.Width = (REAL)collapsed_w;
+            g.DrawString(pData->navItems[i].icon.c_str(), -1, &navIconFont, iconRect, &sfIcon, &navBrush);
+
+            RectF textRect = navItemRect;
+            textRect.X += (REAL)collapsed_w;
+            textRect.Width -= (REAL)collapsed_w;
+
+            StringFormat sfText;
+            sfText.SetAlignment(StringAlignmentNear);
+            sfText.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(pData->navItems[i].title.c_str(), -1, &navFont, textRect, &sfText, &navBrush);
+        } else {
+            g.DrawString(pData->navItems[i].icon.c_str(), -1, &navIconFont, navItemRect, &sfIcon, &navBrush);
+        }
     }
+    SolidBrush underlineTrackBrush(Color(90, 65, 65, 65));
+    RECT navTrackRect = { 0, navBarRect.bottom - 1, clientRect.right, navBarRect.bottom };
+    g.FillRectangle(&underlineTrackBrush, (REAL)navTrackRect.left, (REAL)navTrackRect.top, (REAL)(navTrackRect.right - navTrackRect.left), (REAL)(navTrackRect.bottom - navTrackRect.top));
 
     SolidBrush underlineBrush(Color(255, 0, 122, 204));
-    RECT navUnderlineRect = { (int)pData->navIndicatorX, navBarRect.bottom - 2, (int)(pData->navIndicatorX + pData->navIndicatorWidth), navBarRect.bottom };
+    RECT navUnderlineRect = { (int)pData->navIndicatorX, navBarRect.bottom - 1, (int)(pData->navIndicatorX + pData->navIndicatorWidth), navBarRect.bottom };
     g.FillRectangle(&underlineBrush, (REAL)navUnderlineRect.left, (REAL)navUnderlineRect.top, (REAL)(navUnderlineRect.right - navUnderlineRect.left), (REAL)(navUnderlineRect.bottom - navUnderlineRect.top));
 
-    const int content_y_start = pData->startButtonRect.bottom + 20;
+
     const int content_x_start = 20;
     if (pData->currentPage == 0) { // General
+        int rowCount = (int)pData->rowRects.size();
+        int rowLeft = 0;
+        int rowRight = clientRect.right;
+        for (int i = 0; i < rowCount; i++) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rowLeft, (REAL)rr.bottom - 1, (REAL)rowRight, (REAL)rr.bottom - 1);
+        }
 
         wchar_t buffer[64];
         swprintf_s(buffer, L"%d sec (%d min)", g_selectedTime, g_selectedTime / 60);
-        MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval);
+        MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval, true, L"\uE916");
 
         const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)" };
-        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[g_selectedAction], pData->isHoveringAction);
+        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[g_selectedAction], pData->isHoveringAction, true, L"\uE7C9");
 
         const wchar_t* userSafeNames[] = { L"Off", L"Legacy", L"Beta" };
-        MainUI_Paint_DrawDropdown(hdc, pData->userSafeDropdownRect, pData->hFontText, L"User-Safe Mode", userSafeNames[g_userSafeMode], pData->isHoveringUserSafe);
+        MainUI_Paint_DrawDropdown(hdc, pData->userSafeDropdownRect, pData->hFontText, L"User-Safe Mode", userSafeNames[g_userSafeMode], pData->isHoveringUserSafe, true, L"\uE72E");
 
         const wchar_t* restoreNames[] = { L"Off", L"SetForeground", L"Alt+Tab" };
-        MainUI_Paint_DrawDropdown(hdc, pData->restoreMethodDropdownRect, pData->hFontText, L"Restore Window", restoreNames[g_restoreMethod], pData->isHoveringRestore);
+        MainUI_Paint_DrawDropdown(hdc, pData->restoreMethodDropdownRect, pData->hFontText, L"Restore Window", restoreNames[g_restoreMethod], pData->isHoveringRestore, true, L"\uE73F");
 
-        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance Support", g_multiSupport.load(), PtInRect(&pData->multiInstanceToggleRect, pData->hoverPoint), pData->multiInstanceAnim);
+        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance Support", g_multiSupport.load(), PtInRect(&pData->multiInstanceToggleRect, pData->hoverPoint), pData->multiInstanceAnim, true, L"\uE81E");
 
         const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
         int miIntervalIndex = 0;
@@ -3807,82 +7674,230 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         else if (g_multiInstanceInterval == 3000) miIntervalIndex = 2;
         else if (g_multiInstanceInterval == 5000) miIntervalIndex = 3;
         else if (g_multiInstanceInterval == 10000) miIntervalIndex = 4;
-        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Interval", miIntervalNames[miIntervalIndex], pData->isHoveringMultiInstanceInterval);
+        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Interval", miIntervalNames[miIntervalIndex], pData->isHoveringMultiInstanceInterval, true, L"\uE916");
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
         }
+
+        SolidBrush backupInfoBgBrush(Color(30, 35, 35, 35));
+        Pen backupInfoBorderPen(Color(60, 70, 70, 70), 1.0f);
+        g.FillRectangle(&backupInfoBgBrush, (REAL)pData->backupMessageRect.left, (REAL)pData->backupMessageRect.top, (REAL)(pData->backupMessageRect.right - pData->backupMessageRect.left), (REAL)(pData->backupMessageRect.bottom - pData->backupMessageRect.top));
+        g.DrawLine(&backupInfoBorderPen, (REAL)pData->backupMessageRect.left, (REAL)pData->backupMessageRect.bottom - 1, (REAL)pData->backupMessageRect.right - 1, (REAL)pData->backupMessageRect.bottom - 1);
+        g.DrawLine(&backupInfoBorderPen, (REAL)pData->backupMessageRect.left, (REAL)pData->backupMessageRect.top, (REAL)pData->backupMessageRect.left, (REAL)pData->backupMessageRect.bottom - 1);
+        g.DrawLine(&backupInfoBorderPen, (REAL)pData->backupMessageRect.right - 1, (REAL)pData->backupMessageRect.top, (REAL)pData->backupMessageRect.right - 1, (REAL)pData->backupMessageRect.bottom - 1);
+
+        Font backupInfoFont(hdc, pData->hFontSmall);
+        SolidBrush backupInfoTextBrush(Color(255, 140, 140, 140));
+        RectF backupInfoTextRect(12.0f, (REAL)pData->backupMessageRect.top, (REAL)(pData->backupMessageRect.right - 24), (REAL)(pData->backupMessageRect.bottom - pData->backupMessageRect.top));
+        StringFormat sfBackupInfoText;
+        sfBackupInfoText.SetAlignment(StringAlignmentCenter);
+        sfBackupInfoText.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"Import or Export your current settings here.", -1, &backupInfoFont, backupInfoTextRect, &sfBackupInfoText, &backupInfoTextBrush);
+
+        MainUI_Paint_DrawBackupButtonsRow(hdc, pData->importSettingsRect, pData->exportSettingsRect, pData->hFontText, pData->isHoveringImportSettings, pData->isHoveringExportSettings);
+
+        if (g_updateFound.load() || g_updateCheckFailed.load()) {
+            bool checkFailed = g_updateCheckFailed.load() && !g_updateFound.load();
+            Color updateBannerBgColor = checkFailed ? (pData->isHoveringUpdateBanner ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40)) : (pData->isHoveringUpdateBanner ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40));
+            SolidBrush updateBannerBgBrush(updateBannerBgColor);
+            g.FillRectangle(&updateBannerBgBrush, (REAL)pData->updateBannerRect.left, (REAL)pData->updateBannerRect.top, (REAL)(pData->updateBannerRect.right - pData->updateBannerRect.left), (REAL)(pData->updateBannerRect.bottom - pData->updateBannerRect.top));
+            Pen updateBannerSepPen(Color(100, 80, 80, 80), 1.0f);
+            g.DrawLine(&updateBannerSepPen, (REAL)pData->updateBannerRect.left, (REAL)pData->updateBannerRect.top, (REAL)pData->updateBannerRect.right, (REAL)pData->updateBannerRect.top);
+
+            HFONT updateBannerIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+            Font updateBannerIconFont(hdc, updateBannerIconFontH);
+            SolidBrush updateBannerIconBrush(checkFailed ? Color(255, 210, 120, 80) : Color(255, 80, 200, 120));
+            int updateBannerIconSize = 11;
+            int updateBannerIconPadding = 2;
+            int updateBannerIconX = pData->updateBannerRect.left + 20;
+            int updateBannerIconY = pData->updateBannerRect.top + (pData->updateBannerRect.bottom - pData->updateBannerRect.top - updateBannerIconSize) / 2 - updateBannerIconPadding + 2;
+            RectF updateBannerIconRect((REAL)updateBannerIconX, (REAL)updateBannerIconY, (REAL)(updateBannerIconSize + updateBannerIconPadding * 2), (REAL)(updateBannerIconSize + updateBannerIconPadding * 2));
+            StringFormat sfUpdateBannerIcon;
+            sfUpdateBannerIcon.SetAlignment(StringAlignmentCenter);
+            sfUpdateBannerIcon.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(checkFailed ? L"\uEA39" : L"\uE896", -1, &updateBannerIconFont, updateBannerIconRect, &sfUpdateBannerIcon, &updateBannerIconBrush);
+            DeleteObject(updateBannerIconFontH);
+
+            Font updateBannerTextFont(hdc, pData->hFontText);
+            SolidBrush updateBannerTextBrush(Color(255, 220, 220, 220));
+            int updateBannerTextX = updateBannerIconX + updateBannerIconSize + updateBannerIconPadding * 2 + 10;
+            RectF updateBannerTextRect((REAL)updateBannerTextX, (REAL)pData->updateBannerRect.top, (REAL)(pData->updateBannerRect.right - updateBannerTextX - 30), (REAL)32);
+            StringFormat sfUpdateBannerText;
+            sfUpdateBannerText.SetAlignment(StringAlignmentNear);
+            sfUpdateBannerText.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(checkFailed ? L"Error to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
+
+            HFONT updateBannerArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+            Font updateBannerArrowFont(hdc, updateBannerArrowFontH);
+            SolidBrush updateBannerArrowBrush(Color(255, 150, 150, 150));
+            int updateBannerArrowSize = 9;
+            int updateBannerArrowPadding = 2;
+            int updateBannerArrowX = pData->updateBannerRect.right - 20 - updateBannerArrowSize - updateBannerArrowPadding * 2;
+            int updateBannerArrowY = pData->updateBannerRect.top + (pData->updateBannerRect.bottom - pData->updateBannerRect.top - updateBannerArrowSize) / 2 - updateBannerArrowPadding + 1;
+            RectF updateBannerArrowRect((REAL)updateBannerArrowX, (REAL)updateBannerArrowY, (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2), (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2));
+            StringFormat sfUpdateBannerArrow;
+            sfUpdateBannerArrow.SetAlignment(StringAlignmentCenter);
+            sfUpdateBannerArrow.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(L"\uE76C", -1, &updateBannerArrowFont, updateBannerArrowRect, &sfUpdateBannerArrow, &updateBannerArrowBrush);
+            DeleteObject(updateBannerArrowFontH);
+        }
+
+        Color discordBgColor = pData->isHoveringDiscord ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
+        SolidBrush discordBgBrush(discordBgColor);
+        g.FillRectangle(&discordBgBrush, (REAL)pData->discordButtonRect.left, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - pData->discordButtonRect.left), (REAL)(pData->discordButtonRect.bottom - pData->discordButtonRect.top));
+        Pen discordSepPen(Color(100, 80, 80, 80), 1.0f);
+        g.DrawLine(&discordSepPen, (REAL)pData->discordButtonRect.left, (REAL)pData->discordButtonRect.top, (REAL)pData->discordButtonRect.right, (REAL)pData->discordButtonRect.top);
+
+        HFONT discordIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font discordIconFont(hdc, discordIconFontH);
+        SolidBrush discordIconBrush(Color(255, 88, 101, 242));
+        int discordIconSize = 11;
+        int discordIconPadding = 2;
+        int discordIconX = pData->discordButtonRect.left + 20;
+        int discordIconY = pData->discordButtonRect.top + (pData->discordButtonRect.bottom - pData->discordButtonRect.top - discordIconSize) / 2 - discordIconPadding + 2;
+        RectF discordIconRect((REAL)discordIconX, (REAL)discordIconY, (REAL)(discordIconSize + discordIconPadding * 2), (REAL)(discordIconSize + discordIconPadding * 2));
+        StringFormat sfDiscordIcon;
+        sfDiscordIcon.SetAlignment(StringAlignmentCenter);
+        sfDiscordIcon.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE8BD", -1, &discordIconFont, discordIconRect, &sfDiscordIcon, &discordIconBrush);
+        DeleteObject(discordIconFontH);
+
+        Font discordTextFont(hdc, pData->hFontText);
+        SolidBrush discordTextBrush(Color(255, 220, 220, 220));
+        int discordTextX = discordIconX + discordIconSize + discordIconPadding * 2 + 10;
+        RectF discordTextRect((REAL)discordTextX, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)32);
+        StringFormat sfDiscordText;
+        sfDiscordText.SetAlignment(StringAlignmentNear);
+        sfDiscordText.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
+
+        HFONT discordArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font discordArrowFont(hdc, discordArrowFontH);
+        SolidBrush discordArrowBrush(Color(255, 150, 150, 150));
+        int discordArrowSize = 9;
+        int discordArrowPadding = 2;
+        int discordArrowX = pData->discordButtonRect.right - 20 - discordArrowSize - discordArrowPadding * 2;
+        int discordArrowY = pData->discordButtonRect.top + (pData->discordButtonRect.bottom - pData->discordButtonRect.top - discordArrowSize) / 2 - discordArrowPadding + 1;
+        RectF discordArrowRect((REAL)discordArrowX, (REAL)discordArrowY, (REAL)(discordArrowSize + discordArrowPadding * 2), (REAL)(discordArrowSize + discordArrowPadding * 2));
+        StringFormat sfDiscordArrow;
+        sfDiscordArrow.SetAlignment(StringAlignmentCenter);
+        sfDiscordArrow.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE76C", -1, &discordArrowFont, discordArrowRect, &sfDiscordArrow, &discordArrowBrush);
+        DeleteObject(discordArrowFontH);
     }
     else if (pData->currentPage == 1) { // Automation
-        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Auto-Start AntiAFK", g_autoStartAfk.load(), PtInRect(&pData->autoStartToggleRect, pData->hoverPoint), pData->autoStartAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, L"Auto Reconnect", g_autoReconnect.load(), PtInRect(&pData->autoReconnectToggleRect, pData->hoverPoint), pData->autoReconnectAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Auto Reset (Esc+R+Enter)", g_autoReset.load(), PtInRect(&pData->autoResetToggleRect, pData->hoverPoint), pData->autoResetAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->autoHideToggleRect, pData->hFontText, L"Auto-Hide Roblox", g_autoHideRoblox.load(), PtInRect(&pData->autoHideToggleRect, pData->hoverPoint), pData->autoHideAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Bloxstrap/Fishstrap Integration", g_bloxstrapIntegration.load(), PtInRect(&pData->bloxstrapIntegrationToggleRect, pData->hoverPoint), pData->bloxstrapIntegrationAnim);
+        int rowCount = 9;
+        int rowLeft = 0;
+        int rowRight = clientRect.right;
+        for (int i = 0; i < rowCount; i++) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rowLeft, (REAL)rr.bottom - 1, (REAL)rowRight, (REAL)rr.bottom - 1);
+        }
+
+        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Auto-Start AntiAFK", g_autoStartAfk.load(), PtInRect(&pData->autoStartToggleRect, pData->hoverPoint), pData->autoStartAnim, true, L"\uE768");
+        MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, L"Auto Reconnect*", g_autoReconnect.load(), PtInRect(&pData->autoReconnectToggleRect, pData->hoverPoint), pData->autoReconnectAnim, true, L"\uE8AF");
+        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Auto Reset (Esc+R+Enter)", g_autoReset.load(), PtInRect(&pData->autoResetToggleRect, pData->hoverPoint), pData->autoResetAnim, true, L"\uE81C");
+        MainUI_Paint_DrawToggle(hdc, pData->autoHideToggleRect, pData->hFontText, L"Auto-Hide Roblox", g_autoHideRoblox.load(), PtInRect(&pData->autoHideToggleRect, pData->hoverPoint), pData->autoHideAnim, true, L"\uEE47");
+        MainUI_Paint_DrawToggle(hdc, pData->autoOpacityToggleRect, pData->hFontText, L"Auto Opacity (70%)", g_autoOpacity.load(), PtInRect(&pData->autoOpacityToggleRect, pData->hoverPoint), pData->autoOpacityAnim, true, L"\uE727");
+        MainUI_Paint_DrawToggle(hdc, pData->autoGridToggleRect, pData->hFontText, L"Auto Grid Roblox*", g_autoGrid.load(), PtInRect(&pData->autoGridToggleRect, pData->hoverPoint), pData->autoGridAnim, true, L"\uE80A");
+        MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Fish/Void/Bloxstrap Integration", g_bloxstrapIntegration.load(), PtInRect(&pData->bloxstrapIntegrationToggleRect, pData->hoverPoint), pData->bloxstrapIntegrationAnim, true, L"\uE71B");
+        MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, L"I can forget (smart auto-start)", g_afkReminderEnabled.load(), PtInRect(&pData->iCanForgetToggleRect, pData->hoverPoint), pData->iCanForgetAnim, true, L"\uE916");
+        MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, L"Do not sleep", g_doNotSleep.load(), PtInRect(&pData->doNotSleepToggleRect, pData->hoverPoint), pData->doNotSleepAnim, true, L"\uE708");
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
         }
     }
     else if (pData->currentPage == 2) { // Statistics
-        auto drawStatCard = [&](const RECT& cardRect, const wchar_t* icon, const wchar_t* label, const wchar_t* value, Color accentColor) {
-            GraphicsPath path;
-            REAL r = 8.0f;
-            path.AddArc((REAL)cardRect.left, (REAL)cardRect.top, r * 2, r * 2, 180, 90);
-            path.AddArc((REAL)cardRect.right - r * 2, (REAL)cardRect.top, r * 2, r * 2, 270, 90);
-            path.AddArc((REAL)cardRect.right - r * 2, (REAL)cardRect.bottom - r * 2, r * 2, r * 2, 0, 90);
-            path.AddArc((REAL)cardRect.left, (REAL)cardRect.bottom - r * 2, r * 2, r * 2, 90, 90);
-            path.CloseFigure();
+        int rowCount = pData->rowRects.size();
+        int rowLeft = 0;
+        int rowRight = clientRect.right;
+        for (int i = 0; i < rowCount; i++) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rowLeft, (REAL)rr.bottom - 1, (REAL)rowRight, (REAL)rr.bottom - 1);
+        }
 
-            Color startColor(80, accentColor.GetR(), accentColor.GetG(), accentColor.GetB());
-            Color endColor(0, 45, 45, 45);
-            LinearGradientBrush gradBrush(Point(cardRect.left, cardRect.top), Point(cardRect.right, cardRect.bottom), startColor, endColor);
-            g.FillPath(&gradBrush, &path);
+        HFONT statIconFontH = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font statIconFont(hdc, statIconFontH);
+        SolidBrush statIconBrush(Color(255, 150, 150, 150));
+        int statIconSize = 12;
+        int statIconPadding = 2;
 
-            Pen borderPen(Color(128, accentColor.GetR(), accentColor.GetG(), accentColor.GetB()), 1.5f);
-            g.DrawPath(&borderPen, &path);
-
-            HFONT iconFontH = CreateFontW(-MulDiv(28, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
-            Font iconFont(hdc, iconFontH);
-            SolidBrush whiteBrush(Color(255, 255, 255, 255));
-            RectF iconRect((REAL)cardRect.left + 15, (REAL)cardRect.top + 15, (REAL)cardRect.right - 15 - (cardRect.left + 15), (REAL)50 - 15);
-            g.DrawString(icon, -1, &iconFont, iconRect, &sf, &whiteBrush);
-            DeleteObject(iconFontH);
-
-            Font valFont(hdc, pData->hFontSection);
-            RectF valueRect((REAL)cardRect.left, (REAL)cardRect.top + 48, (REAL)cardRect.right - cardRect.left, (REAL)75 - 48);
-            g.DrawString(value, -1, &valFont, valueRect, &sf, &whiteBrush);
-
-            Font lblFont(hdc, pData->hFontText);
-            SolidBrush grayBrush(Color(255, 200, 200, 200));
-            RectF labelRect((REAL)cardRect.left, (REAL)valueRect.GetBottom(), (REAL)cardRect.right - cardRect.left, (REAL)cardRect.bottom - valueRect.GetBottom() - 5);
-            g.DrawString(label, -1, &lblFont, labelRect, &sf, &grayBrush);
+        auto drawStatIcon = [&](const RECT& rowRect, const wchar_t* icon, int verticalOffset = 0, int extraBoxSize = 0, int horizontalOffset = 0) {
+            int iconBoxSize = statIconSize + statIconPadding * 2 + extraBoxSize;
+            int iconY = rowRect.top + (rowRect.bottom - rowRect.top - iconBoxSize) / 2 + verticalOffset;
+            RectF iconRectF((REAL)(20 + horizontalOffset), (REAL)iconY, (REAL)iconBoxSize, (REAL)iconBoxSize);
+            StringFormat sfIcon;
+            sfIcon.SetAlignment(StringAlignmentCenter);
+            sfIcon.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(icon, -1, &statIconFont, iconRectF, &sfIcon, &statIconBrush);
         };
 
-        const int card_gap = 15;
-        int card_w = (clientRect.right - content_x_start * 2 - card_gap) / 2;
-        int card_h = 100;
-        int y_stat = content_y_start;
+        drawStatIcon(pData->rowRects[0], L"\uE916");
+        drawStatIcon(pData->rowRects[1], L"\uE8EE");
+        drawStatIcon(pData->rowRects[2], L"\uE787");
+        drawStatIcon(pData->rowRects[3], L"\uE7FC");
+        drawStatIcon(pData->rowRects[4], L"\uE823", 1, 6, -2);
+        drawStatIcon(pData->rowRects[5], L"\uE715");
+        drawStatIcon(pData->rowRects[6], L"\uE7E8");
+        drawStatIcon(pData->rowRects[7], L"\uE121");
+
+        DeleteObject(statIconFontH);
+
+        Font labelFont(hdc, pData->hFontText);
+        SolidBrush labelBrush(Color(255, 220, 220, 220));
+        StringFormat sfLabel;
+        sfLabel.SetAlignment(StringAlignmentNear);
+        sfLabel.SetLineAlignment(StringAlignmentCenter);
+        int labelX = 20 + statIconSize + statIconPadding * 2 + 10;
+        int labelWidth = 180;
+
+        RectF lblRect0((REAL)labelX, (REAL)pData->rowRects[0].top, (REAL)labelWidth, (REAL)(pData->rowRects[0].bottom - pData->rowRects[0].top));
+        g.DrawString(L"Total AFK Time", -1, &labelFont, lblRect0, &sfLabel, &labelBrush);
+        RectF lblRect1((REAL)labelX, (REAL)pData->rowRects[1].top, (REAL)labelWidth, (REAL)(pData->rowRects[1].bottom - pData->rowRects[1].top));
+        g.DrawString(L"Actions Performed", -1, &labelFont, lblRect1, &sfLabel, &labelBrush);
+        RectF lblRect2((REAL)labelX, (REAL)pData->rowRects[2].top, (REAL)labelWidth, (REAL)(pData->rowRects[2].bottom - pData->rowRects[2].top));
+        g.DrawString(L"Last Action", -1, &labelFont, lblRect2, &sfLabel, &labelBrush);
+        RectF lblRect3((REAL)labelX, (REAL)pData->rowRects[3].top, (REAL)labelWidth, (REAL)(pData->rowRects[3].bottom - pData->rowRects[3].top));
+        g.DrawString(L"Auto Reconnects", -1, &labelFont, lblRect3, &sfLabel, &labelBrush);
+        RectF lblRect4((REAL)labelX, (REAL)pData->rowRects[4].top, (REAL)labelWidth, (REAL)(pData->rowRects[4].bottom - pData->rowRects[4].top));
+        g.DrawString(L"Longest Session", -1, &labelFont, lblRect4, &sfLabel, &labelBrush);
+        RectF lblRect5((REAL)labelX, (REAL)pData->rowRects[5].top, (REAL)labelWidth, (REAL)(pData->rowRects[5].bottom - pData->rowRects[5].top));
+        g.DrawString(L"Webhooks Sent", -1, &labelFont, lblRect5, &sfLabel, &labelBrush);
+        RectF lblRect6((REAL)labelX, (REAL)pData->rowRects[6].top, (REAL)labelWidth, (REAL)(pData->rowRects[6].bottom - pData->rowRects[6].top));
+        g.DrawString(L"Program Launches", -1, &labelFont, lblRect6, &sfLabel, &labelBrush);
+        RectF lblRect7((REAL)labelX, (REAL)pData->rowRects[7].top, (REAL)labelWidth, (REAL)(pData->rowRects[7].bottom - pData->rowRects[7].top));
+        g.DrawString(L"AFK Sessions", -1, &labelFont, lblRect7, &sfLabel, &labelBrush);
 
         wchar_t buffer[128];
-
-        RECT cardRect1 = { content_x_start, y_stat, content_x_start + card_w, y_stat + card_h };
-        RECT cardRect2 = { cardRect1.right + card_gap, y_stat, cardRect1.right + card_gap + card_w, y_stat + card_h };
-        y_stat += card_h + card_gap;
-        RECT cardRect3 = { content_x_start, y_stat, content_x_start + card_w, y_stat + card_h };
-        RECT cardRect4 = { cardRect3.right + card_gap, y_stat, cardRect3.right + card_gap + card_w, y_stat + card_h };
+        Font valFont(hdc, pData->hFontText);
+        SolidBrush valueBrush(Color(255, 255, 255, 255));
+        StringFormat sfValue;
+        sfValue.SetAlignment(StringAlignmentFar);
+        sfValue.SetLineAlignment(StringAlignmentCenter);
+        int valueRightMargin = 20;
+        int valueWidth = 180;
 
         uint64_t total_seconds = g_totalAfkTimeSeconds.load();
         if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
             total_seconds += (GetTickCount64() - g_afkStartTime.load()) / 1000;
         }
-        int hours = total_seconds / 3600;
-        int minutes = (total_seconds % 3600) / 60;
-        swprintf_s(buffer, L"%d h %d min", hours, minutes);
-        drawStatCard(cardRect1, L"\uE916", L"Total AFK Time", buffer, Color(255, 0, 122, 204));
+        std::wstring totalAfkTimeText = FormatDurationShort(total_seconds);
+        RectF valRect0((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[0].top, (REAL)valueWidth, (REAL)(pData->rowRects[0].bottom - pData->rowRects[0].top));
+        g.DrawString(totalAfkTimeText.c_str(), -1, &valFont, valRect0, &sfValue, &valueBrush);
 
         swprintf_s(buffer, L"%llu", g_afkActionsPerformed.load());
-        drawStatCard(cardRect2, L"\uE8EE", L"Actions Performed", buffer, Color(255, 138, 43, 226));
+        RectF valRect1((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[1].top, (REAL)valueWidth, (REAL)(pData->rowRects[1].bottom - pData->rowRects[1].top));
+        g.DrawString(buffer, -1, &valFont, valRect1, &sfValue, &valueBrush);
 
         uint64_t lastActionTimestamp = g_lastAfkActionTimestamp.load();
         if (lastActionTimestamp > 0) {
@@ -3892,62 +7907,296 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             else swprintf_s(buffer, L"%llu hours ago", elapsed / 3600);
         } else {
             wcscpy_s(buffer, L"Never");
-        } 
-        drawStatCard(cardRect3, L"\uE787", L"Last Action", buffer, Color(255, 204, 51, 102));
+        }
+        RectF valRect2((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[2].top, (REAL)valueWidth, (REAL)(pData->rowRects[2].bottom - pData->rowRects[2].top));
+        g.DrawString(buffer, -1, &valFont, valRect2, &sfValue, &valueBrush);
 
         swprintf_s(buffer, L"%llu", g_autoReconnectsPerformed.load());
-        drawStatCard(cardRect4, L"\uE7FC", L"Auto Reconnects", buffer, Color(255, 34, 177, 76)); 
+        RectF valRect3((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[3].top, (REAL)valueWidth, (REAL)(pData->rowRects[3].bottom - pData->rowRects[3].top));
+        g.DrawString(buffer, -1, &valFont, valRect3, &sfValue, &valueBrush);
 
-        SolidBrush resetStatsBrush(pData->isHoveringResetStats ? Color(150, 90, 90, 90) : Color(100, 70, 70, 70));
-        FillRoundedRectangle(&g, &resetStatsBrush, (REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)(pData->resetStatsButtonRect.right - pData->resetStatsButtonRect.left), (REAL)(pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top), 5.0f);
-        
-        Font sectionFont(hdc, pData->hFontSection);
-        SolidBrush textBrush(Color(255, 220, 220, 220));
-        RectF resetStatsRectF((REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)(pData->resetStatsButtonRect.right - pData->resetStatsButtonRect.left), (REAL)(pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top));
-        g.DrawString(L"Reset Statistics", -1, &sectionFont, resetStatsRectF, &sf, &textBrush);
+        std::wstring longestSessionText = FormatDurationShort(g_longestAfkSessionSeconds.load());
+        RectF valRect4((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[4].top, (REAL)valueWidth, (REAL)(pData->rowRects[4].bottom - pData->rowRects[4].top));
+        g.DrawString(longestSessionText.c_str(), -1, &valFont, valRect4, &sfValue, &valueBrush);
+
+        swprintf_s(buffer, L"%llu", g_discordWebhooksSent.load());
+        RectF valRect5((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[5].top, (REAL)valueWidth, (REAL)(pData->rowRects[5].bottom - pData->rowRects[5].top));
+        g.DrawString(buffer, -1, &valFont, valRect5, &sfValue, &valueBrush);
+
+        swprintf_s(buffer, L"%llu", g_programLaunches.load());
+        RectF valRect6((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[6].top, (REAL)valueWidth, (REAL)(pData->rowRects[6].bottom - pData->rowRects[6].top));
+        g.DrawString(buffer, -1, &valFont, valRect6, &sfValue, &valueBrush);
+
+        swprintf_s(buffer, L"%llu", g_afkSessionsCompleted.load());
+        RectF valRect7((REAL)(clientRect.right - valueWidth - valueRightMargin), (REAL)pData->rowRects[7].top, (REAL)valueWidth, (REAL)(pData->rowRects[7].bottom - pData->rowRects[7].top));
+        g.DrawString(buffer, -1, &valFont, valRect7, &sfValue, &valueBrush);
+
+        Color resetBgColor = pData->isHoveringResetStats ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
+        SolidBrush resetStatsBgBrush(resetBgColor);
+        g.FillRectangle(&resetStatsBgBrush, (REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)(pData->resetStatsButtonRect.right - pData->resetStatsButtonRect.left), (REAL)(pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top));
+
+        Pen resetSepPen(Color(100, 80, 80, 80), 1.0f);
+        g.DrawLine(&resetSepPen, (REAL)pData->resetStatsButtonRect.left, (REAL)pData->resetStatsButtonRect.top, (REAL)pData->resetStatsButtonRect.right, (REAL)pData->resetStatsButtonRect.top);
+
+        HFONT resetIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font resetIconFont(hdc, resetIconFontH);
+        SolidBrush resetIconBrush(Color(255, 200, 80, 80));
+        int resetIconSize = 11;
+        int resetIconPadding = 2;
+        int resetIconX = pData->resetStatsButtonRect.left + 20;
+        int resetIconY = pData->resetStatsButtonRect.top + (pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top - resetIconSize) / 2 - resetIconPadding + 1;
+        RectF resetIconRect((REAL)resetIconX, (REAL)resetIconY, (REAL)(resetIconSize + resetIconPadding * 2), (REAL)(resetIconSize + resetIconPadding * 2));
+        StringFormat sfResetIcon;
+        sfResetIcon.SetAlignment(StringAlignmentCenter);
+        sfResetIcon.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE74D", -1, &resetIconFont, resetIconRect, &sfResetIcon, &resetIconBrush);
+        DeleteObject(resetIconFontH);
+
+        Font resetTextFont(hdc, pData->hFontText);
+        SolidBrush resetTextBrush(Color(255, 220, 220, 220));
+        int resetTextX = resetIconX + resetIconSize + resetIconPadding * 2 + 10;
+        int resetTextWidth = pData->resetStatsButtonRect.right - resetTextX - 20 - (9 + 4);
+        RectF resetTextRect((REAL)resetTextX, (REAL)pData->resetStatsButtonRect.top, (REAL)resetTextWidth, (REAL)32);
+        StringFormat sfResetText;
+        sfResetText.SetAlignment(StringAlignmentNear);
+        sfResetText.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"Reset Statistics", -1, &resetTextFont, resetTextRect, &sfResetText, &resetTextBrush);
+
+        HFONT resetArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font resetArrowFont(hdc, resetArrowFontH);
+        SolidBrush resetArrowBrush(Color(255, 150, 150, 150));
+        int resetArrowSize = 9;
+        int resetArrowPadding = 2;
+        int resetArrowX = pData->resetStatsButtonRect.right - 20 - resetArrowSize - resetArrowPadding * 2;
+        int resetArrowY = pData->resetStatsButtonRect.top + (pData->resetStatsButtonRect.bottom - pData->resetStatsButtonRect.top - resetArrowSize) / 2 - resetArrowPadding + 1;
+        RectF resetArrowRect((REAL)resetArrowX, (REAL)resetArrowY, (REAL)(resetArrowSize + resetArrowPadding * 2), (REAL)(resetArrowSize + resetArrowPadding * 2));
+        StringFormat sfResetArrow;
+        sfResetArrow.SetAlignment(StringAlignmentCenter);
+        sfResetArrow.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE76C", -1, &resetArrowFont, resetArrowRect, &sfResetArrow, &resetArrowBrush);
+        DeleteObject(resetArrowFontH);
 
     }
     else if (pData->currentPage == 3) { // Advanced
-        MainUI_Paint_DrawToggle(hdc, pData->fishstrapToggleRect, pData->hFontText, L"FishStrap/Shaders Support", g_fishstrapSupport.load(), PtInRect(&pData->fishstrapToggleRect, pData->hoverPoint), pData->fishstrapAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->autoUpdateToggleRect, pData->hFontText, L"Update Checker", g_autoUpdate.load(), PtInRect(&pData->autoUpdateToggleRect, pData->hoverPoint), pData->autoUpdateAnim);
-        MainUI_Paint_DrawToggle(hdc, pData->legacyUiToggleRect, pData->hFontText, L"Use Legacy UI (Tray)", g_useLegacyUi.load(), PtInRect(&pData->legacyUiToggleRect, pData->hoverPoint), pData->legacyUiAnim);
+        int rowCount = pData->rowRects.size();
+        int rowLeft = 0;
+        int rowRight = clientRect.right;
+        for (int i = 0; i < rowCount; i++) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rowLeft, (REAL)rr.bottom - 1, (REAL)rowRight, (REAL)rr.bottom - 1);
+        }
+
+        MainUI_Paint_DrawToggle(hdc, pData->fishstrapToggleRect, pData->hFontText, L"FishStrap/Shaders Support", g_fishstrapSupport.load(), PtInRect(&pData->fishstrapToggleRect, pData->hoverPoint), pData->fishstrapAnim, true, L"\uE790");
+        MainUI_Paint_DrawToggle(hdc, pData->autoUpdateToggleRect, pData->hFontText, L"Update Checker", g_autoUpdate.load(), PtInRect(&pData->autoUpdateToggleRect, pData->hoverPoint), pData->autoUpdateAnim, true, L"\uE777");
+        MainUI_Paint_DrawToggle(hdc, pData->legacyUiToggleRect, pData->hFontText, L"Use Legacy UI (Tray)", g_useLegacyUi.load(), PtInRect(&pData->legacyUiToggleRect, pData->hoverPoint), pData->legacyUiAnim, true, L"\uE81C");
+        MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), PtInRect(&pData->statusBarToggleRect, pData->hoverPoint), pData->statusBarAnim, true, L"\uE7F4");
 
             wchar_t fpsLabel[48];
             if (g_fpsLimit == 0) swprintf_s(fpsLabel, L"Off");
             else swprintf_s(fpsLabel, L"%d FPS", g_fpsLimit);
-            MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperDropdownRect, pData->hFontText, L"FPS Capper*", fpsLabel, pData->isHoveringFpsCapper);
-
-        MainUI_Paint_DrawToggle(hdc, pData->unlockFpsOnFocusToggleRect, pData->hFontText, L"Unlock FPS when focus", g_unlockFpsOnFocus.load(), PtInRect(&pData->unlockFpsOnFocusToggleRect, pData->hoverPoint), pData->unlockFpsOnFocusAnim);
-
+            MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperDropdownRect, pData->hFontText, L"FPS Capper*", fpsLabel, pData->isHoveringFpsCapper, true, L"\uF272");
+        MainUI_Paint_DrawToggle(hdc, pData->unlockFpsOnFocusToggleRect, pData->hFontText, L"Unlock FPS when focus", g_unlockFpsOnFocus.load(), PtInRect(&pData->unlockFpsOnFocusToggleRect, pData->hoverPoint), pData->unlockFpsOnFocusAnim, true, L"\uF272");
+        MainUI_Paint_DrawToggle(hdc, pData->autoMuteToggleRect, pData->hFontText, L"AutoMute Roblox", g_autoMute.load(), PtInRect(&pData->autoMuteToggleRect, pData->hoverPoint), pData->autoMuteAnim, true, L"\uE767");
+        MainUI_Paint_DrawToggle(hdc, pData->unmuteOnFocusToggleRect, pData->hFontText, L"Unmute on focus", g_unmuteOnFocus.load(), PtInRect(&pData->unmuteOnFocusToggleRect, pData->hoverPoint), pData->unmuteOnFocusAnim, true, L"\uE767");
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
         }
 
-        SolidBrush resetBrush(pData->isHoveringReset ? Color(150, 90, 90, 90) : Color(100, 70, 70, 70));
-        FillRoundedRectangle(&g, &resetBrush, (REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)(pData->resetSettingsButtonRect.right - pData->resetSettingsButtonRect.left), (REAL)(pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top), 5.0f);
-        
-        Font sectionFont(hdc, pData->hFontSection);
-        SolidBrush textBrush(Color(255, 220, 220, 220));
-        RectF resetRectF((REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)(pData->resetSettingsButtonRect.right - pData->resetSettingsButtonRect.left), (REAL)(pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top));
-        g.DrawString(L"Reset All Settings", -1, &sectionFont, resetRectF, &sf, &textBrush);
+        Color resetBgColor = pData->isHoveringReset ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
+        SolidBrush resetBrush(resetBgColor);
+        g.FillRectangle(&resetBrush, (REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)(pData->resetSettingsButtonRect.right - pData->resetSettingsButtonRect.left), (REAL)(pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top));
+        Pen resetSepPen(Color(100, 80, 80, 80), 1.0f);
+        g.DrawLine(&resetSepPen, (REAL)pData->resetSettingsButtonRect.left, (REAL)pData->resetSettingsButtonRect.top, (REAL)pData->resetSettingsButtonRect.right, (REAL)pData->resetSettingsButtonRect.top);
+
+        HFONT resetIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font resetIconFont(hdc, resetIconFontH);
+        SolidBrush resetIconBrush(Color(255, 200, 80, 80));
+        int resetIconSize2 = 11;
+        int resetIconPadding2 = 2;
+        int resetIconX2 = pData->resetSettingsButtonRect.left + 20;
+        int resetIconY2 = pData->resetSettingsButtonRect.top + (pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top - resetIconSize2) / 2 - resetIconPadding2 + 1;
+        RectF resetIconRect2((REAL)resetIconX2, (REAL)resetIconY2, (REAL)(resetIconSize2 + resetIconPadding2 * 2), (REAL)(resetIconSize2 + resetIconPadding2 * 2));
+        StringFormat sfResetIcon2;
+        sfResetIcon2.SetAlignment(StringAlignmentCenter);
+        sfResetIcon2.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE74D", -1, &resetIconFont, resetIconRect2, &sfResetIcon2, &resetIconBrush);
+        DeleteObject(resetIconFontH);
+
+        Font resetTextFont(hdc, pData->hFontText);
+        SolidBrush resetTextBrush(Color(255, 220, 220, 220));
+        int resetTextX2 = resetIconX2 + resetIconSize2 + resetIconPadding2 * 2 + 10;
+        int resetTextWidth2 = pData->resetSettingsButtonRect.right - resetTextX2 - 20 - (8 + 4);
+        RectF resetTextRect2((REAL)resetTextX2, (REAL)pData->resetSettingsButtonRect.top, (REAL)resetTextWidth2, (REAL)32);
+        StringFormat sfResetText2;
+        sfResetText2.SetAlignment(StringAlignmentNear);
+        sfResetText2.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"Reset All Settings", -1, &resetTextFont, resetTextRect2, &sfResetText2, &resetTextBrush);
+
+        HFONT resetArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font resetArrowFont(hdc, resetArrowFontH);
+        SolidBrush resetArrowBrush(Color(255, 150, 150, 150));
+        int resetArrowSize = 9;
+        int resetArrowPadding = 2;
+        int resetArrowX = pData->resetSettingsButtonRect.right - 20 - resetArrowSize - resetArrowPadding * 2;
+        int resetArrowY = pData->resetSettingsButtonRect.top + (pData->resetSettingsButtonRect.bottom - pData->resetSettingsButtonRect.top - resetArrowSize) / 2 - resetArrowPadding + 1;
+        RectF resetArrowRect((REAL)resetArrowX, (REAL)resetArrowY, (REAL)(resetArrowSize + resetArrowPadding * 2), (REAL)(resetArrowSize + resetArrowPadding * 2));
+        StringFormat sfResetArrow;
+        sfResetArrow.SetAlignment(StringAlignmentCenter);
+        sfResetArrow.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE76C", -1, &resetArrowFont, resetArrowRect, &sfResetArrow, &resetArrowBrush);
+        DeleteObject(resetArrowFontH);
+    }
+    else if (pData->currentPage == 5) { // Discord
+        int rowCount = (int)pData->rowRects.size();
+        for (int i = 0; i < rowCount; ++i) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rr.left, (REAL)rr.top, (REAL)(rr.right - rr.left), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rr.left, (REAL)rr.bottom - 1, (REAL)rr.right, (REAL)rr.bottom - 1);
+        }
+
+        SolidBrush infoBgBrush(Color(60, 45, 45, 45));
+        Pen infoBorderPen(Color(180, 80, 80, 80), 1.0f);
+        g.FillRectangle(&infoBgBrush, (REAL)pData->discordPayloadInfoRect.left, (REAL)pData->discordPayloadInfoRect.top, (REAL)(pData->discordPayloadInfoRect.right - pData->discordPayloadInfoRect.left), (REAL)(pData->discordPayloadInfoRect.bottom - pData->discordPayloadInfoRect.top));
+        g.DrawRectangle(&infoBorderPen, (REAL)pData->discordPayloadInfoRect.left, (REAL)pData->discordPayloadInfoRect.top, (REAL)(pData->discordPayloadInfoRect.right - pData->discordPayloadInfoRect.left - 1), (REAL)(pData->discordPayloadInfoRect.bottom - pData->discordPayloadInfoRect.top - 1));
+
+        HFONT discordInfoIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+        Font discordInfoIconFont(hdc, discordInfoIconFontH);
+        SolidBrush discordInfoIconBrush(Color(255, 88, 101, 242));
+        RectF discordInfoIconRect((REAL)12, (REAL)pData->discordPayloadInfoRect.top, 20.0f, (REAL)(pData->discordPayloadInfoRect.bottom - pData->discordPayloadInfoRect.top));
+        StringFormat sfDiscordInfoIcon;
+        sfDiscordInfoIcon.SetAlignment(StringAlignmentCenter);
+        sfDiscordInfoIcon.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"\uE8BD", -1, &discordInfoIconFont, discordInfoIconRect, &sfDiscordInfoIcon, &discordInfoIconBrush);
+        DeleteObject(discordInfoIconFontH);
+
+        Font discordInfoFont(hdc, pData->hFontSmall);
+        SolidBrush discordInfoTextBrush(Color(255, 140, 140, 140));
+        RectF discordInfoTextRect(36.0f, (REAL)pData->discordPayloadInfoRect.top, (REAL)(pData->discordPayloadInfoRect.right - 48), (REAL)(pData->discordPayloadInfoRect.bottom - pData->discordPayloadInfoRect.top));
+        StringFormat sfDiscordInfoText;
+        sfDiscordInfoText.SetAlignment(StringAlignmentNear);
+        sfDiscordInfoText.SetLineAlignment(StringAlignmentCenter);
+        g.DrawString(L"Discord webhook posts short status updates.", -1, &discordInfoFont, discordInfoTextRect, &sfDiscordInfoText, &discordInfoTextBrush);
+
+        std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
+        MainUI_Paint_DrawToggle(hdc, pData->discordWebhookEnableToggleRect, pData->hFontText, L"Enable webhook", g_discordWebhookEnabled.load(), PtInRect(&pData->discordWebhookEnableToggleRect, pData->hoverPoint), pData->discordWebhookEnableAnim, true, L"\uE8BD");
+        MainUI_Paint_DrawTextInput(hdc, pData->discordWebhookInputRect, pData->hFontSmall, pData->hFontText, L"", webhookUrl, pData->isHoveringDiscordWebhookInput, pData->isDiscordWebhookInputFocused, &pData->discordWebhookCaretPos, &pData->discordWebhookViewOffset, L"https://discord.com/api/webhooks/...");
+
+        MainUI_Paint_DrawTripleActionButtonsRow(
+            hdc,
+            pData->discordWebhookPasteRect,
+            pData->discordWebhookClearRect,
+            pData->discordWebhookTestRect,
+            pData->hFontText,
+            L"Paste",
+            L"Clear",
+            L"Send Test",
+            pData->isHoveringDiscordWebhookPaste,
+            pData->isHoveringDiscordWebhookClear,
+            pData->isHoveringDiscordWebhookTest,
+            true);
+
+        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyStartToggleRect, pData->hFontText, L"Start / Stop", g_discordNotifyStart.load(), PtInRect(&pData->discordNotifyStartToggleRect, pData->hoverPoint), pData->discordNotifyStartAnim, true, L"\uE768");
+        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyActionToggleRect, pData->hFontText, L"Action", g_discordNotifyAction.load(), PtInRect(&pData->discordNotifyActionToggleRect, pData->hoverPoint), pData->discordNotifyActionAnim, true, L"\uE7C9");
+        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyReconnectToggleRect, pData->hFontText, L"Reconnect", g_discordNotifyReconnect.load(), PtInRect(&pData->discordNotifyReconnectToggleRect, pData->hoverPoint), pData->discordNotifyReconnectAnim, true, L"\uE8AF");
+        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyErrorsToggleRect, pData->hFontText, L"Errors", g_discordNotifyErrors.load(), PtInRect(&pData->discordNotifyErrorsToggleRect, pData->hoverPoint), pData->discordNotifyErrorsAnim, true, L"\uEA39");
+        MainUI_Paint_DrawToggle(hdc, pData->discordDisableEmbedToggleRect, pData->hFontText, L"Disable embed", g_discordDisableEmbed.load(), PtInRect(&pData->discordDisableEmbedToggleRect, pData->hoverPoint), pData->discordDisableEmbedAnim, true, L"\uE8FD");
+        MainUI_Paint_DrawToggle(hdc, pData->discordMentionOnErrorsToggleRect, pData->hFontText, L"Mention on errors", g_discordMentionOnErrors.load(), PtInRect(&pData->discordMentionOnErrorsToggleRect, pData->hoverPoint), pData->discordMentionOnErrorsAnim, true, L"\uE7BA");
+
+        for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
+            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
+        }
+    }
+    else if (pData->currentPage == 4) { // Utils
+        int rowCount = (int)pData->rowRects.size();
+        for (int i = 0; i < rowCount; ++i) {
+            RECT rr = pData->rowRects[i];
+            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+            SolidBrush rowBrush(rowBgColor);
+            g.FillRectangle(&rowBrush, (REAL)rr.left, (REAL)rr.top, (REAL)(rr.right - rr.left), (REAL)(rr.bottom - rr.top));
+            Pen sepPen(Color(60, 70, 70, 70), 1.0f);
+            g.DrawLine(&sepPen, (REAL)rr.left, (REAL)rr.bottom - 1, (REAL)rr.right, (REAL)rr.bottom - 1);
+        }
+
+        RECT utilsWindowOpacityDrawRect = { 20, pData->utilsWindowOpacityRect.top, pData->utilsWindowOpacityRect.right, pData->utilsWindowOpacityRect.top + 32 };
+        RECT utilsMuteDrawRect = { 20, pData->utilsMuteToggleRect.top, pData->utilsMuteToggleRect.right, pData->utilsMuteToggleRect.top + 32 };
+        RECT utilsFpsDrawRect = { 20, pData->utilsFpsToggleRect.top, pData->utilsFpsToggleRect.right, pData->utilsFpsToggleRect.top + 32 };
+
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsShowRobloxRect, pData->hFontText, L"Show Roblox", pData->isHoveringUtilsShowRoblox, L"\uE890");
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsHideRobloxRect, pData->hFontText, L"Hide Roblox", pData->isHoveringUtilsHideRoblox, L"\uE890\uEA83");
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsGridSnapRect, pData->hFontText, L"Grid Snap Roblox*", pData->isHoveringUtilsGridSnap, L"\uE80A");
+        MainUI_Paint_DrawToggle(hdc, utilsWindowOpacityDrawRect, pData->hFontText, L"Window Opacity", IsUtilsSessionWindowOpacityEnabled(), PtInRect(&pData->utilsWindowOpacityRect, pData->hoverPoint), pData->utilsWindowOpacityAnim, true, L"\uE727");
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsCloseAllRect, pData->hFontText, L"Close All Roblox", pData->isHoveringUtilsCloseAll, L"\uE8BB");
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsResetAllRect, pData->hFontText, L"Reset in all", pData->isHoveringUtilsResetAll, L"\uE81C");
+        MainUI_Paint_DrawListActionRow(hdc, pData->utilsTestActionRect, pData->hFontText, L"Test AntiAFK action", pData->isHoveringUtilsTestAction, L"\uE768");
+        MainUI_Paint_DrawToggle(hdc, utilsMuteDrawRect, pData->hFontText, L"Mute/UnMute Roblox", IsUtilsSessionMuteEnabled(), PtInRect(&pData->utilsMuteToggleRect, pData->hoverPoint), pData->utilsMuteAnim, true, L"\uE767");
+        MainUI_Paint_DrawToggle(hdc, utilsFpsDrawRect, pData->hFontText, L"Limit/Unlimit FPS*", IsUtilsSessionFpsLimitEnabled(), PtInRect(&pData->utilsFpsToggleRect, pData->hoverPoint), pData->utilsFpsAnim, true, L"\uF272");
+
+        for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
+            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
+        }
     }
     
     SelectObject(hdc, oldFont);
 
-    SelectObject(hdc, pData->hFontSmall);
-    SetTextColor(hdc, RGB(128, 128, 128));
-
-    RECT disclaimerRect = { 0, clientRect.bottom - 25, clientRect.right, clientRect.bottom - 5 };
     const wchar_t* disclaimerText;
     if (pData->currentPage == 2) {
-        disclaimerText = L"Statistics are saved only when the application is closed correctly.";
+        disclaimerText = L"Statistics are saved only when the app is closed correctly.";
+    } else if (pData->currentPage == 3) {
+        disclaimerText = L"* - experimental feature.";
+    } else if (pData->currentPage == 4) {
+        disclaimerText = L"Utils changes apply now and reset on exit.";
+    } else if (pData->currentPage == 5) {
+        disclaimerText = L"Webhook URL is stored locally in your Windows user profile.";
     } else {
         disclaimerText = L"Closing this window minimizes it to the system tray.";
     }
-    Font smallFont(hdc, pData->hFontSmall);
-    SolidBrush disclaimerBrush(Color(255, 128, 128, 128));
-    RectF disclaimerRectF((REAL)0, (REAL)clientRect.bottom - 25, (REAL)clientRect.right, (REAL)20);
-    g.DrawString(disclaimerText, -1, &smallFont, disclaimerRectF, &sf, &disclaimerBrush);
+
+    HFONT discIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
+    Font discIconFont(hdc, discIconFontH);
+    SolidBrush discIconBrush(Color(255, 150, 150, 150));
+    int discIconSize = 10;
+    int discIconGap = 5;
+    int discIconPadding = 4;
+
+    Font discFont(hdc, pData->hFontSmall);
+    SizeF availableSize((REAL)(pData->disclaimerRect.right - pData->disclaimerRect.left - 40), (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top));
+    RectF discTextBounds;
+    g.MeasureString(disclaimerText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &discTextBounds);
+    int textWidth = (int)discTextBounds.Width;
+
+    int discContentWidth = discIconSize + discIconGap + textWidth;
+    int centerX = (pData->disclaimerRect.left + pData->disclaimerRect.right) / 2;
+    int discStartX = centerX - discContentWidth / 2;
+    int discIconX = discStartX - discIconPadding;
+    int discIconY = pData->disclaimerRect.top + (pData->disclaimerRect.bottom - pData->disclaimerRect.top - discIconSize) / 2 - discIconPadding;
+    RectF discIconRectF((REAL)discIconX, (REAL)discIconY, (REAL)(discIconSize + discIconPadding * 2), (REAL)(discIconSize + discIconPadding * 2));
+    StringFormat sfDiscIcon;
+    sfDiscIcon.SetAlignment(StringAlignmentCenter);
+    sfDiscIcon.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE946", -1, &discIconFont, discIconRectF, &sfDiscIcon, &discIconBrush);
+    DeleteObject(discIconFontH);
+
+    SolidBrush disclaimerBgBrush(Color(60, 45, 45, 45));
+    g.FillRectangle(&disclaimerBgBrush, (REAL)pData->disclaimerRect.left, (REAL)pData->disclaimerRect.top, (REAL)(pData->disclaimerRect.right - pData->disclaimerRect.left), (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top));
+
+    Pen disclaimerBorderPen(Color(180, 80, 80, 80), 1.0f);
+    g.DrawRectangle(&disclaimerBorderPen, (REAL)pData->disclaimerRect.left, (REAL)pData->disclaimerRect.top, (REAL)(pData->disclaimerRect.right - pData->disclaimerRect.left - 1), (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top - 1));
+
+    SolidBrush disclaimerBrush(Color(255, 140, 140, 140));
+    int discTextX = discStartX + discIconSize + discIconGap;
+    int discTextWidth = pData->disclaimerRect.right - discTextX;
+    RectF disclaimerRectF((REAL)discTextX, (REAL)pData->disclaimerRect.top, (REAL)discTextWidth, (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top));
+    StringFormat sfDisclaimer;
+    sfDisclaimer.SetAlignment(StringAlignmentNear);
+    sfDisclaimer.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(disclaimerText, -1, &discFont, disclaimerRectF, &sfDisclaimer, &disclaimerBrush);
 }
 LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -3970,28 +8219,27 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->hFontSmall = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontNav = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         pData->hFontNavSelected = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontNavIcon = CreateFontW(-MulDiv(12, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe MDL2 Assets");
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int margin = 20, rowH = 32, vGap = 15, toggleW = 50;
-        const int nav_bar_y = 30, nav_bar_h = 30;
-        const int content_y_start = nav_bar_y + nav_bar_h + 20;
-        int y = content_y_start + 60;
-        
-        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
-        pData->iconButtonRect = { 0, 0, 46, 30 };
-        pData->startButtonRect = { margin, content_y_start, clientRect.right - margin, content_y_start + 40 };
-        
-        PostMessage(hwnd, WM_SIZE, 0, MAKELPARAM(clientRect.right, clientRect.bottom));
 
-        pData->navItems.push_back({ L"General", {0, 0, 0, 0} }); 
-        pData->navItems.push_back({ L"Automation", {0, 0, 0, 0} });
-        pData->navItems.push_back({ L"Statistics", {0, 0, 0, 0} });
-        pData->navItems.push_back({ L"Advanced", {0, 0, 0, 0} });
+        const int startBtnH = 40;
+        const int disclaimerH = 26;
+        pData->startButtonRect = { 0, clientRect.bottom - startBtnH, clientRect.right, clientRect.bottom };
+
+        PostMessage(hwnd, WM_SIZE, 0, MAKELPARAM(clientRect.right, clientRect.bottom));
+        pData->navItems.push_back({ L"General", L"\xE80F", {0, 0, 0, 0}, 0.0f });
+        pData->navItems.push_back({ L"Auto", L"\xE945", {0, 0, 0, 0}, 0.0f });
+        pData->navItems.push_back({ L"Statistics", L"\xE9D2", {0, 0, 0, 0}, 0.0f });
+        pData->navItems.push_back({ L"Advanced", L"\xE713", {0, 0, 0, 0}, 0.0f });
+        pData->navItems.push_back({ L"Utils", L"\xE7FC", {0, 0, 0, 0}, 0.0f });
+        pData->navItems.push_back({ L"Webhook", L"\xE8BD", {0, 0, 0, 0}, 0.0f });
 
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
         pData->hCursorArrow = LoadCursor(NULL, IDC_ARROW);
+        pData->hCursorText = LoadCursor(NULL, IDC_IBEAM);
 
         pData->hIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
@@ -4002,6 +8250,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->autoReconnectAnim = g_autoReconnect.load() ? 1.0f : 0.0f;
         pData->autoResetAnim = g_autoReset.load() ? 1.0f : 0.0f;
         pData->autoHideAnim = g_autoHideRoblox.load() ? 1.0f : 0.0f;
+        pData->autoOpacityAnim = g_autoOpacity.load() ? 1.0f : 0.0f;
+        pData->autoGridAnim = g_autoGrid.load() ? 1.0f : 0.0f;
         pData->bloxstrapIntegrationAnim = g_bloxstrapIntegration.load() ? 1.0f : 0.0f;
         pData->unlockFpsOnFocusAnim = g_unlockFpsOnFocus.load() ? 1.0f : 0.0f;
 
@@ -4009,6 +8259,23 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->stateChangeProgress = 1.0f;
 
         pData->legacyUiAnim = g_useLegacyUi.load() ? 1.0f : 0.0f;
+        pData->statusBarAnim = g_statusBarEnabled.load() ? 1.0f : 0.0f;
+        pData->iCanForgetAnim = g_afkReminderEnabled.load() ? 1.0f : 0.0f;
+        pData->doNotSleepAnim = g_doNotSleep.load() ? 1.0f : 0.0f;
+        pData->autoMuteAnim = g_autoMute.load() ? 1.0f : 0.0f;
+        pData->unmuteOnFocusAnim = g_unmuteOnFocus.load() ? 1.0f : 0.0f;
+        pData->utilsWindowOpacityAnim = IsUtilsSessionWindowOpacityEnabled() ? 1.0f : 0.0f;
+        pData->utilsMuteAnim = IsUtilsSessionMuteEnabled() ? 1.0f : 0.0f;
+        pData->utilsFpsAnim = IsUtilsSessionFpsLimitEnabled() ? 1.0f : 0.0f;
+        pData->discordWebhookEnableAnim = g_discordWebhookEnabled.load() ? 1.0f : 0.0f;
+        pData->discordNotifyStartAnim = g_discordNotifyStart.load() ? 1.0f : 0.0f;
+        pData->discordNotifyStopAnim = g_discordNotifyStop.load() ? 1.0f : 0.0f;
+        pData->discordNotifyActionAnim = g_discordNotifyAction.load() ? 1.0f : 0.0f;
+        pData->discordNotifyReconnectAnim = g_discordNotifyReconnect.load() ? 1.0f : 0.0f;
+        pData->discordNotifyResetAnim = g_discordNotifyReset.load() ? 1.0f : 0.0f;
+        pData->discordNotifyErrorsAnim = g_discordNotifyErrors.load() ? 1.0f : 0.0f;
+        pData->discordDisableEmbedAnim = g_discordDisableEmbed.load() ? 1.0f : 0.0f;
+        pData->discordMentionOnErrorsAnim = g_discordMentionOnErrors.load() ? 1.0f : 0.0f;
 
         return 0;
 
@@ -4031,54 +8298,365 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         if (!pData) break;
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int margin = 20, rowH = 32, vGap = 15, toggleW = 50;
+        const int margin = 20, rowH = 32, vGap = 10, toggleW = 50;
         const int nav_bar_y = 30, nav_bar_h = 30;
-        const int content_y_start = nav_bar_y + nav_bar_h + 20;
-        int y = content_y_start + 40 + 20; 
+        const int startBtnH = 40;
+        const int content_y_start = nav_bar_y + nav_bar_h;
+        int y = content_y_start;
 
-        const int nav_item_w = (clientRect.right / 4);
-        pData->navItems[0].second = { 0 * nav_item_w, nav_bar_y, 1 * nav_item_w, nav_bar_y + nav_bar_h };
-        pData->navItems[1].second = { 1 * nav_item_w, nav_bar_y, 2 * nav_item_w, nav_bar_y + nav_bar_h };
-        pData->navItems[2].second = { 2 * nav_item_w, nav_bar_y, 3 * nav_item_w, nav_bar_y + nav_bar_h };
-        pData->navItems[3].second = { 3 * nav_item_w, nav_bar_y, clientRect.right, nav_bar_y + nav_bar_h };
+        pData->startButtonRect = { 0, clientRect.bottom - startBtnH, clientRect.right, clientRect.bottom };
 
         int help_btn_size = 24;
-        int help_btn_margin = 8;
-        int helpX = clientRect.right - margin - help_btn_size;
+        int ctrlStartX = margin;
+        int ctrlEndX = clientRect.right - 20;
 
-        int control_label_width = 160;
-        int control_area_start_x = margin + control_label_width;
-        int control_area_width = clientRect.right - margin - control_area_start_x - help_btn_size - help_btn_margin;
-
-        int dropW = control_area_width;
+        const int disclaimerH = 26;
 
         pData->helpButtonRects.clear();
-        if (pData->currentPage == 0) { // General
-            pData->intervalDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->actionDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->multiInstanceToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->multiInstanceIntervalDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->userSafeDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->restoreMethodDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
+        pData->rowRects.clear();
+        if (pData->currentPage == 0) {
+            int ddW_interval = 166;
+            int ddW_action = 144;
+            int ddW_mi_interval = 143;
+            int ddW_user_safe = 181;
+            int ddW_restore = 161;
+            int ddW_default = ctrlEndX - ctrlStartX - help_btn_size;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->intervalDropdownRect = { ctrlEndX - ddW_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->actionDropdownRect = { ctrlEndX - ddW_action - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->multiInstanceToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->multiInstanceIntervalDropdownRect = { ctrlEndX - ddW_mi_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->userSafeDropdownRect = { ctrlEndX - ddW_user_safe - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->restoreMethodDropdownRect = { ctrlEndX - ddW_restore - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->backupMessageRect = { 0, y, clientRect.right, y + 26 };
+            y += 25;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            int halfX = clientRect.right / 2;
+            pData->importSettingsRect = { 0, y, halfX, y + rowH };
+            pData->exportSettingsRect = { halfX, y, clientRect.right, y + rowH };
+            y += rowH + vGap;
+
+            pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+            pData->updateBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
         } else if (pData->currentPage == 1) { // Automation
-            pData->autoStartToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->autoReconnectToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->autoResetToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->autoHideToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->bloxstrapIntegrationToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
+            int toggleW = ctrlEndX - ctrlStartX - help_btn_size;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoStartToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoReconnectToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoResetToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoHideToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoOpacityToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoGridToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->bloxstrapIntegrationToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->iCanForgetToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->doNotSleepToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
         } else if (pData->currentPage == 2) { // Statistics
-            pData->resetStatsButtonRect = { margin, clientRect.bottom - 40 - 30, clientRect.right - margin, clientRect.bottom - 30 };
+            int toggleW = ctrlEndX - ctrlStartX - help_btn_size;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->resetStatsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
         } else if (pData->currentPage == 3) { // Advanced
-            pData->fishstrapToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->autoUpdateToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->legacyUiToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->fpsCapperDropdownRect = { control_area_start_x, y, control_area_start_x + dropW, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->unlockFpsOnFocusToggleRect = { helpX - help_btn_margin - toggleW, y, helpX - help_btn_margin, y + rowH }; pData->helpButtonRects.push_back({ helpX, y + (rowH - help_btn_size) / 2, helpX + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size }); y += rowH + vGap;
-            pData->resetSettingsButtonRect = { margin, clientRect.bottom - 40 - 30, clientRect.right - margin, clientRect.bottom - 30 };
+            int ddW_fps = 173;
+            int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->fishstrapToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoUpdateToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->legacyUiToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->statusBarToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->fpsCapperDropdownRect = { ctrlEndX - ddW_fps - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->unlockFpsOnFocusToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->autoMuteToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->unmuteOnFocusToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+        } else if (pData->currentPage == 5) { // Discord
+            const int noteH = 26;
+            const int buttonGap = 0;
+            int toggleW = ctrlEndX - ctrlStartX - help_btn_size;
+            int buttonW = clientRect.right / 3;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordWebhookEnableToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->discordPayloadInfoRect = { 0, y, clientRect.right, y + noteH };
+            y += noteH - 1;
+
+            pData->discordWebhookInputRect = { 0, y, clientRect.right, y + rowH };
+            y += rowH - 1;
+
+            pData->discordWebhookPasteRect = { 0, y, buttonW, y + rowH };
+            pData->discordWebhookClearRect = { pData->discordWebhookPasteRect.right + buttonGap, y, pData->discordWebhookPasteRect.right + buttonGap + buttonW, y + rowH };
+            pData->discordWebhookTestRect = { pData->discordWebhookClearRect.right + buttonGap, y, clientRect.right, y + rowH };
+            y += rowH;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyStartToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyActionToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyReconnectToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyErrorsToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordDisableEmbedToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordMentionOnErrorsToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         }
+        
+        pData->disclaimerRect = { 0, clientRect.bottom - startBtnH - disclaimerH + 1, clientRect.right, clientRect.bottom - startBtnH + 1 };
+        
         InvalidateRect(hwnd, NULL, FALSE);
         break;
     }
+    case WM_KILLFOCUS:
+        if (pData && pData->isDiscordWebhookInputFocused) {
+            pData->isDiscordWebhookInputFocused = false;
+            InvalidateRect(hwnd, &pData->discordWebhookInputRect, FALSE);
+        }
+        break;
+    case WM_KEYDOWN:
+        if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
+            std::wstring currentValue = GetDiscordWebhookUrlCopy();
+            size_t* caretPos = &pData->discordWebhookCaretPos;
+            RECT* inputRect = &pData->discordWebhookInputRect;
+            size_t maxLength = DISCORD_WEBHOOK_MAX_LENGTH;
+            *caretPos = min(*caretPos, currentValue.size());
+
+            if ((GetKeyState(VK_CONTROL) & 0x8000) && wParam == 'V') {
+                std::wstring clipboardText;
+                if (ReadUnicodeTextFromClipboard(hwnd, clipboardText)) {
+                    if (!clipboardText.empty()) {
+                        size_t insertCount = min(clipboardText.size(), maxLength - min(currentValue.size(), maxLength));
+                        if (insertCount > 0) {
+                            currentValue.insert(*caretPos, clipboardText.substr(0, insertCount));
+                            *caretPos += insertCount;
+                            SetDiscordWebhookUrl(currentValue);
+                            *caretPos = min(*caretPos, GetDiscordWebhookUrlCopy().size());
+                            SaveSettings();
+                            InvalidateRect(hwnd, inputRect, FALSE);
+                        }
+                    }
+                }
+                return 0;
+            }
+            if (wParam == VK_ESCAPE) {
+                pData->isDiscordWebhookInputFocused = false;
+                InvalidateRect(hwnd, inputRect, FALSE);
+                return 0;
+            }
+            if (wParam == VK_LEFT) {
+                if (*caretPos > 0) {
+                    --(*caretPos);
+                    InvalidateRect(hwnd, inputRect, FALSE);
+                }
+                return 0;
+            }
+            if (wParam == VK_RIGHT) {
+                if (*caretPos < currentValue.size()) {
+                    ++(*caretPos);
+                    InvalidateRect(hwnd, inputRect, FALSE);
+                }
+                return 0;
+            }
+            if (wParam == VK_HOME) {
+                *caretPos = 0;
+                InvalidateRect(hwnd, inputRect, FALSE);
+                return 0;
+            }
+            if (wParam == VK_END) {
+                *caretPos = currentValue.size();
+                InvalidateRect(hwnd, inputRect, FALSE);
+                return 0;
+            }
+            if (wParam == VK_DELETE) {
+                if (*caretPos < currentValue.size()) {
+                    currentValue.erase(*caretPos, 1);
+                    SetDiscordWebhookUrl(currentValue);
+                    *caretPos = min(*caretPos, GetDiscordWebhookUrlCopy().size());
+                    SaveSettings();
+                    InvalidateRect(hwnd, inputRect, FALSE);
+                }
+                return 0;
+            }
+        }
+        break;
+    case WM_CHAR:
+        if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
+            std::wstring currentValue = GetDiscordWebhookUrlCopy();
+            size_t* caretPos = &pData->discordWebhookCaretPos;
+            RECT* inputRect = &pData->discordWebhookInputRect;
+            size_t maxLength = DISCORD_WEBHOOK_MAX_LENGTH;
+            *caretPos = min(*caretPos, currentValue.size());
+            bool changed = false;
+
+            if (wParam == VK_BACK) {
+                if (*caretPos > 0 && !currentValue.empty()) {
+                    currentValue.erase(*caretPos - 1, 1);
+                    --(*caretPos);
+                    changed = true;
+                }
+            }
+            else if (wParam >= 0x20 && !iswcntrl((wchar_t)wParam) && !iswspace((wchar_t)wParam)) {
+                if (currentValue.size() < maxLength) {
+                    currentValue.insert(currentValue.begin() + (ptrdiff_t)(*caretPos), (wchar_t)wParam);
+                    ++(*caretPos);
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                SetDiscordWebhookUrl(currentValue);
+                *caretPos = min(*caretPos, GetDiscordWebhookUrlCopy().size());
+                SaveSettings();
+                InvalidateRect(hwnd, inputRect, FALSE);
+            }
+            return 0;
+        }
+        break;
 
     case WM_MOUSEMOVE:
     {
@@ -4091,6 +8669,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         };
 
         bool anyHover = false;
+        bool anyTextHover = false;
         anyHover |= checkHover(pData->isHoveringIcon, pData->iconButtonRect);
         anyHover |= checkHover(pData->isHoveringClose, pData->closeButtonRect);
         anyHover |= checkHover(pData->isHoveringStart, pData->startButtonRect);
@@ -4103,6 +8682,10 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringRestore, pData->restoreMethodDropdownRect));
         anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringMultiInstanceInterval, pData->multiInstanceIntervalDropdownRect));
+        anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringDiscord, pData->discordButtonRect));
+        anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringUpdateBanner, pData->updateBannerRect));
+        anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringImportSettings, pData->importSettingsRect));
+        anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringExportSettings, pData->exportSettingsRect));
         anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringFpsCapper, pData->fpsCapperDropdownRect));
         anyHover |= PtInRect(&pData->multiInstanceToggleRect, pt) && pData->currentPage == 0;
         anyHover |= PtInRect(&pData->fishstrapToggleRect, pt) && pData->currentPage == 3;
@@ -4111,14 +8694,45 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         anyHover |= PtInRect(&pData->autoReconnectToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->autoResetToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->autoHideToggleRect, pt) && pData->currentPage == 1;
+        anyHover |= PtInRect(&pData->autoOpacityToggleRect, pt) && pData->currentPage == 1;
+        anyHover |= PtInRect(&pData->autoGridToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->bloxstrapIntegrationToggleRect, pt) && pData->currentPage == 1;
+        anyHover |= PtInRect(&pData->iCanForgetToggleRect, pt) && pData->currentPage == 1;
+        anyHover |= PtInRect(&pData->doNotSleepToggleRect, pt) && pData->currentPage == 1;
         anyHover |= PtInRect(&pData->unlockFpsOnFocusToggleRect, pt) && pData->currentPage == 3;
+        anyHover |= PtInRect(&pData->autoMuteToggleRect, pt) && pData->currentPage == 3;
+        anyHover |= PtInRect(&pData->unmuteOnFocusToggleRect, pt) && pData->currentPage == 3;
         anyHover |= PtInRect(&pData->legacyUiToggleRect, pt) && pData->currentPage == 3;
+        anyHover |= PtInRect(&pData->statusBarToggleRect, pt) && pData->currentPage == 3;
+        if (pData->currentPage == 5) {
+            anyTextHover |= checkHover(pData->isHoveringDiscordWebhookInput, pData->discordWebhookInputRect);
+            anyHover |= checkHover(pData->isHoveringDiscordWebhookPaste, pData->discordWebhookPasteRect);
+            anyHover |= checkHover(pData->isHoveringDiscordWebhookClear, pData->discordWebhookClearRect);
+            anyHover |= checkHover(pData->isHoveringDiscordWebhookTest, pData->discordWebhookTestRect);
+            anyHover |= PtInRect(&pData->discordWebhookEnableToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordNotifyStartToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordNotifyActionToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordNotifyReconnectToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordNotifyErrorsToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordDisableEmbedToggleRect, pt) != FALSE;
+            anyHover |= PtInRect(&pData->discordMentionOnErrorsToggleRect, pt) != FALSE;
+        }
+        if (pData->currentPage == 4) {
+            anyHover |= checkHover(pData->isHoveringUtilsShowRoblox, pData->utilsShowRobloxRect);
+            anyHover |= checkHover(pData->isHoveringUtilsHideRoblox, pData->utilsHideRobloxRect);
+            anyHover |= checkHover(pData->isHoveringUtilsGridSnap, pData->utilsGridSnapRect);
+            anyHover |= checkHover(pData->isHoveringUtilsWindowOpacity, pData->utilsWindowOpacityRect);
+            anyHover |= checkHover(pData->isHoveringUtilsCloseAll, pData->utilsCloseAllRect);
+            anyHover |= checkHover(pData->isHoveringUtilsResetAll, pData->utilsResetAllRect);
+            anyHover |= checkHover(pData->isHoveringUtilsTestAction, pData->utilsTestActionRect);
+            anyHover |= checkHover(pData->isHoveringUtilsMuteToggle, pData->utilsMuteToggleRect);
+            anyHover |= checkHover(pData->isHoveringUtilsFpsToggle, pData->utilsFpsToggleRect);
+        }
 
         int newHoveringNavItem = -1;
         for (size_t i = 0; i < pData->navItems.size(); ++i) {
-            if (PtInRect(&pData->navItems[i].second, pt)) {
-                newHoveringNavItem = i;
+            if (PtInRect(&pData->navItems[i].rect, pt)) {
+                newHoveringNavItem = (int)i;
                 break;
             }
         } 
@@ -4135,24 +8749,41 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         if (newHoveringHelpButton != pData->hoveringHelpButton) { pData->hoveringHelpButton = newHoveringHelpButton; InvalidateRect(hwnd, NULL, FALSE); anyHover = true; }
         anyHover |= (newHoveringHelpButton != -1);
 
-        SetCursor(anyHover ? pData->hCursorHand : pData->hCursorArrow);
+        if (anyTextHover) SetCursor(pData->hCursorText);
+        else SetCursor(anyHover ? pData->hCursorHand : pData->hCursorArrow);
 
-        if (anyHover && !pData->isTrackingMouse) {
+        if ((anyHover || anyTextHover) && !pData->isTrackingMouse) {
             TRACKMOUSEEVENT tme = { sizeof(tme) };
             tme.dwFlags = TME_LEAVE;
             tme.hwndTrack = hwnd;
             TrackMouseEvent(&tme);
             pData->isTrackingMouse = true;
         }
-        if (anyHover) {
+        if (anyHover || anyTextHover) {
             InvalidateRect(hwnd, NULL, FALSE);
         }
         break;
     }
     case WM_MOUSELEAVE:
         pData->isHoveringIcon = pData->isHoveringClose = pData->isHoveringStart = pData->isHoveringReset = pData->isHoveringInterval = pData->isHoveringAction = pData->isHoveringUserSafe = pData->isHoveringRestore = false;
+        pData->isHoveringMultiInstanceInterval = false;
+        pData->isHoveringDiscord = false;
+        pData->isHoveringUpdateBanner = false;
         pData->hoveringNavItem = -1; pData->isHoveringResetStats = false;
         pData->isHoveringFpsCapper = false; 
+        pData->isHoveringDiscordWebhookInput = false;
+        pData->isHoveringDiscordWebhookPaste = false;
+        pData->isHoveringDiscordWebhookClear = false;
+        pData->isHoveringDiscordWebhookTest = false;
+        pData->isHoveringUtilsShowRoblox = false;
+        pData->isHoveringUtilsHideRoblox = false;
+        pData->isHoveringUtilsGridSnap = false;
+        pData->isHoveringUtilsWindowOpacity = false;
+        pData->isHoveringUtilsCloseAll = false;
+        pData->isHoveringUtilsResetAll = false;
+        pData->isHoveringUtilsTestAction = false;
+        pData->isHoveringUtilsMuteToggle = false;
+        pData->isHoveringUtilsFpsToggle = false;
         pData->hoveringHelpButton = -1;
         pData->isTrackingMouse = false;
         if (pData->isPressingStart) {
@@ -4200,6 +8831,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         return hit;
     }
+    case WM_ERASEBKGND:
+        return 1;
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -4275,14 +8908,14 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             } 
         };
 
-        if (pData->currentPage >= 0 && pData->currentPage < pData->navItems.size()) {
-            const RECT& targetRect = pData->navItems[pData->currentPage].second;
+        if (pData->currentPage >= 0 && pData->currentPage < (int)pData->navItems.size()) {
+            const RECT& targetRect = pData->navItems[pData->currentPage].rect;
             float targetX = (float)targetRect.left;
             float targetW = (float)(targetRect.right - targetRect.left);
             animateFloat(pData->navIndicatorX, targetX);
             animateFloat(pData->navIndicatorWidth, targetW);
+            if (abs(pData->navIndicatorX - targetX) > 0.5f || abs(pData->navIndicatorWidth - targetW) > 0.5f) needsRedraw = true;
         }
-        if (abs(pData->navIndicatorX - (float)pData->navItems[pData->currentPage].second.left) > 0.5f) needsRedraw = true;
 
 
         animateToggle(pData->multiInstanceAnim, g_multiSupport.load());
@@ -4292,9 +8925,28 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->autoReconnectAnim, g_autoReconnect.load());
         animateToggle(pData->autoResetAnim, g_autoReset.load());
         animateToggle(pData->autoHideAnim, g_autoHideRoblox.load());
+        animateToggle(pData->autoOpacityAnim, g_autoOpacity.load());
+        animateToggle(pData->autoGridAnim, g_autoGrid.load());
         animateToggle(pData->unlockFpsOnFocusAnim, g_unlockFpsOnFocus.load());
         animateToggle(pData->bloxstrapIntegrationAnim, g_bloxstrapIntegration.load());
         animateToggle(pData->legacyUiAnim, g_useLegacyUi.load());
+        animateToggle(pData->statusBarAnim, g_statusBarEnabled.load());
+        animateToggle(pData->iCanForgetAnim, g_afkReminderEnabled.load());
+        animateToggle(pData->doNotSleepAnim, g_doNotSleep.load());
+        animateToggle(pData->autoMuteAnim, g_autoMute.load());
+        animateToggle(pData->unmuteOnFocusAnim, g_unmuteOnFocus.load());
+        animateToggle(pData->utilsWindowOpacityAnim, IsUtilsSessionWindowOpacityEnabled());
+        animateToggle(pData->utilsMuteAnim, IsUtilsSessionMuteEnabled());
+        animateToggle(pData->utilsFpsAnim, IsUtilsSessionFpsLimitEnabled());
+        animateToggle(pData->discordWebhookEnableAnim, g_discordWebhookEnabled.load());
+        animateToggle(pData->discordNotifyStartAnim, g_discordNotifyStart.load());
+        animateToggle(pData->discordNotifyStopAnim, g_discordNotifyStop.load());
+        animateToggle(pData->discordNotifyActionAnim, g_discordNotifyAction.load());
+        animateToggle(pData->discordNotifyReconnectAnim, g_discordNotifyReconnect.load());
+        animateToggle(pData->discordNotifyResetAnim, g_discordNotifyReset.load());
+        animateToggle(pData->discordNotifyErrorsAnim, g_discordNotifyErrors.load());
+        animateToggle(pData->discordDisableEmbedAnim, g_discordDisableEmbed.load());
+        animateToggle(pData->discordMentionOnErrorsAnim, g_discordMentionOnErrors.load());
         FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
         SetBkMode(memDC, TRANSPARENT);
@@ -4345,8 +8997,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             }
             DeleteObject(pData->hFontTitle); DeleteObject(pData->hFontSection);
             DeleteObject(pData->hFontText); DeleteObject(pData->hFontSmall);
-            DeleteObject(pData->hFontNav); DeleteObject(pData->hFontNavSelected);
-            DestroyCursor(pData->hCursorHand); DestroyCursor(pData->hCursorArrow);
+            DeleteObject(pData->hFontNav); DeleteObject(pData->hFontNavSelected); DeleteObject(pData->hFontNavIcon);
+            DestroyCursor(pData->hCursorHand); DestroyCursor(pData->hCursorArrow); DestroyCursor(pData->hCursorText);
             if (pData->hIcon) DestroyIcon(pData->hIcon);
             delete pData;
 
@@ -4471,9 +9123,11 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
         const int btnW = 90;
         const int btnGap = 10;
-        int totalBtnW = buttons.size() * btnW + (buttons.size() - 1) * btnGap;
-        int btnY = dlgH - button_pane_height + button_margin;
-        int currentX = dlgW - main_margin - totalBtnW;
+        int totalBtnW = buttons.size() == 1
+            ? dlgW
+            : dlgW;
+        int btnY = dlgH - (button_pane_height - 10);
+        int currentX = 0;
 
         for (size_t i = 0; i < buttons.size(); ++i)
         {
@@ -4484,11 +9138,16 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             {
                 isDefault = true;
             }
-            RECT btnRect = { currentX, btnY, currentX + btnW, btnY + btnH };
+            int resolvedBtnW = buttons.size() == 1
+                ? dlgW
+                : (i == buttons.size() - 1 ? (dlgW - currentX) : (dlgW / (int)buttons.size()));
+            int resolvedBtnH = button_pane_height - 10;
+            int resolvedBtnY = btnY;
+            RECT btnRect = { currentX, resolvedBtnY, currentX + resolvedBtnW, resolvedBtnY + resolvedBtnH };
             pData->buttonRects.push_back({ btn.first, btnRect });
             if (isDefault)
                 SetFocus(hwnd); 
-            currentX += btnW + btnGap;
+            currentX += buttons.size() == 1 ? (resolvedBtnW + btnGap) : resolvedBtnW;
         }
 
         pData->closeButtonRect = { dlgW - 46, 0, dlgW, 30 };
@@ -4609,64 +9268,18 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
 
-        SolidBrush bgBrush(Color(100, 10, 10, 10));
-        g.FillRectangle(&bgBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)clientRect.bottom);
-
-        SolidBrush headerPaneBrush(Color(120, 20, 20, 20));
-        g.FillRectangle(&headerPaneBrush, (REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)30);
-        Pen headerPen(Color(15, 255, 255, 255), 1);
-        g.DrawLine(&headerPen, (REAL)0, (REAL)30, (REAL)clientRect.right, (REAL)30);
-        
-        HICON hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
-        if (hAppIcon) {
-             DrawIconEx(memDC, 15, 7, hAppIcon, 16, 16, 0, NULL, DI_NORMAL);
-             DestroyIcon(hAppIcon);
-        }
-
         wchar_t caption[256];
         GetWindowTextW(hwnd, caption, 128);
-        Font titleFont(memDC, pData->hFontTitle);
-        SolidBrush titleBrush(Color(255, 255, 255, 255));
-        
-        StringFormat sfCenter;
-        sfCenter.SetAlignment(StringAlignmentCenter);
-        sfCenter.SetLineAlignment(StringAlignmentCenter);
-        RectF titleRectF((REAL)0, (REAL)0, (REAL)clientRect.right, (REAL)30); 
-        g.DrawString(caption, -1, &titleFont, titleRectF, &sfCenter, &titleBrush);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, caption, pData->isHoveringClose);
 
         Font textFont(memDC, pData->hFontText);
         SolidBrush textBrush(Color(255, 220, 220, 220));
-        RectF textRectF((REAL)20, (REAL)40, (REAL)(clientRect.right - 40), (REAL)(clientRect.bottom - 50));
+        RectF textRectF((REAL)20, (REAL)46, (REAL)(clientRect.right - 40), (REAL)(clientRect.bottom - 98));
         
         StringFormat sf;
         sf.SetAlignment(StringAlignmentNear);
         sf.SetLineAlignment(StringAlignmentNear);
         g.DrawString(pData->params->text, -1, &textFont, textRectF, &sf, &textBrush);
-
-        if (!pData->buttonRects.empty()) {
-             SolidBrush paneBrush(Color(120, 20, 20, 20));
-             g.FillRectangle(&paneBrush, (REAL)0, (REAL)(pData->buttonRects[0].second.top - 10), (REAL)clientRect.right, (REAL)(clientRect.bottom - (pData->buttonRects[0].second.top - 10)));
-        }
-
-        auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
-             Color fill = primary ? (hover ? Color(255, 20, 142, 224) : Color(255, 0, 122, 204)) : (hover ? Color(255, 80, 80, 80) : Color(255, 60, 60, 60));
-             SolidBrush br(fill);
-             GraphicsPath path;
-             path.AddArc((REAL)r.left, (REAL)r.top, 5.0f * 2, 5.0f * 2, 180, 90);
-             path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.top, 5.0f * 2, 5.0f * 2, 270, 90);
-             path.AddArc((REAL)r.right - 5.0f * 2, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 0, 90);
-             path.AddArc((REAL)r.left, (REAL)r.bottom - 5.0f * 2, 5.0f * 2, 5.0f * 2, 90, 90);
-             path.CloseFigure();
-             g.FillPath(&br, &path);
-
-             Font font(memDC, pData->hFontText);
-             SolidBrush btnTextBrush(Color(255, 255, 255, 255));
-             StringFormat sf;
-             sf.SetAlignment(StringAlignmentCenter);
-             sf.SetLineAlignment(StringAlignmentCenter);
-             RectF btnRectF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
-             g.DrawString(txt, -1, &font, btnRectF, &sf, &btnTextBrush);
-        };
 
         for (const auto& btn : pData->buttonRects) {
             const wchar_t* text = L"";
@@ -4676,10 +9289,8 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             else if (btn.first == IDNO) text = L"No";
 
             bool isPrimary = (btn.first == IDOK || btn.first == IDYES);
-            drawBtn(btn.second, text, pData->hoveringButton == btn.first, isPrimary);
+            Popup_DrawActionButton(&g, memDC, btn.second, pData->hFontText, text, pData->hoveringButton == btn.first, isPrimary);
         }
-
-        DrawSharedCloseButton(&g, pData->closeButtonRect, pData->isHoveringClose);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -4799,7 +9410,7 @@ void main_thread(bool arg_tray)
     }
 
     UpdateSplashStatus(L"Preparing user-safe mode...");
-    if (g_userSafeMode > 0)
+    if (g_userSafeMode > 0 || g_afkReminderEnabled.load())
     {
         StartActivityMonitor();
     }
@@ -4811,9 +9422,14 @@ void main_thread(bool arg_tray)
         if (!wins.empty())
         {
             UpdateSplashStatus(L"Auto-starting Anti-AFK...");
+            g_afkStartTime = GetTickCount64();
             g_isAfkStarted = true;
             CreateTrayMenu(true);
             UpdateTrayIcon();
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started on launch.", false);
+            if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+                ApplyAutoRobloxWindowLayout();
+            }
         }
         else
         {
@@ -4821,7 +9437,7 @@ void main_thread(bool arg_tray)
         }
     }
 
-    if (g_fpsLimit > 0) {
+    if (GetEffectiveFpsLimit() > 0) {
         UpdateSplashStatus(L"Starting FPS Capper...");
         if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
         g_fpsCapperThread = std::thread(FpsCapperThread);
@@ -4855,19 +9471,26 @@ void main_thread(bool arg_tray)
             {
                 if (g_autoStartAfk.load() && g_isAfkStarted.load())
                 { 
-                    if (g_afkStartTime.load() > 0) {
-                        g_totalAfkTimeSeconds += (GetTickCount64() - g_afkStartTime.load()) / 1000;
-                        g_afkStartTime = 0;
-                    }
-                    g_isAfkStarted = false; CreateTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX | Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue; 
+                    FinalizeAfkSession();
+                    g_isAfkStarted = false;
+                    if (ShouldMuteRobloxNow()) { MuteAllRoblox(true); } else { MuteAllRoblox(false); }
+                    g_unmutedPid = 0;
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
+                    QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user);
+                    CreateTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX | Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue; 
                 }
                 else
                 {
                     ShowTrayNotification(L"AntiAFK Error", L"Roblox window not found!");
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Roblox not found.", false);
+                    QueueStatusBarOverlay(L"Roblox window not found", 2200, user);
                 }
             }
             else
             {
+                bool autoReconnectTriggered = false;
+                if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load()) RefreshRobloxWindowOpacity(false);
+                if (g_autoGrid.load()) ApplyAutoRobloxWindowLayout();
                 if (g_userSafeMode > 0)
                 {
                     uint64_t startWaitTime = GetTickCount64();
@@ -4880,25 +9503,17 @@ void main_thread(bool arg_tray)
 
                         if (!g_userActive.load())
                         {
-                            if (notifiedUser)
-                            {
-                                ShowTrayNotification(L"AntiAFK | User-Safe | Notice",
-                                    L"Performing anti-AFK action now.");
-                            }
                             break;
                         }
 
                         if (elapsedSeconds >= MAX_WAIT_TIME)
                         {
-                            ShowTrayNotification(L"AntiAFK | User-Safe | Notice",
-                                L"Maximum wait time reached. Performing anti-AFK action now.");
                             break;
                         }
 
                         if (!notifiedUser && elapsedSeconds > 5)
                         {
-                           ShowTrayNotification(L"AntiAFK | User-Safe | Waiting",
-                                L"Waiting for keyboard/mouse inactivity before performing anti-AFK action...");
+                            QueueStatusBarOverlay(L"Waiting for inactivity", 2000, wins.front());
                             notifiedUser = true;
                         }
 
@@ -4909,6 +9524,32 @@ void main_thread(bool arg_tray)
                     }
                 }
 
+                bool wasFpsCapperPaused = PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, true);
+
+                QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_ACTION_PENDING_DURATION, wins.front());
+
+                bool cancelPendingAction = false;
+                DWORD statusBarLeadWaited = 0;
+                while (statusBarLeadWaited < STATUS_BAR_PRE_ACTION_DELAY)
+                {
+                    if (g_stopThread.load()) {
+                        ResumeFpsCapperAfterAction(wasFpsCapperPaused);
+                        return;
+                    }
+                    if (!g_isAfkStarted.load()) {
+                        cancelPendingAction = true;
+                        break;
+                    }
+
+                    DWORD waitChunk = (std::min)((DWORD)50, STATUS_BAR_PRE_ACTION_DELAY - statusBarLeadWaited);
+                    Sleep(waitChunk);
+                    statusBarLeadWaited += waitChunk;
+                }
+
+                if (cancelPendingAction) {
+                    ResumeFpsCapperAfterAction(wasFpsCapperPaused);
+                    continue;
+                }
 
                 if (g_multiSupport.load())
                 {
@@ -4919,12 +9560,12 @@ void main_thread(bool arg_tray)
                         if (wasMinimized)
                             ShowWindow(w, SW_RESTORE);
 
-                        g_isFpsCapperPaused = true;
-                        Sleep(50);
                         SetForegroundWindow(w);
                         if (g_autoReconnect.load()) {
-                            if (CheckForAutoReconnect(w))
+                            if (CheckForAutoReconnect(w)) {
                                 g_autoReconnectsPerformed++;
+                                autoReconnectTriggered = true;
+                            }
                         }
                         for (int j = 0; j < 3; j++)
                         {
@@ -4940,7 +9581,6 @@ void main_thread(bool arg_tray)
                         if (g_multiInstanceInterval > 0 && i < wins.size() - 1) {
                             Sleep(g_multiInstanceInterval);
                         }
-                        g_isFpsCapperPaused = false;
                     }
                 }
                 else
@@ -4950,12 +9590,12 @@ void main_thread(bool arg_tray)
                     if (wasMinimized)
                         ShowWindow(w, SW_RESTORE);
 
-                    g_isFpsCapperPaused = true;
-                    Sleep(50);
                     SetForegroundWindow(w);
                     if (g_autoReconnect.load()) {
-                        if (CheckForAutoReconnect(w))
+                        if (CheckForAutoReconnect(w)) {
                             g_autoReconnectsPerformed++;
+                            autoReconnectTriggered = true;
+                        }
                     }
                     for (int i = 0; i < 3; i++)
                     {
@@ -4969,8 +9609,9 @@ void main_thread(bool arg_tray)
                     {
                         ShowWindow(w, SW_MINIMIZE);
                     }
-                    g_isFpsCapperPaused = false;
                 }
+
+                ResumeFpsCapperAfterAction(wasFpsCapperPaused);
 
                 if (g_restoreMethod > 0)
                 {
@@ -4984,14 +9625,66 @@ void main_thread(bool arg_tray)
                         RestorePreviousWindowWithAltTab();
                     }
                 }
+
+                QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front());
                 g_afkActionsPerformed++;
                 g_lastAfkActionTimestamp = GetTickCount64();
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::Action, L"Cycle completed.", false);
+                if (autoReconnectTriggered) {
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered.", false);
+                }
             }
             g_updateInterval = false;
-            g_cv.wait_for(lock, std::chrono::seconds(g_selectedTime), [] { return g_stopThread.load() || g_updateInterval.load() || !g_isAfkStarted.load(); });
+
+            int waitMs = 0;
+            const int focusCheckInterval = 500;
+            const int totalWaitMs = g_selectedTime * 1000;
+            DWORD previousActivePid = 0;
+            while (waitMs < totalWaitMs) {
+                if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+
+                if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+                    ApplyAutoRobloxWindowLayout();
+                }
+
+                if (g_unmuteOnFocus.load() && g_autoMute.load() && g_utilsMuteOverride.load() == -1) {
+                    HWND fg = GetForegroundWindow();
+                    DWORD currentFgPid = 0;
+                    GetWindowThreadProcessId(fg, &currentFgPid);
+
+                    bool fgIsRoblox = false;
+                    for (HWND w : wins) {
+                        DWORD wPid = 0;
+                        GetWindowThreadProcessId(w, &wPid);
+                        if (wPid == currentFgPid) { fgIsRoblox = true; break; }
+                    }
+
+                    if (fgIsRoblox && currentFgPid > 0 && currentFgPid != g_unmutedPid.load()) {
+                        if (previousActivePid > 0 && previousActivePid != currentFgPid) {
+                            MuteProcessByPid(previousActivePid, true);
+                        }
+                        MuteProcessByPid(currentFgPid, false);
+                        previousActivePid = currentFgPid;
+                        g_unmutedPid = currentFgPid;
+                    } else if (!fgIsRoblox && previousActivePid > 0) {
+                        MuteProcessByPid(previousActivePid, true);
+                        previousActivePid = 0;
+                    }
+                }
+
+                bool notified = g_cv.wait_for(lock, std::chrono::milliseconds(focusCheckInterval), [] { return g_stopThread.load() || g_updateInterval.load() || !g_isAfkStarted.load(); });
+                if (g_updateInterval.load()) break;
+                waitMs += focusCheckInterval;
+            }
+            MuteUnmutedPid();
+            g_unmutedPid = 0;
         }
         else
         {
+            if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+                ApplyAutoRobloxWindowLayout();
+            }
+
             if (g_autoStartAfk.load())
             {
                 auto wins = FindAllRobloxWindows(true);
@@ -5040,7 +9733,14 @@ void main_thread(bool arg_tray)
                             g_afkStartTime = GetTickCount64();
                             CreateTrayMenu(true);
                             UpdateTrayIcon();
-                            ShowTrayNotification(L"AntiAFK-RBX | Auto-Started", L"AntiAFK has started automatically.");
+                            QueueStatusBarOverlay(L"AntiAFK auto-started", 2000, wins.front());
+                            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started automatically.", false);
+                            if (ShouldMuteRobloxNow()) {
+                                MuteAllRoblox(true);
+                            }
+                            if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+                                ApplyAutoRobloxWindowLayout();
+                            }
                         }
                         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                             MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
@@ -5062,7 +9762,8 @@ void main_thread(bool arg_tray)
                     }
                 }
             }
-            g_cv.wait_for(lock, 5000ms, [] { return g_stopThread.load() || g_isAfkStarted.load(); });
+            auto idleWait = (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load() || g_autoStartAfk.load()) ? 1000ms : 5000ms;
+            g_cv.wait_for(lock, idleWait, [] { return g_stopThread.load() || g_isAfkStarted.load(); });
         }
     }
     StopActivityMonitor();
@@ -5098,19 +9799,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all statistics?\nThis action cannot be undone.", L"Reset Statistics", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
             if (result == IDYES) {
-                g_totalAfkTimeSeconds = 0;
-                g_afkActionsPerformed = 0;
-                g_autoReconnectsPerformed = 0;
-                SaveSettings(); 
+                ResetStatisticsCounters();
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
+                CreateTrayMenu(g_isAfkStarted.load());
+                ShowStatusBarOverlay(L"Statistics reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
         }
         break;
     case WM_APP + 2:
         ShowTutorialDialog(hwnd);
         return 0;
+    case WM_APP_SHOW_STATUS_BAR:
+    {
+        StatusBarPayload* payload = reinterpret_cast<StatusBarPayload*>(wParam);
+        if (payload) {
+            ShowStatusBarOverlay(payload->text, payload->durationMs, payload->anchorWindow);
+            delete payload;
+        }
+        return 0;
+    }
     case WM_USER + 1:
         if (lParam == WM_RBUTTONDOWN)
         {
@@ -5147,32 +9856,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_LINKTTU:
         {
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/wiki/Tips-For-Use", NULL, NULL, SW_SHOWNORMAL);
-            ShowTrayNotification(L"AntiAFK-RBX", L"Wiki > TipsToUse opened.");
             break;
         }
         case ID_LINKWIKI:
         {
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/wiki", NULL, NULL, SW_SHOWNORMAL);
-            ShowTrayNotification(L"AntiAFK-RBX", L"GitHub wiki opened.");
             break;
         }
         case ID_LINKGITHUB:
         case ID_UPDATE_AVAILABLE:
         {
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX", NULL, NULL, SW_SHOWNORMAL);
-            ShowTrayNotification(L"AntiAFK-RBX", L"GitHub link opened.");
             break;
         }
         case ID_LINKSF:
         {
             ShellExecute(NULL, L"open", L"https://antiafk-rbx.sourceforge.io", NULL, NULL, SW_SHOWNORMAL);
-            ShowTrayNotification(L"AntiAFK-RBX", L"SourceForge link opened.");
             break;
         }
         case ID_INFORMATION:
         {
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX", NULL, NULL, SW_SHOWNORMAL);
-            ShowTrayNotification(L"AntiAFK-RBX", L"GitHub link opened.");
             break;
         }
         case ID_START_AFK:
@@ -5184,7 +9888,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 {
                     g_afkStartTime = GetTickCount64();
                 }
-                ShowTrayNotification(L"AntiAFK Started", L"AntiAFK has started.");
                 g_isAfkStarted = true;
                 g_manuallyStoppedPids.clear();
               CreateTrayMenu(true);
@@ -5196,23 +9899,36 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         pData->stateChangeProgress = 0.0f;
                        pData->stateChangeDirection = 1;
                     }
-                   InvalidateRect(g_hMainUiWnd, &pData->startButtonRect, FALSE); 
+                   InvalidateRect(g_hMainUiWnd, &pData->startButtonRect, FALSE);
 
                  }
                  g_cv.notify_all();
-                 
-                 if (g_autoHideRoblox.load()) {
-                     for (HWND w : wins) {
-                         ShowWindow(w, SW_HIDE);
-                     }
+
+                 if (ShouldMuteRobloxNow()) {
+                     MuteAllRoblox(true);
                  }
-            }
-            else
-            {
-                ShowTrayNotification(L"Error", L"Roblox window not found!");
-                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                    MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
-                    if (pData) {
+
+                 if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+                     ApplyAutoRobloxWindowLayout();
+                 }
+
+                 if (g_autoHideRoblox.load()) {
+                      for (HWND w : wins) {
+                          ShowWindow(w, SW_HIDE);
+                      }
+                  }
+
+                 ShowStatusBarOverlay(L"AntiAFK started", 1800, wins.front());
+                  QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started manually.", false);
+             }
+             else
+             {
+                 ShowTrayNotification(L"Error", L"Roblox window not found!");
+                 ShowStatusBarOverlay(L"Roblox window not found", 2200, GetForegroundWindow());
+                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Start failed: Roblox not found.", false);
+                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                     MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
+                     if (pData) {
                         pData->startButtonErrorText = L"Roblox not found";
                         pData->startButtonErrorTime = GetTickCount64();
                         pData->errorAnimationDirection = 1;
@@ -5223,13 +9939,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case ID_STOP_AFK:
         {
-            ShowTrayNotification(L"AntiAFK Stopped", L"AntiAFK has been stopped.");
             if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
-                g_totalAfkTimeSeconds += (GetTickCount64() - g_afkStartTime.load()) / 1000;
-                g_afkStartTime = 0;
+                FinalizeAfkSession();
                 SaveSettings();
             }
             g_isAfkStarted = false;
+            g_afkReminderState = 0;
             auto wins_stop = FindAllRobloxWindows(true);
            g_manuallyStoppedPids.clear();
             for (HWND w : wins_stop) {
@@ -5241,9 +9956,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (g_autoHideRoblox.load()) {
                     ShowWindow(w, SW_SHOW);
                 }
+                if (ShouldMuteRobloxNow()) {
+                    MuteAllRoblox(true);
+                } else {
+                    MuteAllRoblox(false);
+                }
+                g_unmutedPid = 0;
             }
+            RefreshRobloxWindowOpacity(false);
             CreateTrayMenu(false);
             UpdateTrayIcon();
+            ShowStatusBarOverlay(L"AntiAFK stopped", 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front());
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
                 if (pData) {
@@ -5254,17 +9977,52 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                InvalidateRect(g_hMainUiWnd, &pData->startButtonRect, FALSE);
             }
             g_cv.notify_all();
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped manually.", false);
             break; 
         }
 
+        case ID_UTILS_SHOW_ALL:
+        {
+            auto wins = FindAllRobloxWindows(true);
+            if (wins.empty())
+            {
+                ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            else
+            {
+                ShowAllRobloxWindows_Multi();
+                ShowStatusBarOverlay(L"All Roblox windows shown", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : wins.front());
+            }
+            break;
+        }
+        case ID_UTILS_HIDE_ALL:
+        {
+            auto wins = FindAllRobloxWindows(true);
+            if (wins.empty())
+            {
+                ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            else
+            {
+                HideAllRobloxWindows();
+                ShowStatusBarOverlay(L"All Roblox windows hidden", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            break;
+        }
         case ID_SHOW_WINDOW:
         {
+            bool shown = false;
+            HWND anchor = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow();
             if (!g_multiSupport.load())
             {
                 HWND rbx = FindWindowByProcessName(L"RobloxPlayerBeta.exe");
                 if (rbx)
                 {
                     ShowWindow(rbx, SW_SHOW);
+                    shown = true;
+                    anchor = rbx;
                 }
                 else if (g_fishstrapSupport.load())
                 {
@@ -5272,31 +10030,55 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (rbx)
                     {
                         ShowWindow(rbx, SW_SHOW);
+                        shown = true;
+                        anchor = rbx;
                     }
                     else
                     {
                         ShowTrayNotification(L"Error", L"Roblox window not found!");
+                        ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                     }
                 }
                 else
                 {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
+                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                 }
             }
             else
             {
-                ShowAllRobloxWindows_Multi();
+                auto wins = FindAllRobloxWindows(true);
+                if (wins.empty())
+                {
+                    ShowTrayNotification(L"Error", L"Roblox window not found!");
+                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
+                }
+                else
+                {
+                    ShowAllRobloxWindows_Multi();
+                    shown = true;
+                    anchor = wins.front();
+                }
+            }
+
+            if (shown)
+            {
+                ShowStatusBarOverlay(L"Roblox window shown", 1600, anchor);
             }
             break;
         }
         case ID_HIDE_WINDOW:
         {
+            bool hidden = false;
+            HWND anchor = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow();
             if (!g_multiSupport.load())
             {
                 HWND rbx = FindWindowByProcessName(L"RobloxPlayerBeta.exe");
                 if (rbx)
                 {
                     ShowWindow(rbx, SW_HIDE);
+                    hidden = true;
+                    anchor = rbx;
                 }
                 else if (g_fishstrapSupport.load())
                 {
@@ -5304,22 +10086,56 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (rbx)
                     {
                         ShowWindow(rbx, SW_HIDE);
+                        hidden = true;
+                        anchor = rbx;
                     }
                     else
                     {
                         ShowTrayNotification(L"Error", L"Roblox window not found!");
+                        ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                     }
                 }
                 else
                 {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
+                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                 }
             }
             else
             {
-                auto wins = FindAllRobloxWindows();
-                for (HWND w : wins)
-                    ShowWindow(w, SW_HIDE);
+                auto wins = FindAllRobloxWindows(true);
+                if (wins.empty())
+                {
+                    ShowTrayNotification(L"Error", L"Roblox window not found!");
+                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
+                }
+                else
+                {
+                    for (HWND w : wins)
+                        ShowWindow(w, SW_HIDE);
+                    hidden = true;
+                    anchor = wins.front();
+                }
+            }
+
+            if (hidden)
+            {
+                ShowStatusBarOverlay(L"Roblox window hidden", 1600, anchor);
+            }
+            break;
+        }
+        case ID_GRID_SNAP:
+        {
+            auto wins = FindAllRobloxWindows(true);
+            if (wins.empty())
+            {
+                ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            else
+            {
+                GridSnapRobloxWindows();
+                ShowStatusBarOverlay(L"Roblox windows arranged", 1800, wins.front());
             }
             break;
         }
@@ -5364,10 +10180,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         ShowWindow(w, SW_MINIMIZE);
                     }
                 }
+
+                g_lastAfkActionTimestamp = GetTickCount64();
+                ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, wins.front());
             }
             else
             {
                 ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             break;
         }
@@ -5395,7 +10215,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 DestroyWindow(g_hMainUiWnd);
             }
-            ShowTrayNotification(L"UI Mode Changed", g_useLegacyUi.load() ? L"Switched to Legacy (Tray) mode." : L"Switched to new UI mode.");
+                            if (g_useLegacyUi.load()) {
+                                ShowTrayNotification(L"UI Mode Changed", L"Switched to Legacy (Tray) mode.");
+                            }
             break;
         case ID_FISHSTRAP_SUP:
             g_fishstrapSupport = !g_fishstrapSupport.load();
@@ -5422,6 +10244,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
             }
             break;
+        case ID_STATUS_BAR:
+            g_statusBarEnabled = !g_statusBarEnabled.load();
+            if (!g_statusBarEnabled.load()) {
+                HideStatusBarOverlay(false);
+            }
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_statusBarEnabled.load()) {
+                ShowStatusBarOverlay(L"Status Bar enabled", 1400, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : NULL);
+            }
+            break;
         case ID_USER_SAFE_OFF:
         case ID_USER_SAFE_LEGACY:
         case ID_USER_SAFE_BETA:
@@ -5429,7 +10265,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_userSafeMode > 0)
             {
                 if (!g_monitorThreadRunning.load()) StartActivityMonitor();
-                ShowTrayNotification(L"User-Safe Mode", L"User-Safe mode is now active.");
             }
             else
             {
@@ -5481,6 +10316,70 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
+        case ID_AUTO_OPACITY:
+            g_autoOpacity = !g_autoOpacity.load();
+            RefreshRobloxWindowOpacity(false);
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_AUTO_GRID:
+            g_autoGrid = !g_autoGrid.load();
+            if (g_autoGrid.load()) {
+                ApplyAutoRobloxWindowLayout();
+            } else {
+                std::lock_guard<std::mutex> guard(g_autoWindowLayoutMutex);
+                g_lastAutoGridWindowSignature.clear();
+            }
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_I_CAN_FORGET:
+            g_afkReminderEnabled = !g_afkReminderEnabled.load();
+            g_afkReminderState = 0;
+            if (g_afkReminderEnabled.load() && !g_monitorThreadRunning.load()) {
+                StartActivityMonitor();
+            }
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_DO_NOT_SLEEP:
+            g_doNotSleep = !g_doNotSleep.load();
+            if (g_doNotSleep.load()) {
+                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+            } else {
+                SetThreadExecutionState(ES_CONTINUOUS);
+            }
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_AUTO_MUTE:
+            g_autoMute = !g_autoMute.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UNMUTE_ON_FOCUS:
+            g_unmuteOnFocus = !g_unmuteOnFocus.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
         case ID_BLOXSTRAP_INTEGRATION:
             g_bloxstrapIntegration = !g_bloxstrapIntegration.load();
             UpdateBloxstrapIntegration(g_bloxstrapIntegration.load());
@@ -5500,6 +10399,252 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
+        case ID_WINDOW_OPACITY:
+            g_windowOpacity = !g_windowOpacity.load();
+            RefreshRobloxWindowOpacity(false);
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UTILS_TOGGLE_WINDOW_OPACITY:
+        {
+            bool enableOpacity = !IsUtilsSessionWindowOpacityEnabled();
+            g_utilsWindowOpacityOverride = enableOpacity ? 1 : 0;
+            RefreshRobloxWindowOpacity(false);
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            ShowStatusBarOverlay(enableOpacity ? L"Session opacity enabled" : L"Session opacity disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            break;
+        }
+        case ID_UTILS_CLOSE_ALL:
+        {
+            int result = ShowDarkMessageBox(
+                g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
+                L"Close all detected Roblox clients?\n\nAntiAFK-RBX will first ask windows to close, then force-close any remaining Roblox processes.",
+                L"Close All Roblox",
+                MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+
+            if (result == IDYES)
+            {
+                bool hadRoblox = !FindAllRobloxProcessIds().empty();
+                int terminatedCount = CloseAllRobloxInstances();
+                if (hadRoblox || terminatedCount > 0) {
+                    ShowStatusBarOverlay(L"Closed all Roblox clients", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                } else {
+                    ShowStatusBarOverlay(L"No Roblox processes found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                }
+            }
+            break;
+        }
+        case ID_UTILS_RESET_ALL:
+        {
+            if (ExecuteRobloxWindowActionForAll(AutoReset_Action, 1)) {
+                ShowStatusBarOverlay(L"Reset sent to all Roblox windows", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Manual reset sent to all Roblox windows.", false);
+            } else {
+                ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            break;
+        }
+        case ID_UTILS_TEST_ACTION:
+        {
+            if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3)) {
+                g_lastAfkActionTimestamp = GetTickCount64();
+                ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            } else {
+                ShowTrayNotification(L"Error", L"Roblox window not found!");
+                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            break;
+        }
+        case ID_UTILS_TOGGLE_MUTE:
+        {
+            auto pids = FindAllRobloxProcessIds();
+            if (pids.empty()) {
+                ShowTrayNotification(L"Error", L"Roblox process not found!");
+                ShowStatusBarOverlay(L"Roblox process not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                break;
+            }
+
+            bool shouldMute = !IsUtilsSessionMuteEnabled();
+            g_utilsMuteOverride = shouldMute ? 1 : 0;
+            MuteAllRoblox(shouldMute);
+            if (!shouldMute) {
+                g_unmutedPid = 0;
+            }
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            ShowStatusBarOverlay(shouldMute ? L"Roblox muted" : L"Roblox unmuted", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            break;
+        }
+        case ID_UTILS_TOGGLE_FPS:
+        {
+            bool shouldLimit = !IsUtilsSessionFpsLimitEnabled();
+            int sessionFpsLimit = g_fpsLimit > 0 ? g_fpsLimit : 5;
+            g_utilsFpsLimitOverride = shouldLimit ? sessionFpsLimit : -1;
+            RestartFpsCapperForEffectiveLimit();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            if (shouldLimit) {
+                wchar_t fpsMessage[80];
+                swprintf_s(fpsMessage, L"Session FPS limit set to %d", sessionFpsLimit);
+                ShowStatusBarOverlay(fpsMessage, 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            } else {
+                ShowStatusBarOverlay(L"Session FPS override disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            }
+            break;
+        }
+        case ID_RESET_STATS:
+        {
+            int result = ShowDarkMessageBox(
+                g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
+                L"Are you sure you want to reset all statistics?\nThis action cannot be undone.",
+                L"Reset Statistics",
+                MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+
+            if (result == IDYES)
+            {
+                ResetStatisticsCounters();
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
+                CreateTrayMenu(g_isAfkStarted.load());
+                ShowStatusBarOverlay(L"Statistics reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            break;
+        }
+        case ID_DISCORD_WEBHOOK_ENABLE:
+            g_discordWebhookEnabled = !g_discordWebhookEnabled.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordWebhookEnabled.load() ? L"Discord webhook enabled" : L"Discord webhook disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_START:
+            g_discordNotifyStart = !g_discordNotifyStart.load();
+            g_discordNotifyStop = g_discordNotifyStart.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyStart.load() ? L"Webhook Start / Stop enabled" : L"Webhook Start / Stop disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_ACTION:
+            g_discordNotifyAction = !g_discordNotifyAction.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyAction.load() ? L"Webhook Action enabled" : L"Webhook Action disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_RECONNECT:
+            g_discordNotifyReconnect = !g_discordNotifyReconnect.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyReconnect.load() ? L"Webhook Reconnect enabled" : L"Webhook Reconnect disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_ERRORS:
+            g_discordNotifyErrors = !g_discordNotifyErrors.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyErrors.load() ? L"Webhook Errors enabled" : L"Webhook Errors disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_DISABLE_EMBED:
+            g_discordDisableEmbed = !g_discordDisableEmbed.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordDisableEmbed.load() ? L"Webhook embeds disabled" : L"Webhook embeds enabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_MENTION_ON_ERRORS:
+            g_discordMentionOnErrors = !g_discordMentionOnErrors.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordMentionOnErrors.load() ? L"Webhook mentions enabled" : L"Webhook mentions disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_WEBHOOK_PASTE:
+        {
+            std::wstring clipboardText;
+            if (!ReadUnicodeTextFromClipboard(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, clipboardText))
+            {
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard does not contain Unicode text right now.", L"Discord Webhook", MB_OK | MB_ICONWARNING);
+                ShowStatusBarOverlay(L"Clipboard text not available", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                break;
+            }
+
+            SetDiscordWebhookUrl(clipboardText);
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(IsDiscordWebhookUrl(GetDiscordWebhookUrlCopy()) ? L"Webhook URL pasted" : L"Webhook URL pasted, but looks invalid", 1900, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        }
+        case ID_DISCORD_WEBHOOK_CLEAR:
+            SetDiscordWebhookUrl(L"");
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(L"Webhook URL cleared", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_WEBHOOK_TEST:
+        {
+            std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
+            if (!IsDiscordWebhookUrl(webhookUrl))
+            {
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Enter a valid Discord webhook URL first.", L"Discord Webhook", MB_OK | MB_ICONWARNING);
+                ShowStatusBarOverlay(L"Webhook URL is invalid", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                break;
+            }
+
+            std::wstring errorText;
+            DWORD statusCode = 0;
+            bool sent = SendDiscordWebhookRequest(
+                webhookUrl,
+                DiscordWebhookEvent::Test,
+                L"Manual test message from the Legacy UI.",
+                &errorText,
+                &statusCode);
+
+            if (sent)
+            {
+                wchar_t successMessage[96];
+                swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, successMessage, L"Discord Webhook", MB_OK | MB_ICONINFORMATION);
+                ShowStatusBarOverlay(L"Test webhook sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            else
+            {
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"Discord Webhook", MB_OK | MB_ICONERROR);
+                ShowStatusBarOverlay(L"Test webhook failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        }
         case ID_FPS_CAP_OFF:
         case ID_FPS_CAP_3:
         case ID_FPS_CAP_5:
@@ -5520,13 +10665,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
 
             if (oldLimit != g_fpsLimit) {
-                if (g_isFpsCapperRunning.load()) {
-                    g_isFpsCapperRunning = false;
-                    if (g_fpsCapperThread.joinable()) {
-                        g_fpsCapperThread.join();
-                    }
-                }
-                if (g_fpsLimit > 0) { g_fpsCapperThread = std::thread(FpsCapperThread); } SaveSettings(); CreateTrayMenu(g_isAfkStarted.load()); 
+                RestartFpsCapperForEffectiveLimit();
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
             }
             break;
         }
@@ -5567,7 +10708,34 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
-                ShowTrayNotification(L"Settings Reset", L"All settings have been restored to their defaults.");
+                ShowStatusBarOverlay(L"Settings reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            break;
+        }
+        case ID_IMPORT_SETTINGS:
+        {
+            if (ImportSettingsFromFile(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd)) {
+                CreateTrayMenu(g_isAfkStarted.load());
+                UpdateTrayIcon();
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
+                ShowStatusBarOverlay(L"Settings imported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            else {
+                ShowTrayNotification(L"Import Failed", L"Could not load settings from the selected file.");
+                ShowStatusBarOverlay(L"Settings import failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            break;
+        }
+        case ID_EXPORT_SETTINGS:
+        {
+            if (ExportSettingsToFile(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd)) {
+                ShowStatusBarOverlay(L"Settings exported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            }
+            else {
+                ShowTrayNotification(L"Export Failed", L"Could not save settings to the selected file.");
+                ShowStatusBarOverlay(L"Settings export failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         }
@@ -5631,9 +10799,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_EXIT:
-            ShowAllRobloxWindows_Multi();
+            ResetRobloxSessionEffectsOnExit();
             if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
-                g_totalAfkTimeSeconds += (GetTickCount64() - g_afkStartTime.load()) / 1000;
+                FinalizeAfkSession();
+            }
+            if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
+                DestroyWindow(g_hStatusBarWnd);
             }
             SaveSettings();
             g_stopThread = true;
@@ -5646,16 +10817,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int oldLimit = g_fpsLimit;
                 g_fpsLimit = LOWORD(wParam) - ID_FPS_CAP_CUSTOM_BASE;
                 if (oldLimit != g_fpsLimit) {
-                    if (g_isFpsCapperRunning.load()) { g_isFpsCapperRunning = false; if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join(); } if (g_fpsLimit > 0) { g_fpsCapperThread = std::thread(FpsCapperThread); } SaveSettings(); CreateTrayMenu(g_isAfkStarted.load()); 
+                    RestartFpsCapperForEffectiveLimit();
+                    SaveSettings();
+                    CreateTrayMenu(g_isAfkStarted.load());
                 }
             }
             break;
         }
         break;
     case WM_DESTROY:
+        ResetRobloxSessionEffectsOnExit();
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
         if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
-            g_totalAfkTimeSeconds += (GetTickCount64() - g_afkStartTime.load()) / 1000;
+            FinalizeAfkSession();
+        }
+        if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
+            DestroyWindow(g_hStatusBarWnd);
         }
         SaveSettings();
         DestroyMenu(g_hMenu);
@@ -5681,6 +10858,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
     wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
     
     LoadSettings();
+    g_programLaunches++;
+    SaveSettings();
+    g_lastActivityTime = GetTickCount64();
+    RefreshRobloxWindowOpacity(false);
+    if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+        ApplyAutoRobloxWindowLayout();
+    }
 
     int argc;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -5689,6 +10873,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
     bool arg_checkUpdatesAndExit = false, arg_resetSettingsAndExit = false;
     bool arg_force = false;
     bool arg_bloxstrapIntegration_cmd = false;
+    bool arg_hasUtilityCommand = false;
+    bool arg_utilsShowAll = false, arg_utilsHideAll = false, arg_utilsGridSnap = false;
+    bool arg_utilsTestAction = false, arg_utilsResetAll = false, arg_utilsCloseAll = false;
+    bool arg_utilsWindowOpacitySet = false, arg_utilsWindowOpacity = false;
+    bool arg_utilsMuteSet = false, arg_utilsMute = false;
+    bool arg_utilsFpsSet = false, arg_utilsFps = false;
 
     if (argv) {
         for (int i = 1; i < argc; ++i) {
@@ -5698,11 +10888,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
             else if (arg == L"--no-splash") arg_noSplash = true;
             else if (arg == L"--tray" || arg == L"--no-ui") arg_tray = true;
             else if (arg == L"--start-afk") arg_startAfk = true;
-            else if (arg == L"--legacy-ui") g_useLegacyUi = true;
+            else if (arg == L"--legacy-ui") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_useLegacyUi = value;
+            }
+            else if (arg == L"--status-bar") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_statusBarEnabled = value;
+            }
             else if (arg == L"--no-notifications") g_notificationsDisabled = true;
             else if (arg == L"--auto-update" || arg == L"--no-update-check") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_autoUpdate = (std::wstring(argv[++i]) == L"on");
+                bool value = (arg != L"--no-update-check");
+                if (ReadOptionalOnOffArgument(argv, argc, i, value, value)) {
+                    g_autoUpdate = value;
                 } else {
                     g_autoUpdate = (arg != L"--no-update-check");
                 }
@@ -5727,25 +10927,47 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
                 else if (val == L"zoom") g_selectedAction = 2;
             }
             else if (arg == L"--multi-instance") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_multiSupport = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_multiSupport = true;
-                }
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_multiSupport = value;
+            }
+            else if (arg == L"--multi-instance-interval" && i + 1 < argc) {
+                try {
+                    int value = std::stoi(argv[++i]);
+                    if (value == 0 || value == 1 || value == 3 || value == 5 || value == 10) {
+                        g_multiInstanceInterval = value * 1000;
+                    }
+                } catch (...) {}
             }
             else if (arg == L"--auto-start") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_autoStartAfk = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_autoStartAfk = true;
-                }
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoStartAfk = value;
             }
             else if (arg == L"--auto-reconnect") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_autoReconnect = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_autoReconnect = true;
-                }
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoReconnect = value;
+            }
+            else if (arg == L"--auto-reset") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoReset = value;
+            }
+            else if (arg == L"--auto-hide") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoHideRoblox = value;
+            }
+            else if (arg == L"--auto-opacity") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoOpacity = value;
+            }
+            else if (arg == L"--auto-grid") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoGrid = value;
             }
             else if (arg == L"--user-safe" && i + 1 < argc) {
                 std::wstring val = argv[++i];
@@ -5760,26 +10982,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
                 else if (val == L"alttab") g_restoreMethod = 2;
             }
             else if (arg == L"--fishstrap-support") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_fishstrapSupport = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_fishstrapSupport = true;
-                }
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_fishstrapSupport = value;
             }
             else if (arg == L"--bloxstrap-integration") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_bloxstrapIntegration = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_bloxstrapIntegration = true;
-                }
-                arg_bloxstrapIntegration_cmd = true;
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_bloxstrapIntegration = value;
+                arg_bloxstrapIntegration_cmd = value;
+            }
+            else if (arg == L"--do-not-sleep") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_doNotSleep = value;
             }
             else if (arg == L"--unlock-fps-on-focus") {
-                if (i + 1 < argc && (std::wstring(argv[i + 1]) == L"on" || std::wstring(argv[i + 1]) == L"off")) {
-                    g_unlockFpsOnFocus = (std::wstring(argv[++i]) == L"on");
-                } else {
-                    g_unlockFpsOnFocus = true;
-                }
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_unlockFpsOnFocus = value;
             }
             else if (arg == L"--set-fps-limit" && i + 1 < argc) {
                 try {
@@ -5790,10 +11011,109 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
                 }
                 catch (...) {}
             }
+            else if (arg == L"--auto-mute") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_autoMute = value;
+            }
+            else if (arg == L"--unmute-on-focus") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_unmuteOnFocus = value;
+            }
+            else if (arg == L"--discord-webhook") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordWebhookEnabled = value;
+            }
+            else if (arg == L"--discord-webhook-url" && i + 1 < argc) {
+                SetDiscordWebhookUrl(argv[++i]);
+            }
+            else if (arg == L"--discord-notify-start") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordNotifyStart = value;
+                g_discordNotifyStop = value;
+            }
+            else if (arg == L"--discord-notify-action") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordNotifyAction = value;
+            }
+            else if (arg == L"--discord-notify-reconnect") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordNotifyReconnect = value;
+            }
+            else if (arg == L"--discord-notify-errors") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordNotifyErrors = value;
+            }
+            else if (arg == L"--discord-disable-embed") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordDisableEmbed = value;
+            }
+            else if (arg == L"--discord-mention-on-errors") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_discordMentionOnErrors = value;
+            }
+            else if (arg == L"--utils-show-all") {
+                arg_hasUtilityCommand = true;
+                arg_utilsShowAll = true;
+            }
+            else if (arg == L"--utils-hide-all") {
+                arg_hasUtilityCommand = true;
+                arg_utilsHideAll = true;
+            }
+            else if (arg == L"--utils-grid-snap") {
+                arg_hasUtilityCommand = true;
+                arg_utilsGridSnap = true;
+            }
+            else if (arg == L"--utils-window-opacity") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                arg_hasUtilityCommand = true;
+                arg_utilsWindowOpacitySet = true;
+                arg_utilsWindowOpacity = value;
+            }
+            else if (arg == L"--utils-mute") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                arg_hasUtilityCommand = true;
+                arg_utilsMuteSet = true;
+                arg_utilsMute = value;
+            }
+            else if (arg == L"--utils-fps") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                arg_hasUtilityCommand = true;
+                arg_utilsFpsSet = true;
+                arg_utilsFps = value;
+            }
+            else if (arg == L"--utils-test-action") {
+                arg_hasUtilityCommand = true;
+                arg_utilsTestAction = true;
+            }
+            else if (arg == L"--utils-reset-all") {
+                arg_hasUtilityCommand = true;
+                arg_utilsResetAll = true;
+            }
+            else if (arg == L"--utils-close-all") {
+                arg_hasUtilityCommand = true;
+                arg_utilsCloseAll = true;
+            }
         }
         LocalFree(argv);
     }
     
+    if (arg_hasUtilityCommand) {
+        arg_noSplash = true;
+        arg_tray = true;
+    }
+
     if (arg_bloxstrapIntegration_cmd) {
         arg_noSplash = true;
         arg_tray = true;
@@ -5833,7 +11153,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
 
     if (arg_checkUpdatesAndExit) {
         CheckForUpdates(false);
-        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : L"You are using the latest version.", L"Update Check", MB_OK | MB_ICONINFORMATION);
+        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Error to check updates." : L"You are using the latest version."), L"Update Check", MB_OK | MB_ICONINFORMATION);
         return 0;
     }
 
@@ -5853,13 +11173,66 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
         EnableMultiInstanceSupport();
     ShowWindow(g_hwnd, SW_HIDE);
 
+    if (arg_hasUtilityCommand) {
+        bool trayMenuNeedsRefresh = false;
+
+        if (arg_utilsWindowOpacitySet) {
+            g_utilsWindowOpacityOverride = arg_utilsWindowOpacity ? 1 : 0;
+            RefreshRobloxWindowOpacity(false);
+            trayMenuNeedsRefresh = true;
+            ShowStatusBarOverlay(arg_utilsWindowOpacity ? L"Session opacity enabled" : L"Session opacity disabled", 1800, g_hwnd);
+        }
+
+        if (arg_utilsMuteSet) {
+            g_utilsMuteOverride = arg_utilsMute ? 1 : 0;
+            if (!arg_utilsMute) {
+                g_unmutedPid = 0;
+            }
+            MuteAllRoblox(arg_utilsMute);
+            trayMenuNeedsRefresh = true;
+            ShowStatusBarOverlay(arg_utilsMute ? L"Roblox muted" : L"Roblox unmuted", 1800, g_hwnd);
+        }
+
+        if (arg_utilsFpsSet) {
+            g_utilsFpsLimitOverride = arg_utilsFps ? (g_fpsLimit > 0 ? g_fpsLimit : 5) : -1;
+            RestartFpsCapperForEffectiveLimit();
+            trayMenuNeedsRefresh = true;
+            if (arg_utilsFps) {
+                wchar_t fpsMessage[80];
+                swprintf_s(fpsMessage, L"Session FPS limit set to %d", g_utilsFpsLimitOverride.load());
+                ShowStatusBarOverlay(fpsMessage, 1800, g_hwnd);
+            } else {
+                ShowStatusBarOverlay(L"Session FPS override disabled", 1800, g_hwnd);
+            }
+        }
+
+        if (trayMenuNeedsRefresh) {
+            CreateTrayMenu(g_isAfkStarted.load());
+        }
+
+        if (arg_utilsShowAll) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_SHOW_ALL, 0);
+        }
+        if (arg_utilsHideAll) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_HIDE_ALL, 0);
+        }
+        if (arg_utilsGridSnap) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_GRID_SNAP, 0);
+        }
+        if (arg_utilsTestAction) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_TEST_ACTION, 0);
+        }
+        if (arg_utilsResetAll) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_RESET_ALL, 0);
+        }
+        if (arg_utilsCloseAll) {
+            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_CLOSE_ALL, 0);
+        }
+    }
+
     if (arg_tray) {
         g_tutorialShown = true; 
     }
-    if (arg_startAfk) {
-        ShowTrayNotification(L"AntiAFK-RBX | Started via Argument", L"AntiAFK has started automatically.");
-    }
-
     std::thread t(main_thread, arg_tray); 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0))
@@ -5887,3 +11260,4 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
     return 0;
 }
 // ==========
+
