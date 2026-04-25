@@ -1,8 +1,8 @@
 ﻿{
-	"enabled": true,
+	"enabled": false,
 	"notify": false,
 	"icon": "\uE76E",
-	"iconColor": "#00FFFF",
-	"title": "Test",
+	"iconColor": "#FFFFFF",
+	"title": "",
 	"description": ""
 }
