@@ -1,6 +1,8 @@
 {
   "enabled": true,
+  "notify": true,
   "icon": "\uE7F4",
+  "iconColor": "#00FFFF",
   "title": "Test",
-  "description": "Announcement test for version 3.2.1"
+  "description": "Test2"
 }
