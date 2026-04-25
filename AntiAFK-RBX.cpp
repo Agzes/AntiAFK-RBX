@@ -1,9 +1,9 @@
-// AntiAFK-RBX.cpp | The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. | By Agzes
+﻿// AntiAFK-RBX.cpp | The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. | By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 
-int currentVersion = 30200; // Major*10000 + Minor*100 + Patch or Mini Update
-const wchar_t* g_Version = L"v.3.2.0";
+int currentVersion = 30201; // Major*10000 + Minor*100 + Patch or Mini Update
+const wchar_t* g_Version = L"v.3.2.1";
 
 #include <windows.h>
 #include <windowsx.h>
@@ -163,6 +163,7 @@ using namespace std::chrono_literals;
 #define ID_DISCORD_NOTIFY_ERRORS 1321
 #define ID_DISCORD_DISABLE_EMBED 1322
 #define ID_DISCORD_MENTION_ON_ERRORS 1323
+#define ID_OPEN_ANNOUNCEMENT 1324
 
 constexpr UINT WM_APP_SHOW_STATUS_BAR = WM_APP + 20;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
@@ -172,6 +173,15 @@ constexpr UINT STATUS_BAR_PRE_ACTION_DELAY = 2000;
 constexpr UINT STATUS_BAR_POST_ACTION_DURATION = 1000;
 constexpr DWORD FPS_CAPPER_PRE_ACTION_PAUSE_MS = 1500;
 constexpr UINT STATUS_BAR_ACTION_PENDING_DURATION = 120000;
+
+struct AnnouncementInfo {
+    bool enabled = false;
+    bool notify = false;
+    std::wstring icon = L"\uE7F4";
+    COLORREF iconColor = RGB(0, 180, 216);
+    std::wstring title;
+    std::wstring description;
+};
 
 
 HWND g_hwnd;
@@ -197,7 +207,9 @@ std::mutex g_autoWindowLayoutMutex;
 std::vector<UINT_PTR> g_lastAutoGridWindowSignature;
 std::mutex g_cv_m;
 std::mutex g_discordWebhookMutex;
+std::mutex g_announcementMutex;
 std::wstring g_discordWebhookUrl;
+AnnouncementInfo g_announcement;
 
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX-tray");
 wchar_t g_splashStatus[128] = L"Initializing...";
@@ -228,6 +240,7 @@ struct StatusBarPayload {
 
 
 bool CheckForUpdates(bool showNotification);
+bool CheckForAnnouncement(bool showNotification = false);
 void SaveSettings();
 std::string EscapeJsonStringUtf8(const std::string& input);
 void FpsCapperThread();
@@ -256,6 +269,9 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_
 bool TryParseOnOffValue(const std::wstring& value, bool& outValue);
 bool ReadOptionalOnOffArgument(LPWSTR* argv, int argc, int& index, bool defaultValue, bool& outValue);
 void ResetStatisticsCounters();
+static bool ParseJsonBool(const std::wstring& json, const std::wstring& key, bool& value);
+static bool ParseJsonString(const std::wstring& json, const std::wstring& key, std::wstring& value);
+AnnouncementInfo GetAnnouncementCopy();
 
 // Args
 void ShowHelp()
@@ -1284,7 +1300,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         if (PtInRect(&pData->sourceforgeButtonRect, pt))
         {
-            ShellExecute(NULL, L"open", L"https://antiafk-rbx.sourceforge.io", NULL, NULL, SW_SHOWNORMAL);
+            ShellExecute(NULL, L"open", L"https://sourceforge.net/projects/antiafk-rbx/", NULL, NULL, SW_SHOWNORMAL);
             return 0;
         }
         if (PtInRect(&pData->topCloseButtonRect, pt))
@@ -1952,11 +1968,7 @@ void ShowAllRobloxWindows_Multi()
     auto wins = FindAllRobloxWindows(true);
     for (HWND w : wins)
     {
-        if (IsIconic(w))
-        {
-            ShowWindow(w, SW_RESTORE);
-        }
-        else if (!IsWindowVisible(w))
+        if (!IsWindowVisible(w) || IsIconic(w))
         {
             ShowWindow(w, SW_SHOW);
         }
@@ -2018,7 +2030,7 @@ void ApplyAutoRobloxWindowLayout()
         g_lastAutoGridWindowSignature.clear();
     }
 }
-bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount)
+bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool showHiddenWindows = true)
 {
     auto wins = FindAllRobloxWindows(true);
     if (!action || repeatCount <= 0 || wins.empty()) {
@@ -2033,7 +2045,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount)
         bool wasVisible = IsWindowVisible(w) != FALSE;
         bool wasMinimized = IsIconic(w);
 
-        if (!wasVisible) {
+        if (!wasVisible && showHiddenWindows) {
             ShowWindow(w, SW_SHOW);
         }
         if (wasMinimized) {
@@ -2047,7 +2059,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount)
             action(w);
         }
 
-        if (!wasVisible) {
+        if (!wasVisible && showHiddenWindows) {
             ShowWindow(w, SW_HIDE);
         }
         else if (wasMinimized) {
@@ -4135,6 +4147,19 @@ static bool ParseJsonString(const std::wstring& json, const std::wstring& key, s
             case L't': out.push_back(L'\t'); break;
             case L'b': out.push_back(L'\b'); break;
             case L'f': out.push_back(L'\f'); break;
+            case L'u':
+                if (i + 4 < raw.size()) {
+                    wchar_t* endPtr = nullptr;
+                    std::wstring hex = raw.substr(i + 1, 4);
+                    long codePoint = wcstol(hex.c_str(), &endPtr, 16);
+                    if (endPtr && *endPtr == L'\0' && codePoint > 0 && codePoint <= 0xFFFF) {
+                        out.push_back((wchar_t)codePoint);
+                        i += 4;
+                        break;
+                    }
+                }
+                out.push_back(L'u');
+                break;
             default: out.push_back(next); break;
             }
         } else {
@@ -4143,6 +4168,175 @@ static bool ParseJsonString(const std::wstring& json, const std::wstring& key, s
     }
     value = out;
     return true;
+}
+
+static std::wstring TrimAnnouncementField(std::wstring value, size_t maxLength)
+{
+    value.erase(0, value.find_first_not_of(L" \t\r\n"));
+    size_t last = value.find_last_not_of(L" \t\r\n");
+    if (last == std::wstring::npos)
+    {
+        value.clear();
+    }
+    else
+    {
+        value.erase(last + 1);
+    }
+
+    for (wchar_t& ch : value)
+    {
+        if (ch == L'\r' || ch == L'\n' || ch == L'\t')
+        {
+            ch = L' ';
+        }
+    }
+
+    if (value.size() > maxLength)
+    {
+        value.resize(maxLength);
+    }
+    return value;
+}
+
+static bool ParseAnnouncementIconColor(const std::wstring& rawColor, COLORREF& outColor)
+{
+    std::wstring value = TrimAnnouncementField(rawColor, 16);
+    if (value.empty())
+    {
+        return false;
+    }
+
+    if (value[0] == L'#')
+    {
+        value.erase(value.begin());
+    }
+    else if (value.size() > 2 && value[0] == L'0' && (value[1] == L'x' || value[1] == L'X'))
+    {
+        value.erase(0, 2);
+    }
+
+    if (value.size() != 6)
+    {
+        return false;
+    }
+
+    wchar_t* endPtr = nullptr;
+    long rgb = wcstol(value.c_str(), &endPtr, 16);
+    if (!endPtr || *endPtr != L'\0' || rgb < 0 || rgb > 0xFFFFFF)
+    {
+        return false;
+    }
+
+    outColor = RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    return true;
+}
+
+static bool DownloadTextUrl(const wchar_t* url, std::string& outText, DWORD timeoutMs = 5000, size_t maxBytes = 8192)
+{
+    outText.clear();
+    HINTERNET hInternet = InternetOpen(L"AntiAFK-RBX/3.2", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet)
+    {
+        return false;
+    }
+
+    InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+    InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+    InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
+
+    HINTERNET hConnect = InternetOpenUrl(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI, 0);
+    if (!hConnect)
+    {
+        InternetCloseHandle(hInternet);
+        return false;
+    }
+
+    char buffer[512] = { 0 };
+    DWORD bytesRead = 0;
+    bool ok = true;
+    while (InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+    {
+        if (outText.size() + bytesRead > maxBytes)
+        {
+            ok = false;
+            break;
+        }
+        outText.append(buffer, bytesRead);
+        bytesRead = 0;
+    }
+
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+    return ok && !outText.empty();
+}
+
+AnnouncementInfo GetAnnouncementCopy()
+{
+    std::lock_guard<std::mutex> lock(g_announcementMutex);
+    return g_announcement;
+}
+
+bool CheckForAnnouncement(bool showNotification)
+{
+    static const wchar_t* ANNOUNCEMENT_URL = L"https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/Announcement/announcement.json";
+
+    std::string bytes;
+    AnnouncementInfo nextAnnouncement;
+
+    if (DownloadTextUrl(ANNOUNCEMENT_URL, bytes, 4000, 8192))
+    {
+        std::wstring json = Utf8ToWide(bytes);
+        bool enabled = false;
+        ParseJsonBool(json, L"enabled", enabled);
+        ParseJsonBool(json, L"isEnabled", enabled);
+
+        if (enabled)
+        {
+            bool notify = false;
+            std::wstring icon, iconColor, title, description;
+            COLORREF parsedIconColor = RGB(0, 180, 216);
+
+            ParseJsonBool(json, L"notify", notify);
+            ParseJsonBool(json, L"isNotify", notify);
+            ParseJsonString(json, L"icon", icon);
+            ParseJsonString(json, L"iconColor", iconColor);
+            ParseJsonString(json, L"color", iconColor);
+            ParseJsonString(json, L"title", title);
+            ParseJsonString(json, L"text", title);
+            ParseJsonString(json, L"description", description);
+            ParseJsonString(json, L"desc", description);
+            ParseAnnouncementIconColor(iconColor, parsedIconColor);
+
+            nextAnnouncement.notify = notify;
+            nextAnnouncement.icon = TrimAnnouncementField(icon.empty() ? L"\uE7F4" : icon, 2);
+            nextAnnouncement.iconColor = parsedIconColor;
+            nextAnnouncement.title = TrimAnnouncementField(title, 80);
+            nextAnnouncement.description = TrimAnnouncementField(description, 140);
+            nextAnnouncement.enabled = !nextAnnouncement.title.empty();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_announcementMutex);
+        g_announcement = nextAnnouncement;
+    }
+
+    if (nextAnnouncement.enabled && showNotification && nextAnnouncement.notify)
+    {
+        const std::wstring notificationText = nextAnnouncement.description.empty() ? nextAnnouncement.title : nextAnnouncement.description;
+        ShowTrayNotification(nextAnnouncement.title.c_str(), notificationText.c_str());
+    }
+
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
+    {
+        InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+    }
+    if (g_hwnd)
+    {
+        CreateTrayMenu(g_isAfkStarted.load());
+    }
+
+    return nextAnnouncement.enabled;
 }
 
 static void ApplySettingsSnapshot(const SettingsSnapshot& s)
@@ -4274,6 +4468,7 @@ void CreateTrayMenu(bool afk)
     if (g_hMenu)
         DestroyMenu(g_hMenu);
     g_hMenu = CreatePopupMenu();
+    AnnouncementInfo announcement = GetAnnouncementCopy();
 
     HMENU InfoMenu = CreatePopupMenu();
     AppendMenu(InfoMenu, MF_STRING, ID_ABOUT_MENU, L"About AntiAFK-RBX");
@@ -4289,6 +4484,10 @@ void CreateTrayMenu(bool afk)
         wchar_t statusText[128];
         swprintf_s(statusText, L"Status: %s", afk ? L"Running" : L"Stopped");
         AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, statusText);
+        if (announcement.enabled)
+        {
+            AppendMenu(g_hMenu, MF_STRING, ID_OPEN_ANNOUNCEMENT, announcement.title.c_str());
+        }
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
         AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
@@ -4310,6 +4509,10 @@ void CreateTrayMenu(bool afk)
     wchar_t infoText[128];
     swprintf_s(infoText, L"Legacy UI • %s", g_Version);
     AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, ID_INFORMATION, infoText);
+    if (announcement.enabled)
+    {
+        AppendMenu(g_hMenu, MF_STRING, ID_OPEN_ANNOUNCEMENT, announcement.title.c_str());
+    }
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(g_hMenu, MF_STRING, ID_EMULATE_SPACE, L"Test Anti-AFK move");
     AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
@@ -4348,7 +4551,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     HMENU hSettingsSubmenu = CreatePopupMenu();
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_fishstrapSupport.load() ? MF_CHECKED : 0), ID_FISHSTRAP_SUP, L"FishStrap/Shaders Support");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update Checker");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
@@ -5410,7 +5613,11 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             Font font13(memDC, pData->hFont13);
             SolidBrush textBrush(Color(255, 200, 200, 200));
             RectF rSub((REAL)margin, (REAL)y_pos + 15 + s1.Height + 10, (REAL)clientRect.right - margin, (REAL)clientRect.bottom - 80);
-            g.DrawString(L"This quick tutorial will walk you through the key features and help with the initial setup.", -1, &font13, rSub, NULL, &textBrush);
+            g.DrawString(
+                L"This quick tutorial will walk you through the key features and help with the initial setup.\n\n"
+                L"Warning: AntiAFK-RBX has no official website.\n"
+                L"Download only from GitHub or SourceForge.",
+                -1, &font13, rSub, NULL, &textBrush);
         }
         else if (pData->page == 1)
         {
@@ -6876,7 +7083,8 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     }
 
     if (pData->currentPage == 0 && PtInRect(&pData->discordButtonRect, pt)) {
-        ShellExecute(NULL, L"open", L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
+        AnnouncementInfo announcement = GetAnnouncementCopy();
+        ShellExecute(NULL, L"open", announcement.enabled ? L"https://agzes.github.io/go/to/antiafk-rbx/notify" : L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
         return;
     }
 
@@ -7003,7 +7211,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
                 if (i == 8) { title = L"Do not sleep"; text = L"Stops Windows from putting the PC to sleep while Anti-AFK is active.\n\nUseful for long unattended sessions. On laptops, this can also prevent sleep-related behavior that would otherwise interrupt Roblox."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"FishStrap/Shaders Support"; text = L"Legacy compatibility option.\n\nThis was mainly needed back when Fishstrap/shader-based setups were commonly used and Roblox detection could break.\n\nToday it usually has no benefit, but it is kept for older/edge setups. Leave it off unless you specifically need it."; }
-                if (i == 1) { title = L"Update Checker"; text = L"Checks for newer AntiAFK-RBX versions when the app starts and shows a notice if an update is available.\n\nDisable this only if you prefer to check for updates manually."; }
+                if (i == 1) { title = L"Update/Announcement Checker"; text = L"Checks for newer AntiAFK-RBX versions and remote announcements when the app starts.\n\nDisable this if you prefer no automatic startup checks. Manual update checks are still available from About."; }
                 if (i == 2) { title = L"Use Legacy UI (Tray)"; text = L"Switches from the modern window interface to the older tray-menu style interface.\n\nThis is useful if you prefer the classic compact workflow. You can switch back later from the tray settings."; }
                 if (i == 3) { title = L"Status Bar*"; text = L"Experimental feature (*) that shows a small on-screen overlay for important events such as start, stop, reconnect actions, and other Anti-AFK status updates.\n\nThis is just an experimental UI feature. Disable it if you want a quieter experience with tray notifications only."; }
                 if (i == 4) { title = L"FPS Capper*"; text = L"Experimental feature (*) that reduces Roblox's frame rate to lower CPU and GPU usage.\n\nThis can save power and reduce heat during background sessions.\n\nNote: it works by limiting/influencing the Roblox process timing rather than enforcing an exact in-game FPS lock, so the FPS you see may fluctuate."; }
@@ -7743,6 +7951,7 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             DeleteObject(updateBannerArrowFontH);
         }
 
+        AnnouncementInfo announcement = GetAnnouncementCopy();
         Color discordBgColor = pData->isHoveringDiscord ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
         SolidBrush discordBgBrush(discordBgColor);
         g.FillRectangle(&discordBgBrush, (REAL)pData->discordButtonRect.left, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - pData->discordButtonRect.left), (REAL)(pData->discordButtonRect.bottom - pData->discordButtonRect.top));
@@ -7751,7 +7960,9 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         HFONT discordIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
         Font discordIconFont(hdc, discordIconFontH);
-        SolidBrush discordIconBrush(Color(255, 88, 101, 242));
+        SolidBrush discordIconBrush(announcement.enabled
+            ? Color(255, GetRValue(announcement.iconColor), GetGValue(announcement.iconColor), GetBValue(announcement.iconColor))
+            : Color(255, 88, 101, 242));
         int discordIconSize = 11;
         int discordIconPadding = 2;
         int discordIconX = pData->discordButtonRect.left + 20;
@@ -7760,17 +7971,29 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         StringFormat sfDiscordIcon;
         sfDiscordIcon.SetAlignment(StringAlignmentCenter);
         sfDiscordIcon.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"\uE8BD", -1, &discordIconFont, discordIconRect, &sfDiscordIcon, &discordIconBrush);
+        g.DrawString(announcement.enabled ? announcement.icon.c_str() : L"\uE8BD", -1, &discordIconFont, discordIconRect, &sfDiscordIcon, &discordIconBrush);
         DeleteObject(discordIconFontH);
 
         Font discordTextFont(hdc, pData->hFontText);
         SolidBrush discordTextBrush(Color(255, 220, 220, 220));
         int discordTextX = discordIconX + discordIconSize + discordIconPadding * 2 + 10;
-        RectF discordTextRect((REAL)discordTextX, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)32);
+        RectF discordTextRect((REAL)discordTextX, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)(announcement.enabled && !announcement.description.empty() ? 18 : 32));
         StringFormat sfDiscordText;
         sfDiscordText.SetAlignment(StringAlignmentNear);
-        sfDiscordText.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
+        sfDiscordText.SetLineAlignment(announcement.enabled && !announcement.description.empty() ? StringAlignmentFar : StringAlignmentCenter);
+        sfDiscordText.SetTrimming(StringTrimmingEllipsisCharacter);
+        g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
+
+        if (announcement.enabled && !announcement.description.empty()) {
+            Font discordDescriptionFont(hdc, pData->hFontSmall);
+            SolidBrush discordDescriptionBrush(Color(255, 150, 150, 150));
+            RectF discordDescriptionRect((REAL)discordTextX, (REAL)(pData->discordButtonRect.top + 16), (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)16);
+            StringFormat sfDiscordDescription;
+            sfDiscordDescription.SetAlignment(StringAlignmentNear);
+            sfDiscordDescription.SetLineAlignment(StringAlignmentNear);
+            sfDiscordDescription.SetTrimming(StringTrimmingEllipsisCharacter);
+            g.DrawString(announcement.description.c_str(), -1, &discordDescriptionFont, discordDescriptionRect, &sfDiscordDescription, &discordDescriptionBrush);
+        }
 
         HFONT discordArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Segoe MDL2 Assets");
         Font discordArrowFont(hdc, discordArrowFontH);
@@ -7991,7 +8214,7 @@ void MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
 
         MainUI_Paint_DrawToggle(hdc, pData->fishstrapToggleRect, pData->hFontText, L"FishStrap/Shaders Support", g_fishstrapSupport.load(), PtInRect(&pData->fishstrapToggleRect, pData->hoverPoint), pData->fishstrapAnim, true, L"\uE790");
-        MainUI_Paint_DrawToggle(hdc, pData->autoUpdateToggleRect, pData->hFontText, L"Update Checker", g_autoUpdate.load(), PtInRect(&pData->autoUpdateToggleRect, pData->hoverPoint), pData->autoUpdateAnim, true, L"\uE777");
+        MainUI_Paint_DrawToggle(hdc, pData->autoUpdateToggleRect, pData->hFontText, L"Update/Announcement Checker", g_autoUpdate.load(), PtInRect(&pData->autoUpdateToggleRect, pData->hoverPoint), pData->autoUpdateAnim, true, L"\uE777");
         MainUI_Paint_DrawToggle(hdc, pData->legacyUiToggleRect, pData->hFontText, L"Use Legacy UI (Tray)", g_useLegacyUi.load(), PtInRect(&pData->legacyUiToggleRect, pData->hoverPoint), pData->legacyUiAnim, true, L"\uE81C");
         MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), PtInRect(&pData->statusBarToggleRect, pData->hoverPoint), pData->statusBarAnim, true, L"\uE7F4");
 
@@ -9409,6 +9632,18 @@ void main_thread(bool arg_tray)
         }
     }
 
+    if (g_autoUpdate.load())
+    {
+        UpdateSplashStatus(L"Checking announcements...");
+        try
+        {
+            CheckForAnnouncement(true);
+        }
+        catch (...)
+        {
+        }
+    }
+
     UpdateSplashStatus(L"Preparing user-safe mode...");
     if (g_userSafeMode > 0 || g_afkReminderEnabled.load())
     {
@@ -9869,9 +10104,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX", NULL, NULL, SW_SHOWNORMAL);
             break;
         }
+        case ID_OPEN_ANNOUNCEMENT:
+        {
+            ShellExecute(NULL, L"open", L"https://agzes.github.io/go/to/antiafk-rbx/notify", NULL, NULL, SW_SHOWNORMAL);
+            break;
+        }
         case ID_LINKSF:
         {
-            ShellExecute(NULL, L"open", L"https://antiafk-rbx.sourceforge.io", NULL, NULL, SW_SHOWNORMAL);
+            ShellExecute(NULL, L"open", L"https://sourceforge.net/projects/antiafk-rbx/", NULL, NULL, SW_SHOWNORMAL);
             break;
         }
         case ID_INFORMATION:
@@ -10013,16 +10253,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case ID_SHOW_WINDOW:
         {
-            bool shown = false;
-            HWND anchor = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow();
             if (!g_multiSupport.load())
             {
                 HWND rbx = FindWindowByProcessName(L"RobloxPlayerBeta.exe");
                 if (rbx)
                 {
                     ShowWindow(rbx, SW_SHOW);
-                    shown = true;
-                    anchor = rbx;
                 }
                 else if (g_fishstrapSupport.load())
                 {
@@ -10030,55 +10266,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (rbx)
                     {
                         ShowWindow(rbx, SW_SHOW);
-                        shown = true;
-                        anchor = rbx;
                     }
                     else
                     {
                         ShowTrayNotification(L"Error", L"Roblox window not found!");
-                        ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                     }
                 }
                 else
                 {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                 }
             }
             else
             {
-                auto wins = FindAllRobloxWindows(true);
-                if (wins.empty())
-                {
-                    ShowTrayNotification(L"Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
-                }
-                else
-                {
-                    ShowAllRobloxWindows_Multi();
-                    shown = true;
-                    anchor = wins.front();
-                }
-            }
-
-            if (shown)
-            {
-                ShowStatusBarOverlay(L"Roblox window shown", 1600, anchor);
+                ShowAllRobloxWindows_Multi();
             }
             break;
         }
         case ID_HIDE_WINDOW:
         {
-            bool hidden = false;
-            HWND anchor = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow();
             if (!g_multiSupport.load())
             {
                 HWND rbx = FindWindowByProcessName(L"RobloxPlayerBeta.exe");
                 if (rbx)
                 {
                     ShowWindow(rbx, SW_HIDE);
-                    hidden = true;
-                    anchor = rbx;
                 }
                 else if (g_fishstrapSupport.load())
                 {
@@ -10086,41 +10298,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (rbx)
                     {
                         ShowWindow(rbx, SW_HIDE);
-                        hidden = true;
-                        anchor = rbx;
                     }
                     else
                     {
                         ShowTrayNotification(L"Error", L"Roblox window not found!");
-                        ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                     }
                 }
                 else
                 {
                     ShowTrayNotification(L"Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
                 }
             }
             else
             {
-                auto wins = FindAllRobloxWindows(true);
-                if (wins.empty())
-                {
-                    ShowTrayNotification(L"Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, anchor);
-                }
-                else
-                {
-                    for (HWND w : wins)
-                        ShowWindow(w, SW_HIDE);
-                    hidden = true;
-                    anchor = wins.front();
-                }
-            }
-
-            if (hidden)
-            {
-                ShowStatusBarOverlay(L"Roblox window hidden", 1600, anchor);
+                auto wins = FindAllRobloxWindows();
+                for (HWND w : wins)
+                    ShowWindow(w, SW_HIDE);
             }
             break;
         }
@@ -10452,7 +10645,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case ID_UTILS_TEST_ACTION:
         {
-            if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3)) {
+            if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3, false)) {
                 g_lastAfkActionTimestamp = GetTickCount64();
                 ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
