@@ -18,13 +18,14 @@
   <a href="https://github.com/Agzes/AntiAFK-RBX/issues/new?template=bug_report.md"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/bug.png" alt="Bug? Write issue!" style="width:32%; min-width:190px;"></a>
   <a href="https://github.com/Agzes/AntiAFK-RBX/wiki"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/wiki.png" alt="Wiki" style="width:32%; min-width:190px;"></a>
 </p>
+
+🐧 Looking for a linux solution? use [AntiAFK-RBX-Sober!](https://github.com/Agzes/AntiAFK-RBX-Sober)
+
+<h2 align="center">  </h2>
 <p align="center" width="100%">
   <a href="https://github.com/Agzes/AntiAFK-RBX/blob/main/LICENSE"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/refs/heads/main/ReadME/license.png" alt="MIT LICENSE" style="width:32%; min-width:190px;"></a>
 </p>
-
-
-<h2 align="center">  </h2>
-<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd> <br><br>
+<h5 align="center">  <kbd>"ᴊᴜsᴛ ᴛʜᴇ ʙᴇsᴛ sᴏʟᴜᴛɪᴏɴ ғᴏʀ ʀᴏʙʟᴏx ᴀɴᴛɪ-ᴀғᴋ" </kbd><br>
 <kbd>With</kbd> <kbd>❤️</kbd> <kbd>by</kbd> <kbd>Agzes</kbd><br>
 <kbd>pls ⭐ project!</kbd><br>
 
