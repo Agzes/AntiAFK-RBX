@@ -1,8 +1,8 @@
 ﻿{
-	"enabled": false,
+	"enabled": true,
 	"notify": false,
-	"icon": "\uE76E",
-	"iconColor": "#FFFFFF",
-	"title": "",
-	"description": ""
+	"icon": "\uEA80",
+	"iconColor": "#2B4ECC",
+	"title": "Got ideas?",
+	"description": "Suggest features for v.3.3!"
 }
