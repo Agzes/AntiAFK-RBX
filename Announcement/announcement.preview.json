@@ -1,0 +1,8 @@
+﻿{
+    "enabled": true,
+    "notify": false,
+    "icon": "\uE734",
+    "iconColor": "#305af2",
+    "title": "Welcome to AntiAFK-RBX v4 alpha testing!",
+    "description": "Please report any bugs on GitHub or the Discord server!"
+}
