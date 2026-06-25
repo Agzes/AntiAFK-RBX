@@ -15,7 +15,7 @@ You are looking at the preview version of new AntiAFK-RBX **V4**, which is curre
 
 <p align="center" width="100%">
     <a href="https://agzes.github.io/go/to/discord"><img src="ReadME/discord-server.png" alt="Join Discord Server" style="width:45%; min-width:190px; max-width:500px;"></a>
-    <a href="https://github.com/Agzes/AntiAFK-RBX/releases/"><img src="ReadME/download-preview.png" alt="Download Now (v.4.0.0-alpha1)" style="width:45%; min-width:190px; max-width:500px;"></a>
+    <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.4.0.0-alpha.1/AntiAFK-RBX.v.4.0.0-alpha.1.exe"><img src="ReadME/download-preview.png" alt="Download Now (v.4.0.0-alpha1)" style="width:45%; min-width:190px; max-width:500px;"></a>
   <br>
     <img src="ReadME/V4.0.0alpha-Main.png" alt="AntiAFK-RBX by Agzes v.4.0.0 (alpha), UI, Features: Lightweight, Fully Customizable, Dark Theme, Free, Clean Design, Stable, Stealth Mode, Unique 'User-Safe' feature, Fast, Safe To Use, FPS (CPU) Capper, All-in-One, Active Updates, Import/Export Settings, Bloxstrap/Fishstrap integration, Custom Games Support, Uobtrusive, WebHook, Multi-Instance, Window Control, Minimize to Tray, Auto-Mute, Smooth, Easy to use, Grid Snap, Open-Source, Auto-Start, Statistics, Ram Cleaner, Not demanding, Auto-Reconnect, Status Bar, Launch Arguments, Delays control, Screen Saver, Simple Mode, Instance Manager, Native C++ & WinAPI, Portable, Ad-Free, Background Working Mode, Auto Restore Window">
   <br>
