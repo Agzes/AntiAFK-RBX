@@ -1,8 +1,8 @@
 ﻿{
-	"enabled": true,
-	"notify": false,
-	"icon": "\uE8BD",
-	"iconColor": "#2B4ECC",
-	"title": "AntiAFK-RBX V4 alpha...",
-	"description": "Vote for the alpha release in Discord"
+    "enabled": false,
+    "notify": false,
+    "icon": "\uE8BD",
+    "iconColor": "#2B4ECC",
+    "title": "AntiAFK-RBX V4 alpha...",
+    "description": "Vote for the alpha release in Discord"
 }
