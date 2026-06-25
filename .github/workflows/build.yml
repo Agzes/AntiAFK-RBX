@@ -3,6 +3,15 @@ name: Build AntiAFK-RBX
 on:
   push:
     branches: [preview]
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - '**.hpp'
+      - '**.rc'
+      - '**.sln'
+      - '**.vcxproj'
+      - '**.vcxproj.filters'
+  push:
     tags: ['v*']
 
 jobs:
