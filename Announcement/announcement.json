@@ -1,8 +1,8 @@
-﻿{
-    "enabled": false,
+﻿﻿{
+    "enabled": true,
     "notify": false,
-    "icon": "\uE8BD",
-    "iconColor": "#2B4ECC",
-    "title": "AntiAFK-RBX V4 alpha...",
-    "description": "Vote for the alpha release in Discord"
+    "icon": "\uE734",
+    "iconColor": "#305af2",
+    "title": "Ready to AntiAFK-RBX V4?",
+    "description": "Download v.4.0.0-alpha1 now from the preview branch!"
 }
