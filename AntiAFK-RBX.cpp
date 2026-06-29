@@ -1,4 +1,4 @@
-﻿// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
+// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 #define ALPHA   1
@@ -19257,6 +19257,8 @@ void main_thread(bool arg_tray)
                         RestorePreviousWindowWithSmartAltTab(altN);
                     }
                 }
+
+                ResumeFpsCapperAfterAction(wasFpsCapperPaused);
 
                 if (!cancelPendingAction && anyActionPerformed) {
                     QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front());
