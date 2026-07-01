@@ -171,6 +171,7 @@ using namespace std::chrono_literals;
 #define ID_AUTO_RESET 313
 #define ID_AUTO_HIDE 314
 #define ID_I_CAN_FORGET 315
+#define ID_SKIP_ACTIVE 1348
 #define ID_STATUS_BAR 316
 #define ID_AUTO_OPACITY 317
 #define ID_AUTO_GRID 318
@@ -360,6 +361,16 @@ std::atomic<bool> g_discordWebhookEnabled(false), g_discordNotifyStart(true), g_
 std::atomic<int> g_afkReminderState(0); // 0 - no reminder, 1 - reminded at 18min, 2 - AFK started at 19min
 std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0), g_longestAfkSessionSeconds(0), g_discordWebhooksSent(0), g_programLaunches(0), g_afkSessionsCompleted(0);
 std::atomic<DWORD> g_unmutedPid(0);
+std::atomic<bool> g_skipActiveEnabled(false);
+std::atomic<uint64_t> g_windowActivityReferenceTick(0);
+struct WindowActivity {
+    HWND hwnd = NULL;
+    uint64_t lastActiveTick = 0;
+    DWORD pid = 0;
+    int icanForgetState = 0; // 0=none, 1=reminder shown, 2=auto-started
+};
+std::map<HWND, WindowActivity> g_windowActivity;
+std::mutex g_windowActivityMutex;
 int g_tutorialStartPage = 0;
 std::atomic<int> g_reconnectCheckInterval(0);
 std::atomic<bool> g_reconnectManualCheckRequest(false);
@@ -688,6 +699,7 @@ void ShowHelp()
             L"  --restore-window <method>            off, foreground, alttab, smart.\r\n"
             L"  --do-not-sleep [on|off]              Force enable/disable sleep prevention.\r\n"
             L"  --i-can-forget [on|off]              Force enable/disable 18/19 min smart auto-start.\r\n"
+            L"  --skip-active [on|off]               Skip the anti-AFK action in Roblox windows that were active recently.\r\n"
             L"  --bloxstrap-integration [on|off]     Force enable/disable Fish/Void/Bloxstrap.\r\n"
             L"  --simple-mode [on|off]               Force enable/disable simple mode (hide advanced).\r\n"
             L"\r\n"
@@ -6267,6 +6279,123 @@ void ResumeFpsCapperAfterAction(bool previousPausedState)
 void CreateTrayMenu(bool afk);
 void UpdateTrayIcon();
 
+static bool IsAnyKeyPressed()
+{
+    for (int i = 1; i < 256; i++)
+    {
+        if (GetAsyncKeyState(i) & 0x0001)
+            return true;
+    }
+    return false;
+}
+
+static void PruneClosedWindowActivity()
+{
+    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+    for (auto it = g_windowActivity.begin(); it != g_windowActivity.end(); )
+    {
+        if (!IsWindow(it->first))
+            it = g_windowActivity.erase(it);
+        else
+            ++it;
+    }
+}
+
+static void TrackForegroundRobloxActivity()
+{
+    HWND fg = GetForegroundWindow();
+    if (!fg) return;
+    HWND top = GetAncestor(fg, GA_ROOT);
+    if (!top || !IsWindow(top)) top = fg;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(top, &pid);
+    if (pid == 0) return;
+
+    bool isRoblox = false;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap != INVALID_HANDLE_VALUE)
+    {
+        PROCESSENTRY32 pe = { 0 };
+        pe.dwSize = sizeof(PROCESSENTRY32);
+        if (Process32First(snap, &pe))
+        {
+            do
+            {
+                if (pe.th32ProcessID == pid &&
+                    _wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+                {
+                    isRoblox = true;
+                    break;
+                }
+            } while (Process32Next(snap, &pe));
+        }
+        CloseHandle(snap);
+    }
+    if (!isRoblox) return;
+    if (!IsAnyKeyPressed()) return;
+
+    uint64_t now = GetTickCount64();
+    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+    auto it = g_windowActivity.find(top);
+    if (it == g_windowActivity.end())
+    {
+        WindowActivity wa;
+        wa.hwnd = top;
+        wa.pid = pid;
+        wa.lastActiveTick = now;
+        g_windowActivity[top] = wa;
+    }
+    else
+    {
+        it->second.lastActiveTick = now;
+    }
+}
+
+static bool IsAnyRobloxWindowActiveRecently()
+{
+    uint64_t now = GetTickCount64();
+    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+    for (auto& kv : g_windowActivity)
+    {
+        if (!IsWindow(kv.first)) continue;
+        if (kv.second.lastActiveTick == 0) continue;
+        if ((now - kv.second.lastActiveTick) / 1000 < (uint64_t)USER_INACTIVITY_WAIT)
+            return true;
+    }
+    return false;
+}
+
+static uint64_t GetLatestRobloxWindowActiveTick()
+{
+    uint64_t latest = 0;
+    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+    for (auto& kv : g_windowActivity)
+    {
+        if (!IsWindow(kv.first)) continue;
+        if (kv.second.lastActiveTick > latest)
+            latest = kv.second.lastActiveTick;
+    }
+    return latest;
+}
+
+static uint64_t GetLastActiveTickForWindow(HWND hwnd)
+{
+    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+    auto it = g_windowActivity.find(hwnd);
+    if (it != g_windowActivity.end()) return it->second.lastActiveTick;
+    return 0;
+}
+
+static bool IsRobloxWindowActiveRecently(HWND hwnd)
+{
+    if (!hwnd) return false;
+    uint64_t lastActive = GetLastActiveTickForWindow(hwnd);
+    if (lastActive == 0) return false;
+    uint64_t now = GetTickCount64();
+    uint64_t elapsed = (now - lastActive) / 1000;
+    return elapsed < (uint64_t)USER_INACTIVITY_WAIT;
+}
+
 // UserSafe
 void MonitorUserActivity()
 {
@@ -6320,7 +6449,13 @@ void MonitorUserActivity()
             }
         }
 
-        if (g_afkReminderEnabled.load() && !g_userActive.load() && !g_isAfkStarted.load())
+        if (g_afkReminderEnabled.load() || g_skipActiveEnabled.load())
+        {
+            PruneClosedWindowActivity();
+            TrackForegroundRobloxActivity();
+        }
+
+        if (g_afkReminderEnabled.load() && !g_isAfkStarted.load())
         {
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
@@ -6331,17 +6466,56 @@ void MonitorUserActivity()
             }
             else
             {
-                uint64_t inactiveTime = (GetTickCount64() - g_lastActivityTime.load()) / 1000;
+                uint64_t now = GetTickCount64();
+                bool anyReminderPending = false;
+                bool anyAutoStartPending = false;
 
-                if (inactiveTime >= AFK_REMINDER_TIME && g_afkReminderState.load() == 0)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Reminder", L"You've been inactive for 18 minutes. Starting AFK prevention soon.");
+                    std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+
+                    for (auto hwnd : wins)
+                    {
+                        auto it = g_windowActivity.find(hwnd);
+                        if (it == g_windowActivity.end())
+                        {
+                            WindowActivity wa;
+                            wa.hwnd = hwnd;
+                            GetWindowThreadProcessId(hwnd, &wa.pid);
+                            wa.lastActiveTick = now;
+                            g_windowActivity[hwnd] = wa;
+                        }
+                    }
+
+                    for (auto& pair : g_windowActivity)
+                    {
+                        WindowActivity& wa = pair.second;
+                        if (!IsWindow(wa.hwnd) || wa.lastActiveTick == 0) continue;
+
+                        uint64_t inactiveTime = (now - wa.lastActiveTick) / 1000;
+
+                        if (inactiveTime >= AFK_REMINDER_TIME && wa.icanForgetState < 1)
+                        {
+                            anyReminderPending = true;
+                            wa.icanForgetState = 1;
+                        }
+
+                        if (inactiveTime >= AFK_AUTO_START_TIME && wa.icanForgetState < 2)
+                        {
+                            anyAutoStartPending = true;
+                            wa.icanForgetState = 2;
+                        }
+                    }
+                }
+
+                if (anyReminderPending && g_afkReminderState.load() == 0)
+                {
+                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Reminder", L"A Roblox window has been inactive for 18 minutes. Starting AFK prevention soon.");
                     g_afkReminderState = 1;
                 }
 
-                if (inactiveTime >= AFK_AUTO_START_TIME && g_afkReminderState.load() < 2)
+                if (anyAutoStartPending && g_afkReminderState.load() < 2)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Auto-Started", L"No activity detected for 19 minutes. Starting AFK prevention.");
+                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Auto-Started", L"No Roblox activity detected for 19 minutes. Starting AFK prevention.");
                     g_afkStartTime = GetTickCount64();
                     g_isAfkStarted = true;
                     {
@@ -6361,7 +6535,7 @@ void MonitorUserActivity()
             }
         }
 
-        Sleep(250);
+        Sleep(100);
     }
 }
 void StartActivityMonitor()
@@ -6371,6 +6545,7 @@ void StartActivityMonitor()
         g_lastActivityTime = GetTickCount64();
         g_userActive = true;
         g_afkReminderState = 0;
+        g_windowActivityReferenceTick = GetTickCount64();
         if (g_activityMonitorThread.joinable())
         {
             g_activityMonitorThread.join();
@@ -6384,6 +6559,16 @@ void StopActivityMonitor()
     if (g_activityMonitorThread.joinable())
     {
         g_activityMonitorThread.join();
+    }
+}
+
+static void ResetIcanForgetCounter()
+{
+    g_afkReminderState = 0;
+    g_windowActivityReferenceTick = GetTickCount64();
+    {
+        std::lock_guard<std::mutex> lock(g_windowActivityMutex);
+        g_windowActivity.clear();
     }
 }
 // ==========
@@ -7378,6 +7563,7 @@ void SaveSettings()
     DWORD fpsLimit = g_fpsLimit;
     DWORD windowOpacity = g_windowOpacity.load();
     DWORD afkReminder = g_afkReminderEnabled.load();
+    DWORD skipActive = g_skipActiveEnabled.load();
     DWORD doNotSleep = g_doNotSleep.load();
     DWORD autoMute = g_autoMute.load();
     DWORD unmuteOnFocus = g_unmuteOnFocus.load();
@@ -7474,6 +7660,7 @@ void SaveSettings()
         RegSetValueEx(hKey, L"MultiInstanceInterval", 0, REG_DWORD, (const BYTE*)&multiInstanceInterval, sizeof(DWORD));
         RegSetValueEx(hKey, L"WindowOpacity", 0, REG_DWORD, (const BYTE*)&windowOpacity, sizeof(DWORD));
         RegSetValueEx(hKey, L"AfkReminder", 0, REG_DWORD, (const BYTE*)&afkReminder, sizeof(DWORD));
+        RegSetValueEx(hKey, L"SkipActive", 0, REG_DWORD, (const BYTE*)&skipActive, sizeof(DWORD));
         RegSetValueEx(hKey, L"DoNotSleep", 0, REG_DWORD, (const BYTE*)&doNotSleep, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoMute", 0, REG_DWORD, (const BYTE*)&autoMute, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnmuteOnFocus", 0, REG_DWORD, (const BYTE*)&unmuteOnFocus, sizeof(DWORD));
@@ -7565,7 +7752,7 @@ void LoadSettings()
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
     DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
-    DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
+    DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
     DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
     DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordDisableEmbed = 0, discordMentionOnErrors = 0;
     DWORD reconnectCheckInterval = 0;    DWORD gridForceSmall = 0, gridAllMonitors = 0, gridKeepAspectRatio = 1;
@@ -7633,6 +7820,7 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"CpuLimitMode", NULL, NULL, (LPBYTE)&cpuLimitMode, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"WindowOpacity", NULL, NULL, (LPBYTE)&windowOpacity, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"AfkReminder", NULL, NULL, (LPBYTE)&afkReminder, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"SkipActive", NULL, NULL, (LPBYTE)&skipActive, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DoNotSleep", NULL, NULL, (LPBYTE)&doNotSleep, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"AutoMute", NULL, NULL, (LPBYTE)&autoMute, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"UnmuteOnFocus", NULL, NULL, (LPBYTE)&unmuteOnFocus, &dataSize); dataSize = sizeof(DWORD);
@@ -7815,6 +8003,7 @@ void LoadSettings()
     g_ramCleanerInterval = (int)ramCleanerInterval;
     g_ramCleanerLimit = (int)ramCleanerLimit;
     g_afkReminderEnabled = (afkReminder != 0);
+    g_skipActiveEnabled = (skipActive != 0);
     g_doNotSleep = (doNotSleep != 0);
     g_autoMute = (autoMute != 0);
     g_unmuteOnFocus = (unmuteOnFocus != 0);
@@ -7906,6 +8095,7 @@ void ResetSettings()
     g_ramCleanerLimit = 500;
     g_afkReminderEnabled = false;
     g_afkReminderState = 0;
+    g_skipActiveEnabled = false;
     g_doNotSleep = false;
     SetThreadExecutionState(ES_CONTINUOUS);
     g_autoMute = false;
@@ -8014,6 +8204,7 @@ struct SettingsSnapshot {
     int ramCleanerInterval = 120;
     int ramCleanerLimit = 500;
     bool afkReminder = false;
+    bool skipActive = false;
     bool doNotSleep = false;
     bool autoMute = false;
     bool unmuteOnFocus = false;
@@ -8091,6 +8282,7 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.ramCleanerInterval = g_ramCleanerInterval.load();
     s.ramCleanerLimit = g_ramCleanerLimit.load();
     s.afkReminder = g_afkReminderEnabled.load();
+    s.skipActive = g_skipActiveEnabled.load();
     s.doNotSleep = g_doNotSleep.load();
     s.autoMute = g_autoMute.load();
     s.unmuteOnFocus = g_unmuteOnFocus.load();
@@ -8211,6 +8403,7 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonInt(ss, L"RamCleanerInterval", s.ramCleanerInterval, first);
     AppendJsonInt(ss, L"RamCleanerLimit", s.ramCleanerLimit, first);
     AppendJsonBool(ss, L"AfkReminder", s.afkReminder, first);
+    AppendJsonBool(ss, L"SkipActive", s.skipActive, first);
     AppendJsonBool(ss, L"DoNotSleep", s.doNotSleep, first);
     AppendJsonBool(ss, L"AutoMute", s.autoMute, first);
     AppendJsonBool(ss, L"UnmuteOnFocus", s.unmuteOnFocus, first);
@@ -8607,6 +8800,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_ramCleanerInterval = s.ramCleanerInterval;
     g_ramCleanerLimit = s.ramCleanerLimit;
     g_afkReminderEnabled = s.afkReminder;
+    g_skipActiveEnabled = s.skipActive;
     g_doNotSleep = s.doNotSleep;
     g_autoMute = s.autoMute;
     g_unmuteOnFocus = s.unmuteOnFocus;
@@ -8711,6 +8905,7 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonInt(json, L"RamCleanerInterval", s.ramCleanerInterval);
     ParseJsonInt(json, L"RamCleanerLimit", s.ramCleanerLimit);
     ParseJsonBool(json, L"AfkReminder", s.afkReminder);
+    ParseJsonBool(json, L"SkipActive", s.skipActive);
     ParseJsonBool(json, L"DoNotSleep", s.doNotSleep);
     ParseJsonBool(json, L"AutoMute", s.autoMute);
     ParseJsonBool(json, L"UnmuteOnFocus", s.unmuteOnFocus);
@@ -8924,6 +9119,7 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"  Instance settings manager...");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I can forget (smart auto-start)");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip active");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"AutoMute Roblox");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on focus");
     }
@@ -10916,6 +11112,7 @@ struct MainUIData {
     RECT legacyUiToggleRect = { 0 };
     RECT statusBarToggleRect = { 0 };
     RECT iCanForgetToggleRect = { 0 };
+    RECT skipActiveToggleRect = { 0 };
     RECT doNotSleepToggleRect = { 0 };
     RECT autoMuteToggleRect = { 0 };
     RECT unmuteOnFocusToggleRect = { 0 };
@@ -11007,6 +11204,7 @@ struct MainUIData {
     bool isHoveringUpdateCheckerToggle = false;
     bool isHoveringDoNotSleepToggle = false;
     bool isHoveringICanForgetToggle = false;
+    bool isHoveringSkipActiveToggle = false;
     bool isHoveringBloxstrapIntegrationToggle = false;
     bool isHoveringStatusBarToggle = false;
     bool isHoveringLegacyUiToggle = false;
@@ -11074,6 +11272,7 @@ struct MainUIData {
     float hotkeyAnim = 0.0f;
     float timingsToggleAnim = 0.0f;
     float iCanForgetAnim = 0.0f;
+    float skipActiveAnim = 0.0f;
     float doNotSleepAnim = 0.0f;
     float autoMuteAnim = 0.0f;
     float unmuteOnFocusAnim = 0.0f;
@@ -13642,7 +13841,7 @@ title = L"CPU Limit %";
                 if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
                 if (i == 3) { title = L"Test Action"; text = L"Performs the selected Anti-AFK action once, so you can verify it works in your current session without waiting for the next interval tick."; }
                 if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
-                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Interval, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
+                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Interval, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
             } else if (pData->currentPage == 1) { // Auto+Utils
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."; }
                 if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
@@ -13657,10 +13856,11 @@ title = L"CPU Limit %";
                 if (i == 0) { title = L"Update/Announcement Checker"; text = L"Checks for AntiAFK-RBX updates and announcements on startup.\n\nManual check is still available from About window. Disable only if you're on a restricted/offline setup - disabling means you won't get critical bug-fix or security notices."; }
                 if (i == 1) { title = L"Close All Roblox"; text = L"Closes every running Roblox window at once.\n\nSends a normal close request first, then force-terminates any that ignore it."; }
                 if (i == 2) { title = L"Do not sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."; }
-                if (i == 3) { title = L"I can forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start AntiAFK for full hands-off."; }
-                if (i == 4) { title = L"Fish/Void/Bloxstrap Integration"; text = L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."; }
-                if (i == 5) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
-                if (i == 6) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
+                if (i == 3) { title = L"I can forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start AntiAFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."; }
+                if (i == 4) { title = L"Skip active"; text = L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
+                if (i == 5) { title = L"Fish/Void/Bloxstrap Integration"; text = L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."; }
+                if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
+                if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures."; }
                 if (i == 1) { title = L"Multi-Instance Interval"; text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC."; }
@@ -13759,6 +13959,8 @@ title = L"CPU Limit %";
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_DO_NOT_SLEEP, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->iCanForgetToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectPage2()) return; PostMessage(g_hwnd, WM_COMMAND, ID_I_CAN_FORGET, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->skipActiveToggleRect, &toggleHitbox);
+        if (PtInRect(&toggleHitbox, pt)) { if (smRedirectPage2()) return; PostMessage(g_hwnd, WM_COMMAND, ID_SKIP_ACTIVE, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->bloxstrapIntegrationToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectPage2()) return; PostMessage(g_hwnd, WM_COMMAND, ID_BLOXSTRAP_INTEGRATION, 0); return; }
 
@@ -14804,6 +15006,11 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->iCanForgetToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->skipActiveToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
@@ -16054,6 +16261,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, L"Do not sleep", g_doNotSleep.load(), pData->isHoveringDoNotSleepToggle, pData->doNotSleepAnim, true, L"\uE708");
         bool smPage2 = g_simpleMode.load();
         MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, L"I can forget (smart auto-start)", g_afkReminderEnabled.load(), pData->isHoveringICanForgetToggle, pData->iCanForgetAnim, true, L"\uE916", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->skipActiveToggleRect, pData->hFontText, L"Skip active", g_skipActiveEnabled.load(), pData->isHoveringSkipActiveToggle, pData->skipActiveAnim, true, L"\uE893", !smPage2);
 
         MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Fish/Void/Bloxstrap Integration", g_bloxstrapIntegration.load(), pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationAnim, true, L"\uE71B", !smPage2);
 
@@ -16080,6 +16288,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 MainUI_Paint_DrawHoverTooltip(hdc, anchor, pData->hFontSmall, smPage2Msg);
             };
             drawPage2Tooltip(pData->iCanForgetToggleRect, pData->isHoveringICanForgetToggle);
+            drawPage2Tooltip(pData->skipActiveToggleRect, pData->isHoveringSkipActiveToggle);
             drawPage2Tooltip(pData->bloxstrapIntegrationToggleRect, pData->isHoveringBloxstrapIntegrationToggle);
             if (pData->isHoveringRestore) {
                 RECT anchor = { pData->restoreMethodDropdownRect.right - 24, pData->restoreMethodDropdownRect.top, pData->restoreMethodDropdownRect.right, pData->restoreMethodDropdownRect.bottom };
@@ -17504,6 +17713,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->legacyUiAnim = g_useLegacyUi.load() ? 1.0f : 0.0f;
         pData->statusBarAnim = g_statusBarEnabled.load() ? 1.0f : 0.0f;
         pData->iCanForgetAnim = g_afkReminderEnabled.load() ? 1.0f : 0.0f;
+        pData->skipActiveAnim = g_skipActiveEnabled.load() ? 1.0f : 0.0f;
         pData->doNotSleepAnim = g_doNotSleep.load() ? 1.0f : 0.0f;
         pData->autoMuteAnim = g_autoMute.load() ? 1.0f : 0.0f;
         pData->unmuteOnFocusAnim = g_unmuteOnFocus.load() ? 1.0f : 0.0f;
@@ -17699,6 +17909,11 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->iCanForgetToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->skipActiveToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
 
@@ -18106,6 +18321,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringUpdateCheckerToggle, pData->updateCheckerToggleRect));
             anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringDoNotSleepToggle, pData->doNotSleepToggleRect));
             anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringICanForgetToggle, pData->iCanForgetToggleRect));
+            anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringSkipActiveToggle, pData->skipActiveToggleRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringCloseAllRoblox, pData->closeAllRobloxButtonRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringImportSettings, pData->importSettingsRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringExportSettings, pData->exportSettingsRect));
@@ -18277,6 +18493,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringUpdateCheckerToggle = false;
         pData->isHoveringDoNotSleepToggle = false;
         pData->isHoveringICanForgetToggle = false;
+        pData->isHoveringSkipActiveToggle = false;
         pData->isHoveringBloxstrapIntegrationToggle = false;
         pData->isHoveringStatusBarToggle = false;
         pData->isHoveringSimpleModeToggle = false;
@@ -18492,6 +18709,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->simpleModeAnim, g_simpleMode.load());
         animateToggle(pData->hotkeyAnim, g_hotkeyEnabled.load());
         animateToggle(pData->iCanForgetAnim, g_afkReminderEnabled.load());
+        animateToggle(pData->skipActiveAnim, g_skipActiveEnabled.load());
         animateToggle(pData->doNotSleepAnim, g_doNotSleep.load());
         animateToggle(pData->autoMuteAnim, g_autoMute.load());
         animateToggle(pData->unmuteOnFocusAnim, g_unmuteOnFocus.load());
@@ -19097,7 +19315,7 @@ void main_thread(bool arg_tray)
     }
 
     UpdateSplashStatus(L"Preparing user-safe mode...");
-    if (g_userSafeMode.load() > 0 || g_afkReminderEnabled.load())
+    if (g_userSafeMode.load() > 0 || g_afkReminderEnabled.load() || g_skipActiveEnabled.load())
     {
         StartActivityMonitor();
     }
@@ -19179,6 +19397,7 @@ void main_thread(bool arg_tray)
                 {
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
+                    ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
@@ -19192,6 +19411,7 @@ void main_thread(bool arg_tray)
                     QueueStatusBarOverlay(L"Roblox window not found", 2200, user);
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
+                    ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
                     CreateTrayMenu(false);
@@ -19315,6 +19535,11 @@ void main_thread(bool arg_tray)
 
                     if (!GetWindowInstanceSetting_AntiAfk(w)) continue;
 
+                    if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(w))
+                    {
+                        continue;
+                    }
+
                     bool wasMinimized = IsIconic(w);
                     if (wasMinimized)
                         ShowWindow(w, SW_RESTORE);
@@ -19339,6 +19564,7 @@ void main_thread(bool arg_tray)
                         cancelPendingAction = true;
                         break;
                     }
+
                     for (int j = 0; j < g_actionRepeatCount.load(); j++)
                     {
                         if (g_stopThread.load() || !g_isAfkStarted.load()) {
@@ -19876,7 +20102,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 FinalizeAfkSession();
                 SaveSettings();
             }
-            g_afkReminderState = 0;
+            ResetIcanForgetCounter();
             auto wins_stop = FindAllRobloxWindows(true);
             {
                 std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
@@ -20108,7 +20334,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             else
             {
-                if (g_monitorThreadRunning.load()) StopActivityMonitor();
+                if (g_monitorThreadRunning.load() && !g_afkReminderEnabled.load() && !g_skipActiveEnabled.load()) StopActivityMonitor();
             }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -20269,8 +20495,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_I_CAN_FORGET:
             g_afkReminderEnabled = !g_afkReminderEnabled.load();
             g_afkReminderState = 0;
-            if (g_afkReminderEnabled.load() && !g_monitorThreadRunning.load()) {
+            if (g_afkReminderEnabled.load()) {
+                g_windowActivityReferenceTick = GetTickCount64();
+                if (!g_monitorThreadRunning.load()) {
+                    StartActivityMonitor();
+                }
+            }
+            else if (!g_userSafeMode.load() && !g_skipActiveEnabled.load()) {
+                StopActivityMonitor();
+            }
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_SKIP_ACTIVE:
+            g_skipActiveEnabled = !g_skipActiveEnabled.load();
+            if (g_skipActiveEnabled.load() && !g_monitorThreadRunning.load()) {
                 StartActivityMonitor();
+            }
+            else if (!g_skipActiveEnabled.load() && !g_userSafeMode.load() && !g_afkReminderEnabled.load()) {
+                StopActivityMonitor();
             }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -21061,6 +21307,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
         if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
             FinalizeAfkSession();
+            ResetIcanForgetCounter();
         }
         if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
             DestroyWindow(g_hStatusBarWnd);
@@ -21359,6 +21606,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 bool value = true;
                 ReadOptionalOnOffArgument(argv, argc, i, true, value);
                 g_afkReminderEnabled = value;
+            }
+            else if (arg == L"--skip-active") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_skipActiveEnabled = value;
             }
             else if (arg == L"--window-opacity") {
                 bool value = true;
