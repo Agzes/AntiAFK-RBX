@@ -122,6 +122,9 @@ using namespace std::chrono_literals;
 #define ID_SETTINGS_MENU 300
 #define ID_MULTI_SUPPORT 7
 #define ID_EXIT 8
+#define ID_TOGGLE_HOTKEY 12
+#define ID_CAPTURE_HOTKEY 13
+#define HOTKEY_START_STOP_ID 9
 #define ID_GRID_SNAP 9
 #define ID_WINDOW_OPACITY 10
 
@@ -336,6 +339,12 @@ std::mutex g_customProcessNamesMutex;
 bool g_enableMainUiIntroAnimation = false;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
+std::atomic<bool> g_hotkeyEnabled(true);
+std::atomic<UINT> g_hotkeyModifiers(MOD_CONTROL | MOD_SHIFT);
+std::atomic<UINT> g_hotkeyVk(VK_F1);
+std::atomic<bool> g_hotkeyCaptureActive(false);
+HWND g_hotkeyCaptureWnd = NULL;
+HHOOK g_hHotkeyHook = NULL;
 std::atomic<int> g_updateServerVersion(0);
 std::atomic<int> g_gridMode(0); // 0 - auto, 1 - fixedSize, 2 - fixedLines, 3 - fixedRows, 4 - fixedWidth, 5 - fixedHeight
 std::atomic<bool> g_ramCleanerEnabled(false);
@@ -571,6 +580,8 @@ bool PauseFpsCapperBeforeAction(DWORD waitMs = FPS_CAPPER_PRE_ACTION_PAUSE_MS, b
 void ResumeFpsCapperAfterAction(bool previousPausedState);
 RECT GetMainUIWindowRect();
 void AnimateSplashToWindowRect(const RECT& targetRect, DWORD durationMs);
+std::wstring FormatHotkeyString(UINT modifiers, UINT vk);
+LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam);
 void ApplyAutoRobloxWindowLayout();
 enum class DiscordWebhookEvent
 {
@@ -7477,7 +7488,14 @@ void SaveSettings()
         RegSetValueEx(hKey, L"DiscordDisableEmbed", 0, REG_DWORD, (const BYTE*)&discordDisableEmbed, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordMentionOnErrors", 0, REG_DWORD, (const BYTE*)&discordMentionOnErrors, sizeof(DWORD));
         RegSetValueEx(hKey, L"ReconnectCheckInterval", 0, REG_DWORD, (const BYTE*)&reconnectCheckInterval, sizeof(DWORD));
-
+        {
+            DWORD hotkeyEnabled = g_hotkeyEnabled.load();
+            DWORD hotkeyModifiers = g_hotkeyModifiers.load();
+            DWORD hotkeyVk = g_hotkeyVk.load();
+            RegSetValueEx(hKey, L"HotkeyEnabled", 0, REG_DWORD, (const BYTE*)&hotkeyEnabled, sizeof(DWORD));
+            RegSetValueEx(hKey, L"HotkeyModifiers", 0, REG_DWORD, (const BYTE*)&hotkeyModifiers, sizeof(DWORD));
+            RegSetValueEx(hKey, L"HotkeyVk", 0, REG_DWORD, (const BYTE*)&hotkeyVk, sizeof(DWORD));
+        }
         {
             DWORD actionPreset = g_actionPreset.load();
             RegSetValueEx(hKey, L"ActionPreset", 0, REG_DWORD, (const BYTE*)&actionPreset, sizeof(DWORD));
@@ -7629,6 +7647,15 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"DiscordDisableEmbed", NULL, NULL, (LPBYTE)&discordDisableEmbed, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordMentionOnErrors", NULL, NULL, (LPBYTE)&discordMentionOnErrors, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"ReconnectCheckInterval", NULL, NULL, (LPBYTE)&reconnectCheckInterval, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD hkEnabled = 1, hkMods = MOD_CONTROL | MOD_SHIFT, hkVk = VK_F1;
+            RegQueryValueEx(hKey, L"HotkeyEnabled", NULL, NULL, (LPBYTE)&hkEnabled, &dataSize); dataSize = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"HotkeyModifiers", NULL, NULL, (LPBYTE)&hkMods, &dataSize); dataSize = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"HotkeyVk", NULL, NULL, (LPBYTE)&hkVk, &dataSize); dataSize = sizeof(DWORD);
+            g_hotkeyEnabled = (hkEnabled != 0);
+            g_hotkeyModifiers = hkMods;
+            g_hotkeyVk = hkVk;
+        }
         RegQueryValueEx(hKey, L"RamCleanerEnabled", NULL, NULL, (LPBYTE)&ramCleanerEnabled, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"RamCleanerMode", NULL, NULL, (LPBYTE)&ramCleanerMode, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"RamCleanerInterval", NULL, NULL, (LPBYTE)&ramCleanerInterval, &dataSize); dataSize = sizeof(DWORD);
@@ -7884,6 +7911,9 @@ void ResetSettings()
     g_autoMute = false;
     g_unmuteOnFocus = false;
     g_simpleMode = false;
+    g_hotkeyEnabled = true;
+    g_hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
+    g_hotkeyVk = VK_F1;
     g_unmutedPid = 0;
     g_discordWebhookEnabled = false;
     g_discordNotifyStart = true;
@@ -8006,6 +8036,9 @@ struct SettingsSnapshot {
     int cpuLimitPercent = 90;
     int cpuLimitPeriod = 100;
     bool cpuLimitMode = false;
+    bool hotkeyEnabled = true;
+    int hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
+    int hotkeyVk = VK_F1;
 };
 
 SettingsSnapshot CaptureSettingsSnapshot()
@@ -8080,6 +8113,9 @@ SettingsSnapshot CaptureSettingsSnapshot()
         s.customProcessNames = g_customProcessNames;
     }
     s.reconnectCheckInterval = g_reconnectCheckInterval.load();
+    s.hotkeyEnabled = g_hotkeyEnabled.load();
+    s.hotkeyModifiers = g_hotkeyModifiers.load();
+    s.hotkeyVk = g_hotkeyVk.load();
     return s;
 }
 
@@ -8197,6 +8233,9 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     ss << (first ? L"" : L",\r\n") << L"  \"DiscordMentionTarget\": \"" << JsonEscape(s.discordMentionTarget) << L"\"";
     first = false;
     AppendJsonInt(ss, L"ReconnectCheckInterval", s.reconnectCheckInterval, first);
+    AppendJsonBool(ss, L"HotkeyEnabled", s.hotkeyEnabled, first);
+    AppendJsonInt(ss, L"HotkeyModifiers", s.hotkeyModifiers, first);
+    AppendJsonInt(ss, L"HotkeyVk", s.hotkeyVk, first);
     ss << L"\r\n}\r\n";
     return ss.str();
 }
@@ -8591,6 +8630,9 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     }
     g_reconnectCheckInterval = s.reconnectCheckInterval;
     if (g_reconnectCheckInterval.load() < 0) g_reconnectCheckInterval = 0;
+    g_hotkeyEnabled = s.hotkeyEnabled;
+    g_hotkeyModifiers = s.hotkeyModifiers;
+    g_hotkeyVk = s.hotkeyVk;
 }
 
 static bool ExportSettingsToFile(HWND owner)
@@ -8710,8 +8752,20 @@ static bool ImportSettingsFromFile(HWND owner)
     }
     ParseJsonString(json, L"DiscordMentionTarget", s.discordMentionTarget);
     ParseJsonInt(json, L"ReconnectCheckInterval", s.reconnectCheckInterval);
+    ParseJsonBool(json, L"HotkeyEnabled", s.hotkeyEnabled);
+    ParseJsonInt(json, L"HotkeyModifiers", s.hotkeyModifiers);
+    ParseJsonInt(json, L"HotkeyVk", s.hotkeyVk);
     ApplySettingsSnapshot(s);
     SaveSettings();
+    if (g_hotkeyEnabled.load()) {
+        UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
+        RegisterHotKey(g_hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+    } else {
+        UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
+    }
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+    }
     return true;
 }
 // ==========
@@ -8754,6 +8808,14 @@ void CreateTrayMenu(bool afk)
             AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         }
         AppendMenu(g_hMenu, MF_STRING, ID_OPEN_UI, L"Open AntiAFK-RBX");
+        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+        {
+            wchar_t hkStatus[128];
+            std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            swprintf_s(hkStatus, L"Hotkey: %s [%s]", hkStr.c_str(), g_hotkeyEnabled.load() ? L"On" : L"Off");
+            AppendMenu(g_hMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, hkStatus);
+        }
+        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"Change Hotkey...");
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
         if (g_updateFound)
@@ -9008,6 +9070,15 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
+    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    {
+        wchar_t hkStatus[128];
+        std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
+        swprintf_s(hkStatus, L"Hotkey • %s • %s", g_hotkeyEnabled.load() ? L"On" : L"Off", hkStr.c_str());
+        AppendMenu(hSettingsSubmenu, MF_STRING | MF_GRAYED, 0, hkStatus);
+    }
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"  Enable Hotkey");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"  Change Hotkey...");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
 
     HMENU hUtilsSubmenu = CreatePopupMenu();
@@ -10940,6 +11011,8 @@ struct MainUIData {
     bool isHoveringStatusBarToggle = false;
     bool isHoveringLegacyUiToggle = false;
     bool isHoveringSimpleModeToggle = false;
+    bool isHoveringHotkeyToggle = false;
+    bool isHoveringHotkeyBind = false;
     bool isHoveringAlphaInfoButton = false;
     bool isHoveringTimingsCompact = false;
     bool isHoveringTimingsBackIcon = false;
@@ -10998,6 +11071,7 @@ struct MainUIData {
     float legacyUiAnim = 0.0f;
     float statusBarAnim = 0.0f;
     float simpleModeAnim = 0.0f;
+    float hotkeyAnim = 0.0f;
     float timingsToggleAnim = 0.0f;
     float iCanForgetAnim = 0.0f;
     float doNotSleepAnim = 0.0f;
@@ -11127,6 +11201,9 @@ struct MainUIData {
     float fpsCapperUnlockFocusAnim = 0.0f;
 
     RECT simpleModeToggleRect = { 0 };
+    RECT hotkeyToggleRect = { 0 };
+    RECT hotkeyBindTextRect = { 0 };
+    RECT hotkeyChangeBtnRect = { 0 };
     RECT alphaInfoButtonRect = { 0 };
     RECT timingsCompactRect = { 0 };
     RECT timingsBackIconRect = { 0 };
@@ -13611,6 +13688,8 @@ title = L"CPU Limit %";
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_MULTI_SUPPORT, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->simpleModeToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_SIMPLE_MODE, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
+        if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_HOTKEY, 0); return; }
     }
     if (pData->currentPage == 1) {
         RECT toggleHitbox;
@@ -13798,6 +13877,7 @@ title = L"CPU Limit %";
             return;
         }
         if (PtInRect(&pData->testActionButtonRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TEST_ACTION, 0); return; }
+        if (PtInRect(&pData->hotkeyChangeBtnRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_HOTKEY, 0); return; }
         if (PtInRect(&pData->instanceManagerBtnRect, pt)) {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -14588,6 +14668,18 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->simpleModeToggleRect = { ctrlStartX, y, ctrlStartX + genCtrlW, y + rowH };
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->hotkeyToggleRect = { ctrlStartX, y, ctrlStartX + genCtrlW, y + rowH };
+        int toggleX_rightEdge = clientRect.right - help_btn_size - 20;
+        int hkBtnH = 24;
+        int hkToggleW = 50;
+        int hkBtnW = 24;
+        int hkTextMaxW = 140;
+        pData->hotkeyChangeBtnRect = { toggleX_rightEdge - hkToggleW - 4 - hkBtnW, y + (rowH - hkBtnH) / 2 + 4, toggleX_rightEdge - hkToggleW - 4, y + (rowH - hkBtnH) / 2 + 4 + hkBtnH };
+        pData->hotkeyBindTextRect = { pData->hotkeyChangeBtnRect.left - hkTextMaxW, y + 8, pData->hotkeyChangeBtnRect.left - 6, y + rowH };
+        pData->helpButtonRects.push_back({ toggleX_rightEdge, y + (rowH - help_btn_size) / 2 + 4, toggleX_rightEdge + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
         pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
@@ -15561,6 +15653,48 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
         MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, L"Simple Mode", g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
 
+        {
+            std::wstring hkText = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            RECT hkRowR = pData->rowRects.back();
+            bool hkEn = g_hotkeyEnabled.load();
+            BYTE hkA = hkEn ? 255 : 100;
+
+            HFONT hkIconF = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font gdiHkIconF(hdc, hkIconF);
+            Font gdiHkTextF(hdc, pData->hFontText);
+            SolidBrush hkIconBr(Color(hkA, 150, 150, 150));
+            SolidBrush hkLabelBr(Color(hkA, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            StringFormat sfHkIc;
+            sfHkIc.SetAlignment(StringAlignmentCenter);
+            sfHkIc.SetLineAlignment(StringAlignmentCenter);
+            RectF hkIcR((REAL)18, (REAL)(hkRowR.top + 2), 22.0f, (REAL)(hkRowR.bottom - hkRowR.top - 4));
+            g.DrawString(L"\uE765", -1, &gdiHkIconF, hkIcR, &sfHkIc, &hkIconBr);
+            StringFormat sfHkLb;
+            sfHkLb.SetAlignment(StringAlignmentNear);
+            sfHkLb.SetLineAlignment(StringAlignmentCenter);
+            RectF hkLbR((REAL)44, (REAL)(hkRowR.top - 1), 100.0f, (REAL)(hkRowR.bottom - hkRowR.top));
+            g.DrawString(L"Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
+            DeleteObject(hkIconF);
+
+            bool isRecording = g_hotkeyCaptureActive.load();
+            MainUI_Paint_DrawCompactButton(hdc, pData->hotkeyChangeBtnRect, pData->hFontText, isRecording ? L"\uE7C8" : L"\uE70F", isRecording, L"", isRecording, 0, hkEn && !isRecording);
+
+            HFONT hkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+            Font gdiHkBindFont(hdc, hkBindFont);
+            SolidBrush hkBindBrush(Color(hkA, 180, 180, 180));
+            StringFormat sfHkBind;
+            sfHkBind.SetAlignment(StringAlignmentFar);
+            sfHkBind.SetLineAlignment(StringAlignmentCenter);
+            RECT hkTr = pData->hotkeyBindTextRect;
+            RectF hkTrF((REAL)hkTr.left, (REAL)hkTr.top, (REAL)(hkTr.right - hkTr.left), (REAL)(hkTr.bottom - hkTr.top));
+            g.DrawString(hkText.c_str(), -1, &gdiHkBindFont, hkTrF, &sfHkBind, &hkBindBrush);
+            DeleteObject(hkBindFont);
+
+            RECT toggleR2 = pData->hotkeyToggleRect;
+            toggleR2.left = pData->hotkeyChangeBtnRect.right + 4;
+            MainUI_Paint_DrawToggle(hdc, toggleR2, pData->hFontText, L"", hkEn, pData->isHoveringHotkeyToggle, pData->hotkeyAnim, false, nullptr, true);
+        }
+
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             bool isButtonElement = false;
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
@@ -15779,6 +15913,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             MainUI_Paint_DrawHoverTooltip(hdc, pData->mutexStatusRect, pData->hFontSmall, statusText, false);
         }
         if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, L"Configure custom action delays & repeats", false);
+        if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, L"Click to change hotkey", false);
     }
     else if (pData->currentPage == 1) { // Auto+Utils
         int rowCount = (int)pData->rowRects.size();
@@ -17940,6 +18075,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringSimpleModeToggle, pData->simpleModeToggleRect));
+            anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringHotkeyToggle, pData->hotkeyToggleRect));
+            anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringHotkeyBind, pData->hotkeyChangeBtnRect));
             anyHover |= (pData->currentPage == 0 && pData->mutexStatusAnim > 0.01f && checkHover(pData->isHoveringMutexStatus, pData->mutexStatusRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoStartToggle, pData->autoStartToggleRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoReconnectToggle, pData->autoReconnectToggleRect));
@@ -18143,6 +18280,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringBloxstrapIntegrationToggle = false;
         pData->isHoveringStatusBarToggle = false;
         pData->isHoveringSimpleModeToggle = false;
+        pData->isHoveringHotkeyToggle = false;
+        pData->isHoveringHotkeyBind = false;
         pData->isHoveringCustomProcessSearchToggle = false;
         pData->isHoveringCustomProcessSearchSettings = false;
         pData->isHoveringCustomProcessSearchExclude = false;
@@ -18351,6 +18490,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->legacyUiAnim, g_useLegacyUi.load());
         animateToggle(pData->statusBarAnim, g_statusBarEnabled.load());
         animateToggle(pData->simpleModeAnim, g_simpleMode.load());
+        animateToggle(pData->hotkeyAnim, g_hotkeyEnabled.load());
         animateToggle(pData->iCanForgetAnim, g_afkReminderEnabled.load());
         animateToggle(pData->doNotSleepAnim, g_doNotSleep.load());
         animateToggle(pData->autoMuteAnim, g_autoMute.load());
@@ -19410,6 +19550,90 @@ void main_thread(bool arg_tray)
 }
 // ==========
 
+std::wstring FormatHotkeyString(UINT modifiers, UINT vk)
+{
+    std::wstring result;
+    if (modifiers & MOD_CONTROL) result += L"Ctrl+";
+    if (modifiers & MOD_SHIFT) result += L"Shift+";
+    if (modifiers & MOD_ALT) result += L"Alt+";
+    if (modifiers & MOD_WIN) result += L"Win+";
+    if (vk >= 'A' && vk <= 'Z') result += (wchar_t)vk;
+    else if (vk >= '0' && vk <= '9') result += (wchar_t)vk;
+    else if (vk >= VK_F1 && vk <= VK_F12) { wchar_t buf[8]; swprintf_s(buf, L"F%d", vk - VK_F1 + 1); result += buf; }
+    else if (vk == VK_SPACE) result += L"Space";
+    else if (vk == VK_RETURN) result += L"Enter";
+    else if (vk == VK_TAB) result += L"Tab";
+    else if (vk == VK_ESCAPE) result += L"Esc";
+    else if (vk == VK_BACK) result += L"Backspace";
+    else if (vk == VK_DELETE) result += L"Del";
+    else if (vk == VK_INSERT) result += L"Ins";
+    else if (vk == VK_HOME) result += L"Home";
+    else if (vk == VK_END) result += L"End";
+    else if (vk == VK_PRIOR) result += L"PgUp";
+    else if (vk == VK_NEXT) result += L"PgDn";
+    else if (vk == VK_LEFT) result += L"Left";
+    else if (vk == VK_RIGHT) result += L"Right";
+    else if (vk == VK_UP) result += L"Up";
+    else if (vk == VK_DOWN) result += L"Down";
+    else if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) { wchar_t buf[8]; swprintf_s(buf, L"Num%d", vk - VK_NUMPAD0); result += buf; }
+    else if (vk == VK_OEM_1) result += L";:";
+    else if (vk == VK_OEM_PLUS) result += L"+";
+    else if (vk == VK_OEM_COMMA) result += L",";
+    else if (vk == VK_OEM_MINUS) result += L"-";
+    else if (vk == VK_OEM_PERIOD) result += L".";
+    else if (vk == VK_OEM_2) result += L"/?";
+    else if (vk == VK_OEM_3) result += L"~";
+    else if (vk == VK_OEM_4) result += L"[{";
+    else if (vk == VK_OEM_5) result += L"\\|";
+    else if (vk == VK_OEM_6) result += L"]}";
+    else if (vk == VK_OEM_7) result += L"'\"";
+    else { wchar_t buf[32]; swprintf_s(buf, L"VK_%d", vk); result += buf; }
+    return result;
+}
+
+static bool g_hkCtrl = false, g_hkShift = false, g_hkAlt = false, g_hkWin = false;
+
+LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode == HC_ACTION && g_hotkeyCaptureActive.load()) {
+        KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+        UINT vk = (UINT)p->vkCode;
+        if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+            switch (vk) {
+            case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: g_hkCtrl = true; break;
+            case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: g_hkShift = true; break;
+            case VK_MENU: case VK_LMENU: case VK_RMENU: g_hkAlt = true; break;
+            case VK_LWIN: case VK_RWIN: g_hkWin = true; break;
+            default:
+                {
+                    UINT mods = 0;
+                    if (g_hkCtrl) mods |= MOD_CONTROL;
+                    if (g_hkShift) mods |= MOD_SHIFT;
+                    if (g_hkAlt) mods |= MOD_ALT;
+                    if (g_hkWin) mods |= MOD_WIN;
+                    g_hotkeyModifiers = mods;
+                    g_hotkeyVk = vk;
+                    g_hotkeyCaptureActive = false;
+                    g_hkCtrl = g_hkShift = g_hkAlt = g_hkWin = false;
+                    if (g_hotkeyCaptureWnd) {
+                        PostMessage(g_hotkeyCaptureWnd, WM_APP + 10, 0, 0);
+                    }
+                    return 1;
+                }
+                break;
+            }
+        } else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+            switch (vk) {
+            case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: g_hkCtrl = false; break;
+            case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: g_hkShift = false; break;
+            case VK_MENU: case VK_LMENU: case VK_RMENU: g_hkAlt = false; break;
+            case VK_LWIN: case VK_RWIN: g_hkWin = false; break;
+            }
+        }
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
 // Main tray worker & winapi worker
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -19427,6 +19651,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         Shell_NotifyIcon(NIM_ADD, &g_nid);
         CreateTrayMenu(g_isAfkStarted.load());
         SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW);
+        if (g_hotkeyEnabled.load()) {
+            RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+        }
         break;
     case WM_SHOWWINDOW:
         if (wParam == TRUE)
@@ -19462,6 +19689,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_previewAlphaNotify = true;
         SaveSettings();
         return 0;
+    case WM_APP + 10:
+        if (g_hHotkeyHook) {
+            UnhookWindowsHookEx(g_hHotkeyHook);
+            g_hHotkeyHook = NULL;
+        }
+        g_hotkeyCaptureActive = false;
+        g_hotkeyCaptureWnd = NULL;
+        if (g_hotkeyEnabled.load()) {
+            RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+        }
+        SaveSettings();
+        CreateTrayMenu(g_isAfkStarted.load());
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+            InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+        }
+        ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 2000, hwnd);
+        break;
     case WM_APP_SHOW_STATUS_BAR:
     {
         StatusBarPayload* payload = reinterpret_cast<StatusBarPayload*>(wParam);
@@ -19798,6 +20042,32 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled \u2014 advanced options hidden" : L"Simple Mode disabled \u2014 showing all options", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
+        case ID_TOGGLE_HOTKEY:
+        {
+            g_hotkeyEnabled = !g_hotkeyEnabled.load();
+            if (g_hotkeyEnabled.load()) {
+                RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+                ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 1800, hwnd);
+            } else {
+                UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
+                ShowStatusBarOverlay(L"Hotkey disabled", 1800, hwnd);
+            }
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            break;
+        }
+        case ID_CAPTURE_HOTKEY:
+        {
+            g_hotkeyCaptureWnd = hwnd;
+            UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
+            g_hotkeyCaptureActive = true;
+            g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+            ShowStatusBarOverlay(L"Press new hotkey combination...", 5000, hwnd);
+            break;
+        }
         case ID_AUTO_UPDATE:
             g_autoUpdate = !g_autoUpdate.load();
             SaveSettings();
@@ -20775,7 +21045,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         }
         break;
+    case WM_HOTKEY:
+        if (wParam == HOTKEY_START_STOP_ID) {
+            PostMessage(hwnd, WM_COMMAND, g_isAfkStarted.load() ? ID_STOP_AFK : ID_START_AFK, 0);
+        }
+        break;
     case WM_DESTROY:
+        UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
+        if (g_hHotkeyHook) {
+            UnhookWindowsHookEx(g_hHotkeyHook);
+            g_hHotkeyHook = NULL;
+        }
+        g_hotkeyCaptureActive = false;
         ResetRobloxSessionEffectsOnExit();
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
         if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
