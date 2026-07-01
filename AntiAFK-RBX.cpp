@@ -14219,7 +14219,7 @@ title = L"CPU Limit %";
         }
     }
 
-    if ((g_updateFound.load() || g_updateCheckFailed.load()) && PtInRect(&pData->updateBannerRect, pt)) {
+    if (pData->currentPage == 0 && (g_updateFound.load() || g_updateCheckFailed.load()) && PtInRect(&pData->updateBannerRect, pt)) {
         if (g_updateFound.load()) {
             PostMessage(g_hwnd, WM_COMMAND, ID_UPDATE_AVAILABLE, 0);
         } else if (g_updateCheckFailed.load()) {
@@ -14231,7 +14231,7 @@ title = L"CPU Limit %";
         }
         return;
     }
-    if (!g_mutexBannerMessage.empty() && PtInRect(&pData->mutexBannerRect, pt)) {
+    if (pData->currentPage == 0 && !g_mutexBannerMessage.empty() && PtInRect(&pData->mutexBannerRect, pt)) {
         if (g_mutexBannerIsSuccess) {
             ClearMutexBanner();
         } else {
