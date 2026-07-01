@@ -724,6 +724,10 @@ void ShowHelp()
             L"  --custom-process-names <names>       Comma-separated process names.\r\n"
             L"  --custom-process-exclude-builtin     Exclude built-in Roblox names.\r\n"
             L"\r\n"
+            L"Hotkey:\r\n"
+            L"  --hotkey [on|off]                    Enable/disable global hotkey.\r\n"
+            L"  --hotkey-bind <combo>                Set hotkey combination (e.g. Ctrl+Shift+F1, F1).\r\n"
+            L"\r\n"
             L"Screen Saver:\r\n"
             L"  --screen-saver [on|off]              Start (or stop with off).\r\n"
             L"  --screen-saver-always-show-exit      Always show the bouncing exit text.\r\n"
@@ -13840,6 +13844,7 @@ title = L"CPU Limit %";
                 if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
                 if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
                 if (i == 3) { title = L"Test Action"; text = L"Performs the selected Anti-AFK action once, so you can verify it works in your current session without waiting for the next interval tick."; }
+                if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance AntiAFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for muti-instance setups."; }
                 if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
                 if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Interval, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
             } else if (pData->currentPage == 1) { // Auto+Utils
@@ -13869,6 +13874,7 @@ title = L"CPU Limit %";
                 if (i == 4) { title = L"Reconnect Interval"; text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus."; }
                 if (i == 5) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
                 if (i == 6) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :) ."; }
+                if (i == 7) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
             } else if (pData->currentPage == 5) { // Discord
                 if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."; }
                 if (i == 1) { title = L"Start / Stop"; text = L"Notifies Discord when Anti-AFK starts and stops.\n\nGood for basic remote monitoring - 2 messages per session, no spam."; }
@@ -13888,8 +13894,6 @@ title = L"CPU Limit %";
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_MULTI_SUPPORT, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->simpleModeToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_SIMPLE_MODE, 0); return; }
-        MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
-        if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_HOTKEY, 0); return; }
     }
     if (pData->currentPage == 1) {
         RECT toggleHitbox;
@@ -14003,6 +14007,8 @@ title = L"CPU Limit %";
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->customProcessSearchToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_TOGGLE, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
+        if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_HOTKEY, 0); return; }
         if (PtInRect(&pData->customProcessSearchSettingsRect, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, 0); return; }
         if (PtInRect(&pData->customProcessSearchExcludeRect, pt)) {
             if (smRedirectAdv()) return;
@@ -14079,7 +14085,6 @@ title = L"CPU Limit %";
             return;
         }
         if (PtInRect(&pData->testActionButtonRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TEST_ACTION, 0); return; }
-        if (PtInRect(&pData->hotkeyChangeBtnRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_HOTKEY, 0); return; }
         if (PtInRect(&pData->instanceManagerBtnRect, pt)) {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -14192,6 +14197,7 @@ title = L"CPU Limit %";
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
+        if (g_hotkeyEnabled.load() && PtInRect(&pData->hotkeyChangeBtnRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_HOTKEY, 0); return; }
         if (PtInRect(&pData->actionDelaysEditButtonRect, pt)) {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -14872,18 +14878,6 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        pData->hotkeyToggleRect = { ctrlStartX, y, ctrlStartX + genCtrlW, y + rowH };
-        int toggleX_rightEdge = clientRect.right - help_btn_size - 20;
-        int hkBtnH = 24;
-        int hkToggleW = 50;
-        int hkBtnW = 24;
-        int hkTextMaxW = 140;
-        pData->hotkeyChangeBtnRect = { toggleX_rightEdge - hkToggleW - 4 - hkBtnW, y + (rowH - hkBtnH) / 2 + 4, toggleX_rightEdge - hkToggleW - 4, y + (rowH - hkBtnH) / 2 + 4 + hkBtnH };
-        pData->hotkeyBindTextRect = { pData->hotkeyChangeBtnRect.left - hkTextMaxW, y + 8, pData->hotkeyChangeBtnRect.left - 6, y + rowH };
-        pData->helpButtonRects.push_back({ toggleX_rightEdge, y + (rowH - help_btn_size) / 2 + 4, toggleX_rightEdge + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
-        y += rowH + vGap;
-
         pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
         pData->updateBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
         if (!g_mutexBannerMessage.empty()) {
@@ -15091,6 +15085,17 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->actionDelaysEditButtonRect = { clientRect.right - help_btn_size - 20 - 50, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
         pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
+
+        {
+            int hkBtnH = 24, hkToggleW = 50, hkBtnW = 24, hkTextMaxW = 140;
+            int toggleX_rightEdge = clientRect.right - help_btn_size - 20;
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->hotkeyToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+            pData->hotkeyChangeBtnRect = { toggleX_rightEdge - hkToggleW - 4 - hkBtnW, y + (rowH - hkBtnH) / 2 + 4, toggleX_rightEdge - hkToggleW - 4, y + (rowH - hkBtnH) / 2 + 4 + hkBtnH };
+            pData->hotkeyBindTextRect = { pData->hotkeyChangeBtnRect.left - hkTextMaxW, y + 8, pData->hotkeyChangeBtnRect.left - 6, y + rowH };
+            pData->helpButtonRects.push_back({ toggleX_rightEdge, y + (rowH - help_btn_size) / 2 + 4, toggleX_rightEdge + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+        }
 
         pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
     } else if (pData->currentPage == 4) { // Statistics
@@ -15860,48 +15865,6 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
         MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, L"Simple Mode", g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
 
-        {
-            std::wstring hkText = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
-            RECT hkRowR = pData->rowRects.back();
-            bool hkEn = g_hotkeyEnabled.load();
-            BYTE hkA = hkEn ? 255 : 100;
-
-            HFONT hkIconF = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-            Font gdiHkIconF(hdc, hkIconF);
-            Font gdiHkTextF(hdc, pData->hFontText);
-            SolidBrush hkIconBr(Color(hkA, 150, 150, 150));
-            SolidBrush hkLabelBr(Color(hkA, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            StringFormat sfHkIc;
-            sfHkIc.SetAlignment(StringAlignmentCenter);
-            sfHkIc.SetLineAlignment(StringAlignmentCenter);
-            RectF hkIcR((REAL)18, (REAL)(hkRowR.top + 2), 22.0f, (REAL)(hkRowR.bottom - hkRowR.top - 4));
-            g.DrawString(L"\uE765", -1, &gdiHkIconF, hkIcR, &sfHkIc, &hkIconBr);
-            StringFormat sfHkLb;
-            sfHkLb.SetAlignment(StringAlignmentNear);
-            sfHkLb.SetLineAlignment(StringAlignmentCenter);
-            RectF hkLbR((REAL)44, (REAL)(hkRowR.top - 1), 100.0f, (REAL)(hkRowR.bottom - hkRowR.top));
-            g.DrawString(L"Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
-            DeleteObject(hkIconF);
-
-            bool isRecording = g_hotkeyCaptureActive.load();
-            MainUI_Paint_DrawCompactButton(hdc, pData->hotkeyChangeBtnRect, pData->hFontText, isRecording ? L"\uE7C8" : L"\uE70F", isRecording, L"", isRecording, 0, hkEn && !isRecording);
-
-            HFONT hkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-            Font gdiHkBindFont(hdc, hkBindFont);
-            SolidBrush hkBindBrush(Color(hkA, 180, 180, 180));
-            StringFormat sfHkBind;
-            sfHkBind.SetAlignment(StringAlignmentFar);
-            sfHkBind.SetLineAlignment(StringAlignmentCenter);
-            RECT hkTr = pData->hotkeyBindTextRect;
-            RectF hkTrF((REAL)hkTr.left, (REAL)hkTr.top, (REAL)(hkTr.right - hkTr.left), (REAL)(hkTr.bottom - hkTr.top));
-            g.DrawString(hkText.c_str(), -1, &gdiHkBindFont, hkTrF, &sfHkBind, &hkBindBrush);
-            DeleteObject(hkBindFont);
-
-            RECT toggleR2 = pData->hotkeyToggleRect;
-            toggleR2.left = pData->hotkeyChangeBtnRect.right + 4;
-            MainUI_Paint_DrawToggle(hdc, toggleR2, pData->hFontText, L"", hkEn, pData->isHoveringHotkeyToggle, pData->hotkeyAnim, false, nullptr, true);
-        }
-
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             bool isButtonElement = false;
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
@@ -16120,7 +16083,6 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             MainUI_Paint_DrawHoverTooltip(hdc, pData->mutexStatusRect, pData->hFontSmall, statusText, false);
         }
         if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, L"Configure custom action delays & repeats", false);
-        if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, L"Click to change hotkey", false);
     }
     else if (pData->currentPage == 1) { // Auto+Utils
         int rowCount = (int)pData->rowRects.size();
@@ -16363,12 +16325,55 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         MainUI_Paint_DrawListActionRow(hdc, pData->actionDelaysRowRect, pData->hFontText, L"Action Delays & Repeats", false, pData->isHoveringActionDelaysEdit, L"\uE713", false, &pData->actionDelaysEditButtonRect, L"edit", !g_simpleMode.load());
 
+        {
+            std::wstring hkText = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            RECT hkRowR = pData->rowRects.back();
+            bool hkEn = g_hotkeyEnabled.load();
+            BYTE hkA = hkEn ? 255 : 100;
+
+            HFONT hkIconF = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font gdiHkIconF(hdc, hkIconF);
+            Font gdiHkTextF(hdc, pData->hFontText);
+            SolidBrush hkIconBr(Color(hkA, 150, 150, 150));
+            SolidBrush hkLabelBr(Color(hkA, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            StringFormat sfHkIc;
+            sfHkIc.SetAlignment(StringAlignmentCenter);
+            sfHkIc.SetLineAlignment(StringAlignmentCenter);
+            RectF hkIcR((REAL)18, (REAL)(hkRowR.top + 2), 22.0f, (REAL)(hkRowR.bottom - hkRowR.top - 4));
+            g.DrawString(L"\uE765", -1, &gdiHkIconF, hkIcR, &sfHkIc, &hkIconBr);
+            StringFormat sfHkLb;
+            sfHkLb.SetAlignment(StringAlignmentNear);
+            sfHkLb.SetLineAlignment(StringAlignmentCenter);
+            RectF hkLbR((REAL)44, (REAL)(hkRowR.top - 1), 100.0f, (REAL)(hkRowR.bottom - hkRowR.top));
+            g.DrawString(L"Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
+            DeleteObject(hkIconF);
+
+            bool isRecording = g_hotkeyCaptureActive.load();
+            MainUI_Paint_DrawCompactButton(hdc, pData->hotkeyChangeBtnRect, pData->hFontText, isRecording ? L"\uE7C8" : L"\uE70F", isRecording, L"", isRecording, 0, hkEn && !isRecording);
+
+            HFONT hkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+            Font gdiHkBindFont(hdc, hkBindFont);
+            SolidBrush hkBindBrush(Color(hkA, 180, 180, 180));
+            StringFormat sfHkBind;
+            sfHkBind.SetAlignment(StringAlignmentFar);
+            sfHkBind.SetLineAlignment(StringAlignmentCenter);
+            RECT hkTr = pData->hotkeyBindTextRect;
+            RectF hkTrF((REAL)hkTr.left, (REAL)hkTr.top, (REAL)(hkTr.right - hkTr.left), (REAL)(hkTr.bottom - hkTr.top));
+            g.DrawString(hkText.c_str(), -1, &gdiHkBindFont, hkTrF, &sfHkBind, &hkBindBrush);
+            DeleteObject(hkBindFont);
+
+            RECT toggleR2 = pData->hotkeyToggleRect;
+            toggleR2.left = pData->hotkeyChangeBtnRect.right + 4;
+            MainUI_Paint_DrawToggle(hdc, toggleR2, pData->hFontText, L"", hkEn, pData->isHoveringHotkeyToggle, pData->hotkeyAnim, false, nullptr, true);
+        }
+
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
         }
         if (pData->isHoveringActionDelaysEdit) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysEditButtonRect, pData->hFontSmall, g_simpleMode.load() ? L"Simple Mode is on • disable it to use this setting" : L"Configure custom key hold, action intervals and repetition count", false);
         }
+        if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, L"Click to change hotkey", false);
         if (pData->isHoveringCustomProcessSearchExclude) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchExcludeRect, pData->hFontSmall, g_useCustomProcessSearch.load() ? L"Exclude built-in Roblox names" : L"Enable Custom Process Search first", false);
         }
@@ -17958,6 +17963,17 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->customProcessSearchToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
             y += rowH + vGap;
 
+            {
+                int hkBtnH = 24, hkToggleW = 50, hkBtnW = 24, hkTextMaxW = 140;
+                int toggleX_rightEdge = clientRect.right - help_btn_size - 20;
+                pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+                pData->hotkeyToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
+                pData->hotkeyChangeBtnRect = { toggleX_rightEdge - hkToggleW - 4 - hkBtnW, y + (rowH - hkBtnH) / 2 + 4, toggleX_rightEdge - hkToggleW - 4, y + (rowH - hkBtnH) / 2 + 4 + hkBtnH };
+                pData->hotkeyBindTextRect = { pData->hotkeyChangeBtnRect.left - hkTextMaxW, y + 8, pData->hotkeyChangeBtnRect.left - 6, y + rowH };
+                pData->helpButtonRects.push_back({ toggleX_rightEdge, y + (rowH - help_btn_size) / 2 + 4, toggleX_rightEdge + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+                y += rowH + vGap;
+            }
+
             pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
         } else if (pData->currentPage == 5) { // Discord
             const int noteH = 26;
@@ -18290,8 +18306,6 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringSimpleModeToggle, pData->simpleModeToggleRect));
-            anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringHotkeyToggle, pData->hotkeyToggleRect));
-            anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringHotkeyBind, pData->hotkeyChangeBtnRect));
             anyHover |= (pData->currentPage == 0 && pData->mutexStatusAnim > 0.01f && checkHover(pData->isHoveringMutexStatus, pData->mutexStatusRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoStartToggle, pData->autoStartToggleRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoReconnectToggle, pData->autoReconnectToggleRect));
@@ -18327,6 +18341,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringExportSettings, pData->exportSettingsRect));
             anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationToggleRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringStatusBarToggle, pData->statusBarToggleRect));
+            anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringHotkeyToggle, pData->hotkeyToggleRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringHotkeyBind, pData->hotkeyChangeBtnRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchToggleRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringCustomProcessSearchSettings, pData->customProcessSearchSettingsRect));
             if (pData->currentPage == 3) {
@@ -18496,9 +18512,9 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringSkipActiveToggle = false;
         pData->isHoveringBloxstrapIntegrationToggle = false;
         pData->isHoveringStatusBarToggle = false;
-        pData->isHoveringSimpleModeToggle = false;
         pData->isHoveringHotkeyToggle = false;
         pData->isHoveringHotkeyBind = false;
+        pData->isHoveringSimpleModeToggle = false;
         pData->isHoveringCustomProcessSearchToggle = false;
         pData->isHoveringCustomProcessSearchSettings = false;
         pData->isHoveringCustomProcessSearchExclude = false;
@@ -21679,6 +21695,55 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             else if (arg == L"--action-repeat" && i + 1 < argc) {
                 int v = _wtoi(argv[++i]);
                 if (v >= 1 && v <= 100) { g_actionRepeatCount = v; g_actionPreset = 2; }
+            }
+            else if (arg == L"--hotkey") {
+                bool value = true;
+                ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                g_hotkeyEnabled = value;
+            }
+            else if (arg == L"--hotkey-bind" && i + 1 < argc) {
+                std::wstring combo = argv[++i];
+                UINT mods = 0;
+                UINT vk = 0;
+                size_t pos = 0;
+                while (pos < combo.size()) {
+                    size_t plus = combo.find(L'+', pos);
+                    std::wstring token = (plus == std::wstring::npos) ? combo.substr(pos) : combo.substr(pos, plus - pos);
+                    if (token == L"Ctrl" || token == L"CTRL") mods |= MOD_CONTROL;
+                    else if (token == L"Shift" || token == L"SHIFT") mods |= MOD_SHIFT;
+                    else if (token == L"Alt" || token == L"ALT") mods |= MOD_ALT;
+                    else if (token == L"Win" || token == L"WIN") mods |= MOD_WIN;
+                    else {
+                        if (token.size() == 1 && token[0] >= L'A' && token[0] <= L'Z') vk = token[0];
+                        else if (token.size() == 1 && token[0] >= L'0' && token[0] <= L'9') vk = token[0];
+                        else if (token[0] == L'F' && token.size() > 1) {
+                            int n = _wtoi(token.c_str() + 1);
+                            if (n >= 1 && n <= 12) vk = VK_F1 + (n - 1);
+                        }
+                        else if (token == L"Space") vk = VK_SPACE;
+                        else if (token == L"Enter") vk = VK_RETURN;
+                        else if (token == L"Tab") vk = VK_TAB;
+                        else if (token == L"Esc" || token == L"Escape") vk = VK_ESCAPE;
+                        else if (token == L"Backspace") vk = VK_BACK;
+                        else if (token == L"Del" || token == L"Delete") vk = VK_DELETE;
+                        else if (token == L"Ins" || token == L"Insert") vk = VK_INSERT;
+                        else if (token == L"Home") vk = VK_HOME;
+                        else if (token == L"End") vk = VK_END;
+                        else if (token == L"PgUp") vk = VK_PRIOR;
+                        else if (token == L"PgDn") vk = VK_NEXT;
+                        else if (token == L"Left") vk = VK_LEFT;
+                        else if (token == L"Right") vk = VK_RIGHT;
+                        else if (token == L"Up") vk = VK_UP;
+                        else if (token == L"Down") vk = VK_DOWN;
+                    }
+                    if (plus == std::wstring::npos) break;
+                    pos = plus + 1;
+                }
+                if (vk != 0) {
+                    g_hotkeyModifiers = mods;
+                    g_hotkeyVk = vk;
+                    g_hotkeyEnabled = true;
+                }
             }
             else if (arg == L"--screen-saver") {
                 bool value = true;
