@@ -148,6 +148,7 @@ using namespace std::chrono_literals;
 #define ID_ACTION_SPACE 201
 #define ID_ACTION_WS 202
 #define ID_ACTION_ZOOM 203
+#define ID_ACTION_RANDOM 204
 
 #define ID_AUTO_UPDATE 302
 #define ID_USER_SAFE 303
@@ -547,7 +548,9 @@ void ApplyActionPreset(int preset) {
 
 
 std::atomic<int> g_selectedTime(540);
-std::atomic<int> g_selectedAction(1); // 0 - space, 1 - w&s, 2 - zoom
+std::atomic<int> g_selectedAction(1); // 0 - space, 1 - w&s, 2 - zoom, 3 - random
+std::atomic<int> g_lastActionKind(1); // 0 - space, 1 - w/s, 2 - zoom (actual last performed)
+std::atomic<int> g_randomCyclePick(-1); // -1 = no pick yet, 0-2 = pick for current cycle
 std::atomic<int> g_restoreMethod(1); // 0 - Off, 1 - SetForeground, 2 - Alt+Tab (legacy), 3 - Smart Alt+Tab
 std::atomic<int> g_userSafeMode(2); // 0 - Off, 1 - Legacy, 2 - Beta
 std::atomic<int> g_fpsLimit(0); // 0 for OFF
@@ -672,7 +675,7 @@ void ShowHelp()
             L"Anti-AFK:\r\n"
             L"  --start-afk                          Start Anti-AFK immediately on launch.\r\n"
             L"  --set-interval <seconds>             Set Anti-AFK interval in seconds (1-1200).\r\n"
-            L"  --set-action <action>                Action: space, ws, zoom.\r\n"
+            L"  --set-action <action>                Action: space, ws, zoom, random*.\r\n"
             L"  --user-safe <mode>                   User-Safe mode: off, legacy, beta.\r\n"
             L"  --action-preset <preset>             Preset: default, safe, custom.\r\n"
             L"  --action-delay-pre <ms>              Delay before action (0-10000).\r\n"
@@ -5480,13 +5483,30 @@ void ClearMutexBanner()
 static void PreciseSleepMs(double ms);
 
 // AntiAFK Action
+static int RandomInt(int max);
+
 void AntiAFK_Action(HWND target)
 {
     if (g_stopThread.load() || !g_isAfkStarted.load()) return;
     if (!target || !IsWindow(target)) return;
 
     int action = g_selectedAction.load();
-    switch (action)
+
+    int performKind = action;
+    if (action == 3) // Random
+    {
+        int pick = g_randomCyclePick.load();
+        if (pick == -1)
+        {
+            pick = RandomInt(3);
+            g_randomCyclePick = pick;
+        }
+        performKind = pick;
+    }
+
+    g_lastActionKind = performKind;
+
+    switch (performKind)
     {
     case 0: // Space
         keybd_event(static_cast<BYTE>(VK_SPACE), static_cast<BYTE>(MapVirtualKey(VK_SPACE, 0)), 0, 0);
@@ -5510,8 +5530,6 @@ void AntiAFK_Action(HWND target)
         keybd_event('O', static_cast<BYTE>(MapVirtualKey('O', 0)), 0, 0);
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('O', static_cast<BYTE>(MapVirtualKey('O', 0)), KEYEVENTF_KEYUP, 0);
-        break;
-    default:
         break;
     }
 }
@@ -6744,7 +6762,7 @@ static int NormalizeSelectedTimeValue(int value)
 
 static int NormalizeSelectedAction(int value)
 {
-    return ClampInt(value, 0, 2);
+    return ClampInt(value, 0, 3);
 }
 
 static int NormalizeUserSafeMode(int value)
@@ -6864,13 +6882,19 @@ std::wstring GetDiscordDisplayTimeLabel()
 
 std::wstring GetDiscordActionCompactLabel()
 {
-    switch (g_selectedAction.load())
+    std::wstring baseName;
+    switch (g_lastActionKind.load())
     {
-    case 0: return L"Jump";
-    case 1: return L"W/S";
-    case 2: return L"Zoom";
-    default: return L"Action";
+    case 0: baseName = L"Jump"; break;
+    case 1: baseName = L"W/S"; break;
+    case 2: baseName = L"Zoom"; break;
+    default: baseName = L"Action"; break;
     }
+    if (g_selectedAction.load() == 3)
+    {
+        return L"Random (" + baseName + L")";
+    }
+    return baseName;
 }
 
 std::wstring GetDiscordIntervalCompactLabel()
@@ -7968,6 +7992,7 @@ void LoadSettings()
     g_multiSupport = (multiSupport != 0);
     g_selectedTime = NormalizeSelectedTimeValue((int)selectedTime);
     g_selectedAction = NormalizeSelectedAction((int)selectedAction);
+    g_lastActionKind = (g_selectedAction.load() == 3) ? 1 : g_selectedAction.load();
     g_autoUpdate = (autoUpdate != 0);
     g_userSafeMode = NormalizeUserSafeMode((int)userSafeMode);
     g_autoStartAfk = (autoStartAfk != 0);
@@ -8048,6 +8073,7 @@ void ResetSettings()
     g_multiSupport = false;
     g_selectedTime = 540;
     g_selectedAction = 1;
+    g_lastActionKind = 1;
     g_autoUpdate = true;
     g_userSafeMode = 2;
     g_autoStartAfk = false;
@@ -8758,6 +8784,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_multiSupport = s.multiSupport;
     g_selectedTime = NormalizeSelectedTimeValue(s.selectedTime);
     g_selectedAction = NormalizeSelectedAction(s.selectedAction);
+    g_lastActionKind = (g_selectedAction.load() == 3) ? 1 : g_selectedAction.load();
     g_autoUpdate = s.autoUpdate;
     g_userSafeMode = NormalizeUserSafeMode(s.userSafeMode);
     g_autoStartAfk = s.autoStartAfk;
@@ -9065,8 +9092,9 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
     wchar_t actionLabel[32];
-    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)" };
+    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*" };
     swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
@@ -13841,7 +13869,7 @@ title = L"CPU Limit %";
             const wchar_t* text = L"No help text available for this setting.";
             if (pData->currentPage == 0) { // General
                 if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
-                if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
+                if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
                 if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
                 if (i == 3) { title = L"Test Action"; text = L"Performs the selected Anti-AFK action once, so you can verify it works in your current session without waiting for the next interval tick."; }
                 if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance AntiAFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for muti-instance setups."; }
@@ -14047,6 +14075,7 @@ title = L"CPU Limit %";
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
             POINT menuPt;
             menuPt.x = pData->actionDropdownRect.left;
             menuPt.y = pData->actionDropdownRect.bottom;
@@ -15801,7 +15830,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         swprintf_s(buffer, L"%d sec (%d min)", g_selectedTime.load(), g_selectedTime.load() / 60);
         MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval, true, L"\uE916", true, nullptr, 1, -1);
 
-        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)" };
+        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*" };
         MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[g_selectedAction.load()], pData->isHoveringAction, true, L"\uE7C9");
         MainUI_Paint_DrawCompactButton(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringActionDelaysSettingsCompact, L"\uE713", false);
 
@@ -19587,6 +19616,7 @@ void main_thread(bool arg_tray)
                         break;
                     }
 
+                    g_randomCyclePick = -1;
                     for (int j = 0; j < g_actionRepeatCount.load(); j++)
                     {
                         if (g_stopThread.load() || !g_isAfkStarted.load()) {
@@ -20684,12 +20714,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (!g_isAfkStarted.load()) {
                 ShowTrayNotification(L"AntiAFK-RBX \u2022 Info", L"Start Anti-AFK first to test the action.");
                 ShowStatusBarOverlay(L"Start AFK first to test", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-            } else if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3, false)) {
-                g_lastAfkActionTimestamp = GetTickCount64();
-                ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                g_randomCyclePick = -1;
+                if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3, false)) {
+                    g_lastAfkActionTimestamp = GetTickCount64();
+                    ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                } else {
+                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                    ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                }
             }
             break;
         }
@@ -21243,6 +21276,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_ACTION_SPACE:
         case ID_ACTION_WS:
         case ID_ACTION_ZOOM:
+        case ID_ACTION_RANDOM:
             g_selectedAction = NormalizeSelectedAction(LOWORD(wParam) - ID_ACTION_SPACE);
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -21432,6 +21466,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 if (val == L"space") g_selectedAction = 0;
                 else if (val == L"ws") g_selectedAction = 1;
                 else if (val == L"zoom") g_selectedAction = 2;
+                else if (val == L"random") g_selectedAction = 3;
             }
             else if (arg == L"--multi-instance") {
                 bool value = true;
