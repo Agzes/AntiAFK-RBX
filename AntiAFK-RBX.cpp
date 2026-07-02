@@ -19301,6 +19301,14 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
 }
 // ==========
 
+struct FpsCapperPauseGuard {
+    bool wasPaused;
+    FpsCapperPauseGuard() : wasPaused(PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, true)) {}
+    ~FpsCapperPauseGuard() { ResumeFpsCapperAfterAction(wasPaused); }
+    FpsCapperPauseGuard(const FpsCapperPauseGuard&) = delete;
+    FpsCapperPauseGuard& operator=(const FpsCapperPauseGuard&) = delete;
+};
+
 // Main thread
 void main_thread(bool arg_tray)
 {
@@ -19488,7 +19496,7 @@ void main_thread(bool arg_tray)
                     if (!cancelPendingAction) HideStatusBarOverlay(false);
                 }
 
-                bool wasFpsCapperPaused = PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, true);
+                FpsCapperPauseGuard fpsCapperGuard;
 
                 QueueStatusBarOverlay(L"Performing anti-AFK action",
                                       STATUS_BAR_ACTION_PENDING_DURATION, wins.front());
@@ -19498,7 +19506,6 @@ void main_thread(bool arg_tray)
                 {
                     if (g_stopThread.load()) {
                         HideStatusBarOverlay(false);
-                        ResumeFpsCapperAfterAction(wasFpsCapperPaused);
                         return;
                     }
                     if (!g_isAfkStarted.load()) {
@@ -19513,7 +19520,6 @@ void main_thread(bool arg_tray)
 
                 if (cancelPendingAction) {
                     HideStatusBarOverlay(false);
-                    ResumeFpsCapperAfterAction(wasFpsCapperPaused);
                     continue;
                 }
 
