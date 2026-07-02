@@ -6,8 +6,8 @@
 #define RC      3
 #define STABLE  4
 #define MAKE_VERSION(major, minor, patch, type, num) ((major)*10000000 + (minor)*100000 + (patch)*1000 + (type)*100 + (num))
-int currentVersion = MAKE_VERSION(4, 0, 0, ALPHA, 1);
-const wchar_t* g_Version = L"v.4.0.0-alpha1";
+int currentVersion = MAKE_VERSION(4, 0, 0, ALPHA, 2);
+const wchar_t* g_Version = L"v.4.0.0-alpha2";
 
 #include <windows.h>
 #include <intrin.h>
