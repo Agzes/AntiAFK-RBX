@@ -17233,10 +17233,10 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             Color statusIconColor = afkStarted ? Color(255, 80, 200, 80) : Color(255, 200, 80, 80);
             drawTIcon(0, afkStarted ? L"\uE768" : L"\uE769", 0, 0, 0, statusIconColor);
             drawTIcon(1, L"\uE916");
-            drawTIcon(2, L"\uE8EE");
+            drawTIcon(2, L"\uE787");
             drawTIcon(3, L"\uE7FC");
-            drawTIcon(4, L"\uE715");
-            drawTIcon(5, L"\uE787");
+            drawTIcon(4, L"\uE8EE");
+            drawTIcon(5, L"\uE7FC");
 
             DeleteObject(tIconFontH);
 
