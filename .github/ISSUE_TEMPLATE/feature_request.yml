@@ -1,0 +1,32 @@
+name: 💡 Feature Request
+description: Propose a new feature
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees:
+    - agzes
+body:
+    - type: markdown
+      attributes:
+          value: "## Thank you for suggesting a new feature to help improve AntiAFK-RBX!"
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem
+          placeholder: What is the issue or limitation you want to solve?
+      validations:
+          required: true
+    - type: textarea
+      id: solution
+      attributes:
+          label: Proposed Solution (optional)
+          placeholder: How should this feature work?
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives Considered
+          placeholder: Any other ways to solve this?
+    - type: textarea
+      id: context
+      attributes:
+          label: Extra Context
+          placeholder: Screenshots, examples, etc.

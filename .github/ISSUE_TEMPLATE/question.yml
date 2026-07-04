@@ -1,0 +1,19 @@
+name: ❓ Question
+description: Ask a question about AntiAFK-RBX
+title: "[Question]: "
+labels: ["question"]
+assignees:
+    - agzes
+body:
+    - type: textarea
+      id: question
+      attributes:
+          label: Question
+          placeholder: What would you like to ask or clarify?
+      validations:
+          required: true
+    - type: textarea
+      id: context
+      attributes:
+          label: Context
+          placeholder: Any details or configuration related to your question.
