@@ -341,6 +341,7 @@ std::mutex g_customProcessNamesMutex;
 bool g_enableMainUiIntroAnimation = false;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
+std::atomic<bool> g_pendingExit(false);
 std::atomic<bool> g_hotkeyEnabled(true);
 std::atomic<UINT> g_hotkeyModifiers(MOD_CONTROL | MOD_SHIFT);
 std::atomic<UINT> g_hotkeyVk(VK_F1);
@@ -20474,6 +20475,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ApplyDarkMode(hwnd, true);
             TrackPopupMenu(g_hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
             PostMessage(hwnd, WM_NULL, 0, 0);
+            if (g_pendingExit.exchange(false)) {
+                DestroyWindow(g_hwnd);
+            }
         }
         else if (lParam == WM_LBUTTONDOWN)
         {
@@ -21757,7 +21761,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         }
         case ID_EXIT:
-            DestroyWindow(g_hwnd);
+            g_pendingExit = true;
             break;
         default:
             if (LOWORD(wParam) >= ID_FPS_CAP_CUSTOM_BASE && LOWORD(wParam) <= ID_FPS_CAP_CUSTOM_BASE + 60) {
