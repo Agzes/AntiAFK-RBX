@@ -6297,6 +6297,415 @@ void ResumeFpsCapperAfterAction(bool previousPausedState)
 }
 // ==========
 
+// Tray icon helpers
+static std::vector<HBITMAP> g_menuIconBitmaps;
+
+static void DestroyMenuIconCache()
+{
+    for (HBITMAP hbm : g_menuIconBitmaps)
+        if (hbm) DeleteObject(hbm);
+    g_menuIconBitmaps.clear();
+}
+
+static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 16, COLORREF color = RGB(200, 200, 200), bool showCheckmark = false)
+{
+    HDC hdc = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdc);
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = -size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    SelectObject(memDC, hBmp);
+    memset(bits, 0, size * size * 4);
+
+    {
+        Gdiplus::Graphics g(memDC);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+        Gdiplus::FontFamily ff(L"Segoe MDL2 Assets");
+
+        if (showCheckmark)
+        {
+            Gdiplus::Font f(&ff, (REAL)size * 0.80f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+            Gdiplus::Color gdiColor(220, GetRValue(color), GetGValue(color), GetBValue(color));
+            Gdiplus::SolidBrush brush(gdiColor);
+            Gdiplus::StringFormat sf;
+            sf.SetAlignment(Gdiplus::StringAlignmentCenter);
+            sf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+            wchar_t text[2] = { glyph, 0 };
+            Gdiplus::RectF r(0.0f, 0.0f, (REAL)size, (REAL)size);
+            g.DrawString(text, 1, &f, r, &sf, &brush);
+
+            REAL badgeSize = (REAL)size * 0.60f;
+            REAL badgeX = (REAL)size - badgeSize;
+            REAL badgeY = (REAL)size - badgeSize;
+            Gdiplus::RectF badgeR(badgeX, badgeY, badgeSize, badgeSize);
+            Gdiplus::SolidBrush badgeBrush(Gdiplus::Color(255, 80, 200, 120));
+            g.FillEllipse(&badgeBrush, badgeR);
+
+            Gdiplus::Font checkFont(&ff, (REAL)size * 0.55f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+            Gdiplus::SolidBrush checkBrush(Gdiplus::Color(255, 255, 255, 255));
+            wchar_t checkText[2] = { 0xE73E, 0 };
+            Gdiplus::StringFormat checkSf;
+            checkSf.SetAlignment(Gdiplus::StringAlignmentCenter);
+            checkSf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+            Gdiplus::RectF checkR(badgeX + 1.0f, badgeY + 1.0f, badgeSize, badgeSize);
+            g.DrawString(checkText, 1, &checkFont, checkR, &checkSf, &checkBrush);
+        }
+        else
+        {
+            Gdiplus::Font f(&ff, (REAL)size * 0.82f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+            Gdiplus::Color gdiColor(255, GetRValue(color), GetGValue(color), GetBValue(color));
+            Gdiplus::SolidBrush brush(gdiColor);
+            Gdiplus::StringFormat sf;
+            sf.SetAlignment(Gdiplus::StringAlignmentCenter);
+            sf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+            wchar_t text[2] = { glyph, 0 };
+            Gdiplus::RectF r(0.0f, 0.0f, (REAL)size, (REAL)size);
+            g.DrawString(text, 1, &f, r, &sf, &brush);
+        }
+    }
+
+    DeleteDC(memDC);
+    ReleaseDC(NULL, hdc);
+    return hBmp;
+}
+
+static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORREF color, int size = 16)
+{
+    HDC hdc = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdc);
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = -size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    SelectObject(memDC, hBmp);
+    memset(bits, 0, size * size * 4);
+
+    {
+        Gdiplus::Graphics g(memDC);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+        Gdiplus::FontFamily ff(L"Segoe MDL2 Assets");
+        Gdiplus::Font f(&ff, (REAL)size * 0.82f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::Color gdiColor(255, GetRValue(color), GetGValue(color), GetBValue(color));
+        Gdiplus::SolidBrush brush(gdiColor);
+        Gdiplus::StringFormat sf;
+        sf.SetAlignment(Gdiplus::StringAlignmentCenter);
+        sf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        Gdiplus::RectF r(0.0f, 0.0f, (REAL)size, (REAL)size);
+        g.DrawString(text, textLen, &f, r, &sf, &brush);
+    }
+
+    DeleteDC(memDC);
+    ReleaseDC(NULL, hdc);
+    return hBmp;
+}
+
+static HBITMAP CreateMenuIconFromAppIcon(int size = 16)
+{
+    HICON hIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_MAIN), IMAGE_ICON, size, size, LR_DEFAULTCOLOR);
+    if (!hIcon) return NULL;
+
+    HDC hdc = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdc);
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = -size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    SelectObject(memDC, hBmp);
+    memset(bits, 0, size * size * 4);
+    DrawIconEx(memDC, 0, 0, hIcon, size, size, 0, NULL, DI_NORMAL);
+    DestroyIcon(hIcon);
+    DeleteDC(memDC);
+    ReleaseDC(NULL, hdc);
+    return hBmp;
+}
+
+static HBITMAP CreateMenuIconFromTrayState(bool afk, int size = 16)
+{
+    int iconId = IDI_TRAY_OFF;
+    if (afk)
+        iconId = g_multiSupport.load() ? IDI_TRAY_ON_MULTI : IDI_TRAY_ON;
+
+    HICON hIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, size, size, LR_DEFAULTCOLOR);
+    if (!hIcon) return NULL;
+
+    HDC hdc = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(hdc);
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = -size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    SelectObject(memDC, hBmp);
+    memset(bits, 0, size * size * 4);
+    DrawIconEx(memDC, 0, 0, hIcon, size, size, 0, NULL, DI_NORMAL);
+    DestroyIcon(hIcon);
+    DeleteDC(memDC);
+    ReleaseDC(NULL, hdc);
+    return hBmp;
+}
+
+static void SetMenuIcon(HMENU hMenu, UINT itemId, wchar_t glyph, bool isChecked = false)
+{
+    if (!glyph) return;
+    HBITMAP hBmp = CreateMenuIconFromGlyph(glyph, 16, RGB(200, 200, 200), isChecked);
+    g_menuIconBitmaps.push_back(hBmp);
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hMenu, itemId, FALSE, &mii);
+}
+
+static void SetMenuIconPopup(HMENU hParent, HMENU hSub, wchar_t glyph)
+{
+    if (!glyph) return;
+    HBITMAP hBmp = CreateMenuIconFromGlyph(glyph);
+    g_menuIconBitmaps.push_back(hBmp);
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hParent, (UINT_PTR)hSub, FALSE, &mii);
+}
+
+static void SetMenuIconBitmap(HMENU hMenu, UINT itemId, HBITMAP hBmp)
+{
+    if (!hBmp) return;
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hMenu, itemId, FALSE, &mii);
+}
+
+static void SetAnnouncementMenuIcon(HMENU hMenu, UINT itemId, const AnnouncementInfo& announcement)
+{
+    if (!announcement.enabled || announcement.icon.empty())
+        return;
+    HBITMAP hBmp = CreateMenuIconFromString(announcement.icon.c_str(), (int)announcement.icon.length(), announcement.iconColor);
+    if (!hBmp) return;
+    g_menuIconBitmaps.push_back(hBmp);
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hMenu, itemId, FALSE, &mii);
+}
+
+static void AppendMenuLabelWithIcon(HMENU hMenu, const wchar_t* text, wchar_t glyph)
+{
+    int pos = GetMenuItemCount(hMenu);
+    AppendMenu(hMenu, MF_STRING | MF_GRAYED, 0, text);
+    if (!glyph) return;
+    HBITMAP hBmp = CreateMenuIconFromGlyph(glyph);
+    g_menuIconBitmaps.push_back(hBmp);
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hMenu, pos, TRUE, &mii);
+}
+
+static void AppendMenuLabelWithTrayStateIcon(HMENU hMenu, const wchar_t* text, bool afk)
+{
+    int pos = GetMenuItemCount(hMenu);
+    AppendMenu(hMenu, MF_STRING | MF_GRAYED, 0, text);
+    HBITMAP hBmp = CreateMenuIconFromTrayState(afk);
+    if (!hBmp) return;
+    g_menuIconBitmaps.push_back(hBmp);
+    MENUITEMINFO mii = { sizeof(mii) };
+    mii.fMask = MIIM_BITMAP;
+    mii.hbmpItem = hBmp;
+    SetMenuItemInfo(hMenu, pos, TRUE, &mii);
+}
+
+static void AppendStatusLabel(HMENU hMenu, bool afk)
+{
+    wchar_t statusText[128];
+    const wchar_t* status = afk
+        ? (g_multiSupport.load() ? L"Running (Multi)" : L"Running")
+        : L"Stopped";
+    swprintf_s(statusText, L"%s \u2022 %s", status, g_Version);
+    AppendMenuLabelWithTrayStateIcon(hMenu, statusText, afk);
+}
+
+static wchar_t GetMenuGlyph(UINT cmdId)
+{
+    switch (cmdId)
+    {
+        case ID_ABOUT_MENU:                return 0xE946;
+        case ID_SHOW_TUTORIAL:             return 0xE8BD;
+        case ID_LINKTTU:
+        case ID_LINKWIKI:
+        case ID_LINKGITHUB:
+        case ID_LINKSF:                    return 0xE71B;
+        case ID_START_AFK:                 return 0xE768;
+        case ID_STOP_AFK:                  return 0xE769;
+        case ID_SHOW_WINDOW:               return 0xF19D;
+        case ID_HIDE_WINDOW:               return 0xEE47;
+        case ID_WINDOW_OPACITY:            return 0xE727;
+        case ID_GRID_SNAP:                 return 0xE80A;
+        case ID_OPEN_UI:                   return 0xE80F;
+        case ID_TOGGLE_HOTKEY:             return 0xE765;
+        case ID_CAPTURE_HOTKEY:            return 0xE70F;
+        case ID_USE_LEGACY_UI:             return 0xE80F;
+        case ID_UPDATE_AVAILABLE:          return 0xE777;
+        case ID_EXIT:                      return 0xE711;
+        case ID_TEST_ACTION:               return 0xE768;
+        case ID_MULTI_SUPPORT:             return 0xE81E;
+        case ID_TOGGLE_SIMPLE_MODE:        return 0xE71B;
+        case ID_AUTO_UPDATE:               return 0xE777;
+        case ID_STATUS_BAR:                return 0xE7F4;
+        case ID_AUTO_START_AFK:            return 0xE768;
+        case ID_AUTO_RECONNECT:            return 0xE8AF;
+        case ID_RECONNECT_MANUAL_CHECK:    return 0xE72C;
+        case ID_RECONNECT_INTERVAL_OFF:
+        case ID_RECONNECT_INTERVAL_30:
+        case ID_RECONNECT_INTERVAL_60:
+        case ID_RECONNECT_INTERVAL_120:
+        case ID_RECONNECT_INTERVAL_300:
+        case ID_RECONNECT_INTERVAL_600:
+        case ID_RECONNECT_INTERVAL_CUSTOM: return 0xE8AF;
+        case ID_AUTO_RESET:                return 0xE81C;
+        case ID_AUTO_HIDE:                 return 0xEE47;
+        case ID_AUTO_OPACITY:              return 0xE727;
+        case ID_AUTO_GRID:                 return 0xE80A;
+        case ID_GRID_SETTINGS:             return 0xE713;
+        case ID_GRID_FORCE_SMALL:          return 0xE73F;
+        case ID_GRID_KEEP_ASPECT_RATIO:    return 0xE799;
+        case ID_GRID_ALL_MONITORS:         return 0xE81E;
+        case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
+        case ID_BLOXSTRAP_INTEGRATION:     return 0xE71B;
+        case ID_I_CAN_FORGET:              return 0xE916;
+        case ID_SKIP_ACTIVE:               return 0xE893;
+        case ID_AUTO_MUTE:                 return 0xE74F;
+        case ID_UNMUTE_ON_FOCUS:           return 0xE7ED;
+        case ID_UNLOCK_FPS_ON_FOCUS:       return 0xE950;
+        case ID_DO_NOT_SLEEP:              return 0xE708;
+        case ID_USER_SAFE_OFF:
+        case ID_USER_SAFE_LEGACY:
+        case ID_USER_SAFE_BETA:            return 0xE72E;
+        case ID_RESTORE_OFF:
+        case ID_RESTORE_FOREGROUND:
+        case ID_RESTORE_ALTTAB:
+        case ID_RESTORE_SMART_ALTTAB:      return 0xE73F;
+        case ID_FPS_CAP_TOGGLE:            return 0xE950;
+        case ID_CPU_LIMIT_MODE_TOGGLE:     return 0xE950;
+        case ID_FPS_CAP_CUSTOM:
+        case ID_FPS_CAP_3:
+        case ID_FPS_CAP_5:
+        case ID_FPS_CAP_7:
+        case ID_FPS_CAP_10:
+        case ID_FPS_CAP_15:                return 0xE950;
+        case ID_CPU_LIMIT_PERCENT_CUSTOM:
+        case ID_CPU_LIMIT_PERIOD_CUSTOM:   return 0xE950;
+        case ID_RAM_CLEANER_RUNTIME_TOGGLE:return 0xE964;
+        case ID_RAM_CLEAN_MODE_SMART:
+        case ID_RAM_CLEAN_MODE_TIME:
+        case ID_RAM_CLEAN_MODE_HYBRID:     return 0xE964;
+        case ID_RAM_CLEAN_INTERVAL_CUSTOM: return 0xE916;
+        case ID_RAM_CLEAN_LIMIT_CUSTOM:    return 0xE9D2;
+        case ID_ACTION_PRESET_STANDARD:
+        case ID_ACTION_PRESET_SLOW:
+        case ID_ACTION_PRESET_FAST:
+        case ID_ACTION_PRESET_CUSTOM:      return 0xE838;
+        case ID_ACTION_DELAY_PRE:          return 0xE7A7;
+        case ID_ACTION_DELAY_KEY:          return 0xE765;
+        case ID_ACTION_DELAY_POST:         return 0xE7A6;
+        case ID_ACTION_DELAY_REPEAT:       return 0xE9F3;
+        case ID_CUSTOM_PROCESS_SEARCH_TOGGLE:   return 0xE721;
+        case ID_CUSTOM_PROCESS_SEARCH_SETTINGS: return 0xE713;
+        case ID_CUSTOM_PROCESS_SEARCH_EXCLUDE:  return 0xE711;
+        case ID_SCREEN_SAVER:              return 0xE708;
+        case ID_SS_ALWAYS_SHOW_EXIT:       return 0xED55;
+        case ID_IMPORT_SETTINGS:           return 0xE896;
+        case ID_EXPORT_SETTINGS:           return 0xE898;
+        case ID_RESET_SETTINGS:
+        case ID_RESET_STATS:               return 0xE74D;
+        case ID_UTILS_SHOW_ALL:            return 0xF19D;
+        case ID_UTILS_HIDE_ALL:            return 0xEE47;
+        case ID_UTILS_TOGGLE_WINDOW_OPACITY: return 0xE727;
+        case ID_UTILS_TOGGLE_MUTE:         return 0xE74F;
+        case ID_UTILS_TOGGLE_FPS:          return 0xE950;
+        case ID_RAM_CLEAN_SWEEP:           return 0xE74D;
+        case ID_UTILS_TEST_ACTION:         return 0xE768;
+        case ID_UTILS_RESET_ALL:           return 0xE81C;
+        case ID_UTILS_CLOSE_ALL:           return 0xE711;
+        case ID_DISCORD_WEBHOOK_ENABLE:
+        case ID_DISCORD_WEBHOOK_TEST:      return 0xE8BD;
+        case ID_DISCORD_NOTIFY_START:
+        case ID_DISCORD_NOTIFY_STOP:       return 0xE768;
+        case ID_DISCORD_WEBHOOK_PASTE:     return 0xE16F;
+        case ID_DISCORD_WEBHOOK_CLEAR:     return 0xE74D;
+        case ID_DISCORD_NOTIFY_ACTION:     return 0xE7C9;
+        case ID_DISCORD_NOTIFY_RECONNECT:  return 0xE8AF;
+        case ID_DISCORD_NOTIFY_ERRORS:     return 0xE7BA;
+        case ID_DISCORD_MENTION_ON_ERRORS: return 0xE781;
+        case ID_DISCORD_DISABLE_EMBED:     return 0xE8FD;
+        case ID_DISCORD_MENTION_TARGET:    return 0xE713;
+        case ID_TIME_CUSTOM:
+        case ID_TIME_3:
+        case ID_TIME_6:
+        case ID_TIME_9:
+        case ID_TIME_11:
+        case ID_TIME_13:
+        case ID_TIME_15:
+        case ID_TIME_18:                   return 0xE916;
+        case ID_ACTION_SPACE:
+        case ID_ACTION_WS:
+        case ID_ACTION_ZOOM:
+        case ID_ACTION_RANDOM:             return 0xE7C9;
+        case ID_MI_INTERVAL_0:
+        case ID_MI_INTERVAL_1:
+        case ID_MI_INTERVAL_3:
+        case ID_MI_INTERVAL_5:
+        case ID_MI_INTERVAL_10:            return 0xE916;
+    }
+    return 0;
+}
+
+static void ApplyMenuIconsRecursive(HMENU hMenu)
+{
+    int count = GetMenuItemCount(hMenu);
+    for (int i = 0; i < count; i++)
+    {
+        MENUITEMINFO mii = { sizeof(mii) };
+        mii.fMask = MIIM_ID | MIIM_SUBMENU | MIIM_FTYPE | MIIM_STATE;
+        if (!GetMenuItemInfo(hMenu, i, TRUE, &mii))
+            continue;
+        if (mii.fType & MFT_SEPARATOR)
+            continue;
+        if (mii.hSubMenu)
+        {
+            ApplyMenuIconsRecursive(mii.hSubMenu);
+            continue;
+        }
+        if (mii.wID != 0 && mii.wID != ID_OPEN_ANNOUNCEMENT)
+        {
+            wchar_t glyph = GetMenuGlyph(mii.wID);
+            if (glyph)
+                SetMenuIcon(hMenu, mii.wID, glyph, (mii.fState & MFS_CHECKED) != 0);
+        }
+    }
+}
+
 // Forward declarations for MonitorUserActivity
 void CreateTrayMenu(bool afk);
 void UpdateTrayIcon();
@@ -9001,6 +9410,7 @@ void CreateTrayMenu(bool afk)
 {
     if (g_hMenu)
         DestroyMenu(g_hMenu);
+    DestroyMenuIconCache();
     g_hMenu = CreatePopupMenu();
     AnnouncementInfo announcement = GetAnnouncementCopy();
 
@@ -9012,15 +9422,19 @@ void CreateTrayMenu(bool afk)
     AppendMenu(InfoMenu, MF_STRING, ID_LINKGITHUB, L"[Link] - GitHub");
     AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, L"[Link] - SourceForge");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)InfoMenu, L"AntiAFK-RBX by Agzes");
+    {
+        HBITMAP hAppBmp = CreateMenuIconFromAppIcon();
+        g_menuIconBitmaps.push_back(hAppBmp);
+        SetMenuIconBitmap(g_hMenu, (UINT_PTR)InfoMenu, hAppBmp);
+    }
 
     if (!g_useLegacyUi.load())
     {
-        wchar_t statusText[128];
-        swprintf_s(statusText, L"Status: %s", afk ? L"Running" : L"Stopped");
-        AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, 0, statusText);
+        AppendStatusLabel(g_hMenu, afk);
         if (announcement.enabled)
         {
             AppendMenu(g_hMenu, MF_STRING, ID_OPEN_ANNOUNCEMENT, announcement.title.c_str());
+            SetAnnouncementMenuIcon(g_hMenu, ID_OPEN_ANNOUNCEMENT, announcement);
         }
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
@@ -9045,24 +9459,25 @@ void CreateTrayMenu(bool afk)
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
         if (g_updateFound)
-            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[?] • Update Available");
+            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[?] \x2022 Update Available");
         AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
+        ApplyMenuIconsRecursive(g_hMenu);
         return;
     }
 
-    wchar_t infoText[128];
-    swprintf_s(infoText, L"Legacy UI • %s", g_Version);
-    AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, 0, infoText);
+    AppendStatusLabel(g_hMenu, afk);
     if (announcement.enabled)
     {
         AppendMenu(g_hMenu, MF_STRING, ID_OPEN_ANNOUNCEMENT, announcement.title.c_str());
+        SetAnnouncementMenuIcon(g_hMenu, ID_OPEN_ANNOUNCEMENT, announcement);
     }
     if (!g_mutexBannerMessage.empty())
     {
-        AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, 0, g_mutexBannerMessage.c_str());
+        wchar_t mutexIcon = g_mutexBannerIsSuccess ? 0xE73E : 0xE7BA;
+        AppendMenuLabelWithIcon(g_hMenu, g_mutexBannerMessage.c_str(), mutexIcon);
         if (!g_mutexBannerDescription.empty())
         {
-            AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, 0, g_mutexBannerDescription.c_str());
+            AppendMenuLabelWithIcon(g_hMenu, g_mutexBannerDescription.c_str(), mutexIcon);
         }
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     }
@@ -9087,6 +9502,7 @@ void CreateTrayMenu(bool afk)
     else
         swprintf_s(timeLabel, L"Set Interval • %d min", g_selectedTime.load() / 60);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hTimeSubmenu, timeLabel);
+    SetMenuIconPopup(g_hMenu, hTimeSubmenu, 0xE916);
 
     HMENU hActionSubmenu = CreatePopupMenu();
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
@@ -9097,6 +9513,7 @@ void CreateTrayMenu(bool afk)
     const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*" };
     swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
+    SetMenuIconPopup(g_hMenu, hActionSubmenu, 0xE7C9);
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (!g_simpleMode.load()) {
         AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
@@ -9136,19 +9553,20 @@ void CreateTrayMenu(bool afk)
         }
         wchar_t reconnectIntervalLabel[64];
         int intervalVal = g_reconnectCheckInterval.load();
-        if (intervalVal <= 0) swprintf_s(reconnectIntervalLabel, L"  Reconnect Interval • Off");
-        else if (intervalVal < 60) swprintf_s(reconnectIntervalLabel, L"  Reconnect Interval • %d sec", intervalVal);
-        else swprintf_s(reconnectIntervalLabel, L"  Reconnect Interval • %d min", intervalVal / 60);
+        if (intervalVal <= 0) swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • Off");
+        else if (intervalVal < 60) swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • %d sec", intervalVal);
+        else swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • %d min", intervalVal / 60);
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hReconnectIntervalSubmenu, reconnectIntervalLabel);
+        SetMenuIconPopup(hSettingsSubmenu, hReconnectIntervalSubmenu, 0xE8AF);
     }
     if (!g_simpleMode.load()) {
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"  Manual Reconnect Check*");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"╰ Manual Reconnect Check*");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, L"Auto Opacity (70%)");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox*");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"  Grid settings...");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"  Instance settings manager...");
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid settings...");
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance manager");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I can forget (smart auto-start)");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip active");
@@ -9166,6 +9584,7 @@ void CreateTrayMenu(bool afk)
     wchar_t userSafeLabel[48];
     swprintf_s(userSafeLabel, L"User-Safe Mode • %s", userSafeNames[g_userSafeMode.load()]);
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
+    SetMenuIconPopup(hSettingsSubmenu, hUserSafeSubmenu, 0xE72E);
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
 
     if (!g_simpleMode.load()) {
@@ -9178,6 +9597,7 @@ void CreateTrayMenu(bool afk)
         wchar_t restoreLabel[48];
         swprintf_s(restoreLabel, L"Restore Window Method • %s", restoreNames[g_restoreMethod.load()]);
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRestoreSubmenu, restoreLabel);
+        SetMenuIconPopup(hSettingsSubmenu, hRestoreSubmenu, 0xE73F);
         AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
     }
 
@@ -9209,6 +9629,7 @@ void CreateTrayMenu(bool afk)
     else if (g_cpuLimitMode.load()) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d%% Limit (%dms)", g_cpuLimitPercent.load(), g_cpuLimitPeriod.load());
     else swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d FPS", g_fpsLimit.load());
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
+    SetMenuIconPopup(hSettingsSubmenu, hFpsCapperSubmenu, 0xE950);
 
     HMENU hRamCleanerSubmenu = CreatePopupMenu();
     AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerEnabled.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_RUNTIME_TOGGLE, L"Enabled");
@@ -9219,12 +9640,12 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hRamCleanerSubmenu, MF_SEPARATOR, 0, NULL);
     wchar_t cycleValueText[64];
     swprintf_s(cycleValueText, L"Interval: %d sec", g_ramCleanerInterval.load());
-    AppendMenu(hRamCleanerSubmenu, MF_GRAYED | MF_DISABLED, 0, cycleValueText);
-    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"Set Interval...");
+    AppendMenuLabelWithIcon(hRamCleanerSubmenu, cycleValueText, 0xE916);
+    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"╰ Set Interval...");
     wchar_t limitValueText[64];
     swprintf_s(limitValueText, L"Limit: %d MB", g_ramCleanerLimit.load());
-    AppendMenu(hRamCleanerSubmenu, MF_GRAYED | MF_DISABLED, 0, limitValueText);
-    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"Set Limit...");
+    AppendMenuLabelWithIcon(hRamCleanerSubmenu, limitValueText, 0xE964);
+    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"╰ Set Limit...");
     wchar_t ramCleanerLabel[64];
     if (!g_ramCleanerEnabled.load()) swprintf_s(ramCleanerLabel, L"RAM Cleaner • Disabled");
     else {
@@ -9234,6 +9655,7 @@ void CreateTrayMenu(bool afk)
         swprintf_s(ramCleanerLabel, L"RAM Cleaner • %s", modeNames[modeVal]);
     }
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRamCleanerSubmenu, ramCleanerLabel);
+    SetMenuIconPopup(hSettingsSubmenu, hRamCleanerSubmenu, 0xE964);
 
     if (!g_simpleMode.load()) {
         HMENU hActionDelaysSubmenu = CreatePopupMenu();
@@ -9246,6 +9668,7 @@ void CreateTrayMenu(bool afk)
             wchar_t presetLabel[64];
             swprintf_s(presetLabel, L"Action Preset • %s", presetNames[g_actionPreset.load() < 0 || g_actionPreset.load() > 2 ? 0 : g_actionPreset.load()]);
             AppendMenu(hActionDelaysSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hPresetSubmenu, presetLabel);
+            SetMenuIconPopup(hActionDelaysSubmenu, hPresetSubmenu, 0xE838);
         }
         {
             wchar_t preText[64];
@@ -9262,6 +9685,7 @@ void CreateTrayMenu(bool afk)
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_REPEAT, repeatText);
         }
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hActionDelaysSubmenu, L"Action Delays & Repeats");
+        SetMenuIconPopup(hSettingsSubmenu, hActionDelaysSubmenu, 0xE713);
     }
 
     if (!g_simpleMode.load()) {
@@ -9277,12 +9701,13 @@ void CreateTrayMenu(bool afk)
                     g_useCustomProcessSearch.load() ? L"On" : L"Off",
                     preview.c_str());
             }
-            AppendMenu(hCustomProcessSubmenu, MF_STRING | MF_GRAYED, 0, cpStatusText);
+            AppendMenuLabelWithIcon(hCustomProcessSubmenu, cpStatusText, 0xE721);
             AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_useCustomProcessSearch.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_TOGGLE, L"Enable");
             AppendMenu(hCustomProcessSubmenu, MF_STRING | MF_STRING, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, L"Set Process Names...");
             AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_excludeBuiltinNames.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_EXCLUDE, L"Exclude Built-in Names");
         }
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hCustomProcessSubmenu, L"Custom Process Search");
+        SetMenuIconPopup(hSettingsSubmenu, hCustomProcessSubmenu, 0xE721);
     }
 
     HMENU hScreenSaverSubmenu = CreatePopupMenu();
@@ -9292,7 +9717,8 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowExitUI.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_EXIT, L"Always show Exit");
     }
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hScreenSaverSubmenu,
-        g_screenSaverActive.load() ? L"Screen Saver • Active" : L"Screen Saver");
+        g_screenSaverActive.load() ? L"Screen Saver \x2022 Active" : L"Screen Saver");
+    SetMenuIconPopup(hSettingsSubmenu, hScreenSaverSubmenu, 0xE708);
 
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
@@ -9303,11 +9729,12 @@ void CreateTrayMenu(bool afk)
         wchar_t hkStatus[128];
         std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
         swprintf_s(hkStatus, L"Hotkey • %s • %s", g_hotkeyEnabled.load() ? L"On" : L"Off", hkStr.c_str());
-        AppendMenu(hSettingsSubmenu, MF_STRING | MF_GRAYED, 0, hkStatus);
+        AppendMenuLabelWithIcon(hSettingsSubmenu, hkStatus, 0xE765);
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"  Enable Hotkey");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"  Change Hotkey...");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"├ Enable Hotkey");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"╰ Change Hotkey...");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
+    SetMenuIconPopup(g_hMenu, hSettingsSubmenu, 0xE713);
 
     HMENU hUtilsSubmenu = CreatePopupMenu();
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_SHOW_ALL, L"Show All Roblox");
@@ -9322,30 +9749,32 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_RESET_ALL, L"Reset All Roblox");
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_CLOSE_ALL, L"Close All Roblox");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, L"Utils");
+    SetMenuIconPopup(g_hMenu, hUtilsSubmenu, 0xE945);
 
     HMENU hStatsSubmenu = CreatePopupMenu();
     {
         wchar_t statText[128];
         std::wstring totalAfk = FormatDurationShort(g_totalAfkTimeSeconds.load());
         swprintf_s(statText, L"Total AFK Time • %s", totalAfk.c_str());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE916);
         swprintf_s(statText, L"AFK Actions • %llu", g_afkActionsPerformed.load());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE8EE);
         swprintf_s(statText, L"Auto Reconnects • %llu", g_autoReconnectsPerformed.load());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7FC);
         swprintf_s(statText, L"Webhook Events • %llu", g_discordWebhooksSent.load());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE715);
         swprintf_s(statText, L"Sessions Completed • %llu", g_afkSessionsCompleted.load());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE121);
         swprintf_s(statText, L"Program Launches • %llu", g_programLaunches.load());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7E8);
         std::wstring longestAfk = FormatDurationShort(g_longestAfkSessionSeconds.load());
         swprintf_s(statText, L"Longest Session • %s", longestAfk.c_str());
-        AppendMenu(hStatsSubmenu, MF_STRING | MF_GRAYED, 0, statText);
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE823);
     }
     AppendMenu(hStatsSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, L"Reset Statistics");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
+    SetMenuIconPopup(g_hMenu, hStatsSubmenu, 0xE9D2);
 
     HMENU hDiscordSubmenu = CreatePopupMenu();
     {
@@ -9353,7 +9782,7 @@ void CreateTrayMenu(bool afk)
         const bool webhookConfigured = IsDiscordWebhookUrl(webhookUrl);
         const bool webhookEnabled = g_discordWebhookEnabled.load();
         const UINT webhookDependentState = webhookEnabled ? 0 : MF_GRAYED;
-        AppendMenu(hDiscordSubmenu, MF_STRING | MF_GRAYED, 0, webhookConfigured ? L"Webhook URL • Configured" : L"Webhook URL • Not set");
+        AppendMenuLabelWithIcon(hDiscordSubmenu, webhookConfigured ? L"Webhook URL • Configured" : L"Webhook URL • Not set", 0xE8BD);
         AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(hDiscordSubmenu, MF_STRING | (webhookEnabled ? MF_CHECKED : 0), ID_DISCORD_WEBHOOK_ENABLE, L"Enable Webhook");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyStart.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_START, L"Notify Start / Stop");
@@ -9369,11 +9798,12 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, L"Send Test Webhook");
     }
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, L"Discord Webhook");
+    SetMenuIconPopup(g_hMenu, hDiscordSubmenu, 0xE8BD);
 
     AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
     AppendMenu(g_hMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
     if (g_simpleMode.load())
-        AppendMenu(g_hMenu, MF_STRING | MF_GRAYED, 0, L"  (some options hidden)");
+        AppendMenuLabelWithIcon(g_hMenu, L"╰ (some options hidden)", 0xE946);
     AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance bypass");
 
     HMENU hMiIntervalSubmenu = CreatePopupMenu();
@@ -9386,11 +9816,13 @@ void CreateTrayMenu(bool afk)
     const wchar_t* miLabelV = g_multiInstanceInterval.load() == 0 ? L"Min" : (g_multiInstanceInterval.load() == 1000 ? L"1s" : (g_multiInstanceInterval.load() == 3000 ? L"3s" : (g_multiInstanceInterval.load() == 5000 ? L"5s" : L"10s")));
     swprintf_s(miIntervalLabel, L"Multi-Instance Interval • %s", miLabelV);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
+    SetMenuIconPopup(g_hMenu, hMiIntervalSubmenu, 0xE916);
 
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
         AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[?] • Update Available");
     AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
+    ApplyMenuIconsRecursive(g_hMenu);
 }
 void UpdateTrayIcon()
 {
@@ -14176,11 +14608,11 @@ title = L"CPU Limit %";
             wchar_t cycleValueText[64];
             swprintf_s(cycleValueText, L"Interval: %d sec", g_ramCleanerInterval.load());
             AppendMenu(hMenu, MF_GRAYED | MF_DISABLED, 0, cycleValueText);
-            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"Set Interval...");
+            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"╰ Set Interval...");
             wchar_t limitValueText[64];
             swprintf_s(limitValueText, L"Limit: %d MB", g_ramCleanerLimit.load());
             AppendMenu(hMenu, MF_GRAYED | MF_DISABLED, 0, limitValueText);
-            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"Set Limit...");
+            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"╰ Set Limit...");
             POINT menuPt;
             menuPt.x = pData->ramCleanerDropdownRect.left;
             menuPt.y = pData->ramCleanerDropdownRect.bottom;
@@ -21915,13 +22347,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
 
     const bool useMainUiStartupOverlay = !arg_noSplash && !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
-    if (!arg_noSplash && g_firstWelcomeShown.load() && !useMainUiStartupOverlay) {
+    if (!arg_noSplash && g_firstWelcomeShown.load() && !g_useLegacyUi.load() && !useMainUiStartupOverlay) {
         CreateSplashScreen(hInstance);
     }
 
     RegisterClass(&wc);
     g_hwnd = CreateWindowEx(0, CLASS_NAME, L"AntiAFK-RBX", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
+
+    if (g_useLegacyUi.load() && !arg_tray && !arg_noSplash && g_firstWelcomeShown.load()) {
+        ShowTrayNotification(L"AntiAFK-RBX \u2022 Legacy Mode", L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure.");
+    }
+
     if (g_multiSupport.load())
     {
         const int maxMutexRetries = 5;
