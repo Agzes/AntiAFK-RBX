@@ -21818,6 +21818,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nShowCmd);
+    {
+        typedef BOOL(WINAPI* SetProcessDpiAwarenessContext_fn)(HANDLE);
+        auto fn = (SetProcessDpiAwarenessContext_fn)GetProcAddress(
+            GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext");
+        if (fn) fn((HANDLE)-4);
+    }
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
