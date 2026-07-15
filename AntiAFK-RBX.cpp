@@ -6308,9 +6308,12 @@ static void DestroyMenuIconCache()
     g_menuIconBitmaps.clear();
 }
 
-static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 16, COLORREF color = RGB(200, 200, 200), bool showCheckmark = false)
+static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 0, COLORREF color = RGB(200, 200, 200), bool showCheckmark = false)
 {
     HDC hdc = GetDC(NULL);
+    if (size == 0) {
+        size = MulDiv(16, GetDeviceCaps(hdc, LOGPIXELSY), 96);
+    }
     HDC memDC = CreateCompatibleDC(hdc);
     BITMAPINFO bmi = {};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -6327,12 +6330,12 @@ static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 16, COLORREF co
     {
         Gdiplus::Graphics g(memDC);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
         Gdiplus::FontFamily ff(L"Segoe MDL2 Assets");
 
         if (showCheckmark)
         {
-            Gdiplus::Font f(&ff, (REAL)size * 0.80f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+            Gdiplus::Font f(&ff, (REAL)size * 0.90f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
             Gdiplus::Color gdiColor(220, GetRValue(color), GetGValue(color), GetBValue(color));
             Gdiplus::SolidBrush brush(gdiColor);
             Gdiplus::StringFormat sf;
@@ -6360,7 +6363,7 @@ static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 16, COLORREF co
         }
         else
         {
-            Gdiplus::Font f(&ff, (REAL)size * 0.82f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+            Gdiplus::Font f(&ff, (REAL)size * 0.90f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
             Gdiplus::Color gdiColor(255, GetRValue(color), GetGValue(color), GetBValue(color));
             Gdiplus::SolidBrush brush(gdiColor);
             Gdiplus::StringFormat sf;
@@ -6377,9 +6380,12 @@ static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 16, COLORREF co
     return hBmp;
 }
 
-static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORREF color, int size = 16)
+static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORREF color, int size = 0)
 {
     HDC hdc = GetDC(NULL);
+    if (size == 0) {
+        size = MulDiv(16, GetDeviceCaps(hdc, LOGPIXELSY), 96);
+    }
     HDC memDC = CreateCompatibleDC(hdc);
     BITMAPINFO bmi = {};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -6396,7 +6402,7 @@ static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORR
     {
         Gdiplus::Graphics g(memDC);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
         Gdiplus::FontFamily ff(L"Segoe MDL2 Assets");
         Gdiplus::Font f(&ff, (REAL)size * 0.82f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
         Gdiplus::Color gdiColor(255, GetRValue(color), GetGValue(color), GetBValue(color));
@@ -6413,8 +6419,13 @@ static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORR
     return hBmp;
 }
 
-static HBITMAP CreateMenuIconFromAppIcon(int size = 16)
+static HBITMAP CreateMenuIconFromAppIcon(int size = 0)
 {
+    if (size == 0) {
+        HDC sdc = GetDC(NULL);
+        size = MulDiv(16, GetDeviceCaps(sdc, LOGPIXELSY), 96);
+        ReleaseDC(NULL, sdc);
+    }
     HICON hIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_MAIN), IMAGE_ICON, size, size, LR_DEFAULTCOLOR);
     if (!hIcon) return NULL;
 
@@ -6438,8 +6449,13 @@ static HBITMAP CreateMenuIconFromAppIcon(int size = 16)
     return hBmp;
 }
 
-static HBITMAP CreateMenuIconFromTrayState(bool afk, int size = 16)
+static HBITMAP CreateMenuIconFromTrayState(bool afk, int size = 0)
 {
+    HDC hdcDPI = GetDC(NULL);
+    if (size == 0) {
+        size = MulDiv(16, GetDeviceCaps(hdcDPI, LOGPIXELSY), 96);
+    }
+    ReleaseDC(NULL, hdcDPI);
     int iconId = IDI_TRAY_OFF;
     if (afk)
         iconId = g_multiSupport.load() ? IDI_TRAY_ON_MULTI : IDI_TRAY_ON;
@@ -6470,7 +6486,7 @@ static HBITMAP CreateMenuIconFromTrayState(bool afk, int size = 16)
 static void SetMenuIcon(HMENU hMenu, UINT itemId, wchar_t glyph, bool isChecked = false)
 {
     if (!glyph) return;
-    HBITMAP hBmp = CreateMenuIconFromGlyph(glyph, 16, RGB(200, 200, 200), isChecked);
+    HBITMAP hBmp = CreateMenuIconFromGlyph(glyph, 0, RGB(200, 200, 200), isChecked);
     g_menuIconBitmaps.push_back(hBmp);
     MENUITEMINFO mii = { sizeof(mii) };
     mii.fMask = MIIM_BITMAP;
