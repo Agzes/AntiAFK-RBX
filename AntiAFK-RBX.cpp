@@ -161,6 +161,8 @@ using namespace std::chrono_literals;
 #define ID_AUTO_RECONNECT 309
 #define ID_IMPORT_SETTINGS 320
 #define ID_EXPORT_SETTINGS 321
+#define ID_STATUS_BAR_PRIMARY_MONITOR 319
+#define ID_STATUS_BAR_POSITION_BOTTOM 330
 #define ID_CUSTOM_PROCESS_SEARCH_TOGGLE 322
 #define ID_CUSTOM_PROCESS_SEARCH_SETTINGS 323
 #define ID_CUSTOM_PROCESS_SEARCH_EXCLUDE 324
@@ -289,6 +291,7 @@ constexpr UINT WM_APP_SHOW_STATUS_BAR_PERSISTENT = WM_APP + 21;
 constexpr UINT WM_APP_UPDATE_STATUS_BAR = WM_APP + 22;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
 constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
+constexpr UINT STATUS_BAR_POSITION_TIMER = 3;
 constexpr UINT STATUS_BAR_DEFAULT_DURATION = 1800;
 constexpr UINT STATUS_BAR_PRE_ACTION_DELAY = 2000;
 constexpr UINT STATUS_BAR_POST_ACTION_DURATION = 1000;
@@ -341,6 +344,8 @@ std::mutex g_customProcessNamesMutex;
 bool g_enableMainUiIntroAnimation = false;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
+std::atomic<bool> g_statusBarPrimaryMonitor(false);
+std::atomic<bool> g_statusBarPositionBottom(false);
 std::atomic<bool> g_pendingExit(false);
 std::atomic<bool> g_hotkeyEnabled(true);
 std::atomic<UINT> g_hotkeyModifiers(MOD_CONTROL | MOD_SHIFT);
@@ -6590,6 +6595,8 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_TOGGLE_SIMPLE_MODE:        return 0xE71B;
         case ID_AUTO_UPDATE:               return 0xE777;
         case ID_STATUS_BAR:                return 0xE7F4;
+        case ID_STATUS_BAR_PRIMARY_MONITOR: return 0xE7F4;
+        case ID_STATUS_BAR_POSITION_BOTTOM: return 0xE96E;
         case ID_AUTO_START_AFK:            return 0xE768;
         case ID_AUTO_RECONNECT:            return 0xE8AF;
         case ID_RECONNECT_MANUAL_CHECK:    return 0xE72C;
@@ -8108,6 +8115,14 @@ void SaveSettings()
         RegSetValueEx(hKey, L"BloxstrapIntegration", 0, REG_DWORD, (const BYTE*)&bloxstrapIntegration, sizeof(DWORD));
         RegSetValueEx(hKey, L"UseLegacyUI", 0, REG_DWORD, (const BYTE*)&useLegacyUi, sizeof(DWORD));
         RegSetValueEx(hKey, L"StatusBarEnabled", 0, REG_DWORD, (const BYTE*)&statusBarEnabled, sizeof(DWORD));
+        {
+            DWORD statusBarPrimaryMonitor = g_statusBarPrimaryMonitor.load();
+            RegSetValueEx(hKey, L"StatusBarPrimaryMonitor", 0, REG_DWORD, (const BYTE*)&statusBarPrimaryMonitor, sizeof(DWORD));
+        }
+        {
+            DWORD statusBarPositionBottom = g_statusBarPositionBottom.load();
+            RegSetValueEx(hKey, L"StatusBarPositionBottom", 0, REG_DWORD, (const BYTE*)&statusBarPositionBottom, sizeof(DWORD));
+        }
         RegSetValueEx(hKey, L"FpsLimit", 0, REG_DWORD, (const BYTE*)&fpsLimit, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnlockFpsOnFocus", 0, REG_DWORD, (const BYTE*)&unlockFpsOnFocus, sizeof(DWORD));
         DWORD multiInstanceInterval = g_multiInstanceInterval.load();
@@ -8204,7 +8219,7 @@ void LoadSettings()
     HKEY hKey;
     DWORD multiSupport = 0, selectedTime = 540, selectedAction = 1, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
-    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
+    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, fpsLimit = 0, unlockFpsOnFocus = 0;
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
     DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
     DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
@@ -8266,6 +8281,8 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"UseLegacyUI", NULL, NULL, (LPBYTE)&useLegacyUi, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"BloxstrapIntegration", NULL, NULL, (LPBYTE)&bloxstrapIntegration, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"StatusBarEnabled", NULL, NULL, (LPBYTE)&statusBarEnabled, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarPrimaryMonitor", NULL, NULL, (LPBYTE)&statusBarPrimaryMonitor, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarPositionBottom", NULL, NULL, (LPBYTE)&statusBarPositionBottom, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"FpsLimit", NULL, NULL, (LPBYTE)&fpsLimit, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"UnlockFpsOnFocus", NULL, NULL, (LPBYTE)&unlockFpsOnFocus, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"MultiInstanceInterval", NULL, NULL, (LPBYTE)&multiInstanceInterval, &dataSize); dataSize = sizeof(DWORD);
@@ -8444,6 +8461,8 @@ void LoadSettings()
     g_useLegacyUi = (useLegacyUi != 0);
     g_bloxstrapIntegration = (bloxstrapIntegration != 0);
     g_statusBarEnabled = (statusBarEnabled != 0);
+    g_statusBarPrimaryMonitor = (statusBarPrimaryMonitor != 0);
+    g_statusBarPositionBottom = (statusBarPositionBottom != 0);
     g_fpsLimit = NormalizeFpsLimitValue((int)fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
     g_cpuLimitPercent = (int)cpuLimitPercent;
@@ -8651,6 +8670,8 @@ struct SettingsSnapshot {
     bool useLegacyUi = false;
     bool bloxstrapIntegration = false;
     bool statusBarEnabled = true;
+    bool statusBarPrimaryMonitor = false;
+    bool statusBarPositionBottom = false;
     int fpsLimit = 0;
     bool unlockFpsOnFocus = false;
     int multiInstanceInterval = 0;
@@ -8726,6 +8747,8 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.useLegacyUi = g_useLegacyUi.load();
     s.bloxstrapIntegration = g_bloxstrapIntegration.load();
     s.statusBarEnabled = g_statusBarEnabled.load();
+    s.statusBarPrimaryMonitor = g_statusBarPrimaryMonitor.load();
+    s.statusBarPositionBottom = g_statusBarPositionBottom.load();
     s.fpsLimit = g_fpsLimit;
     s.unlockFpsOnFocus = g_unlockFpsOnFocus.load();
     s.cpuLimitPercent = g_cpuLimitPercent.load();
@@ -8847,6 +8870,8 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"UseLegacyUI", s.useLegacyUi, first);
     AppendJsonBool(ss, L"BloxstrapIntegration", s.bloxstrapIntegration, first);
     AppendJsonBool(ss, L"StatusBarEnabled", s.statusBarEnabled, first);
+    AppendJsonBool(ss, L"StatusBarPrimaryMonitor", s.statusBarPrimaryMonitor, first);
+    AppendJsonBool(ss, L"StatusBarPositionBottom", s.statusBarPositionBottom, first);
     AppendJsonInt(ss, L"FpsLimit", s.fpsLimit, first);
     AppendJsonBool(ss, L"UnlockFpsOnFocus", s.unlockFpsOnFocus, first);
     AppendJsonInt(ss, L"CpuLimitPercent", s.cpuLimitPercent, first);
@@ -9243,6 +9268,8 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_useLegacyUi = s.useLegacyUi;
     g_bloxstrapIntegration = s.bloxstrapIntegration;
     g_statusBarEnabled = s.statusBarEnabled;
+    g_statusBarPrimaryMonitor = s.statusBarPrimaryMonitor;
+    g_statusBarPositionBottom = s.statusBarPositionBottom;
     g_fpsLimit = NormalizeFpsLimitValue(s.fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
     g_unlockFpsOnFocus = s.unlockFpsOnFocus;
@@ -9350,6 +9377,8 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"UseLegacyUI", s.useLegacyUi);
     ParseJsonBool(json, L"BloxstrapIntegration", s.bloxstrapIntegration);
     ParseJsonBool(json, L"StatusBarEnabled", s.statusBarEnabled);
+    ParseJsonBool(json, L"StatusBarPrimaryMonitor", s.statusBarPrimaryMonitor);
+    ParseJsonBool(json, L"StatusBarPositionBottom", s.statusBarPositionBottom);
     ParseJsonInt(json, L"FpsLimit", s.fpsLimit);
     ParseJsonBool(json, L"UnlockFpsOnFocus", s.unlockFpsOnFocus);
     ParseJsonInt(json, L"CpuLimitPercent", s.cpuLimitPercent);
@@ -11592,6 +11621,8 @@ struct MainUIData {
     RECT ssAlwaysShowButtonRect = { 0 };
     RECT legacyUiToggleRect = { 0 };
     RECT statusBarToggleRect = { 0 };
+    RECT statusBarPrimaryMonitorCompactRect = { 0 };
+    RECT statusBarPositionBottomCompactRect = { 0 };
     RECT iCanForgetToggleRect = { 0 };
     RECT skipActiveToggleRect = { 0 };
     RECT doNotSleepToggleRect = { 0 };
@@ -11688,6 +11719,8 @@ struct MainUIData {
     bool isHoveringSkipActiveToggle = false;
     bool isHoveringBloxstrapIntegrationToggle = false;
     bool isHoveringStatusBarToggle = false;
+    bool isHoveringStatusBarPrimaryMonitorCompact = false;
+    bool isHoveringStatusBarPositionBottomCompact = false;
     bool isHoveringLegacyUiToggle = false;
     bool isHoveringSimpleModeToggle = false;
     bool isHoveringHotkeyToggle = false;
@@ -11749,6 +11782,8 @@ struct MainUIData {
     float unlockFpsOnFocusAnim = 0.0f;
     float legacyUiAnim = 0.0f;
     float statusBarAnim = 0.0f;
+    float statusBarPrimaryMonitorCompactAnim = 0.0f;
+    float statusBarPositionBottomCompactAnim = 0.0f;
     float simpleModeAnim = 0.0f;
     float hotkeyAnim = 0.0f;
     float timingsToggleAnim = 0.0f;
@@ -12369,6 +12404,10 @@ int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY)
 
 HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
 {
+    if (g_statusBarPrimaryMonitor.load()) {
+        return MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+    }
+
     if (anchorWindow && IsWindow(anchorWindow)) {
         return MonitorFromWindow(anchorWindow, MONITOR_DEFAULTTONEAREST);
     }
@@ -12406,14 +12445,19 @@ RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
     GetMonitorInfo(hMon, &mi);
 
     int workWidth = mi.rcWork.right - mi.rcWork.left;
-    int minWidth = MulDiv(420, dpiX, 96);
-    int width = (std::max)(minWidth, MeasureStatusBarContentWidth(message, dpiY));
+    int contentWidth = MeasureStatusBarContentWidth(message, dpiY);
+    int minWidth = (std::min)(MulDiv(240, dpiX, 96), workWidth - MulDiv(54, dpiX, 96));
+    int width = (std::max)(minWidth, contentWidth);
     int height = MulDiv(34, dpiY, 96);
     width = (std::min)(width, workWidth - MulDiv(54, dpiX, 96));
-    width = (std::max)(width, minWidth);
 
     int x = mi.rcWork.left + (workWidth - width) / 2;
-    int y = mi.rcWork.top + MulDiv(14, dpiY, 96);
+    int y;
+    if (g_statusBarPositionBottom.load()) {
+        y = mi.rcWork.bottom - height - MulDiv(14, dpiY, 96);
+    } else {
+        y = mi.rcWork.top + MulDiv(14, dpiY, 96);
+    }
     return { x, y, x + width, y + height };
 }
 
@@ -12458,6 +12502,7 @@ void HideStatusBarOverlay(bool animate = false)
     }
 
     KillTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER);
+    KillTimer(g_hStatusBarWnd, STATUS_BAR_POSITION_TIMER);
     StatusBarData* pData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
     if (!pData || !animate || !IsWindowVisible(g_hStatusBarWnd)) {
         KillTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER);
@@ -12581,6 +12626,7 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
     UpdateStatusBarPlacement(g_hStatusBarWnd, pData);
     KillTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER);
     SetTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER, (std::max)(durationMs, (UINT)700), NULL);
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_POSITION_TIMER, 250, NULL);
 
     pData->targetAlpha = 255;
     if (!wasVisible) {
@@ -12621,6 +12667,7 @@ void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWind
     bool wasVisible = IsWindowVisible(g_hStatusBarWnd) != FALSE;
     UpdateStatusBarPlacement(g_hStatusBarWnd, pData);
     KillTimer(g_hStatusBarWnd, STATUS_BAR_HIDE_TIMER);
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_POSITION_TIMER, 250, NULL);
 
     pData->targetAlpha = 255;
     if (!wasVisible) {
@@ -12645,11 +12692,7 @@ void UpdateStatusBarMessage(const std::wstring& message)
     }
 
     pData->message = message;
-    HWND anchorWindow = NULL;
-    if (g_hwnd && IsWindow(g_hwnd)) {
-        anchorWindow = g_hwnd;
-    }
-    pData->targetBounds = CalculateStatusBarBounds(anchorWindow, message);
+    pData->targetBounds = CalculateStatusBarBounds(NULL, message);
     UpdateStatusBarPlacement(g_hStatusBarWnd, pData);
     InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
     UpdateWindow(g_hStatusBarWnd);
@@ -12788,6 +12831,7 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 
         if (wParam == STATUS_BAR_HIDE_TIMER) {
             KillTimer(hwnd, STATUS_BAR_HIDE_TIMER);
+            KillTimer(hwnd, STATUS_BAR_POSITION_TIMER);
             if (pData && pData->persistent) {
                 return 0;
             }
@@ -12812,6 +12856,16 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
                 KillTimer(hwnd, STATUS_BAR_ANIM_TIMER);
                 if (pData->currentAlpha == 0) {
                     ShowWindow(hwnd, SW_HIDE);
+                }
+            }
+            return 0;
+        }
+        if (wParam == STATUS_BAR_POSITION_TIMER) {
+            if (!g_statusBarPrimaryMonitor.load() && IsWindowVisible(hwnd)) {
+                RECT newBounds = CalculateStatusBarBounds(NULL, pData->message);
+                if (newBounds.left != pData->targetBounds.left || newBounds.top != pData->targetBounds.top) {
+                    pData->targetBounds = newBounds;
+                    UpdateStatusBarPlacement(hwnd, pData);
                 }
             }
             return 0;
@@ -12845,6 +12899,7 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         if (pData) {
             KillTimer(hwnd, STATUS_BAR_HIDE_TIMER);
             KillTimer(hwnd, STATUS_BAR_ANIM_TIMER);
+            KillTimer(hwnd, STATUS_BAR_POSITION_TIMER);
             if (pData->hIcon) DestroyIcon(pData->hIcon);
             if (pData->hFontBrand) DeleteObject(pData->hFontBrand);
             if (pData->hFontText) DeleteObject(pData->hFontText);
@@ -14482,6 +14537,8 @@ title = L"CPU Limit %";
         RECT toggleHitbox;
         MainUI_Paint_DrawToggleGetHitbox(pData->statusBarToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR, 0); return; }
+        if (PtInRect(&pData->statusBarPrimaryMonitorCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_PRIMARY_MONITOR, 0); return; }
+        if (PtInRect(&pData->statusBarPositionBottomCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_POSITION_BOTTOM, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->customProcessSearchToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_TOGGLE, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
@@ -15515,11 +15572,16 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
         int compactW = help_btn_size;
         int inlineGap = 4;
-        int controlTop, controlBottom;
+        int controlTop, controlBottom, toggleSwitchLeft;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        pData->statusBarToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        controlTop = y + (rowH - help_btn_size) / 2 + 4;
+        controlBottom = controlTop + help_btn_size;
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+        pData->statusBarToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+        toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+        pData->statusBarPrimaryMonitorCompactRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+        pData->statusBarPositionBottomCompactRect = { pData->statusBarPrimaryMonitorCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPrimaryMonitorCompactRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -15532,7 +15594,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         controlBottom = controlTop + help_btn_size;
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
         pData->customProcessSearchToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
-        int toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+        toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
         pData->customProcessSearchSettingsRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
         pData->customProcessSearchExcludeRect = { pData->customProcessSearchSettingsRect.left - inlineGap - compactW, controlTop, pData->customProcessSearchSettingsRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
@@ -16761,6 +16823,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         bool smAdvanced = g_simpleMode.load();
         MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
+        MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true);
+        MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
 
         const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
         int miIntervalIndex = 0;
@@ -16857,6 +16921,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
         if (pData->isHoveringCustomProcessSearchSettings) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchSettingsRect, pData->hFontSmall, L"Configure custom window/process search names", false);
+        }
+        if (pData->isHoveringStatusBarPrimaryMonitorCompact) {
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontSmall, g_statusBarPrimaryMonitor.load() ? L"Status Bar pinned to primary monitor" : L"Status Bar follows cursor monitor", false);
+        }
+        if (pData->isHoveringStatusBarPositionBottomCompact) {
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontSmall, g_statusBarPositionBottom.load() ? L"Status Bar at bottom" : L"Status Bar at top", false);
         }
         if (g_simpleMode.load()) {
             const wchar_t* smAdvMsg = L"Simple Mode is on - disable it to use this setting";
@@ -18195,6 +18265,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
         pData->legacyUiAnim = g_useLegacyUi.load() ? 1.0f : 0.0f;
         pData->statusBarAnim = g_statusBarEnabled.load() ? 1.0f : 0.0f;
+        pData->statusBarPrimaryMonitorCompactAnim = g_statusBarPrimaryMonitor.load() ? 1.0f : 0.0f;
+        pData->statusBarPositionBottomCompactAnim = g_statusBarPositionBottom.load() ? 1.0f : 0.0f;
         pData->iCanForgetAnim = g_afkReminderEnabled.load() ? 1.0f : 0.0f;
         pData->skipActiveAnim = g_skipActiveEnabled.load() ? 1.0f : 0.0f;
         pData->doNotSleepAnim = g_doNotSleep.load() ? 1.0f : 0.0f;
@@ -18410,7 +18482,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
             int compactW = help_btn_size;
             int inlineGap = 4;
-            int controlTop, controlBottom;
+            int controlTop, controlBottom, toggleSwitchLeft;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->bloxstrapIntegrationToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
@@ -18418,8 +18490,13 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-            pData->statusBarToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
-            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            controlTop = y + (rowH - help_btn_size) / 2 + 4;
+            controlBottom = controlTop + help_btn_size;
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+            pData->statusBarToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+            toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+            pData->statusBarPrimaryMonitorCompactRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+            pData->statusBarPositionBottomCompactRect = { pData->statusBarPrimaryMonitorCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPrimaryMonitorCompactRect.left - inlineGap, controlBottom };
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -18819,6 +18896,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringExportSettings, pData->exportSettingsRect));
             anyHover |= (pData->currentPage == 2 && checkToggleHover(pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationToggleRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringStatusBarToggle, pData->statusBarToggleRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringStatusBarPositionBottomCompact, pData->statusBarPositionBottomCompactRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringHotkeyToggle, pData->hotkeyToggleRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringHotkeyBind, pData->hotkeyChangeBtnRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchToggleRect));
@@ -18990,6 +19069,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringSkipActiveToggle = false;
         pData->isHoveringBloxstrapIntegrationToggle = false;
         pData->isHoveringStatusBarToggle = false;
+        pData->isHoveringStatusBarPrimaryMonitorCompact = false;
+        pData->isHoveringStatusBarPositionBottomCompact = false;
         pData->isHoveringHotkeyToggle = false;
         pData->isHoveringHotkeyBind = false;
         pData->isHoveringSimpleModeToggle = false;
@@ -19200,6 +19281,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->bloxstrapIntegrationAnim, g_bloxstrapIntegration.load());
         animateToggle(pData->legacyUiAnim, g_useLegacyUi.load());
         animateToggle(pData->statusBarAnim, g_statusBarEnabled.load());
+        animateToggle(pData->statusBarPrimaryMonitorCompactAnim, g_statusBarPrimaryMonitor.load());
+        animateToggle(pData->statusBarPositionBottomCompactAnim, g_statusBarPositionBottom.load());
         animateToggle(pData->simpleModeAnim, g_simpleMode.load());
         animateToggle(pData->hotkeyAnim, g_hotkeyEnabled.load());
         animateToggle(pData->iCanForgetAnim, g_afkReminderEnabled.load());
@@ -20817,7 +20900,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_STATUS_BAR:
             g_statusBarEnabled = !g_statusBarEnabled.load();
             if (!g_statusBarEnabled.load()) {
-                HideStatusBarOverlay(false);
+                HideStatusBarOverlay(true);
             }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -20826,6 +20909,34 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_statusBarEnabled.load()) {
                 ShowStatusBarOverlay(L"Status Bar enabled", 1400, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : NULL);
+            }
+            break;
+        case ID_STATUS_BAR_PRIMARY_MONITOR:
+            g_statusBarPrimaryMonitor = !g_statusBarPrimaryMonitor.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            if (g_statusBarEnabled.load() && g_hStatusBarWnd && IsWindowVisible(g_hStatusBarWnd)) {
+                StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
+                if (sbData) {
+                    sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                    UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
+                }
+            }
+            break;
+        case ID_STATUS_BAR_POSITION_BOTTOM:
+            g_statusBarPositionBottom = !g_statusBarPositionBottom.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            if (g_statusBarEnabled.load() && g_hStatusBarWnd && IsWindowVisible(g_hStatusBarWnd)) {
+                StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
+                if (sbData) {
+                    sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                    UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
+                }
             }
             break;
         case ID_USER_SAFE_OFF:
