@@ -1,4 +1,4 @@
-﻿// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
+// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 #define ALPHA   1
@@ -6,8 +6,8 @@
 #define RC      3
 #define STABLE  4
 #define MAKE_VERSION(major, minor, patch, type, num) ((major)*10000000 + (minor)*100000 + (patch)*1000 + (type)*100 + (num))
-int currentVersion = MAKE_VERSION(4, 0, 0, ALPHA, 2);
-const wchar_t* g_Version = L"v.4.0.0-alpha2";
+int currentVersion = MAKE_VERSION(4, 0, 0, BETA, 1);
+const wchar_t* g_Version = L"v.4.0.0-beta1";
 
 #include <windows.h>
 #include <intrin.h>
@@ -28,6 +28,7 @@ const wchar_t* g_Version = L"v.4.0.0-alpha2";
 #include <vector>
 #include <atomic>
 #include <algorithm>
+#include <set>
 #include <map>
 #include <queue>
 #include <unordered_set>
@@ -124,7 +125,10 @@ using namespace std::chrono_literals;
 #define ID_EXIT 8
 #define ID_TOGGLE_HOTKEY 12
 #define ID_CAPTURE_HOTKEY 13
+#define ID_TOGGLE_GRID_HOTKEY 14
+#define ID_CAPTURE_GRID_HOTKEY 15
 #define HOTKEY_START_STOP_ID 9
+#define HOTKEY_GRID_SNAP_ID 10
 #define ID_GRID_SNAP 9
 #define ID_WINDOW_OPACITY 10
 
@@ -208,6 +212,7 @@ using namespace std::chrono_literals;
 #define ID_MI_INTERVAL_3 704
 #define ID_MI_INTERVAL_5 705
 #define ID_MI_INTERVAL_10 706
+#define ID_MI_INTERVAL_CUSTOM 707
 
 #define ID_UPDATE_AVAILABLE 1000
 #define ID_ANNOUNCEMENT_TEXT 1001
@@ -264,6 +269,7 @@ using namespace std::chrono_literals;
 #define ID_RAM_CLEAN_MODE_SMART 1343
 #define ID_RAM_CLEAN_MODE_HYBRID 1345
 #define ID_RAM_CLEANER_RUNTIME_TOGGLE 1346
+#define ID_INTERVAL_MACRO_TOGGLE 1349
 #define ID_RECONNECT_INTERVAL_SUBMENU 1370
 #define ID_RECONNECT_INTERVAL_OFF 1371
 #define ID_RECONNECT_INTERVAL_30 1372
@@ -273,6 +279,8 @@ using namespace std::chrono_literals;
 #define ID_RECONNECT_INTERVAL_600 1376
 #define ID_RECONNECT_MANUAL_CHECK 1377
 #define ID_RECONNECT_INTERVAL_CUSTOM 1378
+#define ID_RECONNECT_MACRO_DELAY 1353
+#define ID_MACROS_IMPORT 1354
 #define ID_ADVANCED_RECONNECT 1379
 #define ID_ACTION_PRESET_STANDARD 1360
 #define ID_ACTION_PRESET_SLOW 1361
@@ -282,13 +290,39 @@ using namespace std::chrono_literals;
 #define ID_ACTION_DELAY_KEY 1381
 #define ID_ACTION_DELAY_POST 1382
 #define ID_ACTION_DELAY_REPEAT 1383
+#define ID_DISCORD_NOTIFY_MACRO 1391
+#define ID_DISCORD_NOTIFY_INTERVAL_MACROS 1392
+#define ID_WEBHOOK_SET_URL 1393
+#define ID_TIMINGS_INFO 1394
+#define ID_RETRY_MULTI_INSTANCE 1395
+#define ID_DISCORD_NOTIFY_HEARTBEAT 1398
+#define ID_WEBHOOK_SET_HEARTBEAT 1399
+#define ID_DISCORD_NOTIFY_UTILS_RAM 1400
+#define ID_DISCORD_USE_DEFAULT_NAME 1396
+#define ID_DISCORD_USE_DEFAULT_AVATAR 1397
+#define ID_DISCORD_USE_TIMESTAMP 1401
 #define ID_SCREEN_SAVER 1350
 #define ID_SS_ALWAYS_SHOW_EXIT 1351
 #define ID_TOGGLE_SIMPLE_MODE 1352
 
+#define ID_MACROS_OPEN 1700
+#define ID_MACROS_RECORD 1701
+#define ID_MACROS_STOP_RECORDING 1702
+#define ID_MACROS_WIZARD_NEXT 1703
+#define ID_MACROS_WIZARD_BACK 1704
+#define ID_MACROS_WIZARD_FINISH 1705
+#define ID_MACROS_WIZARD_RECORD 1706
+#define ID_MACROS_TEST_RUN 1707
+#define ID_MACROS_DELETE_STEP 1708
+#define ID_MACROS_EDIT_STEP 1709
+#define ID_MACROS_SELECT 1710
+
 constexpr UINT WM_APP_SHOW_STATUS_BAR = WM_APP + 20;
 constexpr UINT WM_APP_SHOW_STATUS_BAR_PERSISTENT = WM_APP + 21;
 constexpr UINT WM_APP_UPDATE_STATUS_BAR = WM_APP + 22;
+constexpr UINT WM_APP_SHOW_MACROS = WM_APP + 23;
+constexpr UINT WM_APP_CLOSE_MACROS = WM_APP + 24;
+constexpr UINT WM_APP_SHOW_GRID = WM_APP + 25;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
 constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
 constexpr UINT STATUS_BAR_POSITION_TIMER = 3;
@@ -312,6 +346,8 @@ HWND g_hwnd;
 HINSTANCE g_hInst;
 NOTIFYICONDATA g_nid;
 HMENU g_hMenu;
+std::atomic<bool> g_mainUiOpenedForMacros(false);
+std::atomic<bool> g_mainUiOpenedForGrid(false);
 HANDLE g_hMultiInstanceMutex = NULL;
 bool g_multiInstanceMutexOwnedByOther = false;
 std::wstring g_mutexBannerMessage;
@@ -335,6 +371,7 @@ HWND g_hCustomKeyPressDelayWnd = NULL;
 HWND g_hCustomPostActionDelayWnd = NULL;
 HWND g_hCustomActionRepeatCountWnd = NULL;
 HWND g_hCustomReconnectIntervalWnd = NULL;
+HWND g_hCustomReconnectMacroDelayWnd = NULL;
 HWND g_hCustomCpuLimitPercentWnd = NULL;
 HWND g_hCustomCpuLimitPeriodWnd = NULL;
 std::atomic<bool> g_useCustomProcessSearch(false);
@@ -346,11 +383,14 @@ std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
 std::atomic<bool> g_statusBarPrimaryMonitor(false);
 std::atomic<bool> g_statusBarPositionBottom(false);
-std::atomic<bool> g_pendingExit(false);
 std::atomic<bool> g_hotkeyEnabled(true);
 std::atomic<UINT> g_hotkeyModifiers(MOD_CONTROL | MOD_SHIFT);
 std::atomic<UINT> g_hotkeyVk(VK_F1);
 std::atomic<bool> g_hotkeyCaptureActive(false);
+std::atomic<bool> g_hotkeyGridEnabled(true);
+std::atomic<UINT> g_hotkeyGridModifiers(MOD_CONTROL | MOD_SHIFT);
+std::atomic<UINT> g_hotkeyGridVk(VK_F2);
+std::atomic<bool> g_hotkeyCaptureIsGrid(false);
 HWND g_hotkeyCaptureWnd = NULL;
 HHOOK g_hHotkeyHook = NULL;
 std::atomic<int> g_updateServerVersion(0);
@@ -361,10 +401,19 @@ std::atomic<int> g_ramCleanerMode(0); // 0 - time, 1 - ram, 2 - time + ram
 std::atomic<int> g_ramCleanerInterval(120); // s
 std::atomic<int> g_ramCleanerLimit(500); // MB
 std::atomic<bool> g_isRamCleanerRunning(false);
+std::atomic<bool> g_intervalMacroEnabled(false);
+std::atomic<bool> g_intervalMacroThreadRunning(false);
+std::thread g_intervalMacroThread;
+std::atomic<int> g_reconnectMacroDelaySec(60);
+std::mutex g_reconnectMacroDelayMutex;
+std::map<HWND, ULONGLONG> g_reconnectMacroPending;
 std::atomic<int> g_gridFixedWinW(800), g_gridFixedWinH(600);
 std::atomic<int> g_gridFixedCols(2), g_gridFixedRows(2);
 std::atomic<int> g_gridSpacingBetween(7), g_gridSpacingBorders(8);
-std::atomic<bool> g_discordWebhookEnabled(false), g_discordNotifyStart(true), g_discordNotifyStop(true), g_discordNotifyAction(false), g_discordNotifyReconnect(true), g_discordNotifyReset(false), g_discordNotifyErrors(true), g_discordDisableEmbed(false), g_discordMentionOnErrors(false);
+std::atomic<bool> g_discordWebhookEnabled(false), g_discordNotifyStart(true), g_discordNotifyStop(true), g_discordNotifyAction(false), g_discordNotifyReconnect(true), g_discordNotifyReset(false), g_discordNotifyErrors(true), g_discordDisableEmbed(false), g_discordMentionOnErrors(false), g_discordNotifyMacro(false), g_discordNotifyIntervalMacros(false), g_discordNotifyHeartbeat(false), g_discordNotifyUtilsRam(false), g_discordUseDefaultName(false), g_discordUseDefaultAvatar(false), g_discordUseTimestamp(true);
+std::atomic<int> g_discordHeartbeatIntervalMin(60);
+std::atomic<uint64_t> g_lastHeartbeatSend(0);
+std::atomic<uint64_t> g_lastSessionDurationSeconds(0);
 std::atomic<int> g_afkReminderState(0); // 0 - no reminder, 1 - reminded at 18min, 2 - AFK started at 19min
 std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0), g_longestAfkSessionSeconds(0), g_discordWebhooksSent(0), g_programLaunches(0), g_afkSessionsCompleted(0);
 std::atomic<DWORD> g_unmutedPid(0);
@@ -384,14 +433,14 @@ std::atomic<bool> g_reconnectManualCheckRequest(false);
 std::thread g_activityMonitorThread;
 std::thread g_reconnectMonitorThread;
 std::atomic<bool> g_reconnectMonitorRunning(false);
+std::mutex g_reconnectMonitorMutex;
+std::mutex g_fpsCapperThreadMutex;
 std::map<HWND, DWORD> g_reconnectCooldownMap;
 std::mutex g_reconnectCooldownMutex;
 std::thread g_fpsCapperThread;
 std::thread g_ramCleanerThread;
-std::vector<HWND> g_screenSaverWindows;
 std::atomic<bool> g_screenSaverActive(false);
 std::atomic<bool> g_screenSaverStopRequested(false);
-std::thread g_screenSaverThread;
 std::condition_variable g_cv;
 std::vector<DWORD> g_manuallyStoppedPids;
 std::mutex g_manuallyStoppedPidsMutex;
@@ -421,6 +470,16 @@ struct RobloxInstanceSettings {
     bool enableReconnect = true;
     bool overrideReset = false;
     bool enableReset = true;
+    bool overrideTimer = false;
+    bool enableTimer = false;
+    int timerSeconds = 540;
+    bool overrideMacro = false;
+    bool enableMacro = false;
+    std::vector<std::wstring> macroNames = {};
+    bool enableReconnectMacro = false;
+    std::vector<std::wstring> reconnectMacroNames = {};
+    bool enableIntervalMacro = false;
+    std::vector<std::wstring> intervalMacroNames = {};
     std::wstring presetName = L"Default";
 };
 
@@ -442,13 +501,23 @@ struct RobloxInstancePreset {
     bool enableReconnect = true;
     bool overrideReset = false;
     bool enableReset = true;
+    bool overrideTimer = false;
+    bool enableTimer = false;
+    int timerSeconds = 540;
+    bool overrideMacro = false;
+    bool enableMacro = false;
+    std::vector<std::wstring> macroNames = {};
+    bool enableReconnectMacro = false;
+    std::vector<std::wstring> reconnectMacroNames = {};
+    bool enableIntervalMacro = false;
+    std::vector<std::wstring> intervalMacroNames = {};
 };
 
 std::map<HWND, RobloxInstanceSettings> g_instanceSettings;
 std::vector<RobloxInstancePreset> g_instancePresets = {
-    { L"Default", false, true, false, false, false, false, 180, false, false, false, false, 60, false, true, false, true },
-    { L"All off", true, false, true, false, true, false, 180, true, false, true, false, 0, true, false, true, false },
-    { L"All on", true, true, true, true, true, true, 180, true, true, true, true, 60, true, true, true, true }
+    { L"Default", false, true, false, false, false, false, 180, false, false, false, false, 60, false, true, false, true, false, false, 540, false, false, {}, {}, {} },
+    { L"All off", true, false, true, false, true, false, 180, true, false, true, false, 0, true, false, true, false, true, false, 540, true, false, {}, {}, {} },
+    { L"All on", true, true, true, true, true, true, 180, true, true, true, true, 60, true, true, true, true, true, true, 540, true, true, {}, {}, {} }
 };
 std::mutex g_instanceSettingsMutex;
 std::mutex g_instancePresetsMutex;
@@ -521,6 +590,101 @@ bool GetWindowInstanceSetting_Reset(HWND hwnd, bool globalDefault) {
     return globalDefault;
 }
 
+bool GetWindowInstanceSetting_Timer(HWND hwnd, int globalDefault, int& outSeconds) {
+    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+    auto it = g_instanceSettings.find(hwnd);
+    if (it != g_instanceSettings.end() && it->second.overrideTimer) {
+        outSeconds = it->second.timerSeconds;
+        return it->second.enableTimer;
+    }
+    outSeconds = globalDefault;
+    return false;
+}
+
+bool GetWindowInstanceSetting_Macro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+    auto it = g_instanceSettings.find(hwnd);
+    if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (it->second.enableMacro) {
+            outMacroNames = it->second.macroNames;
+            return !outMacroNames.empty();
+        }
+        return false;
+    }
+    if (it != g_instanceSettings.end()) {
+        std::wstring preset = it->second.presetName;
+        if (_wcsicmp(preset.c_str(), L"Default") != 0) {
+            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+            for (const auto& pr : g_instancePresets) {
+                if (pr.name == preset) {
+                    if (pr.overrideMacro && pr.enableMacro) {
+                        outMacroNames = pr.macroNames;
+                        return !outMacroNames.empty();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool GetWindowInstanceSetting_ReconnectMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+    auto it = g_instanceSettings.find(hwnd);
+    if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (it->second.enableReconnectMacro) {
+            outMacroNames = it->second.reconnectMacroNames;
+            return !outMacroNames.empty();
+        }
+        return false;
+    }
+    if (it != g_instanceSettings.end()) {
+        std::wstring preset = it->second.presetName;
+        if (_wcsicmp(preset.c_str(), L"Default") != 0) {
+            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+            for (const auto& pr : g_instancePresets) {
+                if (pr.name == preset) {
+                    if (pr.overrideMacro && pr.enableReconnectMacro) {
+                        outMacroNames = pr.reconnectMacroNames;
+                        return !outMacroNames.empty();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool GetWindowInstanceSetting_IntervalMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+    auto it = g_instanceSettings.find(hwnd);
+    if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (it->second.enableIntervalMacro) {
+            outMacroNames = it->second.intervalMacroNames;
+            return !outMacroNames.empty();
+        }
+        return false;
+    }
+    if (it != g_instanceSettings.end()) {
+        std::wstring preset = it->second.presetName;
+        if (_wcsicmp(preset.c_str(), L"Default") != 0) {
+            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+            for (const auto& pr : g_instancePresets) {
+                if (pr.name == preset) {
+                    if (pr.overrideMacro && pr.enableIntervalMacro) {
+                        outMacroNames = pr.intervalMacroNames;
+                        return !outMacroNames.empty();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 const TCHAR g_szClassName[] = _T("AntiAFK-RBX-tray");
 wchar_t g_splashStatus[128] = L"Initializing...";
 constexpr DWORD ACTION_DELAY = 30, ALT_DELAY = 15;
@@ -552,9 +716,252 @@ void ApplyActionPreset(int preset) {
     }
 }
 
+enum class MacroStepType : uint8_t {
+    ImageClick = 0,
+    KeyPress,
+    KeyDown,
+    KeyUp,
+    MouseMove,
+    MouseClick,
+    MouseDown,
+    MouseUp,
+    Sleep,
+    RandomSleep,
+    MouseWheel
+};
+
+struct ImageTemplate {
+    uint16_t width = 12;
+    uint16_t height = 12;
+    std::vector<uint32_t> pixels;
+
+    bool CaptureFromWindow(HWND hwnd, int cx, int cy, int size = 12) {
+        width = height = (uint16_t)size;
+        pixels.resize(size * size);
+        HDC hdcWindow = GetDC(hwnd);
+        if (!hdcWindow) return false;
+        HDC hdcMem = CreateCompatibleDC(hdcWindow);
+        if (!hdcMem) { ReleaseDC(hwnd, hdcWindow); return false; }
+        HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, size, size);
+        if (!hBitmap) { DeleteDC(hdcMem); ReleaseDC(hwnd, hdcWindow); return false; }
+        SelectObject(hdcMem, hBitmap);
+        BitBlt(hdcMem, 0, 0, size, size, hdcWindow, cx - size / 2, cy - size / 2, SRCCOPY);
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = size;
+        bmi.bmiHeader.biHeight = -size;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        GetDIBits(hdcMem, hBitmap, 0, size, pixels.data(), &bmi, DIB_RGB_COLORS);
+        DeleteObject(hBitmap);
+        DeleteDC(hdcMem);
+        ReleaseDC(hwnd, hdcWindow);
+        return true;
+    }
+
+    bool FindOnWindow(HWND hwnd, int& outX, int& outY, int tolerance = 200) const {
+        if (pixels.empty() || width == 0 || height == 0) return false;
+        RECT rc;
+        if (!GetClientRect(hwnd, &rc)) return false;
+        int winW = rc.right - rc.left;
+        int winH = rc.bottom - rc.top;
+        if (winW < width || winH < height) return false;
+
+        HDC hdcWindow = GetDC(hwnd);
+        if (!hdcWindow) return false;
+        HDC hdcMem = CreateCompatibleDC(hdcWindow);
+        if (!hdcMem) { ReleaseDC(hwnd, hdcWindow); return false; }
+        HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, winW, winH);
+        if (!hBitmap) { DeleteDC(hdcMem); ReleaseDC(hwnd, hdcWindow); return false; }
+        SelectObject(hdcMem, hBitmap);
+        BitBlt(hdcMem, 0, 0, winW, winH, hdcWindow, 0, 0, SRCCOPY);
+
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = winW;
+        bmi.bmiHeader.biHeight = -winH;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        std::vector<uint32_t> screenPixels(winW * winH);
+        GetDIBits(hdcMem, hBitmap, 0, winH, screenPixels.data(), &bmi, DIB_RGB_COLORS);
+        DeleteObject(hBitmap);
+        DeleteDC(hdcMem);
+        ReleaseDC(hwnd, hdcWindow);
+
+        int bestX = -1, bestY = -1;
+        int bestScore = tolerance;
+
+        for (int y = 0; y <= winH - height; y++) {
+            for (int x = 0; x <= winW - width; x++) {
+                int score = 0;
+                for (int ty = 0; ty < height && score < bestScore; ty++) {
+                    for (int tx = 0; tx < width && score < bestScore; tx++) {
+                        uint32_t spx = screenPixels[(y + ty) * winW + (x + tx)];
+                        uint32_t tpx = pixels[ty * width + tx];
+                        int dr = abs((int)(spx & 0xFF) - (int)(tpx & 0xFF));
+                        int dg = abs((int)((spx >> 8) & 0xFF) - (int)((tpx >> 8) & 0xFF));
+                        int db = abs((int)((spx >> 16) & 0xFF) - (int)((tpx >> 16) & 0xFF));
+                        score += dr + dg + db;
+                    }
+                }
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestX = x + width / 2;
+                    bestY = y + height / 2;
+                }
+            }
+        }
+
+        if (bestX >= 0 && bestY >= 0) {
+            outX = bestX;
+            outY = bestY;
+            return true;
+        }
+        return false;
+    }
+};
+
+struct MacroAction {
+    MacroStepType type = MacroStepType::ImageClick;
+    uint16_t x = 0, y = 0;
+    ImageTemplate image;
+    uint8_t tolerance = 200;
+    uint16_t delayBeforeMs = 0;
+    uint8_t vkCode = 0;
+    uint8_t modifiers = 0;
+    uint8_t mouseButton = 0;
+    int16_t wheelDelta = 0;
+    bool mouseDown = false;
+    bool mouseUp = false;
+    bool relative = false;
+    std::vector<std::pair<uint16_t, uint16_t>> path;
+    std::vector<uint16_t> pathDelays;
+};
+
+struct Macro {
+    std::wstring name;
+    std::vector<MacroAction> actions;
+    int totalRepeats = 1;
+    bool triggerOnCooldown = false;
+    bool triggerOnReconnect = false;
+    int cooldownIntervalSec = 0;
+    bool triggerOnInterval = false;
+    int intervalSec = 30;
+    int triggerOrderCooldown = 0;
+    int triggerOrderReconnect = 0;
+    int triggerOrderInterval = 0;
+};
+
+void MacroEngine_Init();
+void MacroEngine_Shutdown();
+bool MacroEngine_LoadMacros();
+bool MacroEngine_SaveMacros();
+Macro* MacroEngine_FindCooldownMacro();
+Macro* MacroEngine_FindReconnectMacro();
+std::vector<Macro> MacroEngine_GetCooldownMacros();
+std::vector<Macro> MacroEngine_GetReconnectMacros();
+std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target);
+std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target);
+void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest = false, bool allowWithoutAfk = false);
+void MacroEngine_StopRecording();
+void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button);
+void MacroEngine_ShowWizard(HWND parent, int startStep = 1);
+void MacroEngine_ShowEditor(HWND parent, int macroIndex);
+void MacroEngine_TestRun(HWND parent, int macroIndex);
+void ShowMainUIDialog(HWND owner);
+void FocusRobloxWindow(HWND hwnd);
+
+void FillRoundedRectangle(Gdiplus::Graphics* g, Gdiplus::Brush* brush, REAL x, REAL y, REAL width, REAL height, REAL radius);
+void DrawRoundedRectangle(Gdiplus::Graphics* g, Gdiplus::Pen* pen, REAL x, REAL y, REAL width, REAL height, REAL radius);
+int MeasureTextWidth(HDC hdc, HFONT font, const std::wstring& text);
 
 std::atomic<int> g_selectedTime(540);
-std::atomic<int> g_selectedAction(1); // 0 - space, 1 - w&s, 2 - zoom, 3 - random
+std::atomic<int> g_selectedAction(1); // 0 - space, 1 - w&s, 2 - zoom, 3 - random, 4 - macro
+std::atomic<int> g_selectedMacroIndex(-1); // -1 = no macro selected
+std::atomic<int> g_macroIntervalTargetIndex(-1); // -1 = use g_selectedMacroIndex
+std::vector<Macro> g_macros;
+std::mutex g_macrosMutex;
+int g_macroTriggerOrderCounter = 0;
+
+static bool MacroEngine_HasReconnectMacros() {
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    for (const auto& m : g_macros) {
+        if (m.triggerOnReconnect) return true;
+    }
+    return false;
+}
+
+static bool MacroEngine_HasIntervalMacros() {
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    for (const auto& m : g_macros) {
+        if (m.triggerOnInterval && m.intervalSec > 0) return true;
+    }
+    return false;
+}
+
+std::vector<HWND> FindAllRobloxWindows(bool includeHidden);
+
+static bool MacroEngine_AllWindowsHaveInstanceMacros() {
+    auto wins = FindAllRobloxWindows(true);
+    if (wins.empty()) return false;
+    for (HWND w : wins) {
+        std::vector<std::wstring> names;
+        if (!GetWindowInstanceSetting_Macro(w, names) || names.empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+Macro* MacroEngine_FindMacro(const std::wstring& name) {
+    if (name.empty()) return nullptr;
+    for (auto& m : g_macros) {
+        if (m.name == name) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+bool g_isRecording = false;
+HWND g_recordingTargetHwnd = NULL;
+HHOOK g_recordingMouseHook = NULL;
+std::thread g_recordingDeltaThread;
+std::mutex g_recordingMovesMutex;
+HHOOK g_recordingKeyboardHook = NULL;
+HWND g_recordingOverlayWnd = NULL;
+bool g_recordingStopPending = false;
+std::vector<MacroAction> g_recordingActions;
+double g_recordingStartTime = 0;
+double g_recordingLastEventTime = 0;
+int g_recordingClickCount = 0;
+int g_recordingKeyCount = 0;
+int g_recordingWheelCount = 0;
+std::vector<std::pair<uint16_t, uint16_t>> g_recordingPendingMoves;
+std::vector<uint16_t> g_recordingPendingDelays;
+double g_recordingLastMoveTime = 0;
+bool g_recordingMovementsEnabled = true;
+bool g_recordingLeftDown = false;
+bool g_recordingRightDown = false;
+bool g_recordingMiddleDown = false;
+bool g_recordingXButton1Down = false;
+bool g_recordingXButton2Down = false;
+std::set<uint8_t> g_recordingKeysDown;
+int g_recordingRawDeltaX = 0;
+int g_recordingRawDeltaY = 0;
+bool g_recordingRawInputRegistered = false;
+bool g_recordingHasRelativeMoves = false;
+bool g_macroWizardActive = false;
+HWND g_macroWizardHwnd = NULL;
+int g_macroWizardStep = 0;
+HWND g_wizardTargetHwnd = NULL;
+bool g_macroReRecording = false;
+HWND g_testTargetHwnd = NULL;
+Macro g_wizardMacro;
+std::map<std::pair<HWND, std::wstring>, ULONGLONG> g_lastIntervalMacroRun;
+std::mutex g_lastIntervalMacroRunMutex;
+std::atomic<bool> g_macroTestRunning(false);
 std::atomic<int> g_lastActionKind(1); // 0 - space, 1 - w/s, 2 - zoom (actual last performed)
 std::atomic<int> g_randomCyclePick(-1); // -1 = no pick yet, 0-2 = pick for current cycle
 std::atomic<int> g_restoreMethod(1); // 0 - Off, 1 - SetForeground, 2 - Alt+Tab (legacy), 3 - Smart Alt+Tab
@@ -591,6 +998,7 @@ void SaveSettings();
 std::string EscapeJsonStringUtf8(const std::string& input);
 void FpsCapperThread();
 void RamCleanerThread();
+void IntervalMacroThread();
 int ClearRobloxMemory();
 bool AnyRobloxWindowExceedsRamLimit(int limitMb);
 void ShowAllRobloxWindows_Multi();
@@ -611,12 +1019,19 @@ enum class DiscordWebhookEvent
     Action,
     AutoReconnect,
     AutoReset,
-    Error
+    Error,
+    Macro,
+    IntervalMacrosStarted,
+    IntervalMacrosStopped,
+    Heartbeat,
+    UtilityRam
 };
 std::queue<std::pair<DiscordWebhookEvent, std::wstring>> g_webhookQueue;
 std::condition_variable g_webhookCv;
-bool g_webhookThreadRunning = false;
+std::atomic<bool> g_webhookThreadRunning(false);
 std::thread g_webhookThread;
+std::wstring BuildDiscordTotalStatsLine();
+std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds);
 void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring& summary, bool bypassEnabledCheck = false);
 uint64_t FinalizeAfkSession();
 std::wstring FormatDurationShort(uint64_t totalSeconds);
@@ -629,6 +1044,7 @@ void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWin
 void QueueStatusBarMessage(const std::wstring& message);
 void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL);
 void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow);
+void HideStatusBarOverlay(bool animate = false);
 void UpdateStatusBarMessage(const std::wstring& message);
 bool TryParseOnOffValue(const std::wstring& value, bool& outValue);
 bool ReadOptionalOnOffArgument(LPWSTR* argv, int argc, int& index, bool defaultValue, bool& outValue);
@@ -1047,9 +1463,9 @@ static void Popup_DrawTextInput(Graphics* g, HDC hdc, const RECT& rect, HFONT in
     g->SetTextRenderingHint(oldTextHint);
 #pragma warning(pop)
 }
-static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT& rect, HFONT inputFont, const wchar_t* value, const wchar_t* placeholder, bool isHovering, bool isFocused) {
-    Color fillColor = isFocused ? Color(140, 55, 55, 55) : (isHovering ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45));
-    Color borderColor = isFocused ? Color(140, 0, 122, 204) : Color(180, 56, 56, 56);
+static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT& rect, HFONT inputFont, const wchar_t* value, const wchar_t* placeholder, bool isHovering, bool isFocused, bool drawTopBorder = true, bool drawBottomSliver = true) {
+    Color fillColor = isFocused ? Color(150, 58, 58, 58) : (isHovering ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45));
+    Color borderColor = Color(180, 56, 56, 56);
     SolidBrush fillBrush(fillColor);
     Pen borderPen(borderColor, 1.0f);
 
@@ -1061,10 +1477,14 @@ static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT&
     int w = rect.right - rect.left;
     int h = rect.bottom - rect.top;
     SolidBrush borderBrush(borderColor);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
+    if (drawTopBorder) {
+        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
+    }
     g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
     g->FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
+    if (drawBottomSliver) {
+        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), 1.0f, (REAL)h);
+    }
     g->SetPixelOffsetMode(oldMode);
     g->SetSmoothingMode(oldSmooth);
 
@@ -2356,6 +2776,9 @@ struct GridSettingsData {
     RECT spacingBordersDropdownRect = {0};
     RECT okButtonRect = {0};
     RECT helpButtonRects[7] = {0};
+    RECT gridHotkeyToggleRect = {0};
+    RECT gridHotkeyChangeBtnRect = {0};
+    RECT gridHotkeyBindTextRect = {0};
     int hoveringHelpButton = -1;
     bool isHoveringClose = false;
     bool isHoveringForceSmall = false;
@@ -2367,6 +2790,8 @@ struct GridSettingsData {
     bool isHoveringSpacingBetween = false;
     bool isHoveringSpacingBorders = false;
     bool isHoveringOk = false;
+    bool isHoveringGridHotkeyChange = false;
+    bool isHoveringGridHotkeyToggle = false;
     bool isTrackingMouse = false;
     HCURSOR hCursorHand = NULL;
     HCURSOR hCursorArrow = NULL;
@@ -2377,7 +2802,9 @@ void MainUI_Paint_DrawToggleGetHitbox(const RECT& rowRect, RECT* outToggleRect);
 void MainUI_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering);
 void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary, bool drawBottomBorder = true);
 void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wchar_t* label, const wchar_t* value, bool isHovering, bool hasRightNeighbor, const wchar_t* icon = nullptr, bool isEnabled = true, Graphics* pG = nullptr, int iconVerticalOffset = 0, int iconHorizontalOffset = 0, const wchar_t* rightIcon = L"\uE70D");
+float MainUI_Paint_DrawBadge(Graphics& g, float x, float y, float badgeH, const wchar_t* badgeText, int textAlpha = 255);
 void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering, bool fullyRounded = false, Graphics* pG = nullptr);
+void MainUI_Paint_DrawCompactButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, bool isHovering, const wchar_t* label, bool checked, int iconXOffset, bool enabled);
 enum class CustomInputDialogType {
     Interval,
     FpsLimit,
@@ -2393,20 +2820,36 @@ enum class CustomInputDialogType {
     PostActionDelay,
     ActionRepeatCount,
     ReconnectInterval,
+    ReconnectMacroDelay,
     CpuLimitPercent,
     CpuLimitPeriod,
     InstanceGeometry,
     InstanceTitle,
-    PresetName
+    PresetName,
+    MacroName,
+    MacroInterval,
+    InstanceTimer,
+    MacroRename,
+    DiscordWebhookUrl,
+    DiscordHeartbeatInterval,
+    MultiInstanceInterval
 };
 void ShowCustomInputDialog(HWND owner, CustomInputDialogType type);
+HWND g_hCustomMacroRenameWnd = NULL;
 HWND g_geometryTargetHwnd = NULL;
 std::vector<HWND> g_geometryTargetWindows;
 HWND g_hCustomGeometryWnd = NULL;
 HWND g_renameTargetHwnd = NULL;
 std::vector<HWND> g_renameTargetWindows;
 HWND g_hCustomRenameWnd = NULL;
+std::vector<HWND> g_instanceTimerTargetWindows;
+HWND g_hCustomInstanceTimerWnd = NULL;
 HWND g_hCustomPresetNameWnd = NULL;
+HWND g_hCustomMacroNameWnd = NULL;
+HWND g_hCustomMacroIntervalWnd = NULL;
+HWND g_hCustomWebhookUrlWnd = NULL;
+HWND g_hCustomHeartbeatIntervalWnd = NULL;
+HWND g_hCustomMultiInstanceIntervalWnd = NULL;
 std::wstring g_editingPresetName;
 int g_editingPresetIndex = -1;
 HWND g_presetEditSource = NULL;
@@ -2463,14 +2906,14 @@ static void GridSettings_UpdateLayout(HWND hwnd, GridSettingsData* pData) {
     y += fullRowH;
 
     pData->modeOptionRects[0] = {0, y, cr.right, y + fullRowH};
-    setupRow(3, pData->modeOptionRects[0], pData->modeDropdownRect, pData->helpButtonRects[3], 160, true);
+    setupRow(3, pData->modeOptionRects[0], pData->modeDropdownRect, pData->helpButtonRects[3], 176, true);
     pData->modeOptionRects[0].right = cr.right;
     y += fullRowH;
 
     int currentMode = g_gridMode.load();
     if (currentMode > 0) {
         pData->modeOptionRects[2] = {0, y, cr.right, y + fullRowH};
-        setupRow(4, pData->modeOptionRects[2], pData->modeValueDropdownRect, pData->helpButtonRects[4], 160, true);
+        setupRow(4, pData->modeOptionRects[2], pData->modeValueDropdownRect, pData->helpButtonRects[4], 176, true);
         pData->modeOptionRects[2].right = cr.right;
         y += fullRowH;
     } else {
@@ -2489,6 +2932,14 @@ static void GridSettings_UpdateLayout(HWND hwnd, GridSettingsData* pData) {
     pData->spacingBordersRect = {0, y, cr.right, y + fullRowH};
     setupRow(nextRowIndex, pData->spacingBordersRect, pData->spacingBordersDropdownRect, pData->helpButtonRects[6], 80, true);
     pData->spacingBordersRect.right = cr.right;
+    y += fullRowH;
+
+    pData->gridHotkeyToggleRect = {0, y, cr.right, y + fullRowH};
+    {
+        int hkBtnH = 24, hkToggleW = 50, hkBtnW = 24, hkTextMaxW = 130;
+        pData->gridHotkeyChangeBtnRect = { cr.right - hkToggleW - 4 - hkBtnW, y + (rowH - hkBtnH) / 2 + 4, cr.right - hkToggleW - 4, y + (rowH - hkBtnH) / 2 + 4 + hkBtnH };
+        pData->gridHotkeyBindTextRect = { pData->gridHotkeyChangeBtnRect.left - hkTextMaxW, y + 8, pData->gridHotkeyChangeBtnRect.left - 6, y + rowH };
+    }
     y += fullRowH;
 
     pData->okButtonRect = {0, cr.bottom - 40, cr.right, cr.bottom};
@@ -2548,6 +2999,12 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         updateHover(pData->isHoveringModeValue, pData->modeValueDropdownRect);
         updateHover(pData->isHoveringSpacingBetween, pData->spacingBetweenDropdownRect);
         updateHover(pData->isHoveringSpacingBorders, pData->spacingBordersDropdownRect);
+        updateHover(pData->isHoveringGridHotkeyChange, pData->gridHotkeyChangeBtnRect);
+        {
+            RECT hkToggleHitbox;
+            MainUI_Paint_DrawToggleGetHitbox(pData->gridHotkeyToggleRect, &hkToggleHitbox);
+            updateHover(pData->isHoveringGridHotkeyToggle, hkToggleHitbox);
+        }
         updateHover(pData->isHoveringOk, pData->okButtonRect);
 
         int newHoveringHelpButton = -1;
@@ -2583,6 +3040,8 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         pData->isHoveringModeValue = false;
         pData->isHoveringSpacingBetween = false;
         pData->isHoveringSpacingBorders = false;
+        pData->isHoveringGridHotkeyChange = false;
+        pData->isHoveringGridHotkeyToggle = false;
         pData->isHoveringOk = false;
         pData->hoveringHelpButton = -1;
         pData->isTrackingMouse = false;
@@ -2697,6 +3156,19 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             ShowCustomInputDialog(hwnd, CustomInputDialogType::GridSpacingBorders);
             return 0;
         }
+
+        if (PtInRect(&pData->gridHotkeyChangeBtnRect, pt)) {
+            PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_GRID_HOTKEY, 0);
+            return 0;
+        }
+        {
+            RECT hkToggleHitbox;
+            MainUI_Paint_DrawToggleGetHitbox(pData->gridHotkeyToggleRect, &hkToggleHitbox);
+            if (PtInRect(&hkToggleHitbox, pt)) {
+                PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_GRID_HOTKEY, 0);
+                return 0;
+            }
+        }
         break;
     }
     case WM_NCHITTEST: {
@@ -2761,6 +3233,7 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 drawRowBg(4, pData->spacingBetweenRect);
                 drawRowBg(5, pData->spacingBordersRect);
             }
+            drawRowBg(7, pData->gridHotkeyToggleRect);
         }
 
         MainUI_Paint_DrawToggle(memDC, pData->forceSmallToggleRect, pData->hFont12, L"Force small window", g_gridForceSmall.load(), pData->isHoveringForceSmall, g_gridForceSmall.load() ? 1.0f : 0.0f, false, L"\uE73F");
@@ -2801,6 +3274,49 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
         wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
         MainUI_Paint_DrawDropdown(memDC, pData->spacingBordersDropdownRect, pData->hFont12, L"Spacing from borders", bordersText, pData->isHoveringSpacingBorders, true, L"\uE7A8", true, nullptr, 0, 0, L"\uE70F");
+
+        {
+            std::wstring gkText = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+            RECT gkRowR = pData->gridHotkeyToggleRect;
+            bool gkEn = g_hotkeyGridEnabled.load();
+
+            Gdiplus::Graphics gfxHk(memDC);
+            gfxHk.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            gfxHk.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+            HFONT hkIconF = CreateFontW(-MulDiv(12, GetDeviceCaps(memDC, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font gdiHkIconF(memDC, hkIconF);
+            Font gdiHkTextF(memDC, pData->hFont12);
+            SolidBrush hkIconBr(Color(255, 150, 150, 150));
+            SolidBrush hkLabelBr(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            StringFormat sfHkIc;
+            sfHkIc.SetAlignment(StringAlignmentCenter);
+            sfHkIc.SetLineAlignment(StringAlignmentCenter);
+            RectF hkIcR((REAL)16, (REAL)(gkRowR.top + 2), 22.0f, (REAL)(gkRowR.bottom - gkRowR.top - 4));
+            gfxHk.DrawString(L"\uE80A", -1, &gdiHkIconF, hkIcR, &sfHkIc, &hkIconBr);
+            StringFormat sfHkLb;
+            sfHkLb.SetAlignment(StringAlignmentNear);
+            sfHkLb.SetLineAlignment(StringAlignmentCenter);
+            RectF hkLbR((REAL)44, (REAL)(gkRowR.top - 1), 120.0f, (REAL)(gkRowR.bottom - gkRowR.top));
+            gfxHk.DrawString(L"Grid Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
+            DeleteObject(hkIconF);
+
+            MainUI_Paint_DrawCompactButton(memDC, pData->gridHotkeyChangeBtnRect, pData->hFont12, L"\uE70F", pData->isHoveringGridHotkeyChange, L"", false, 0, gkEn);
+
+            HFONT hkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(memDC, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+            Font gdiHkBindFont(memDC, hkBindFont);
+            SolidBrush hkBindBrush(Color(gkEn ? 255 : 100, 180, 180, 180));
+            StringFormat sfHkBind;
+            sfHkBind.SetAlignment(StringAlignmentFar);
+            sfHkBind.SetLineAlignment(StringAlignmentCenter);
+            RECT hkTr = pData->gridHotkeyBindTextRect;
+            RectF hkTrF((REAL)hkTr.left, (REAL)hkTr.top, (REAL)(hkTr.right - hkTr.left), (REAL)(hkTr.bottom - hkTr.top));
+            gfxHk.DrawString(gkText.c_str(), -1, &gdiHkBindFont, hkTrF, &sfHkBind, &hkBindBrush);
+            DeleteObject(hkBindFont);
+
+            RECT toggleG2 = pData->gridHotkeyToggleRect;
+            toggleG2.left = pData->gridHotkeyChangeBtnRect.right + 4;
+            MainUI_Paint_DrawToggle(memDC, toggleG2, pData->hFont12, L"", gkEn, pData->isHoveringGridHotkeyToggle, gkEn ? 1.0f : 0.0f, false, nullptr, true);
+        }
 
         for (int i = 0; i < 7; ++i) {
             if (pData->helpButtonRects[i].left != 0) {
@@ -2860,7 +3376,7 @@ void ShowGridSettingsDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
     int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
-    int winW = 380, winH = 380;
+    int winW = 380, winH = 430;
     int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, GRID_CLASS_NAME,
         L"AntiAFK-RBX \u2022 Grid Settings", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
@@ -2912,6 +3428,7 @@ struct InstanceManagerData {
     HFONT hFont14 = NULL;
     HFONT hFont12 = NULL;
     HFONT hFont10 = NULL;
+    HICON hAppIcon = NULL;
     HCURSOR hCursorHand = NULL;
     HCURSOR hCursorArrow = NULL;
     RECT closeButtonRect = { 0 };
@@ -2932,13 +3449,24 @@ struct InstanceManagerData {
     bool isHoveringHide = false;
     bool isHoveringFpsLimit = false;
     bool isHoveringReconnect = false;
+    bool isHoveringReconnectSelect = false;
+    bool isHoveringReconnectSeq = false;
+    bool isHoveringReconnectMacro = false;
     bool isHoveringReset = false;
+    bool isHoveringMacro = false;
+    bool isHoveringMacroSelect = false;
+    bool isHoveringMacroSeq = false;
+    bool isHoveringIntervalMacro = false;
+    bool isHoveringIntervalMacroSelect = false;
+    bool isHoveringIntervalMacroSeq = false;
     bool isHoveringShowHide = false;
     bool isHoveringGeometry = false;
     bool isHoveringCloseClient = false;
     bool isHoveringRename = false;
     bool isHoveringRefresh = false;
     bool isHoveringCreatePreset = false;
+    bool isHoveringFocusBtn = false;
+    int focusBtnRow = -1;
     bool isTrackingMouse = false;
 
     RECT presetRect = { 0 };
@@ -2948,7 +3476,16 @@ struct InstanceManagerData {
     RECT hideRect = { 0 };
     RECT fpsLimitRect = { 0 };
     RECT reconnectRect = { 0 };
+    RECT reconnectMacroRect = { 0 };
+    RECT reconnectSelectRect = { 0 };
+    RECT reconnectSeqRect = { 0 };
     RECT resetRect = { 0 };
+    RECT macroRect = { 0 };
+    RECT macroSelectRect = { 0 };
+    RECT macroSeqRect = { 0 };
+    RECT intervalMacroRect = { 0 };
+    RECT intervalMacroSelectRect = { 0 };
+    RECT intervalMacroSeqRect = { 0 };
     RECT createPresetRect = { 0 };
 
     RECT btnShowHideRect = { 0 };
@@ -2963,7 +3500,10 @@ struct InstanceManagerData {
     float animHide = 0.0f;
     float animFpsLimit = 0.0f;
     float animReconnect = 0.0f;
+    float animReconnectMacro = 0.0f;
     float animReset = 0.0f;
+    float animMacro = 0.0f;
+    float animIntervalMacro = 0.0f;
 };
 
 static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) {
@@ -2975,7 +3515,8 @@ static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) 
 
     pData->refreshBtnRect = { 182, 31, 215, 65 };
 
-    int rowH = 32, vGap = 10;
+    int rowH = 28, vGap = 9;
+    int rowStep = rowH + 1;
     int rowStartY = 66;
     int fullL = 218, fullR = cr.right - 1;
     int ctrlL = fullL, ctrlR = fullR - 10;
@@ -2983,29 +3524,52 @@ static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) 
     int ddH = 25, ddYOff = (rowH - ddH) / 2;
     int topBarTop = 31, topBarBot = 65;
     int topRowY = topBarTop;
-    pData->presetRect = { ctrlR - 180, topRowY + ddYOff + 1, ctrlR - 25, topRowY + ddYOff + 1 + ddH };
-    pData->createPresetRect = { ctrlR - 25, topRowY + ddYOff + 1, ctrlR, topRowY + ddYOff + 1 + ddH };
+    pData->presetRect = { ctrlR - 180, topRowY + ddYOff + 1 + 2, ctrlR - 25, topRowY + ddYOff + 1 + ddH + 2 };
+    pData->createPresetRect = { ctrlR - 25, topRowY + ddYOff + 1 + 2, ctrlR, topRowY + ddYOff + 1 + ddH + 2 };
 
     int r1 = rowStartY;
     pData->antiAfkRect = { ctrlL, r1, ctrlR, r1 + rowH };
 
-    int r2 = r1 + rowH + vGap;
+    int r2 = r1 + rowStep + vGap;
     pData->resetRect = { ctrlL, r2, ctrlR, r2 + rowH };
 
-    int r3 = r2 + rowH + vGap;
+    int r3 = r2 + rowStep + vGap;
     pData->muteRect = { ctrlL, r3, ctrlR, r3 + rowH };
 
-    int r4 = r3 + rowH + vGap;
+    int r4 = r3 + rowStep + vGap;
     pData->opacityRect = { ctrlL, r4, ctrlR, r4 + rowH };
 
-    int r5 = r4 + rowH + vGap;
+    int r5 = r4 + rowStep + vGap;
     pData->hideRect = { ctrlL, r5, ctrlR, r5 + rowH };
 
-    int r6 = r5 + rowH + vGap;
+    int r6 = r5 + rowStep + vGap;
     pData->fpsLimitRect = { ctrlL, r6, ctrlR, r6 + rowH };
 
-    int r7 = r6 + rowH + vGap;
+    int r7 = r6 + rowStep + vGap;
     pData->reconnectRect = { ctrlL, r7, ctrlR, r7 + rowH };
+
+    int r8 = r7 + rowStep + vGap;
+    int macroCtrlW = 84;
+    int macroSeqW = 24;
+    int macroGap = 3;
+    int ctrlOff = (rowH - 24) / 2 + 4;
+    int seqOff = ctrlOff;
+    int macroRowEnd = ctrlR - macroCtrlW - macroSeqW - macroGap - 4;
+    int macroSelectL = ctrlR - macroCtrlW - macroSeqW - macroGap;
+    int macroSelectR = ctrlR - macroSeqW - macroGap;
+    pData->macroRect = { ctrlL, r8, macroRowEnd, r8 + rowH };
+    pData->macroSelectRect = { macroSelectL, r8 + ctrlOff, macroSelectR, r8 + ctrlOff + 24 };
+    pData->macroSeqRect = { ctrlR - macroSeqW, r8 + seqOff, ctrlR, r8 + seqOff + macroSeqW };
+
+    int r9 = r8 + rowStep + vGap;
+    pData->reconnectMacroRect = { ctrlL, r9, macroRowEnd, r9 + rowH };
+    pData->reconnectSelectRect = { macroSelectL, r9 + ctrlOff, macroSelectR, r9 + ctrlOff + 24 };
+    pData->reconnectSeqRect = { ctrlR - macroSeqW, r9 + seqOff, ctrlR, r9 + seqOff + macroSeqW };
+
+    int r10 = r9 + rowStep + vGap;
+    pData->intervalMacroRect = { ctrlL, r10, macroRowEnd, r10 + rowH };
+    pData->intervalMacroSelectRect = { macroSelectL, r10 + ctrlOff, macroSelectR, r10 + ctrlOff + 24 };
+    pData->intervalMacroSeqRect = { ctrlR - macroSeqW, r10 + seqOff, ctrlR, r10 + seqOff + macroSeqW };
 
     int btnY = cr.bottom - 32;
     int rightPanelStartX = 215;
@@ -3036,6 +3600,9 @@ static RobloxInstanceSettings GetDefaultInstanceSettingsForWindow(HWND hwnd) {
     s.enableReconnect = g_autoReconnect.load();
     s.overrideReset = false;
     s.enableReset = g_autoReset.load();
+    s.overrideMacro = false;
+    s.enableMacro = false;
+    s.macroNames.clear();
     s.presetName = L"Default";
     return s;
 }
@@ -3059,6 +3626,13 @@ static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring&
         s.enableReconnect = g_autoReconnect.load();
         s.overrideReset = false;
         s.enableReset = g_autoReset.load();
+        s.overrideMacro = false;
+        s.enableMacro = false;
+        s.macroNames.clear();
+        s.enableReconnectMacro = false;
+        s.reconnectMacroNames.clear();
+        s.enableIntervalMacro = false;
+        s.intervalMacroNames.clear();
         return;
     }
     std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
@@ -3080,6 +3654,13 @@ static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring&
             s.enableReconnect = pr.enableReconnect;
             s.overrideReset = pr.overrideReset;
             s.enableReset = pr.enableReset;
+            s.overrideMacro = pr.overrideMacro;
+            s.enableMacro = pr.enableMacro;
+            s.macroNames = pr.macroNames;
+            s.enableReconnectMacro = pr.overrideMacro && !pr.reconnectMacroNames.empty();
+            s.reconnectMacroNames = pr.reconnectMacroNames;
+            s.enableIntervalMacro = pr.overrideMacro && !pr.intervalMacroNames.empty();
+            s.intervalMacroNames = pr.intervalMacroNames;
             break;
         }
     }
@@ -3102,6 +3683,10 @@ void PruneClosedInstanceSettings()
         }
     }
 }
+
+// Macro Order Dialog (forward declarations)
+enum class MacroOrderListType { AfkAction = 0, Reconnect = 1, Interval = 2 };
+void ShowMacroOrderDialog(HWND owner, const std::vector<HWND>& targets, MacroOrderListType listType);
 
 LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     InstanceManagerData* pData = (InstanceManagerData*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
@@ -3127,6 +3712,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
         pData->hCursorArrow = LoadCursor(NULL, IDC_ARROW);
+        pData->hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
         pData->robloxWins = FindAllRobloxWindows(true);
 
@@ -3159,6 +3745,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             if (pData->hFont14) DeleteObject(pData->hFont14);
             if (pData->hFont12) DeleteObject(pData->hFont12);
             if (pData->hFont10) DeleteObject(pData->hFont10);
+            if (pData->hAppIcon) DestroyIcon(pData->hAppIcon);
             delete pData;
         }
         g_hInstanceManagerDlg = NULL;
@@ -3189,6 +3776,20 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 animate(pData->animHide, s.overrideHide ? s.enableHide : g_autoHideRoblox.load());
                 animate(pData->animFpsLimit, s.overrideFpsLimit ? s.enableFpsLimit : (g_fpsLimit > 0));
                 animate(pData->animReconnect, s.overrideReconnect ? s.enableReconnect : g_autoReconnect.load());
+                animate(pData->animReconnectMacro, s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros());
+
+                bool presetMacroEnabled = false;
+                if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                    std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                    for (const auto& pr : g_instancePresets) {
+                        if (pr.name == s.presetName) {
+                            presetMacroEnabled = pr.overrideMacro ? pr.enableMacro : false;
+                            break;
+                        }
+                    }
+                }
+                animate(pData->animMacro, s.overrideMacro ? s.enableMacro : presetMacroEnabled);
+                animate(pData->animIntervalMacro, s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros());
             }
             if (animating) {
                 InvalidateRect(hwnd, NULL, FALSE);
@@ -3247,12 +3848,22 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         bool oldFps = pData->isHoveringFpsLimit;
         bool oldReconnect = pData->isHoveringReconnect;
         bool oldReset = pData->isHoveringReset;
+        bool oldMacro = pData->isHoveringMacro;
+        bool oldMacroSelect = pData->isHoveringMacroSelect;
+        bool oldMacroSeq = pData->isHoveringMacroSeq;
+        bool oldReconnectMacro = pData->isHoveringReconnectMacro;
+        bool oldReconnectSelect = pData->isHoveringReconnectSelect;
+        bool oldReconnectSeq = pData->isHoveringReconnectSeq;
+        bool oldIntervalMacro = pData->isHoveringIntervalMacro;
+        bool oldIntervalMacroSelect = pData->isHoveringIntervalMacroSelect;
+        bool oldIntervalMacroSeq = pData->isHoveringIntervalMacroSeq;
         bool oldShowHide = pData->isHoveringShowHide;
         bool oldGeom = pData->isHoveringGeometry;
         bool oldRename = pData->isHoveringRename;
         bool oldCloseCl = pData->isHoveringCloseClient;
         bool oldRefresh = pData->isHoveringRefresh;
         bool oldCreatePreset = pData->isHoveringCreatePreset;
+        bool oldFocusBtn = pData->isHoveringFocusBtn;
 
         pData->isHoveringClose = PtInRect(&pData->closeButtonRect, pt) != 0;
         pData->isHoveringMinimize = PtInRect(&pData->minimizeButtonRect, pt) != 0;
@@ -3272,12 +3883,30 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringHide = PtInRect(&pData->hideRect, pt) != 0;
             pData->isHoveringFpsLimit = PtInRect(&pData->fpsLimitRect, pt) != 0;
             pData->isHoveringReconnect = PtInRect(&pData->reconnectRect, pt) != 0;
+            pData->isHoveringReconnectMacro = PtInRect(&pData->reconnectMacroRect, pt) != 0;
+            pData->isHoveringReconnectSelect = PtInRect(&pData->reconnectSelectRect, pt) != 0;
+            pData->isHoveringReconnectSeq = PtInRect(&pData->reconnectSeqRect, pt) != 0;
             pData->isHoveringReset = PtInRect(&pData->resetRect, pt) != 0;
+            pData->isHoveringMacro = PtInRect(&pData->macroRect, pt) != 0;
+            pData->isHoveringMacroSelect = PtInRect(&pData->macroSelectRect, pt) != 0;
+            pData->isHoveringMacroSeq = PtInRect(&pData->macroSeqRect, pt) != 0;
+            pData->isHoveringIntervalMacro = PtInRect(&pData->intervalMacroRect, pt) != 0;
+            pData->isHoveringIntervalMacroSelect = PtInRect(&pData->intervalMacroSelectRect, pt) != 0;
+            pData->isHoveringIntervalMacroSeq = PtInRect(&pData->intervalMacroSeqRect, pt) != 0;
 
             pData->isHoveringShowHide = PtInRect(&pData->btnShowHideRect, pt) != 0;
             pData->isHoveringGeometry = PtInRect(&pData->btnGeometryRect, pt) != 0;
             pData->isHoveringRename = PtInRect(&pData->btnRenameRect, pt) != 0;
             pData->isHoveringCloseClient = PtInRect(&pData->btnCloseClientRect, pt) != 0;
+            if (pData->isHoveringMacroSelect) {
+                pData->isHoveringMacroSeq = false;
+            }
+            if (pData->isHoveringReconnectSelect) {
+                pData->isHoveringReconnectSeq = false;
+            }
+            if (pData->isHoveringIntervalMacroSelect) {
+                pData->isHoveringIntervalMacroSeq = false;
+            }
         } else {
             pData->isHoveringPreset = false;
             pData->isHoveringAntiAfk = false;
@@ -3287,6 +3916,15 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringFpsLimit = false;
             pData->isHoveringReconnect = false;
             pData->isHoveringReset = false;
+            pData->isHoveringMacro = false;
+            pData->isHoveringMacroSelect = false;
+            pData->isHoveringMacroSeq = false;
+            pData->isHoveringReconnectMacro = false;
+            pData->isHoveringReconnectSelect = false;
+            pData->isHoveringReconnectSeq = false;
+            pData->isHoveringIntervalMacro = false;
+            pData->isHoveringIntervalMacroSelect = false;
+            pData->isHoveringIntervalMacroSeq = false;
             pData->isHoveringShowHide = false;
             pData->isHoveringGeometry = false;
             pData->isHoveringRename = false;
@@ -3296,13 +3934,35 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         bool hand = pData->isHoveringClose || pData->isHoveringMinimize || pData->isHoveringPreset || pData->isHoveringAntiAfk ||
             pData->isHoveringMute || pData->isHoveringOpacity ||
             pData->isHoveringHide || pData->isHoveringFpsLimit ||
-            pData->isHoveringReconnect || pData->isHoveringReset || pData->isHoveringShowHide ||
+            pData->isHoveringReconnect || pData->isHoveringReset ||
+            pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq ||
+            pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq ||
+            pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq ||
+            pData->isHoveringShowHide ||
             pData->isHoveringGeometry || pData->isHoveringRename || pData->isHoveringCloseClient ||
             pData->isHoveringRefresh || pData->isHoveringCreatePreset;
 
         if (!hand && pt.x >= 0 && pt.x <= 215 && pt.y >= 65) {
             RECT cr2; GetClientRect(hwnd, &cr2);
             if (pt.y <= cr2.bottom) hand = true;
+        }
+
+        {
+            int focusRow = -1;
+            if (pt.x >= 215 - 30 && pt.x <= 215 - 6 && pt.y >= 65) {
+                RECT cr2; GetClientRect(hwnd, &cr2);
+                if (pt.y <= cr2.bottom) {
+                    int idx = (pt.y - 65 + pData->scrollOffset) / 40;
+                    if (idx >= 0 && idx < (int)pData->robloxWins.size()) {
+                        int rowTop = 66 - pData->scrollOffset + idx * 40;
+                        RECT fBtn = { 215 - 30, rowTop + 8, 215 - 6, rowTop + 32 };
+                        if (PtInRect(&fBtn, pt)) focusRow = idx;
+                    }
+                }
+            }
+            pData->isHoveringFocusBtn = focusRow >= 0;
+            pData->focusBtnRow = focusRow;
+            if (pData->isHoveringFocusBtn) hand = true;
         }
 
         SetCursor(hand ? pData->hCursorHand : pData->hCursorArrow);
@@ -3312,10 +3972,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             oldOpacity != pData->isHoveringOpacity ||
             oldHide != pData->isHoveringHide || oldFps != pData->isHoveringFpsLimit ||
             oldReconnect != pData->isHoveringReconnect ||
-            oldReset != pData->isHoveringReset || oldShowHide != pData->isHoveringShowHide ||
+            oldReset != pData->isHoveringReset || oldMacro != pData->isHoveringMacro ||
+            oldMacroSelect != pData->isHoveringMacroSelect ||
+            pData->isHoveringMacroSeq != oldMacroSeq ||
+            pData->isHoveringReconnectMacro != oldReconnectMacro || pData->isHoveringReconnectSelect != oldReconnectSelect || pData->isHoveringReconnectSeq != oldReconnectSeq ||
+            pData->isHoveringIntervalMacro != oldIntervalMacro || pData->isHoveringIntervalMacroSelect != oldIntervalMacroSelect || pData->isHoveringIntervalMacroSeq != oldIntervalMacroSeq ||
+            oldShowHide != pData->isHoveringShowHide ||
             oldGeom != pData->isHoveringGeometry || oldRename != pData->isHoveringRename ||
             oldCloseCl != pData->isHoveringCloseClient || oldRefresh != pData->isHoveringRefresh ||
-            oldCreatePreset != pData->isHoveringCreatePreset) {
+            oldCreatePreset != pData->isHoveringCreatePreset ||
+            oldFocusBtn != pData->isHoveringFocusBtn) {
             InvalidateRect(hwnd, NULL, FALSE);
         }
         break;
@@ -3333,12 +3999,23 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         pData->isHoveringFpsLimit = false;
         pData->isHoveringReconnect = false;
         pData->isHoveringReset = false;
+        pData->isHoveringMacro = false;
+        pData->isHoveringMacroSelect = false;
+        pData->isHoveringMacroSeq = false;
+        pData->isHoveringReconnectMacro = false;
+        pData->isHoveringReconnectSelect = false;
+        pData->isHoveringReconnectSeq = false;
+        pData->isHoveringIntervalMacro = false;
+        pData->isHoveringIntervalMacroSelect = false;
+        pData->isHoveringIntervalMacroSeq = false;
         pData->isHoveringShowHide = false;
         pData->isHoveringGeometry = false;
         pData->isHoveringRename = false;
         pData->isHoveringCloseClient = false;
         pData->isHoveringRefresh = false;
         pData->isHoveringCreatePreset = false;
+        pData->isHoveringFocusBtn = false;
+        pData->focusBtnRow = -1;
         InvalidateRect(hwnd, NULL, FALSE);
         break;
     }
@@ -3397,6 +4074,12 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 int idx = (pt.y - 65 + pData->scrollOffset) / 40;
                 if (idx >= 0 && idx < (int)pData->robloxWins.size()) {
                     HWND clickedWnd = pData->robloxWins[idx];
+                    int rowTop = 66 - pData->scrollOffset + idx * 40;
+                    RECT fBtn = { 215 - 30, rowTop + 8, 215 - 6, rowTop + 32 };
+                    if (PtInRect(&fBtn, pt)) {
+                        FocusRobloxWindow(clickedWnd);
+                        return 0;
+                    }
                     if (pData->isCtrlDown) {
                         auto selIt = std::find(pData->selectedWindows.begin(), pData->selectedWindows.end(), clickedWnd);
                         if (selIt != pData->selectedWindows.end()) {
@@ -3437,6 +4120,17 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             auto it = g_instanceSettings.find(selWnd);
             RobloxInstanceSettings s = (it != g_instanceSettings.end()) ? it->second : GetDefaultInstanceSettingsForWindow(selWnd);
             lock.unlock();
+
+            bool presetMacroEnabled = false;
+            if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                for (const auto& pr : g_instancePresets) {
+                    if (pr.name == s.presetName) {
+                        presetMacroEnabled = pr.overrideMacro ? pr.enableMacro : false;
+                        break;
+                    }
+                }
+            }
 
             auto BuildTargets = [pData]() -> std::vector<HWND> {
                 std::vector<HWND> targets = pData->selectedWindows;
@@ -3598,6 +4292,228 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
+
+            MainUI_Paint_DrawToggleGetHitbox(pData->macroRect, &toggleHitbox);
+            if (PtInRect(&toggleHitbox, pt)) {
+                APPLY_TO_TARGETS({
+                    s2.overrideMacro = true;
+                    s2.enableMacro = !s2.enableMacro;
+                });
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+
+            MainUI_Paint_DrawToggleGetHitbox(pData->reconnectMacroRect, &toggleHitbox);
+            if (PtInRect(&toggleHitbox, pt)) {
+                APPLY_TO_TARGETS({
+                    s2.overrideMacro = true;
+                    s2.enableReconnectMacro = !s2.enableReconnectMacro;
+                    if (!s2.enableReconnectMacro) s2.reconnectMacroNames.clear();
+                });
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+
+            if (PtInRect(&pData->reconnectSelectRect, pt)) {
+                bool canSelect = (s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
+                if (canSelect) {
+                    HMENU hMenu = CreatePopupMenu();
+                    AppendMenu(hMenu, MF_STRING, 7000, L"None (Default)");
+                    {
+                        std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                        for (size_t i = 0; i < g_macros.size(); i++) {
+                            UINT flags = MF_STRING;
+                            std::vector<std::wstring> names;
+                            if (s.overrideMacro) {
+                                names = s.reconnectMacroNames;
+                            } else if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                                std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                                for (const auto& pr : g_instancePresets) {
+                                    if (pr.name == s.presetName) { names = pr.reconnectMacroNames; break; }
+                                }
+                            }
+                            for (const auto& n : names) {
+                                if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                            }
+                            AppendMenu(hMenu, flags, 7001 + i, g_macros[i].name.c_str());
+                        }
+                    }
+                    POINT menuPt = { pData->reconnectSelectRect.left, pData->reconnectSelectRect.bottom };
+                    ClientToScreen(hwnd, &menuPt);
+                    int selected = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
+                    PostMessage(hwnd, WM_NULL, 0, 0);
+                    DestroyMenu(hMenu);
+
+                    if (selected == 7000) {
+                        APPLY_TO_TARGETS({
+                            s2.reconnectMacroNames.clear();
+                        });
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    } else if (selected >= 7001 && selected < 7001 + (int)g_macros.size()) {
+                        std::wstring macroName;
+                        {
+                            std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                            macroName = g_macros[selected - 7001].name;
+                        }
+                        APPLY_TO_TARGETS({
+                            s2.overrideMacro = true;
+                            auto it = std::find(s2.reconnectMacroNames.begin(), s2.reconnectMacroNames.end(), macroName);
+                            if (it != s2.reconnectMacroNames.end()) {
+                                s2.reconnectMacroNames.erase(it);
+                            } else {
+                                s2.reconnectMacroNames.push_back(macroName);
+                            }
+                        });
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    }
+                }
+                return 0;
+            }
+            if (PtInRect(&pData->reconnectSeqRect, pt)) {
+                bool canSeq = (s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
+                if (canSeq) {
+                    ShowMacroOrderDialog(hwnd, targets, MacroOrderListType::Reconnect);
+                }
+                return 0;
+            }
+
+            if (PtInRect(&pData->macroSelectRect, pt)) {
+                bool canSelect = s.overrideMacro ? s.enableMacro : presetMacroEnabled;
+                if (canSelect) {
+                    HMENU hMenu = CreatePopupMenu();
+                    AppendMenu(hMenu, MF_STRING, 6000, L"None (Default)");
+                    {
+                        std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                        for (size_t i = 0; i < g_macros.size(); i++) {
+                            UINT flags = MF_STRING;
+                            std::vector<std::wstring> names;
+                            if (s.overrideMacro) {
+                                names = s.macroNames;
+                            } else if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                                std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                                for (const auto& pr : g_instancePresets) {
+                                    if (pr.name == s.presetName) { names = pr.macroNames; break; }
+                                }
+                            }
+                            for (const auto& n : names) {
+                                if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                            }
+                            AppendMenu(hMenu, flags, 6001 + i, g_macros[i].name.c_str());
+                        }
+                    }
+                    POINT menuPt = { pData->macroSelectRect.left, pData->macroSelectRect.bottom };
+                    ClientToScreen(hwnd, &menuPt);
+                    int selected = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
+                    PostMessage(hwnd, WM_NULL, 0, 0);
+                    DestroyMenu(hMenu);
+
+                    if (selected == 6000) {
+                        APPLY_TO_TARGETS({
+                            s2.macroNames.clear();
+                        });
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    } else if (selected >= 6001 && selected < 6001 + (int)g_macros.size()) {
+                        std::wstring macroName;
+                        {
+                            std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                            macroName = g_macros[selected - 6001].name;
+                        }
+                        APPLY_TO_TARGETS({
+                            auto it = std::find(s2.macroNames.begin(), s2.macroNames.end(), macroName);
+                            if (it != s2.macroNames.end()) {
+                                s2.macroNames.erase(it);
+                            } else {
+                                s2.macroNames.push_back(macroName);
+                            }
+                        });
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    }
+                }
+                return 0;
+            }
+            if (PtInRect(&pData->macroSeqRect, pt)) {
+                bool canSeq = (s.overrideMacro ? s.enableMacro : presetMacroEnabled) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
+                if (canSeq) {
+                    ShowMacroOrderDialog(hwnd, targets, MacroOrderListType::AfkAction);
+                }
+                return 0;
+            }
+
+            MainUI_Paint_DrawToggleGetHitbox(pData->intervalMacroRect, &toggleHitbox);
+            if (PtInRect(&toggleHitbox, pt)) {
+                APPLY_TO_TARGETS({
+                    s2.overrideMacro = true;
+                    s2.enableIntervalMacro = !s2.enableIntervalMacro;
+                    if (!s2.enableIntervalMacro) s2.intervalMacroNames.clear();
+                });
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+
+            if (PtInRect(&pData->intervalMacroSelectRect, pt)) {
+                bool canSelect = (s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
+                if (!canSelect) return 0;
+                HMENU hMenu = CreatePopupMenu();
+                AppendMenu(hMenu, MF_STRING, 8000, L"None (Default)");
+                {
+                    std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                    for (size_t i = 0; i < g_macros.size(); i++) {
+                        UINT flags = MF_STRING;
+                        std::vector<std::wstring> names;
+                        if (s.overrideMacro) {
+                            names = s.intervalMacroNames;
+                        } else if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                            for (const auto& pr : g_instancePresets) {
+                                if (pr.name == s.presetName) { names = pr.intervalMacroNames; break; }
+                            }
+                        }
+                        for (const auto& n : names) {
+                            if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                        }
+                        std::wstring item = g_macros[i].name;
+                        if (g_macros[i].intervalSec > 0) {
+                            item += L" \u2014 " + std::to_wstring(g_macros[i].intervalSec) + L"s";
+                        } else {
+                            item += L" \u2014 (interval not set)";
+                        }
+                        AppendMenu(hMenu, flags, 8001 + i, item.c_str());
+                    }
+                }
+                POINT menuPt = { pData->intervalMacroSelectRect.left, pData->intervalMacroSelectRect.bottom };
+                ClientToScreen(hwnd, &menuPt);
+                int selected = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
+                PostMessage(hwnd, WM_NULL, 0, 0);
+                DestroyMenu(hMenu);
+
+                if (selected == 8000) {
+                    APPLY_TO_TARGETS({
+                        s2.intervalMacroNames.clear();
+                    });
+                    InvalidateRect(hwnd, NULL, FALSE);
+                } else if (selected >= 8001 && selected < 8001 + (int)g_macros.size()) {
+                    std::wstring macroName;
+                    {
+                        std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                        macroName = g_macros[selected - 8001].name;
+                    }
+                    APPLY_TO_TARGETS({
+                        s2.overrideMacro = true;
+                        auto it = std::find(s2.intervalMacroNames.begin(), s2.intervalMacroNames.end(), macroName);
+                        if (it != s2.intervalMacroNames.end()) {
+                            s2.intervalMacroNames.erase(it);
+                        } else {
+                            s2.intervalMacroNames.push_back(macroName);
+                        }
+                    });
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                return 0;
+            }
+            if (PtInRect(&pData->intervalMacroSeqRect, pt)) {
+                bool canSeq = (s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
+                if (canSeq) {
+                    ShowMacroOrderDialog(hwnd, targets, MacroOrderListType::Interval);
+                }
+                return 0;
+            }
             #undef APPLY_TO_TARGETS
 
             if (PtInRect(&pData->btnShowHideRect, pt)) {
@@ -3685,42 +4601,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             formatCent.SetLineAlignment(Gdiplus::StringAlignmentCenter);
 
             {
-                HICON hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
-                if (hAppIcon) {
-                    DrawIconEx(memDC, 15, 7, hAppIcon, 16, 16, 0, NULL, DI_NORMAL);
-                    DestroyIcon(hAppIcon);
-                }
-                {
-                    Gdiplus::StringFormat sfBeta;
-                    sfBeta.SetAlignment(Gdiplus::StringAlignmentCenter);
-                    sfBeta.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-                    Gdiplus::Font betaFont(L"Segoe UI", 8.0f);
-                    Gdiplus::RectF betaRect;
-                    gfx.MeasureString(L"BETA", -1, &betaFont, Gdiplus::PointF(0,0), &sfBeta, &betaRect);
-                    float bx = 40.0f, by = 15.0f;
-                    float bw = betaRect.Width + 8.0f, bh = betaRect.Height + 2.0f;
-                    Gdiplus::GraphicsPath betaPath;
-                    REAL br = 2.0f;
-                    betaPath.AddArc(bx, by - bh/2, br*2, br*2, 180, 90);
-                    betaPath.AddArc(bx + bw - br*2, by - bh/2, br*2, br*2, 270, 90);
-                    betaPath.AddArc(bx + bw - br*2, by + bh/2 - br*2, br*2, br*2, 0, 90);
-                    betaPath.AddArc(bx, by + bh/2 - br*2, br*2, br*2, 90, 90);
-                    betaPath.CloseFigure();
-                    Gdiplus::SmoothingMode oldSM = gfx.GetSmoothingMode();
-                    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                    Gdiplus::SolidBrush betaBg(Gdiplus::Color(60, 120, 120, 120));
-                    gfx.FillPath(&betaBg, &betaPath);
-                    gfx.SetSmoothingMode(oldSM);
-                    float textX = bx + (bw - betaRect.Width) / 2.0f;
-                    float textY = by - betaRect.Height / 2.0f + 1.0f;
-                    Gdiplus::StringFormat sfBetaDraw;
-                    sfBetaDraw.SetAlignment(Gdiplus::StringAlignmentNear);
-                    sfBetaDraw.SetLineAlignment(Gdiplus::StringAlignmentNear);
-                    Gdiplus::SolidBrush betaText(Gdiplus::Color(200, 200, 200, 200));
-                    gfx.DrawString(L"BETA", -1, &betaFont, Gdiplus::PointF(textX, textY), &sfBetaDraw, &betaText);
-                }
                 Gdiplus::SolidBrush bgBrush(Gdiplus::Color(100, 10, 10, 10));
                 gfx.FillRectangle(&bgBrush, (REAL)cr.left, (REAL)cr.top, (REAL)(cr.right - cr.left), (REAL)(cr.bottom - cr.top));
+                if (pData->hAppIcon) {
+                    DrawIconEx(memDC, 15, 7, pData->hAppIcon, 16, 16, 0, NULL, DI_NORMAL);
+                }
+                int releaseType = (currentVersion / 100) % 10;
+                if (releaseType != STABLE && releaseType != 0) {
+                    float bh = 13.0f;
+                    MainUI_Paint_DrawBadge(gfx, 40.0f, 15.0f - bh / 2.0f, bh, L"PREVIEW");
+                }
                 Gdiplus::SolidBrush headerLineBrush(Gdiplus::Color(180, 56, 56, 56));
                 Gdiplus::PixelOffsetMode oldMode = gfx.GetPixelOffsetMode();
                 Gdiplus::SmoothingMode oldSmooth = gfx.GetSmoothingMode();
@@ -3867,8 +4757,25 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 wchar_t presetLabel[64];
                 swprintf_s(presetLabel, L"Preset: %s", prName.c_str());
                 gfx.DrawString(presetLabel, -1, &presetFont, Gdiplus::PointF((REAL)(rowRect.left + 12), (REAL)(rowRect.top + 19)), &presetBrush);
+
+                {
+                    RECT focusBtnRect = { 215 - 30, rowRect.top + 8, 215 - 6, rowRect.bottom - 8 };
+                    bool focusHovered = pData->isHoveringFocusBtn && pData->focusBtnRow == (int)i;
+                    Gdiplus::Font iconFont(L"Segoe MDL2 Assets", 11.0f);
+                    Gdiplus::StringFormat sfCent;
+                    sfCent.SetAlignment(Gdiplus::StringAlignmentCenter);
+                    sfCent.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+                    Gdiplus::SolidBrush fgColor(focusHovered ? Gdiplus::Color(255, 100, 150, 255) : Gdiplus::Color(180, 120, 120, 120));
+                    gfx.DrawString(L"\uE7B3", -1, &iconFont, Gdiplus::RectF((REAL)focusBtnRect.left, (REAL)focusBtnRect.top, (REAL)(focusBtnRect.right - focusBtnRect.left), (REAL)(focusBtnRect.bottom - focusBtnRect.top)), &sfCent, &fgColor);
+                }
             }
             gfx.ResetClip();
+
+            if (pData->isHoveringFocusBtn && pData->focusBtnRow >= 0) {
+                int rowTop = 66 - pData->scrollOffset + pData->focusBtnRow * 40;
+                RECT fTip = { 215 - 30, rowTop + 8, 215 - 6, rowTop + 32 };
+                MainUI_Paint_DrawHoverTooltip(memDC, fTip, pData->hFont10, L"Focus window", false);
+            }
 
             {
                 wchar_t counterText[64];
@@ -3954,12 +4861,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     gfx.SetSmoothingMode(Gdiplus::SmoothingModeNone);
                     gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
                     RECT rows[] = { pData->antiAfkRect, pData->resetRect, pData->muteRect,
-                                    pData->opacityRect, pData->hideRect, pData->fpsLimitRect, pData->reconnectRect };
+                                    pData->opacityRect, pData->hideRect, pData->fpsLimitRect, pData->reconnectRect, pData->macroRect, pData->reconnectMacroRect, pData->intervalMacroRect };
                     Gdiplus::SolidBrush sepBrush(Gdiplus::Color(180, 56, 56, 56));
-                    for (int i = 0; i < 7; i++) {
+                    int rowsClipTop = rows[0].top;
+                    int rowsClipBot = rows[9].bottom + 10;
+                    Gdiplus::Region rowsClip(Gdiplus::Rect(215, rowsClipTop, cr.right - 216, rowsClipBot - rowsClipTop));
+                    gfx.SetClip(&rowsClip);
+                    for (int i = 0; i < 10; i++) {
                         RECT rr = rows[i];
                         int rowTop = rr.top;
-                        int rowBottom = (i + 1 < 7) ? rows[i + 1].top : (rr.bottom + 10);
+                        int rowBottom = (i + 1 < 10) ? rows[i + 1].top : (rr.bottom + 10);
                         Gdiplus::Color rowBg = (i % 2 == 0) ? Gdiplus::Color(30, 35, 35, 35) : Gdiplus::Color(50, 50, 50, 50);
                         Gdiplus::SolidBrush rowBrush(rowBg);
                         REAL bgL = 215.0f, bgR = (REAL)(cr.right - 1);
@@ -3969,6 +4880,18 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         gfx.FillRectangle(&sepBrush, bgL, (REAL)(rowBottom - 1), bgR - bgL, 1.0f);
                         gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
                         gfx.SetSmoothingMode(Gdiplus::SmoothingModeNone);
+                    }
+                    gfx.ResetClip();
+                }
+
+                bool presetMacroEnabled = false;
+                if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                    std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                    for (const auto& pr : g_instancePresets) {
+                        if (pr.name == s.presetName) {
+                            presetMacroEnabled = pr.overrideMacro ? pr.enableMacro : false;
+                            break;
+                        }
                     }
                 }
 
@@ -4013,10 +4936,123 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
                 MainUI_Paint_DrawToggle(memDC, pData->fpsLimitRect, pData->hFont12, L"FPS Cap", s.overrideFpsLimit ? s.enableFpsLimit : (g_fpsLimit > 0), pData->isHoveringFpsLimit, pData->animFpsLimit, false, L"\uE950", !isDefaultPreset, nullptr, true, 10);
 
+                std::wstring currentReconnectMacroName = L"None";
+                if (s.overrideMacro) {
+                    if (!s.reconnectMacroNames.empty()) {
+                        currentReconnectMacroName = std::to_wstring((int)s.reconnectMacroNames.size());
+                    }
+                } else {
+                    if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                        std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                        for (const auto& pr : g_instancePresets) {
+                            if (pr.name == s.presetName) {
+                                if (pr.overrideMacro && !pr.reconnectMacroNames.empty()) {
+                                    currentReconnectMacroName = std::to_wstring((int)pr.reconnectMacroNames.size());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (currentReconnectMacroName.empty()) currentReconnectMacroName = L"None (Default)";
+
                 MainUI_Paint_DrawToggle(memDC, pData->reconnectRect, pData->hFont12, L"Reconnect", s.overrideReconnect ? s.enableReconnect : g_autoReconnect.load(), pData->isHoveringReconnect, pData->animReconnect, false, L"\uE8AF", !isDefaultPreset, nullptr, true, 10);
 
-                if (isDefaultPreset && (pData->isHoveringAntiAfk || pData->isHoveringReset || pData->isHoveringMute || pData->isHoveringOpacity || pData->isHoveringHide || pData->isHoveringFpsLimit || pData->isHoveringReconnect)) {
-                    MainUI_Paint_DrawHoverTooltip(memDC, pData->antiAfkRect, pData->hFont10, L"Settings are inherited from main settings, click to switch", false);
+                std::wstring currentMacroName = L"None";
+                if (s.overrideMacro) {
+                    if (s.enableMacro && !s.macroNames.empty()) {
+                        currentMacroName = std::to_wstring((int)s.macroNames.size());
+                    }
+                } else {
+                    if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                        std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                        for (const auto& pr : g_instancePresets) {
+                            if (pr.name == s.presetName) {
+                                if (pr.overrideMacro && pr.enableMacro && !pr.macroNames.empty()) {
+                                    currentMacroName = std::to_wstring((int)pr.macroNames.size());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (currentMacroName.empty()) currentMacroName = L"None (Default)";
+
+                bool actionMacroEnabled = s.overrideMacro ? s.enableMacro : presetMacroEnabled;
+                bool reconnectMacroToggle = s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros();
+                bool intervalMacroToggle = s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros();
+                bool macroControlsEnabled = !isDefaultPreset;
+
+                MainUI_Paint_DrawToggle(memDC, pData->macroRect, pData->hFont12, L"Custom afk action macro", actionMacroEnabled, pData->isHoveringMacro, pData->animMacro, false, L"\uE7C9", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawDropdown(memDC, pData->macroSelectRect, pData->hFont12, L"", currentMacroName.c_str(), pData->isHoveringMacroSelect, false, nullptr, actionMacroEnabled && macroControlsEnabled);
+                auto drawSeqBtn = [&](RECT& sr, bool hovered, bool enabled) {
+                    Gdiplus::SolidBrush seqBg(enabled ? (hovered ? Gdiplus::Color(150, 80, 80, 80) : Gdiplus::Color(140, 45, 45, 45)) : Gdiplus::Color(100, 40, 40, 40));
+                    Gdiplus::Pen seqBorder(enabled ? Gdiplus::Color(180, 56, 56, 56) : Gdiplus::Color(120, 56, 56, 56), 1.0f);
+                    Gdiplus::SmoothingMode oldSmooth = gfx.GetSmoothingMode();
+                    Gdiplus::PixelOffsetMode oldOff = gfx.GetPixelOffsetMode();
+                    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                    gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+                    FillRoundedRectangle(&gfx, &seqBg, (REAL)sr.left, (REAL)sr.top, (REAL)(sr.right - sr.left), (REAL)(sr.bottom - sr.top), 4.0f);
+                    gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+                    DrawRoundedRectangle(&gfx, &seqBorder, (REAL)sr.left, (REAL)sr.top, (REAL)(sr.right - sr.left), (REAL)(sr.bottom - sr.top), 4.0f);
+                    gfx.SetPixelOffsetMode(oldOff);
+                    gfx.SetSmoothingMode(oldSmooth);
+                    Gdiplus::SolidBrush seqIcon(enabled ? Gdiplus::Color(210, 200, 200, 200) : Gdiplus::Color(110, 120, 120, 120));
+                    Gdiplus::Font seqFont(L"Segoe MDL2 Assets", 8.0f);
+                    Gdiplus::RectF seqRect((REAL)sr.left, (REAL)(sr.top + 1.5f), (REAL)(sr.right - sr.left), (REAL)(sr.bottom - sr.top));
+                    gfx.DrawString(L"\uE70F", -1, &seqFont, seqRect, &formatCent, &seqIcon);
+                };
+                drawSeqBtn(pData->macroSeqRect, pData->isHoveringMacroSeq, actionMacroEnabled && macroControlsEnabled);
+
+                MainUI_Paint_DrawToggle(memDC, pData->reconnectMacroRect, pData->hFont12, L"Reconnect Macro", reconnectMacroToggle, pData->isHoveringReconnectMacro, pData->animReconnectMacro, false, L"\uE8AF", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawDropdown(memDC, pData->reconnectSelectRect, pData->hFont12, L"", currentReconnectMacroName.c_str(), pData->isHoveringReconnectSelect, false, nullptr, reconnectMacroToggle && macroControlsEnabled);
+                drawSeqBtn(pData->reconnectSeqRect, pData->isHoveringReconnectSeq, reconnectMacroToggle && macroControlsEnabled);
+
+                std::wstring currentIntervalMacroName = L"None";
+                if (s.overrideMacro) {
+                    if (!s.intervalMacroNames.empty()) {
+                        currentIntervalMacroName = std::to_wstring((int)s.intervalMacroNames.size());
+                    }
+                } else {
+                    if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+                        std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                        for (const auto& pr : g_instancePresets) {
+                            if (pr.name == s.presetName) {
+                                if (pr.overrideMacro && !pr.intervalMacroNames.empty()) {
+                                    currentIntervalMacroName = std::to_wstring((int)pr.intervalMacroNames.size());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (currentIntervalMacroName.empty()) currentIntervalMacroName = L"None (Default)";
+
+                MainUI_Paint_DrawToggle(memDC, pData->intervalMacroRect, pData->hFont12, L"Custom interval macro", intervalMacroToggle, pData->isHoveringIntervalMacro, pData->animIntervalMacro, false, L"\uE916", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawDropdown(memDC, pData->intervalMacroSelectRect, pData->hFont12, L"", currentIntervalMacroName.c_str(), pData->isHoveringIntervalMacroSelect, false, nullptr, intervalMacroToggle && macroControlsEnabled);
+                drawSeqBtn(pData->intervalMacroSeqRect, pData->isHoveringIntervalMacroSeq, intervalMacroToggle && macroControlsEnabled);
+
+                if (isDefaultPreset) {
+                    RECT tipRect = { 0 };
+                    if (pData->isHoveringAntiAfk) tipRect = pData->antiAfkRect;
+                    else if (pData->isHoveringReset) tipRect = pData->resetRect;
+                    else if (pData->isHoveringMute) tipRect = pData->muteRect;
+                    else if (pData->isHoveringOpacity) tipRect = pData->opacityRect;
+                    else if (pData->isHoveringHide) tipRect = pData->hideRect;
+                    else if (pData->isHoveringFpsLimit) tipRect = pData->fpsLimitRect;
+                    else if (pData->isHoveringReconnect) tipRect = pData->reconnectRect;
+                    else if (pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq) tipRect = pData->macroRect;
+                    else if (pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq) tipRect = pData->reconnectMacroRect;
+                    else if (pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq) tipRect = pData->intervalMacroRect;
+                    if (tipRect.left != 0) {
+                        MainUI_Paint_DrawHoverTooltip(memDC, tipRect, pData->hFont10, L"Settings are inherited from main settings, click to switch", false);
+                    }
+                } else if (pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq) {
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->macroRect, pData->hFont10, L"Replaces the anti-AFK action for this instance with the selected macro", false);
+                } else if (pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq) {
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->reconnectMacroRect, pData->hFont10, L"Macro executed when this instance reconnects", false);
+                } else if (pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq) {
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->intervalMacroRect, pData->hFont10, L"Macro repeated on the interval timer set in Macros", false);
                 }
 
                 bool visible = IsWindowVisible(selWnd) != 0;
@@ -4067,7 +5103,7 @@ void ShowInstanceManagerWindow(HWND owner) {
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
-    int winW = 640, winH = 460;
+    int winW = 640, winH = 500;
     int x = (screenW - winW) / 2;
     int y = (screenH - winH) / 2;
 
@@ -4590,11 +5626,12 @@ bool ShouldRunFpsCapperNow()
 }
 void RestartFpsCapperForEffectiveLimit()
 {
+    std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
     if (g_isFpsCapperRunning.load()) {
         g_isFpsCapperRunning = false;
-        if (g_fpsCapperThread.joinable()) {
-            g_fpsCapperThread.join();
-        }
+    }
+    if (g_fpsCapperThread.joinable()) {
+        g_fpsCapperThread.join();
     }
 
     if (GetEffectiveFpsLimit() > 0) {
@@ -5487,6 +6524,7 @@ void ClearMutexBanner()
 // ==========
 
 static void PreciseSleepMs(double ms);
+static double MacroEngine_NowMs();
 
 // AntiAFK Action
 static int RandomInt(int max);
@@ -5537,6 +6575,15 @@ void AntiAFK_Action(HWND target)
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('O', static_cast<BYTE>(MapVirtualKey('O', 0)), KEYEVENTF_KEYUP, 0);
         break;
+    case 4: // Custom Macro
+    {
+        std::vector<Macro> cds = MacroEngine_GetCooldownMacrosForWindow(target);
+        for (const auto& m : cds) {
+            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+            MacroEngine_ExecuteMacro(m, target);
+        }
+        break;
+    }
     }
 }
 // ==========
@@ -5761,6 +6808,33 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     return true;
 }
 
+static void MacroEngine_RunPendingReconnectMacros() {
+    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
+    ULONGLONG now = GetTickCount64();
+    ULONGLONG delayMs = (ULONGLONG)(std::max)(0, g_reconnectMacroDelaySec.load()) * 1000;
+    std::vector<HWND> due;
+    {
+        std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
+        for (auto it = g_reconnectMacroPending.begin(); it != g_reconnectMacroPending.end(); ) {
+            if (now - it->second >= delayMs) {
+                due.push_back(it->first);
+                it = g_reconnectMacroPending.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (HWND w : due) {
+        if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+        if (!IsWindow(w)) continue;
+        std::vector<Macro> recs = MacroEngine_GetReconnectMacrosForWindow(w);
+        for (const auto& m : recs) {
+            if (g_stopThread.load()) break;
+            MacroEngine_ExecuteMacro(m, w);
+        }
+    }
+}
+
 void PerformReconnectCheckOnAllWindows(bool useFocus = false)
 {
     if (!g_autoReconnect.load()) return;
@@ -5781,10 +6855,15 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
         if (triggered) {
             g_autoReconnectsPerformed++;
             reconnectTriggered = true;
+            {
+                std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
+                g_reconnectMacroPending[w] = GetTickCount64();
+            }
             std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
             g_reconnectCooldownMap[w] = now;
         }
     }
+    MacroEngine_RunPendingReconnectMacros();
     if (reconnectTriggered) {
         QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered (interval check).", false);
         QueueStatusBarOverlay(L"Auto-Reconnect triggered", 2000, wins.front());
@@ -5813,6 +6892,7 @@ void ReconnectMonitorThread()
             if (g_reconnectManualCheckRequest.exchange(false)) {
                 PerformReconnectCheckOnAllWindows(true);
             }
+            MacroEngine_RunPendingReconnectMacros();
             Sleep(500);
         }
         if (g_stopThread.load() || !g_reconnectMonitorRunning.load() || !g_isAfkStarted.load()) break;
@@ -5825,6 +6905,7 @@ void ReconnectMonitorThread()
 
 void StartReconnectMonitor()
 {
+    std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
     if (g_reconnectMonitorRunning.load()) return;
     if (g_reconnectMonitorThread.joinable()) {
         g_reconnectMonitorThread.join();
@@ -5834,13 +6915,2388 @@ void StartReconnectMonitor()
 
 void StopReconnectMonitor()
 {
+    std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
     g_reconnectMonitorRunning = false;
     if (g_reconnectMonitorThread.joinable()) {
         g_reconnectMonitorThread.join();
     }
-    std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
+    std::lock_guard<std::mutex> cooldownLock(g_reconnectCooldownMutex);
     g_reconnectCooldownMap.clear();
 }
+
+static std::wstring MacroEngine_GetMacrosPath() {
+    wchar_t appData[MAX_PATH];
+    if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData) != S_OK) {
+        return L"macros.json";
+    }
+    return std::wstring(appData) + L"\\AntiAFK-RBX\\macros.json";
+}
+
+static void MacroEngine_EnsureDirectory() {
+    wchar_t appData[MAX_PATH];
+    if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData) != S_OK) return;
+    std::wstring dir = std::wstring(appData) + L"\\AntiAFK-RBX";
+    CreateDirectoryW(dir.c_str(), NULL);
+}
+
+static std::string MacroEngine_WideToUtf8(const std::wstring& wstr) {
+    if (wstr.empty()) return {};
+    int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+    std::string result(len, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &result[0], len, NULL, NULL);
+    result.pop_back();
+    return result;
+}
+
+static std::wstring MacroEngine_Utf8ToWide(const std::string& str) {
+    if (str.empty()) return {};
+    int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
+    std::wstring result(len, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &result[0], len);
+    result.pop_back();
+    return result;
+}
+
+static std::string MacroEngine_Base64Encode(const std::vector<uint32_t>& data) {
+    if (data.empty()) return {};
+    std::string bytes;
+    bytes.reserve(data.size() * 4);
+    for (uint32_t v : data) {
+        bytes.push_back((char)(v & 0xFF));
+        bytes.push_back((char)((v >> 8) & 0xFF));
+        bytes.push_back((char)((v >> 16) & 0xFF));
+        bytes.push_back((char)((v >> 24) & 0xFF));
+    }
+    static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    int i = 0;
+    for (size_t j = 0; j < bytes.size(); j += 3) {
+        int b0 = (unsigned char)bytes[j];
+        int b1 = (j + 1 < bytes.size()) ? (unsigned char)bytes[j + 1] : 0;
+        int b2 = (j + 2 < bytes.size()) ? (unsigned char)bytes[j + 2] : 0;
+        out += b64[b0 >> 2];
+        out += b64[((b0 & 3) << 4) | (b1 >> 4)];
+        out += (j + 1 < bytes.size()) ? b64[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+        out += (j + 2 < bytes.size()) ? b64[b2 & 63] : '=';
+    }
+    return out;
+}
+
+static std::vector<uint32_t> MacroEngine_Base64Decode(const std::string& str) {
+    if (str.empty()) return {};
+    static const std::string b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string bytes;
+    bytes.reserve(str.size() * 3 / 4);
+    int val = 0, valb = -8;
+    for (char c : str) {
+        if (c == '=') break;
+        auto pos = b64.find(c);
+        if (pos == std::string::npos) continue;
+        val = (val << 6) + (int)pos;
+        valb += 6;
+        if (valb >= 0) {
+            bytes.push_back((char)((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    std::vector<uint32_t> result(bytes.size() / 4);
+    for (size_t i = 0; i < result.size(); i++) {
+        uint32_t v = (unsigned char)bytes[i * 4];
+        v |= (unsigned char)bytes[i * 4 + 1] << 8;
+        v |= (unsigned char)bytes[i * 4 + 2] << 16;
+        v |= (unsigned char)bytes[i * 4 + 3] << 24;
+        result[i] = v;
+    }
+    return result;
+}
+
+static std::string MacroEngine_EscapeJson(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 2);
+    for (char c : s) {
+        if (c == '"') out += "\\\"";
+        else if (c == '\\') out += "\\\\";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c == '\t') out += "\\t";
+        else out += c;
+    }
+    return out;
+}
+
+static std::string MacroEngine_StepTypeToString(MacroStepType type) {
+    switch (type) {
+        case MacroStepType::ImageClick: return "image_click";
+        case MacroStepType::KeyPress: return "key_press";
+        case MacroStepType::KeyDown: return "key_down";
+        case MacroStepType::KeyUp: return "key_up";
+        case MacroStepType::MouseMove: return "mouse_move";
+        case MacroStepType::MouseClick: return "mouse_click";
+        case MacroStepType::MouseDown: return "mouse_down";
+        case MacroStepType::MouseUp: return "mouse_up";
+        case MacroStepType::Sleep: return "sleep";
+        case MacroStepType::RandomSleep: return "random_sleep";
+        case MacroStepType::MouseWheel: return "mouse_wheel";
+    }
+    return "image_click";
+}
+
+static MacroStepType MacroEngine_StringToStepType(const std::string& s) {
+    if (s == "key_press") return MacroStepType::KeyPress;
+    if (s == "key_down") return MacroStepType::KeyDown;
+    if (s == "key_up") return MacroStepType::KeyUp;
+    if (s == "mouse_move") return MacroStepType::MouseMove;
+    if (s == "mouse_click") return MacroStepType::MouseClick;
+    if (s == "mouse_down") return MacroStepType::MouseDown;
+    if (s == "mouse_up") return MacroStepType::MouseUp;
+    if (s == "sleep") return MacroStepType::Sleep;
+    if (s == "random_sleep") return MacroStepType::RandomSleep;
+    if (s == "mouse_wheel") return MacroStepType::MouseWheel;
+    return MacroStepType::ImageClick;
+}
+
+bool MacroEngine_LoadMacros() {
+    MacroEngine_EnsureDirectory();
+    std::wstring path = MacroEngine_GetMacrosPath();
+    HANDLE hFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+    DWORD size = GetFileSize(hFile, NULL);
+    if (size == 0 || size > 1024 * 1024 * 5) { CloseHandle(hFile); return false; }
+    std::string content(size, 0);
+    DWORD read;
+    if (!ReadFile(hFile, &content[0], size, &read, NULL)) { CloseHandle(hFile); return false; }
+    CloseHandle(hFile);
+    content.resize(read);
+
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    g_macros.clear();
+
+    auto safeStoi = [](const std::string& str, int defaultValue = 0) -> int {
+        if (str.empty()) return defaultValue;
+        try {
+            size_t pos = 0;
+            return std::stoi(str, &pos);
+        } catch (...) {
+            return defaultValue;
+        }
+    };
+
+    auto findStr = [&](const std::string& json, const std::string& key, size_t start, std::string& out) -> bool {
+        std::string search = "\"" + key + "\"";
+        size_t pos = json.find(search, start);
+        if (pos == std::string::npos) return false;
+        pos = json.find('"', pos + search.size());
+        if (pos == std::string::npos) return false;
+        pos++;
+        std::string val;
+        while (pos < json.size() && json[pos] != '"') {
+            if (json[pos] == '\\' && pos + 1 < json.size()) { pos++; val += json[pos]; }
+            else val += json[pos];
+            pos++;
+        }
+        out = val;
+        return true;
+    };
+
+    auto findBool = [&](const std::string& json, const std::string& key, size_t start, bool& out) -> bool {
+        std::string search = "\"" + key + "\"";
+        size_t pos = json.find(search, start);
+        if (pos == std::string::npos) return false;
+        pos = json.find_first_of("tf", pos + search.size());
+        if (pos == std::string::npos) return false;
+        out = (json[pos] == 't');
+        return true;
+    };
+
+    auto findInt = [&](const std::string& json, const std::string& key, size_t start, int& out) -> bool {
+        std::string search = "\"" + key + "\"";
+        size_t pos = json.find(search, start);
+        if (pos == std::string::npos) return false;
+        pos = json.find_first_of(": ", pos + search.size());
+        if (pos == std::string::npos) return false;
+        pos = json.find_first_of("-0123456789", pos);
+        if (pos == std::string::npos) return false;
+        char* end = nullptr;
+        out = (int)strtol(json.c_str() + pos, &end, 10);
+        return true;
+    };
+
+    size_t scanPos = 0;
+    while (true) {
+        size_t namePos = content.find("\"name\"", scanPos);
+        if (namePos == std::string::npos) break;
+
+        size_t macroStart = content.rfind('{', namePos);
+        if (macroStart == std::string::npos) break;
+
+        int depth = 0;
+        size_t macroEnd = std::string::npos;
+        for (size_t p = macroStart; p < content.size(); p++) {
+            if (content[p] == '{') depth++;
+            else if (content[p] == '}') {
+                depth--;
+                if (depth == 0) { macroEnd = p; break; }
+            }
+        }
+        if (macroEnd == std::string::npos) break;
+
+        std::string mjson = content.substr(macroStart, macroEnd - macroStart + 1);
+
+        Macro m;
+        std::string name;
+        if (findStr(mjson, "name", 0, name)) {
+            m.name = MacroEngine_Utf8ToWide(name);
+            findBool(mjson, "triggerOnCooldown", 0, m.triggerOnCooldown);
+            findBool(mjson, "triggerOnReconnect", 0, m.triggerOnReconnect);
+            findBool(mjson, "triggerOnInterval", 0, m.triggerOnInterval);
+            findInt(mjson, "triggerOrderCooldown", 0, m.triggerOrderCooldown);
+            findInt(mjson, "triggerOrderReconnect", 0, m.triggerOrderReconnect);
+            findInt(mjson, "triggerOrderInterval", 0, m.triggerOrderInterval);
+            findInt(mjson, "intervalSec", 0, m.intervalSec);
+            findInt(mjson, "cooldownIntervalSec", 0, m.cooldownIntervalSec);
+            findInt(mjson, "totalRepeats", 0, m.totalRepeats);
+
+            size_t actionsStart = mjson.find("\"actions\"");
+            if (actionsStart != std::string::npos) {
+                size_t arrStart = mjson.find('[', actionsStart);
+                if (arrStart != std::string::npos) {
+                    size_t actSearch = arrStart;
+                    while (true) {
+                        size_t actStart = mjson.find('{', actSearch);
+                        if (actStart == std::string::npos) break;
+
+                        int actDepth = 0;
+                        size_t actEnd = std::string::npos;
+                        for (size_t p = actStart; p < mjson.size(); p++) {
+                            if (mjson[p] == '{') actDepth++;
+                            else if (mjson[p] == '}') {
+                                actDepth--;
+                                if (actDepth == 0) { actEnd = p; break; }
+                            }
+                        }
+                        if (actEnd == std::string::npos) break;
+
+                        std::string astr = mjson.substr(actStart, actEnd - actStart + 1);
+                        MacroAction a;
+                        std::string t;
+                        if (findStr(astr, "type", 0, t)) {
+                            a.type = MacroEngine_StringToStepType(t);
+                        }
+                        int tmpX = 0, tmpY = 0, tmpTol = 0, tmpDelay = 0, tmpVk = 0, tmpMod = 0, tmpBtn = 0, tmpWheel = 0;
+                        findInt(astr, "x", 0, tmpX); a.x = (uint16_t)tmpX;
+                        findInt(astr, "y", 0, tmpY); a.y = (uint16_t)tmpY;
+                        findInt(astr, "tolerance", 0, tmpTol); a.tolerance = (uint8_t)tmpTol;
+                        findInt(astr, "delayMs", 0, tmpDelay); a.delayBeforeMs = (uint16_t)tmpDelay;
+                        findInt(astr, "vkCode", 0, tmpVk); a.vkCode = (uint8_t)tmpVk;
+                        findInt(astr, "modifiers", 0, tmpMod); a.modifiers = (uint8_t)tmpMod;
+                        findInt(astr, "mouseButton", 0, tmpBtn); a.mouseButton = (uint8_t)tmpBtn;
+                        findInt(astr, "wheelDelta", 0, tmpWheel); a.wheelDelta = (int16_t)tmpWheel;
+                        findBool(astr, "mouseDown", 0, a.mouseDown);
+                        findBool(astr, "mouseUp", 0, a.mouseUp);
+                        findBool(astr, "relative", 0, a.relative);
+
+                        size_t pathPos = astr.find("\"path\"");
+                        if (pathPos != std::string::npos) {
+                            size_t pArrStart = astr.find('[', pathPos);
+                            if (pArrStart != std::string::npos) {
+                                int pDepth = 0;
+                                size_t pArrEnd = std::string::npos;
+                                for (size_t p = pArrStart; p < astr.size(); p++) {
+                                    if (astr[p] == '[') pDepth++;
+                                    else if (astr[p] == ']') {
+                                        pDepth--;
+                                        if (pDepth == 0) { pArrEnd = p; break; }
+                                    }
+                                }
+                                if (pArrEnd != std::string::npos) {
+                                    std::string pstr = astr.substr(pArrStart, pArrEnd - pArrStart + 1);
+                                    size_t pairPos = 0;
+                                    while (true) {
+                                        size_t pairStart = pstr.find('[', pairPos);
+                                        if (pairStart == std::string::npos) break;
+                                        size_t pairClose = pstr.find(']', pairStart);
+                                        if (pairClose == std::string::npos) break;
+                                        std::string pairContent = pstr.substr(pairStart + 1, pairClose - pairStart - 1);
+                                        size_t comma = pairContent.find(',');
+                                        if (comma != std::string::npos) {
+                                            int px = safeStoi(pairContent.substr(0, comma));
+                                            int py = safeStoi(pairContent.substr(comma + 1));
+                                            a.path.push_back({ (uint16_t)(int16_t)px, (uint16_t)(int16_t)py });
+                                        }
+                                        pairPos = pairClose + 1;
+                                    }
+                                }
+                            }
+                        }
+
+                        size_t pdPos = astr.find("\"pathDelays\"");
+                        if (pdPos != std::string::npos) {
+                            size_t pdStart = astr.find('[', pdPos);
+                            if (pdStart != std::string::npos) {
+                                size_t pdEnd = astr.find(']', pdStart);
+                                if (pdEnd != std::string::npos) {
+                                    std::string pdStr = astr.substr(pdStart + 1, pdEnd - pdStart - 1);
+                                    size_t pdCur = 0;
+                                    while (pdCur < pdStr.size()) {
+                                        size_t pdComma = pdStr.find(',', pdCur);
+                                        std::string valStr = (pdComma != std::string::npos) ? pdStr.substr(pdCur, pdComma - pdCur) : pdStr.substr(pdCur);
+                                        while (!valStr.empty() && isspace((unsigned char)valStr.front())) valStr.erase(valStr.begin());
+                                        while (!valStr.empty() && isspace((unsigned char)valStr.back())) valStr.pop_back();
+                                        if (!valStr.empty()) {
+                                            a.pathDelays.push_back((uint16_t)safeStoi(valStr, 0));
+                                        }
+                                        if (pdComma == std::string::npos) break;
+                                        pdCur = pdComma + 1;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (a.type == MacroStepType::ImageClick) {
+                            std::string b64;
+                            if (findStr(astr, "image", 0, b64)) {
+                                a.image.pixels = MacroEngine_Base64Decode(b64);
+                                int px = (int)a.image.pixels.size();
+                                if (px > 0) {
+                                    a.image.width = a.image.height = (uint16_t)sqrt((double)px);
+                                }
+                            }
+                        }
+
+                        m.actions.push_back(a);
+                        actSearch = actEnd + 1;
+                    }
+                }
+            }
+
+            g_macros.push_back(m);
+        }
+        scanPos = macroEnd + 1;
+    }
+
+    int maxOrder = 0;
+    for (const auto& m : g_macros) {
+        maxOrder = (std::max)(maxOrder, (std::max)((std::max)(m.triggerOrderCooldown, m.triggerOrderReconnect), m.triggerOrderInterval));
+    }
+    g_macroTriggerOrderCounter = maxOrder + 1;
+    return true;
+}
+
+bool MacroEngine_SaveMacros() {
+    MacroEngine_EnsureDirectory();
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+
+    std::string json = "{\n  \"macros\": [\n";
+    for (size_t i = 0; i < g_macros.size(); i++) {
+        const Macro& m = g_macros[i];
+        json += "    {\n";
+        json += "      \"name\": \"" + MacroEngine_EscapeJson(MacroEngine_WideToUtf8(m.name)) + "\",\n";
+        json += "      \"triggerOnCooldown\": " + std::string(m.triggerOnCooldown ? "true" : "false") + ",\n";
+        json += "      \"triggerOnReconnect\": " + std::string(m.triggerOnReconnect ? "true" : "false") + ",\n";
+        json += "      \"triggerOnInterval\": " + std::string(m.triggerOnInterval ? "true" : "false") + ",\n";
+        json += "      \"triggerOrderCooldown\": " + std::to_string(m.triggerOrderCooldown) + ",\n";
+        json += "      \"triggerOrderReconnect\": " + std::to_string(m.triggerOrderReconnect) + ",\n";
+        json += "      \"triggerOrderInterval\": " + std::to_string(m.triggerOrderInterval) + ",\n";
+        json += "      \"intervalSec\": " + std::to_string(m.intervalSec) + ",\n";
+        json += "      \"cooldownIntervalSec\": " + std::to_string(m.cooldownIntervalSec) + ",\n";
+        json += "      \"totalRepeats\": " + std::to_string(m.totalRepeats) + ",\n";
+        json += "      \"actions\": [\n";
+        for (size_t j = 0; j < m.actions.size(); j++) {
+            const MacroAction& a = m.actions[j];
+            json += "        {\n";
+            json += "          \"type\": \"" + MacroEngine_StepTypeToString(a.type) + "\",\n";
+            json += "          \"x\": " + std::to_string(a.x) + ",\n";
+            json += "          \"y\": " + std::to_string(a.y) + ",\n";
+            json += "          \"delayMs\": " + std::to_string(a.delayBeforeMs) + ",\n";
+            json += "          \"tolerance\": " + std::to_string(a.tolerance) + ",\n";
+            json += "          \"vkCode\": " + std::to_string(a.vkCode) + ",\n";
+            json += "          \"modifiers\": " + std::to_string(a.modifiers) + ",\n";
+            json += "          \"mouseButton\": " + std::to_string(a.mouseButton) + ",\n";
+            json += "          \"wheelDelta\": " + std::to_string(a.wheelDelta) + ",\n";
+            json += "          \"mouseDown\": " + std::string(a.mouseDown ? "true" : "false") + ",\n";
+            json += "          \"mouseUp\": " + std::string(a.mouseUp ? "true" : "false") + ",\n";
+            json += "          \"relative\": " + std::string(a.relative ? "true" : "false");
+            if (!a.path.empty()) {
+                json += ",\n          \"path\": [";
+                for (size_t k = 0; k < a.path.size(); k++) {
+                    json += "[" + std::to_string((int16_t)a.path[k].first) + "," + std::to_string((int16_t)a.path[k].second) + "]";
+                    if (k < a.path.size() - 1) json += ",";
+                }
+                json += "]";
+            }
+            if (!a.pathDelays.empty()) {
+                json += ",\n          \"pathDelays\": [";
+                for (size_t k = 0; k < a.pathDelays.size(); k++) {
+                    json += std::to_string(a.pathDelays[k]);
+                    if (k < a.pathDelays.size() - 1) json += ",";
+                }
+                json += "]";
+            }
+            if (a.type == MacroStepType::ImageClick && !a.image.pixels.empty()) {
+                json += ",\n          \"image\": \"" + MacroEngine_Base64Encode(a.image.pixels) + "\"";
+                json += ",\n          \"imageW\": " + std::to_string(a.image.width);
+                json += ",\n          \"imageH\": " + std::to_string(a.image.height);
+            }
+            json += "\n        }";
+            if (j < m.actions.size() - 1) json += ",";
+            json += "\n";
+        }
+        json += "      ]\n    }";
+        if (i < g_macros.size() - 1) json += ",";
+        json += "\n";
+    }
+    json += "  ]\n}\n";
+
+    std::wstring path = MacroEngine_GetMacrosPath();
+    HANDLE hFile = CreateFileW(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+    DWORD written;
+    WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
+    CloseHandle(hFile);
+    return true;
+}
+
+static std::string MacroEngine_MacroToJson(const Macro& m) {
+    std::string json = "{\n";
+    json += "  \"name\": \"" + MacroEngine_EscapeJson(MacroEngine_WideToUtf8(m.name)) + "\",\n";
+    json += "  \"triggerOnCooldown\": " + std::string(m.triggerOnCooldown ? "true" : "false") + ",\n";
+    json += "  \"triggerOnReconnect\": " + std::string(m.triggerOnReconnect ? "true" : "false") + ",\n";
+    json += "  \"triggerOnInterval\": " + std::string(m.triggerOnInterval ? "true" : "false") + ",\n";
+    json += "  \"triggerOrderCooldown\": " + std::to_string(m.triggerOrderCooldown) + ",\n";
+    json += "  \"triggerOrderReconnect\": " + std::to_string(m.triggerOrderReconnect) + ",\n";
+    json += "  \"triggerOrderInterval\": " + std::to_string(m.triggerOrderInterval) + ",\n";
+    json += "  \"intervalSec\": " + std::to_string(m.intervalSec) + ",\n";
+    json += "  \"cooldownIntervalSec\": " + std::to_string(m.cooldownIntervalSec) + ",\n";
+    json += "  \"totalRepeats\": " + std::to_string(m.totalRepeats) + ",\n";
+    json += "  \"actions\": [\n";
+    for (size_t j = 0; j < m.actions.size(); j++) {
+        const MacroAction& a = m.actions[j];
+        json += "    {\n";
+        json += "      \"type\": \"" + MacroEngine_StepTypeToString(a.type) + "\",\n";
+        json += "      \"x\": " + std::to_string(a.x) + ",\n";
+        json += "      \"y\": " + std::to_string(a.y) + ",\n";
+        json += "      \"delayMs\": " + std::to_string(a.delayBeforeMs) + ",\n";
+        json += "      \"tolerance\": " + std::to_string(a.tolerance) + ",\n";
+        json += "      \"vkCode\": " + std::to_string(a.vkCode) + ",\n";
+        json += "      \"modifiers\": " + std::to_string(a.modifiers) + ",\n";
+        json += "      \"mouseDown\": " + std::string(a.mouseDown ? "true" : "false") + ",\n";
+        json += "      \"mouseUp\": " + std::string(a.mouseUp ? "true" : "false") + ",\n";
+        json += "      \"relative\": " + std::string(a.relative ? "true" : "false");
+        if (!a.path.empty()) {
+            json += ",\n      \"path\": [";
+            for (size_t k = 0; k < a.path.size(); k++) {
+                json += "[" + std::to_string((int16_t)a.path[k].first) + "," + std::to_string((int16_t)a.path[k].second) + "]";
+                if (k < a.path.size() - 1) json += ",";
+            }
+            json += "]";
+        }
+        if (a.type == MacroStepType::ImageClick && !a.image.pixels.empty()) {
+            json += ",\n      \"image\": \"" + MacroEngine_Base64Encode(a.image.pixels) + "\"";
+            json += ",\n      \"imageW\": " + std::to_string(a.image.width);
+            json += ",\n      \"imageH\": " + std::to_string(a.image.height);
+        }
+        json += "\n    }";
+        if (j < m.actions.size() - 1) json += ",";
+        json += "\n";
+    }
+    json += "  ]\n}\n";
+    return json;
+}
+
+static bool MacroEngine_ExportMacroToFile(HWND parent, int macroIndex) {
+    std::string json;
+    std::wstring macroName;
+    {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        if (macroIndex < 0 || macroIndex >= (int)g_macros.size()) return false;
+        json = MacroEngine_MacroToJson(g_macros[macroIndex]);
+        macroName = g_macros[macroIndex].name;
+    }
+
+    wchar_t filter[] = L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    wchar_t fileName[MAX_PATH] = {0};
+    for (auto& c : macroName) { if (c == L'/' || c == L'\\' || c == L':' || c == L'*' || c == L'?' || c == L'\"' || c == L'<' || c == L'>' || c == L'|') c = L'_'; }
+    wcscpy_s(fileName, macroName.c_str());
+    wcscat_s(fileName, L".json");
+
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = parent;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = fileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"json";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY;
+    if (!GetSaveFileNameW(&ofn)) return false;
+
+    HANDLE hFile = CreateFileW(fileName, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+    DWORD written;
+    WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
+    CloseHandle(hFile);
+    return true;
+}
+
+static bool MacroEngine_ImportMacroFromFile(HWND parent) {
+    wchar_t filter[] = L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    wchar_t fileName[MAX_PATH] = {0};
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = parent;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = fileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"json";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    if (!GetOpenFileNameW(&ofn)) return false;
+
+    HANDLE hFile = CreateFileW(fileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+    DWORD size = GetFileSize(hFile, NULL);
+    if (size == 0 || size > 1024 * 1024) { CloseHandle(hFile); return false; }
+    std::string content(size, 0);
+    DWORD read;
+    if (!ReadFile(hFile, &content[0], size, &read, NULL)) { CloseHandle(hFile); return false; }
+    CloseHandle(hFile);
+
+    auto findStrIn = [](const std::string& s, const std::string& key) -> std::string {
+        auto pos = s.find("\"" + key + "\": \"");
+        if (pos == std::string::npos) return "";
+        pos += key.size() + 5;
+        auto end = s.find("\"", pos);
+        if (end == std::string::npos) return "";
+        return s.substr(pos, end - pos);
+    };
+    auto findIntIn = [](const std::string& s, const std::string& key) -> int {
+        auto pos = s.find("\"" + key + "\": ");
+        if (pos == std::string::npos) return 0;
+        pos += key.size() + 4;
+        size_t end = pos;
+        while (end < s.size() && (isdigit((unsigned char)s[end]) || s[end] == '-')) end++;
+        if (end == pos) return 0;
+        try {
+            return std::stoi(s.substr(pos, end - pos));
+        } catch (...) {
+            return 0;
+        }
+    };
+    auto findBoolIn = [](const std::string& s, const std::string& key) -> bool {
+        return s.find("\"" + key + "\": true") != std::string::npos;
+    };
+
+    auto parseMacroJson = [&](const std::string& json) -> Macro {
+        Macro m;
+        m.name = MacroEngine_Utf8ToWide(findStrIn(json, "name"));
+        m.triggerOnCooldown = findBoolIn(json, "triggerOnCooldown");
+        m.triggerOnReconnect = findBoolIn(json, "triggerOnReconnect");
+        m.triggerOnInterval = findBoolIn(json, "triggerOnInterval");
+        m.triggerOrderCooldown = findIntIn(json, "triggerOrderCooldown");
+        m.triggerOrderReconnect = findIntIn(json, "triggerOrderReconnect");
+        m.triggerOrderInterval = findIntIn(json, "triggerOrderInterval");
+        m.intervalSec = findIntIn(json, "intervalSec");
+        m.cooldownIntervalSec = findIntIn(json, "cooldownIntervalSec");
+        m.totalRepeats = findIntIn(json, "totalRepeats");
+
+        auto actionsPos = json.find("\"actions\": [");
+        if (actionsPos != std::string::npos) {
+            actionsPos += 12;
+            while (actionsPos < json.size()) {
+                auto openPos = json.find("{", actionsPos);
+                if (openPos == std::string::npos || openPos > json.find("]", actionsPos)) break;
+                auto closePos = json.find("}", openPos);
+                if (closePos == std::string::npos) break;
+                std::string block = json.substr(openPos, closePos - openPos + 1);
+                MacroAction a;
+                a.type = MacroEngine_StringToStepType(findStrIn(block, "type"));
+                a.x = (uint16_t)findIntIn(block, "x");
+                a.y = (uint16_t)findIntIn(block, "y");
+                a.delayBeforeMs = (uint16_t)findIntIn(block, "delayMs");
+                a.tolerance = (uint16_t)findIntIn(block, "tolerance");
+                a.vkCode = (BYTE)findIntIn(block, "vkCode");
+                a.modifiers = (BYTE)findIntIn(block, "modifiers");
+                a.mouseButton = (BYTE)findIntIn(block, "mouseButton");
+                a.mouseDown = findBoolIn(block, "mouseDown");
+                a.mouseUp = findBoolIn(block, "mouseUp");
+                a.relative = findBoolIn(block, "relative");
+
+                size_t pathPos = block.find("\"path\"");
+                if (pathPos != std::string::npos) {
+                    size_t pArrStart = block.find('[', pathPos);
+                    if (pArrStart != std::string::npos) {
+                        int depth = 0;
+                        size_t pArrEnd = std::string::npos;
+                        for (size_t p = pArrStart; p < block.size(); p++) {
+                            if (block[p] == '[') depth++;
+                            else if (block[p] == ']') {
+                                depth--;
+                                if (depth == 0) { pArrEnd = p; break; }
+                            }
+                        }
+                        if (pArrEnd != std::string::npos) {
+                            std::string pstr = block.substr(pArrStart, pArrEnd - pArrStart + 1);
+                            size_t pairPos = 0;
+                            while (true) {
+                                size_t pairStart = pstr.find('[', pairPos);
+                                if (pairStart == std::string::npos) break;
+                                size_t pairClose = pstr.find(']', pairStart);
+                                if (pairClose == std::string::npos) break;
+                                std::string pairContent = pstr.substr(pairStart + 1, pairClose - pairStart - 1);
+                                size_t comma = pairContent.find(',');
+                                if (comma != std::string::npos) {
+                                    try {
+                                        int px = std::stoi(pairContent.substr(0, comma));
+                                        int py = std::stoi(pairContent.substr(comma + 1));
+                                        a.path.push_back({ (uint16_t)(int16_t)px, (uint16_t)(int16_t)py });
+                                    } catch (...) {}
+                                }
+                                pairPos = pairClose + 1;
+                            }
+                        }
+                    }
+                }
+                if (a.type == MacroStepType::ImageClick) {
+                    std::string imgStr = findStrIn(block, "image");
+                    int w = findIntIn(block, "imageW");
+                    int h = findIntIn(block, "imageH");
+                    if (!imgStr.empty() && w > 0 && h > 0) {
+                        a.image.width = w;
+                        a.image.height = h;
+                        a.image.pixels = MacroEngine_Base64Decode(imgStr);
+                    }
+                }
+                m.actions.push_back(a);
+                actionsPos = closePos + 1;
+            }
+        }
+        return m;
+    };
+
+    Macro imported = parseMacroJson(content);
+    if (imported.name.empty() && imported.actions.empty()) {
+        QueueStatusBarOverlay(L"Invalid macro file", 2000, parent);
+        return false;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        int suffix = 1;
+        std::wstring origName = imported.name;
+        while (true) {
+            bool dup = false;
+            for (auto& m : g_macros) {
+                if (m.name == imported.name) { dup = true; break; }
+            }
+            if (!dup) break;
+            imported.name = origName + L" (" + std::to_wstring(suffix++) + L")";
+        }
+        g_macros.push_back(imported);
+        g_selectedMacroIndex = (int)g_macros.size() - 1;
+        g_selectedAction = 4;
+    }
+    MacroEngine_SaveMacros();
+    QueueStatusBarOverlay(L"Imported: " + imported.name, 2000, parent);
+    return true;
+}
+
+std::vector<Macro> MacroEngine_GetCooldownMacros() {
+    std::vector<Macro> result;
+    {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        for (const auto& m : g_macros) {
+            if (m.triggerOnCooldown) result.push_back(m);
+        }
+    }
+    std::stable_sort(result.begin(), result.end(), [](const Macro& a, const Macro& b) {
+        if (a.triggerOrderCooldown == 0 || b.triggerOrderCooldown == 0) return false;
+        return a.triggerOrderCooldown < b.triggerOrderCooldown;
+    });
+    return result;
+}
+
+std::vector<Macro> MacroEngine_GetReconnectMacros() {
+    std::vector<Macro> result;
+    {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        for (const auto& m : g_macros) {
+            if (m.triggerOnReconnect) result.push_back(m);
+        }
+    }
+    std::stable_sort(result.begin(), result.end(), [](const Macro& a, const Macro& b) {
+        if (a.triggerOrderReconnect == 0 || b.triggerOrderReconnect == 0) return false;
+        return a.triggerOrderReconnect < b.triggerOrderReconnect;
+    });
+    return result;
+}
+
+std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target) {
+    return MacroEngine_GetCooldownMacros();
+}
+
+std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
+    std::vector<Macro> globalRec = MacroEngine_GetReconnectMacros();
+    std::vector<std::wstring> names;
+    if (!GetWindowInstanceSetting_ReconnectMacro(target, names) || names.empty()) return globalRec;
+
+    std::vector<Macro> result;
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    for (const auto& name : names) {
+        for (const auto& m : g_macros) {
+            if (_wcsicmp(m.name.c_str(), name.c_str()) == 0) {
+                result.push_back(m);
+                break;
+            }
+        }
+    }
+    return result.empty() ? globalRec : result;
+}
+
+static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
+    if (!IsWindow(w)) return;
+    std::vector<Macro> intervalMacros;
+    {
+        std::vector<std::wstring> macroNames;
+        if (GetWindowInstanceSetting_IntervalMacro(w, macroNames) && !macroNames.empty()) {
+            std::lock_guard<std::mutex> lockM(g_macrosMutex);
+            for (const auto& macroName : macroNames) {
+                Macro* m = MacroEngine_FindMacro(macroName);
+                if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+            }
+        } else {
+            std::lock_guard<std::mutex> lockM(g_macrosMutex);
+            for (const auto& m : g_macros) {
+                if (m.triggerOnInterval && m.intervalSec > 0) intervalMacros.push_back(m);
+            }
+        }
+    }
+    for (const auto& m : intervalMacros) {
+        if (g_stopThread.load()) break;
+        bool shouldRun = false;
+        {
+            std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+            auto key = std::make_pair(w, m.name);
+            auto it = g_lastIntervalMacroRun.find(key);
+            if (it == g_lastIntervalMacroRun.end()) {
+                g_lastIntervalMacroRun[key] = now;
+                shouldRun = false;
+            } else {
+                ULONGLONG elapsed = now - it->second;
+                if (elapsed >= (ULONGLONG)m.intervalSec * 1000) {
+                    it->second = now;
+                    shouldRun = true;
+                }
+            }
+        }
+        if (shouldRun) {
+            bool wasMinimized = IsIconic(w);
+            if (wasMinimized) ShowWindow(w, SW_RESTORE);
+            SetForegroundWindow(w);
+            Sleep(g_preActionDelay.load());
+            MacroEngine_ExecuteMacro(m, w, false, true);
+            if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+            g_afkActionsPerformed++;
+            g_lastAfkActionTimestamp = GetTickCount64();
+        }
+    }
+}
+
+void IntervalMacroThread() {
+    g_intervalMacroThreadRunning = true;
+    while (g_intervalMacroEnabled.load() && !g_stopThread.load()) {
+        ULONGLONG now = GetTickCount64();
+        auto wins = FindAllRobloxWindows(true);
+        for (HWND w : wins) {
+            MacroEngine_CheckIntervalMacros(w, now);
+        }
+        Sleep(250);
+    }
+    g_intervalMacroThreadRunning = false;
+}
+
+Macro* MacroEngine_FindCooldownMacro() {
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    int idx = g_selectedMacroIndex.load();
+    if (idx >= 0 && idx < (int)g_macros.size()) {
+        Macro& m = g_macros[idx];
+        if (m.triggerOnCooldown) return &m;
+    }
+    for (auto& m : g_macros) {
+        if (m.triggerOnCooldown) return &m;
+    }
+    return nullptr;
+}
+
+Macro* MacroEngine_FindReconnectMacro() {
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    for (auto& m : g_macros) {
+        if (m.triggerOnReconnect) return &m;
+    }
+    return nullptr;
+}
+
+static void MacroEngine_SendKey(BYTE vk, bool down) {
+    DWORD flags = down ? 0 : KEYEVENTF_KEYUP;
+    if ((vk >= VK_PRIOR && vk <= VK_DOWN) ||
+        vk == VK_INSERT || vk == VK_DELETE ||
+        vk == VK_RCONTROL || vk == VK_RMENU ||
+        vk == VK_LWIN || vk == VK_RWIN ||
+        vk == VK_DIVIDE || vk == VK_NUMLOCK || vk == VK_SNAPSHOT) {
+        flags |= KEYEVENTF_EXTENDEDKEY;
+    }
+    keybd_event(vk, MapVirtualKey(vk, 0), flags, 0);
+}
+
+static bool MacroEngine_IsMouseButtonDown(int btn) {
+    if (btn == 0) return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+    if (btn == 1) return (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+    if (btn == 2) return (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+    if (btn == 3) return (GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0;
+    return (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0;
+}
+
+void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
+    SetForegroundWindow(hwnd);
+    Sleep(30);
+    RECT hwWr, hwCr;
+    GetWindowRect(hwnd, &hwWr);
+    GetClientRect(hwnd, &hwCr);
+    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
+    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
+    POINT screenPt = { hwWr.left + borderX + targetX, hwWr.top + borderY + targetY };
+
+    int r = RandomInt(5) - 2;
+    screenPt.x += r;
+    screenPt.y += (RandomInt(5) - 2);
+
+    POINT oldPos;
+    GetCursorPos(&oldPos);
+
+    int steps = max(4, (int)(sqrt((double)(screenPt.x - oldPos.x) * (screenPt.x - oldPos.x) + (screenPt.y - oldPos.y) * (screenPt.y - oldPos.y)) / 20));
+    steps = min(steps, 15);
+    IncrementalMouseMove(oldPos.x, oldPos.y, screenPt.x, screenPt.y, steps, 40);
+
+    Sleep(20 + RandomInt(30));
+
+    if (button == 0) { // left
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        Sleep(30 + RandomInt(40));
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    } else if (button == 1) { // right
+        mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+        Sleep(30 + RandomInt(40));
+        mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+    } else if (button == 2) { // middle
+        mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0);
+        Sleep(30 + RandomInt(40));
+        mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
+    } else if (button == 3) { // xbutton1
+        mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0);
+        Sleep(30 + RandomInt(40));
+        mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0);
+    } else { // xbutton2
+        mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0);
+        Sleep(30 + RandomInt(40));
+        mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0);
+    }
+}
+
+void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool allowWithoutAfk) {
+    if (g_macroTestRunning && !isTest) return;
+    if (!hwnd || !IsWindow(hwnd)) return;
+
+    RECT origRect;
+    GetWindowRect(hwnd, &origRect);
+    bool wasHidden = !IsWindowVisible(hwnd) || IsIconic(hwnd);
+    if (wasHidden) {
+        ShowWindow(hwnd, SW_RESTORE);
+        Sleep(200);
+    }
+
+    SetWindowPos(hwnd, HWND_TOP, origRect.left, origRect.top, 800, 600, SWP_NOACTIVATE);
+    Sleep(100);
+    SetForegroundWindow(hwnd);
+    BringWindowToTop(hwnd);
+    Sleep(200);
+
+    POINT cursorRestore;
+    GetCursorPos(&cursorRestore);
+
+    int repeats = macro.totalRepeats > 0 ? macro.totalRepeats : 1;
+    for (int r = 0; r < repeats; r++) {
+        if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
+        double base = MacroEngine_NowMs();
+        double due = 0.0;
+        auto waitDue = [&]() {
+            double remain = base + due - MacroEngine_NowMs();
+            if (remain > 0.0) PreciseSleepMs(remain);
+        };
+        for (const auto& a : macro.actions) {
+            if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) goto macroEngineEnd;
+
+            switch (a.type) {
+                case MacroStepType::ImageClick: {
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    SetForegroundWindow(hwnd);
+                    Sleep(50);
+                    MacroEngine_HumanClick(hwnd, a.x, a.y, a.mouseButton);
+                    break;
+                }
+                case MacroStepType::MouseClick:
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    MacroEngine_HumanClick(hwnd, a.x, a.y, a.mouseButton);
+                    break;
+                case MacroStepType::MouseDown: {
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    SetForegroundWindow(hwnd);
+                    RECT hwWr, hwCr;
+                    GetWindowRect(hwnd, &hwWr);
+                    GetClientRect(hwnd, &hwCr);
+                    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
+                    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
+                    int sx = hwWr.left + borderX + a.x;
+                    int sy = hwWr.top + borderY + a.y;
+                    int screenW = GetSystemMetrics(SM_CXSCREEN);
+                    int screenH = GetSystemMetrics(SM_CYSCREEN);
+                    long absX = (long)sx * 65535 / (screenW > 0 ? screenW : 1);
+                    long absY = (long)sy * 65535 / (screenH > 0 ? screenH : 1);
+                    mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, absX, absY, 0, 0);
+                    switch (a.mouseButton) {
+                        case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
+                        case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); break;
+                        case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); break;
+                        case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); break;
+                        default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); break;
+                    }
+                    break;
+                }
+                case MacroStepType::MouseUp: {
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    switch (a.mouseButton) {
+                        case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); break;
+                        case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); break;
+                        case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); break;
+                        case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); break;
+                        default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); break;
+                    }
+                    break;
+                }
+                case MacroStepType::KeyPress:
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    MacroEngine_SendKey(a.vkCode, true);
+                    PreciseSleepMs(50);
+                    MacroEngine_SendKey(a.vkCode, false);
+                    break;
+                case MacroStepType::KeyDown:
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    MacroEngine_SendKey(a.vkCode, true);
+                    break;
+                case MacroStepType::KeyUp:
+                    due += a.delayBeforeMs + 15.0;
+                    waitDue();
+                    MacroEngine_SendKey(a.vkCode, false);
+                    break;
+                case MacroStepType::MouseMove: {
+                    if (!a.path.empty()) {
+                        RECT hwWr, hwCr;
+                        GetWindowRect(hwnd, &hwWr);
+                        GetClientRect(hwnd, &hwCr);
+                        int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
+                        int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
+
+                        if (a.mouseDown && !MacroEngine_IsMouseButtonDown(a.mouseButton)) {
+                            switch (a.mouseButton) {
+                                case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
+                                case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); break;
+                                case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); break;
+                                case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); break;
+                                default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); break;
+                            }
+                        }
+
+                        DWORD totalDurationMs = a.delayBeforeMs;
+                        DWORD numPoints = (DWORD)a.path.size();
+                        DWORD stepDelay = (numPoints > 0) ? (totalDurationMs / numPoints) : 0;
+                        DWORD extraMs = (numPoints > 0) ? (totalDurationMs % numPoints) : 0;
+                        int centerX = hwWr.left + borderX + hwCr.right / 2;
+                        int centerY = hwWr.top + borderY + hwCr.bottom / 2;
+                        int accX = 0, accY = 0;
+
+                        for (size_t i = 0; i < numPoints; i++) {
+                            if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
+                            DWORD sleepTime = (i < a.pathDelays.size()) ? a.pathDelays[i] : (stepDelay + (i < extraMs ? 1 : 0));
+                            due += sleepTime;
+                            waitDue();
+                            const auto& pt = a.path[i];
+                            if (a.relative) {
+                                mouse_event(MOUSEEVENTF_MOVE, (int16_t)pt.first, (int16_t)pt.second, 0, 0);
+                                accX += (int16_t)pt.first;
+                                accY += (int16_t)pt.second;
+                                if (accX * accX + accY * accY > 150 * 150) {
+                                    accX = 0;
+                                    accY = 0;
+                                    SetCursorPos(centerX, centerY);
+                                }
+                            } else {
+                                int sx = hwWr.left + borderX + pt.first;
+                                int sy = hwWr.top + borderY + pt.second;
+                                int screenW = GetSystemMetrics(SM_CXSCREEN);
+                                int screenH = GetSystemMetrics(SM_CYSCREEN);
+                                long absX = (long)sx * 65535 / (screenW > 0 ? screenW : 1);
+                                long absY = (long)sy * 65535 / (screenH > 0 ? screenH : 1);
+                                mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, absX, absY, 0, 0);
+                            }
+                        }
+                        if (a.mouseUp && MacroEngine_IsMouseButtonDown(a.mouseButton)) {
+                            due += 10;
+                            waitDue();
+                            switch (a.mouseButton) {
+                                case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); break;
+                                case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); break;
+                                case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); break;
+                                case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); break;
+                                default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); break;
+                            }
+                        }
+                    } else {
+                        due += a.delayBeforeMs;
+                        waitDue();
+                        MacroEngine_HumanClick(hwnd, a.x, a.y, 0);
+                    }
+                    break;
+                }
+                case MacroStepType::Sleep:
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    break;
+                case MacroStepType::RandomSleep:
+                    due += a.delayBeforeMs + RandomInt(a.tolerance ? a.tolerance : 500);
+                    waitDue();
+                    break;
+                case MacroStepType::MouseWheel: {
+                    due += a.delayBeforeMs;
+                    waitDue();
+                    DWORD dwData = (DWORD)(int)(a.wheelDelta != 0 ? a.wheelDelta : (a.mouseButton == 1 ? -120 : 120));
+                    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, dwData, 0);
+                    break;
+                }
+            }
+        }
+    }
+
+macroEngineEnd:
+    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+    mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
+    mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0);
+    mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0);
+
+    MacroEngine_SendKey(VK_CONTROL, false);
+    MacroEngine_SendKey(VK_SHIFT, false);
+    MacroEngine_SendKey(VK_MENU, false);
+
+    SetCursorPos(cursorRestore.x, cursorRestore.y);
+
+    SetWindowPos(hwnd, NULL, origRect.left, origRect.top,
+                 origRect.right - origRect.left,
+                 origRect.bottom - origRect.top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    if (wasHidden) ShowWindow(hwnd, SW_HIDE);
+
+    if (!isTest) {
+        wchar_t winTitle[128] = L"";
+        GetWindowTextW(hwnd, winTitle, 128);
+        wchar_t summary[256];
+        swprintf_s(summary, L"Macro \"%s\" on %s", macro.name.c_str(), (wcslen(winTitle) > 0) ? winTitle : L"Roblox window");
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::Macro, summary, false);
+    }
+}
+
+static double MacroEngine_NowMs() {
+    static LARGE_INTEGER freq = []() { LARGE_INTEGER f; QueryPerformanceFrequency(&f); return f; }();
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    return (double)c.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+
+static void MacroEngine_FlushRecordingMouseDeltas() {
+    if (!g_isRecording || g_recordingStopPending || !g_recordingMovementsEnabled) return;
+    std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
+    int dx = g_recordingRawDeltaX;
+    int dy = g_recordingRawDeltaY;
+    if (dx == 0 && dy == 0) return;
+    g_recordingRawDeltaX = 0;
+    g_recordingRawDeltaY = 0;
+    double now = MacroEngine_NowMs();
+    DWORD moveDelay = (g_recordingLastMoveTime > 0) ? (DWORD)(now - g_recordingLastMoveTime) : 10;
+    g_recordingLastMoveTime = now;
+    g_recordingPendingMoves.push_back({ (uint16_t)(int16_t)dx, (uint16_t)(int16_t)dy });
+    g_recordingPendingDelays.push_back((uint16_t)min((DWORD)65535, moveDelay));
+    g_recordingHasRelativeMoves = true;
+}
+
+static bool MacroEngine_TakePendingMoves(std::vector<std::pair<uint16_t, uint16_t>>& outPath, std::vector<uint16_t>& outDelays, bool& outRelative) {
+    std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
+    if (g_recordingPendingMoves.empty()) return false;
+    outPath = std::move(g_recordingPendingMoves);
+    outDelays = std::move(g_recordingPendingDelays);
+    outRelative = g_recordingHasRelativeMoves;
+    g_recordingHasRelativeMoves = false;
+    return true;
+}
+
+static void MacroEngine_ClearPendingMoves() {
+    std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
+    g_recordingPendingMoves.clear();
+    g_recordingPendingDelays.clear();
+    g_recordingHasRelativeMoves = false;
+    g_recordingRawDeltaX = 0;
+    g_recordingRawDeltaY = 0;
+}
+
+static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && g_isRecording && !g_recordingStopPending) {
+        MSLLHOOKSTRUCT* p = (MSLLHOOKSTRUCT*)lParam;
+        POINT pt = p->pt;
+        ScreenToClient(g_recordingTargetHwnd, &pt);
+        RECT targetCr = { 0, 0, 800, 600 };
+        if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
+            GetClientRect(g_recordingTargetHwnd, &targetCr);
+        }
+        if (g_recordingOverlayWnd && IsWindow(g_recordingOverlayWnd)) {
+            RECT ovRc = { 0 };
+            GetWindowRect(g_recordingOverlayWnd, &ovRc);
+            if (PtInRect(&ovRc, p->pt)) {
+                return CallNextHookEx(NULL, nCode, wParam, lParam);
+            }
+        }
+
+        bool inBounds = (pt.x >= 0 && pt.y >= 0 && pt.x < targetCr.right && pt.y < targetCr.bottom);
+
+        if (wParam == WM_MOUSEMOVE) {
+            if (g_recordingMovementsEnabled && (g_recordingRightDown || g_recordingLeftDown)) {
+                MacroEngine_FlushRecordingMouseDeltas();
+            }
+        } else if (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN) {
+            if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            bool isRight = (wParam == WM_RBUTTONDOWN);
+            bool wasDown = isRight ? g_recordingRightDown : g_recordingLeftDown;
+            if (isRight) {
+                g_recordingRightDown = true;
+            } else {
+                g_recordingLeftDown = true;
+            }
+            {
+                std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
+                g_recordingRawDeltaX = 0;
+                g_recordingRawDeltaY = 0;
+            }
+
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            {
+                MacroAction moveAction;
+                moveAction.type = MacroStepType::MouseMove;
+                moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                moveAction.mouseDown = wasDown;
+                moveAction.mouseUp = false;
+                moveAction.mouseButton = isRight ? 1 : 0;
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    g_recordingActions.push_back(moveAction);
+                    delay = 0;
+                }
+            }
+
+            MacroAction action;
+            action.type = MacroStepType::MouseDown;
+            action.x = (uint16_t)pt.x;
+            action.y = (uint16_t)pt.y;
+            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+            action.mouseButton = isRight ? 1 : 0;
+            action.image.CaptureFromWindow(g_recordingTargetHwnd, pt.x, pt.y, 12);
+            g_recordingActions.push_back(action);
+            g_recordingClickCount++;
+            g_recordingLastEventTime = now;
+        } else if (wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) {
+            if (!inBounds && !g_recordingLeftDown && !g_recordingRightDown) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            bool isRight = (wParam == WM_RBUTTONUP);
+            MacroEngine_FlushRecordingMouseDeltas();
+            if (isRight) g_recordingRightDown = false;
+            else g_recordingLeftDown = false;
+
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            {
+                MacroAction moveAction;
+                moveAction.type = MacroStepType::MouseMove;
+                moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                moveAction.mouseDown = true;
+                moveAction.mouseUp = false;
+                moveAction.mouseButton = isRight ? 1 : 0;
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    g_recordingActions.push_back(moveAction);
+                    delay = 0;
+                }
+            }
+
+            MacroAction action;
+            action.type = MacroStepType::MouseUp;
+            action.x = (uint16_t)pt.x;
+            action.y = (uint16_t)pt.y;
+            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+            action.mouseButton = isRight ? 1 : 0;
+            g_recordingActions.push_back(action);
+            g_recordingLastEventTime = now;
+        } else if (wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL) {
+            if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            short delta = (short)HIWORD(p->mouseData);
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            {
+                MacroAction moveAction;
+                moveAction.type = MacroStepType::MouseMove;
+                moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                moveAction.mouseDown = g_recordingLeftDown || g_recordingRightDown;
+                moveAction.mouseUp = false;
+                moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    g_recordingActions.push_back(moveAction);
+                    delay = 0;
+                }
+            }
+
+            MacroAction action;
+            action.type = MacroStepType::MouseWheel;
+            action.x = (uint16_t)pt.x;
+            action.y = (uint16_t)pt.y;
+            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+            action.wheelDelta = delta;
+            action.mouseButton = (delta < 0) ? 1 : 0;
+            g_recordingActions.push_back(action);
+            g_recordingWheelCount++;
+            g_recordingLastEventTime = now;
+        } else if (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN || wParam == WM_MBUTTONUP || wParam == WM_XBUTTONUP) {
+            if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            bool isDown = (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN);
+            int btn = 2;
+            if (wParam == WM_XBUTTONDOWN || wParam == WM_XBUTTONUP) {
+                btn = 2 + (int)HIWORD(p->mouseData);
+                if (btn < 3 || btn > 4) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            }
+            bool* downFlag = (btn == 2) ? &g_recordingMiddleDown : (btn == 3 ? &g_recordingXButton1Down : &g_recordingXButton2Down);
+
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            if (isDown) {
+                bool wasDown = *downFlag;
+                *downFlag = true;
+
+                {
+                    MacroAction moveAction;
+                    moveAction.type = MacroStepType::MouseMove;
+                    moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                    moveAction.mouseDown = wasDown;
+                    moveAction.mouseUp = false;
+                    moveAction.mouseButton = (uint8_t)btn;
+                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                        g_recordingActions.push_back(moveAction);
+                        delay = 0;
+                    }
+                }
+
+                MacroAction action;
+                action.type = MacroStepType::MouseDown;
+                action.x = (uint16_t)pt.x;
+                action.y = (uint16_t)pt.y;
+                action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                action.mouseButton = (uint8_t)btn;
+                action.image.CaptureFromWindow(g_recordingTargetHwnd, pt.x, pt.y, 12);
+                g_recordingActions.push_back(action);
+                g_recordingClickCount++;
+                g_recordingLastEventTime = now;
+            } else {
+                *downFlag = false;
+
+                {
+                    MacroAction moveAction;
+                    moveAction.type = MacroStepType::MouseMove;
+                    moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                    moveAction.mouseDown = true;
+                    moveAction.mouseUp = false;
+                    moveAction.mouseButton = (uint8_t)btn;
+                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                        g_recordingActions.push_back(moveAction);
+                        delay = 0;
+                    }
+                }
+
+                MacroAction action;
+                action.type = MacroStepType::MouseUp;
+                action.x = (uint16_t)pt.x;
+                action.y = (uint16_t)pt.y;
+                action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                action.mouseButton = (uint8_t)btn;
+                g_recordingActions.push_back(action);
+                g_recordingLastEventTime = now;
+            }
+        }
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
+static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && g_isRecording && !g_recordingStopPending) {
+        KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+
+        if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) &&
+            p->vkCode == 'R' && (GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
+            auto& acts = g_recordingActions;
+            for (int i = (int)acts.size() - 1; i >= 0; i--) {
+                if (acts[i].type == MacroStepType::KeyDown &&
+                    (acts[i].vkCode == VK_CONTROL || acts[i].vkCode == VK_SHIFT ||
+                     acts[i].vkCode == VK_LCONTROL || acts[i].vkCode == VK_RCONTROL ||
+                     acts[i].vkCode == VK_LSHIFT || acts[i].vkCode == VK_RSHIFT)) {
+                    acts.erase(acts.begin() + i);
+                } else {
+                    break;
+                }
+            }
+            g_recordingKeysDown.erase(VK_CONTROL);
+            g_recordingKeysDown.erase(VK_SHIFT);
+            g_recordingKeysDown.erase(VK_LCONTROL);
+            g_recordingKeysDown.erase(VK_RCONTROL);
+            g_recordingKeysDown.erase(VK_LSHIFT);
+            g_recordingKeysDown.erase(VK_RSHIFT);
+            MacroEngine_StopRecording();
+            return 1;
+        }
+
+        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+            g_recordingKeysDown.erase((uint8_t)p->vkCode);
+        }
+
+        if (GetAncestor(GetForegroundWindow(), GA_ROOT) != g_recordingTargetHwnd) {
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
+        }
+
+        if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
+            if (g_recordingKeysDown.count((uint8_t)p->vkCode)) {
+                return CallNextHookEx(NULL, nCode, wParam, lParam);
+            }
+            g_recordingKeysDown.insert((uint8_t)p->vkCode);
+
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            {
+                MacroAction moveAction;
+                moveAction.type = MacroStepType::MouseMove;
+                moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                moveAction.relative = false;
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    g_recordingActions.push_back(moveAction);
+                    delay = 0;
+                }
+            }
+
+            MacroAction action;
+            action.type = MacroStepType::KeyDown;
+            action.vkCode = (BYTE)p->vkCode;
+            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+            g_recordingActions.push_back(action);
+            g_recordingKeyCount++;
+            g_recordingLastEventTime = now;
+        } else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+            double now = MacroEngine_NowMs();
+            DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+
+            {
+                MacroAction moveAction;
+                moveAction.type = MacroStepType::MouseMove;
+                moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                moveAction.mouseDown = g_recordingLeftDown || g_recordingRightDown;
+                moveAction.mouseUp = false;
+                moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
+                moveAction.relative = false;
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    g_recordingActions.push_back(moveAction);
+                    delay = 0;
+                }
+            }
+
+            MacroAction action;
+            action.type = MacroStepType::KeyUp;
+            action.vkCode = (BYTE)p->vkCode;
+            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+            g_recordingActions.push_back(action);
+            g_recordingLastEventTime = now;
+        }
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
+static void MacroEngine_MoveSamplerThread() {
+    POINT lastPos = { -1, -1 };
+    while (g_isRecording && !g_recordingStopPending) {
+        if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd) && g_recordingMovementsEnabled) {
+            POINT cur;
+            GetCursorPos(&cur);
+            ScreenToClient(g_recordingTargetHwnd, &cur);
+            if (cur.x >= 0 && cur.y >= 0 && cur.x < 800 && cur.y < 600) {
+                if (lastPos.x >= 0 && lastPos.y >= 0) {
+                    int dx = abs(cur.x - lastPos.x);
+                    int dy = abs(cur.y - lastPos.y);
+                    if (dx > 1 || dy > 1) {
+                        g_recordingPendingMoves.push_back({ (uint16_t)cur.x, (uint16_t)cur.y });
+                        g_recordingPendingDelays.push_back(15);
+                    }
+                }
+                lastPos = cur;
+            }
+        }
+        Sleep(15);
+    }
+}
+
+static const wchar_t RECORD_OVERLAY_CLASS[] = L"AntiAFK-RBX-RecordOverlay";
+static bool g_recordOverlayClassRegistered = false;
+int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY);
+void UpdateStatusBarWindowRegion(HWND hwnd);
+
+static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg)
+    {
+    case WM_CREATE:
+    {
+        EnableAcrylic(hwnd);
+        UpdateStatusBarWindowRegion(hwnd);
+        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+
+        enum DWM_WINDOW_CORNER_PREFERENCE {
+            DWMWCP_DEFAULT = 0,
+            DWMWCP_DONOTROUND = 1,
+            DWMWCP_ROUND = 2,
+            DWMWCP_ROUNDSMALL = 3
+        };
+        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+
+        SetTimer(hwnd, 1, 200, NULL);
+        SetTimer(hwnd, 2, 16, NULL);
+        return 0;
+    }
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_SIZE:
+        UpdateStatusBarWindowRegion(hwnd);
+        return 0;
+    case WM_TIMER:
+    {
+        if (wParam == 2) {
+            if (g_isRecording && (g_recordingLeftDown || g_recordingRightDown)) {
+                MacroEngine_FlushRecordingMouseDeltas();
+            }
+            return 0;
+        }
+        if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd) && g_isRecording) {
+            RECT wr = { 0 };
+            GetWindowRect(g_recordingTargetHwnd, &wr);
+            HDC screen = GetDC(NULL);
+            int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+            ReleaseDC(NULL, screen);
+            int x = wr.left + 12;
+            int y = wr.top - MulDiv(35, dpiY, 96);
+            SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+        return 0;
+    }
+    case WM_SETCURSOR:
+        SetCursor(LoadCursor(NULL, IDC_HAND));
+        return TRUE;
+    case WM_LBUTTONUP:
+        MacroEngine_StopRecording();
+        return 0;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        RECT clientRect;
+        GetClientRect(hwnd, &clientRect);
+
+        HDC hdc = BeginPaint(hwnd, &ps);
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
+        HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+
+        HBRUSH backBrush = CreateSolidBrush(RGB(16, 16, 16));
+        FillRect(memDC, &clientRect, backBrush);
+        DeleteObject(backBrush);
+
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetPixelOffsetMode(PixelOffsetModeHalf);
+        g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+
+        const REAL width = (REAL)(clientRect.right - clientRect.left);
+        const REAL height = (REAL)(clientRect.bottom - clientRect.top);
+        const REAL radius = 9.0f;
+        const int dpiX = GetDeviceCaps(hdc, LOGPIXELSX);
+        const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+        const int iconLeftPx = MulDiv(10, dpiX, 96);
+        const int iconSizePx = MulDiv(14, dpiY, 96);
+        const int iconGapPx = MulDiv(10, dpiX, 96);
+        const int horizontalPaddingPx = MulDiv(12, dpiX, 96);
+
+        SolidBrush bodyBrush(Color(90, 16, 16, 16));
+        Pen borderPen(Color(180, 56, 56, 56), 1.0f);
+
+        FillRoundedRectangle(&g, &bodyBrush, 0.0f, 0.0f, width, height, radius);
+        DrawRoundedRectangle(&g, &borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f, radius);
+
+        HFONT hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+
+        Font textFont(memDC, hFontText);
+        SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+
+        const wchar_t* message = L"Click here to stop recording";
+
+        StringFormat sfStatus;
+        sfStatus.SetAlignment(StringAlignmentNear);
+        sfStatus.SetLineAlignment(StringAlignmentCenter);
+        sfStatus.SetTrimming(StringTrimmingEllipsisCharacter);
+        sfStatus.SetFormatFlags(StringFormatFlagsNoWrap);
+
+        int messageWidthPx = MeasureTextWidth(memDC, hFontText, message);
+
+        const REAL fixedTextLeft = (REAL)(iconLeftPx + iconSizePx + iconGapPx);
+        REAL availableTextWidth = (std::max)(0.0f, (REAL)(width - fixedTextLeft - (REAL)horizontalPaddingPx));
+        REAL x = fixedTextLeft;
+        if ((REAL)messageWidthPx < availableTextWidth) {
+            x += (availableTextWidth - (REAL)messageWidthPx) / 2.0f;
+        }
+
+        HICON hIcon = CreateCustomIcon();
+        if (hIcon) {
+            DrawIconEx(memDC, iconLeftPx, (int)((height - (REAL)iconSizePx) / 2.0f), hIcon, iconSizePx, iconSizePx, 0, NULL, DI_NORMAL);
+            DestroyIcon(hIcon);
+        }
+
+        REAL y = 0.0f;
+        RectF statusRect(x, y, width - x - (REAL)horizontalPaddingPx, height);
+        g.DrawString(message, -1, &textFont, statusRect, &sfStatus, &textBrush);
+
+        DeleteObject(hFontText);
+
+        BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
+
+        SelectObject(memDC, oldBMP);
+        DeleteObject(memBMP);
+        DeleteDC(memDC);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_DESTROY:
+        KillTimer(hwnd, 1);
+        KillTimer(hwnd, 2);
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static void ShowRecordingOverlayWindow(HWND targetHwnd)
+{
+    if (!g_recordOverlayClassRegistered) {
+        WNDCLASS wc = { 0 };
+        wc.lpfnWndProc = RecordOverlayWndProc;
+        wc.hInstance = g_hInst;
+        wc.lpszClassName = RECORD_OVERLAY_CLASS;
+        wc.hCursor = LoadCursor(NULL, IDC_HAND);
+        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        RegisterClass(&wc);
+        g_recordOverlayClassRegistered = true;
+    }
+
+    RECT wr = { 0, 0, 800, 600 };
+    if (targetHwnd && IsWindow(targetHwnd)) {
+        GetWindowRect(targetHwnd, &wr);
+    }
+
+    HDC screen = GetDC(NULL);
+    int dpiX = GetDeviceCaps(screen, LOGPIXELSX);
+    int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+    ReleaseDC(NULL, screen);
+
+    HDC hdc = GetDC(NULL);
+    HFONT textFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    int messageWidth = MeasureTextWidth(hdc, textFont, L"Click here to stop recording");
+    DeleteObject(textFont);
+    ReleaseDC(NULL, hdc);
+
+    int contentWidth = MulDiv(10, dpiY, 96) + MulDiv(14, dpiY, 96) + MulDiv(10, dpiY, 96) + messageWidth + MulDiv(24, dpiY, 96);
+    int width = (std::max)(MulDiv(220, dpiX, 96), contentWidth);
+    int height = MulDiv(34, dpiY, 96);
+    int x = wr.left + 12;
+    int y = wr.top - MulDiv(35, dpiY, 96);
+
+    g_recordingOverlayWnd = CreateWindowEx(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+        RECORD_OVERLAY_CLASS,
+        L"AntiAFK-RBX Stop Recording",
+        WS_POPUP | WS_VISIBLE,
+        x, y, width, height,
+        NULL, NULL, g_hInst, NULL);
+
+    UpdateStatusBarWindowRegion(g_recordingOverlayWnd);
+}
+
+static void HideRecordingOverlayWindow()
+{
+    if (g_recordingOverlayWnd && IsWindow(g_recordingOverlayWnd)) {
+        DestroyWindow(g_recordingOverlayWnd);
+        g_recordingOverlayWnd = NULL;
+    }
+}
+
+void MacroEngine_StopRecording() {
+    if (!g_isRecording) return;
+    g_recordingStopPending = true;
+    Sleep(50);
+
+    if (g_recordingMouseHook) {
+        UnhookWindowsHookEx(g_recordingMouseHook);
+        g_recordingMouseHook = NULL;
+    }
+    if (g_recordingKeyboardHook) {
+        UnhookWindowsHookEx(g_recordingKeyboardHook);
+        g_recordingKeyboardHook = NULL;
+    }
+    if (g_recordingDeltaThread.joinable()) {
+        g_recordingDeltaThread.join();
+    }
+
+    {
+        MacroAction moveAction;
+        moveAction.type = MacroStepType::MouseMove;
+        moveAction.delayBeforeMs = 0;
+        moveAction.relative = false;
+        if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+            g_recordingActions.push_back(moveAction);
+        }
+    }
+
+    HideRecordingOverlayWindow();
+    g_isRecording = false;
+
+    g_recordingLeftDown = false;
+    g_recordingRightDown = false;
+    g_recordingMiddleDown = false;
+    g_recordingXButton1Down = false;
+    g_recordingXButton2Down = false;
+    g_recordingKeysDown.clear();
+
+    g_wizardMacro.actions = std::move(g_recordingActions);
+    g_recordingActions.clear();
+
+    if (g_macroReRecording) {
+        g_macroReRecording = false;
+        {
+            std::lock_guard<std::mutex> lock(g_macrosMutex);
+            int sel = g_selectedMacroIndex.load();
+            if (sel >= 0 && sel < (int)g_macros.size()) {
+                g_macros[sel] = g_wizardMacro;
+            }
+        }
+        MacroEngine_SaveMacros();
+        g_macroWizardActive = false;
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+            PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+        }
+    } else {
+        {
+            std::lock_guard<std::mutex> lock(g_macrosMutex);
+            g_macros.push_back(g_wizardMacro);
+            g_selectedMacroIndex = (int)g_macros.size() - 1;
+            g_selectedAction = 4;
+        }
+        MacroEngine_SaveMacros();
+        g_macroWizardActive = false;
+        if (g_macroWizardHwnd && IsWindow(g_macroWizardHwnd)) {
+            DestroyWindow(g_macroWizardHwnd);
+            g_macroWizardHwnd = NULL;
+        }
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+            PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+        }
+        QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr);
+    }
+    g_macroWizardStep = 3;
+
+    HideStatusBarOverlay(true);
+    QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr);
+    CreateTrayMenu(g_isAfkStarted.load());
+}
+
+static void MacroEngine_CancelRecording() {
+    if (!g_isRecording) return;
+    g_recordingStopPending = true;
+    Sleep(50);
+
+    if (g_recordingMouseHook) {
+        UnhookWindowsHookEx(g_recordingMouseHook);
+        g_recordingMouseHook = NULL;
+    }
+    if (g_recordingKeyboardHook) {
+        UnhookWindowsHookEx(g_recordingKeyboardHook);
+        g_recordingKeyboardHook = NULL;
+    }
+    if (g_recordingDeltaThread.joinable()) {
+        g_recordingDeltaThread.join();
+    }
+
+    HideRecordingOverlayWindow();
+    g_isRecording = false;
+
+    g_recordingActions.clear();
+    MacroEngine_ClearPendingMoves();
+    g_recordingClickCount = 0;
+    g_recordingKeyCount = 0;
+    g_recordingWheelCount = 0;
+    g_recordingLeftDown = false;
+    g_recordingRightDown = false;
+    g_recordingMiddleDown = false;
+    g_recordingXButton1Down = false;
+    g_recordingXButton2Down = false;
+    g_recordingKeysDown.clear();
+    g_macroReRecording = false;
+    g_macroWizardActive = false;
+
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+    }
+    QueueStatusBarOverlay(L"Recording cancelled", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : nullptr);
+    CreateTrayMenu(g_isAfkStarted.load());
+}
+
+static void MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macroName) {
+    if (g_isRecording) return;
+    if (!targetHwnd || !IsWindow(targetHwnd)) return;
+
+    RECT restoreRect;
+    GetWindowRect(targetHwnd, &restoreRect);
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    if (GetWindowPlacement(targetHwnd, &wp) && (wp.flags & WPF_RESTORETOMAXIMIZED) == 0) {
+        restoreRect = wp.rcNormalPosition;
+    }
+
+    if (IsIconic(targetHwnd) || !IsWindowVisible(targetHwnd)) {
+        ShowWindow(targetHwnd, SW_RESTORE);
+        ShowWindow(targetHwnd, SW_SHOW);
+        Sleep(200);
+    }
+
+    SetWindowPos(targetHwnd, NULL, restoreRect.left, restoreRect.top, 800, 600, SWP_NOZORDER);
+    Sleep(200);
+
+    {
+        if (IsIconic(targetHwnd)) ShowWindow(targetHwnd, SW_RESTORE);
+        ShowWindow(targetHwnd, SW_SHOW);
+        SetForegroundWindow(targetHwnd);
+    }
+    Sleep(250);
+
+    RECT hwWr, hwCr;
+    GetWindowRect(targetHwnd, &hwWr);
+    GetClientRect(targetHwnd, &hwCr);
+    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
+    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
+    int centerX = hwWr.left + borderX + hwCr.right / 2;
+    int centerY = hwWr.top + borderY + hwCr.bottom / 2;
+    SetCursorPos(centerX, centerY);
+    Sleep(100);
+
+    g_recordingTargetHwnd = targetHwnd;
+    g_recordingActions.clear();
+    MacroEngine_ClearPendingMoves();
+    g_recordingLastMoveTime = 0;
+    g_recordingClickCount = 0;
+    g_recordingKeyCount = 0;
+    g_recordingWheelCount = 0;
+    g_recordingStartTime = MacroEngine_NowMs();
+    g_recordingLastEventTime = 0;
+    g_recordingStopPending = false;
+    g_isRecording = true;
+
+    g_recordingMouseHook = SetWindowsHookEx(WH_MOUSE_LL, MacroEngine_LLMouseProc, GetModuleHandle(NULL), 0);
+    g_recordingKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, MacroEngine_LLKeyboardProc, GetModuleHandle(NULL), 0);
+
+    if (g_recordingDeltaThread.joinable()) {
+        g_recordingDeltaThread.join();
+    }
+    g_recordingDeltaThread = std::thread([]() {
+        while (g_isRecording && !g_recordingStopPending) {
+            bool buttonsDown = g_recordingLeftDown || g_recordingRightDown;
+            if (!buttonsDown) {
+                if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
+                    POINT cur;
+                    GetCursorPos(&cur);
+                    RECT wr;
+                    GetWindowRect(g_recordingTargetHwnd, &wr);
+                    if (!PtInRect(&wr, cur)) {
+                        Sleep(8);
+                        continue;
+                    }
+                }
+            }
+            MacroEngine_FlushRecordingMouseDeltas();
+            Sleep(8);
+        }
+    });
+
+    ShowRecordingOverlayWindow(targetHwnd);
+    ShowStatusBarOverlayPersistent(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop", targetHwnd);
+
+    CreateTrayMenu(g_isAfkStarted.load());
+}
+
+static const wchar_t MACRO_WIZARD_CLASS[] = L"AntiAFK-RBX-MacroWizard";
+
+static void MacroEngine_Wizard_DrawStep1(HDC hdc, const RECT& rc) {
+    Gdiplus::Graphics g(hdc);
+    Gdiplus::SolidBrush textBrush(Gdiplus::Color(255, 205, 205, 205));
+    Gdiplus::SolidBrush dimBrush(Gdiplus::Color(255, 40, 40, 40));
+    Gdiplus::Font font(L"Segoe UI", 14.0f);
+    Gdiplus::Font smallFont(L"Segoe UI", 10.0f);
+    Gdiplus::StringFormat sf;
+    sf.SetAlignment(Gdiplus::StringAlignmentCenter);
+
+    g.FillRectangle(&dimBrush, (INT)rc.left, (INT)rc.top, (INT)(rc.right - rc.left), (INT)(rc.bottom - rc.top));
+
+    int cy = rc.top + 40;
+    g.DrawString(L"Step 1/5 \u2014 Name && Window", -1, &font, Gdiplus::PointF((REAL)(rc.left + 20), (REAL)cy), &textBrush);
+    cy += 50;
+    g.DrawString(L"Give your macro a name:", -1, &smallFont, Gdiplus::PointF((REAL)(rc.left + 20), (REAL)cy), &textBrush);
+}
+
+static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_CREATE: {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            int cw = rc.right - rc.left;
+            int ch = rc.bottom - rc.top;
+            int mg = 14;
+            int btnY = ch - 40;
+            int btnH = 26;
+            int btnW = 80;
+
+            if (g_macroWizardStep == 1) {
+                HWND hNameEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
+                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+                    mg, 50, cw - mg * 2, 24, hwnd, (HMENU)1001, g_hInst, NULL);
+                SendMessage(hNameEdit, EM_SETLIMITTEXT, 64, 0);
+
+                HWND hWinCombo = CreateWindowEx(WS_EX_CLIENTEDGE, L"COMBOBOX", L"",
+                    WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
+                    mg, 90, cw - mg * 2, 200, hwnd, (HMENU)1002, g_hInst, NULL);
+
+                CreateWindowW(L"BUTTON", L"Next \u2192",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
+
+                CreateWindowW(L"BUTTON", L"Cancel",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    mg, btnY, btnW, btnH, hwnd, (HMENU)IDCANCEL, g_hInst, NULL);
+
+                HWND combo = GetDlgItem(hwnd, 1002);
+                if (combo) {
+                    auto wins = FindAllRobloxWindows(true);
+                    for (HWND w : wins) {
+                        wchar_t title[256];
+                        GetWindowTextW(w, title, 256);
+                        wchar_t buf[320];
+                        swprintf_s(buf, L"%s [%d]", title, (int)(uintptr_t)w);
+                        SendMessage(combo, CB_ADDSTRING, 0, (LPARAM)buf);
+                    }
+                    if (wins.size() > 0)
+                        SendMessage(combo, CB_SETCURSEL, 0, 0);
+                }
+            } else if (g_macroWizardStep == 3) {
+                CreateWindowW(L"BUTTON", L"Next \u2192",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
+                CreateWindowW(L"BUTTON", L"\u2190 Re-record",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    mg, btnY, 100, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+                CreateWindowW(L"BUTTON", L"Test Run",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    mg + 110, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_TEST_RUN, g_hInst, NULL);
+            } else if (g_macroWizardStep == 4) {
+                CreateWindowW(L"BUTTON", L"Run on AFK cooldown",
+                    WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                    mg, 50, 200, 24, hwnd, (HMENU)1003, g_hInst, NULL);
+                CreateWindowW(L"BUTTON", L"Run on reconnect",
+                    WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                    mg, 80, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
+                CreateWindowW(L"BUTTON", L"\u2190 Back",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    mg, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+                CreateWindowW(L"BUTTON", L"\u2713 Finish",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
+                Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
+            }
+            ApplyDarkMode(hwnd, true);
+            break;
+        }
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+
+            Gdiplus::Graphics g(hdc);
+            Gdiplus::SolidBrush bgBrush(Gdiplus::Color(255, 30, 30, 30));
+            Gdiplus::SolidBrush textBrush(Gdiplus::Color(255, 205, 205, 205));
+            Gdiplus::SolidBrush dimBrush(Gdiplus::Color(255, 50, 50, 50));
+            Gdiplus::Font titleFont(L"Segoe UI", 16.0f, Gdiplus::FontStyleBold);
+            Gdiplus::Font stepFont(L"Segoe UI", 12.0f);
+            Gdiplus::Font smallFont(L"Segoe UI", 10.0f);
+            Gdiplus::StringFormat sfCenter;
+            sfCenter.SetAlignment(Gdiplus::StringAlignmentCenter);
+
+            g.FillRectangle(&bgBrush, (INT)rc.left, (INT)rc.top, (INT)(rc.right - rc.left), (INT)(rc.bottom - rc.top));
+
+            if (g_macroWizardStep == 1) {
+                g.DrawString(L"Step 1/5 \u2014 Name Your Macro", -1, &titleFont,
+                    Gdiplus::PointF(20.0f, 20.0f), &textBrush);
+                g.DrawString(L"Give your macro a name and select the target Roblox window.", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 55.0f), &textBrush);
+                g.DrawString(L"Macro Name:", -1, &smallFont,
+                    Gdiplus::PointF(20.0f, 82.0f), &textBrush);
+                g.DrawString(L"Target Window:", -1, &smallFont,
+                    Gdiplus::PointF(20.0f, 132.0f), &textBrush);
+            } else if (g_macroWizardStep == 2) {
+                g.DrawString(L"Step 2/5 \u2014 Ready to Record", -1, &titleFont,
+                    Gdiplus::PointF(20.0f, 20.0f), &textBrush);
+                g.DrawString(L"AntiAFK-RBX will resize your game to 800x600", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 65.0f), &textBrush);
+                g.DrawString(L"and start recording your actions.", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 88.0f), &textBrush);
+                g.DrawString(L"Press Ctrl+Shift+R or click Stop to finish.", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 120.0f), &textBrush);
+                {
+                    std::wstring macroLabel = L"Macro: " + g_wizardMacro.name;
+                    g.DrawString(macroLabel.c_str(), -1, &smallFont,
+                        Gdiplus::PointF(20.0f, 170.0f), &textBrush);
+                }
+            } else if (g_macroWizardStep == 3) {
+                int stepCount = (int)g_wizardMacro.actions.size();
+                g.DrawString(L"Step 3/5 \u2014 Review Actions", -1, &titleFont,
+                    Gdiplus::PointF(20.0f, 20.0f), &textBrush);
+                wchar_t countMsg[64];
+                swprintf_s(countMsg, L"Recorded %d actions. Review below:", stepCount);
+                g.DrawString(countMsg, -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 55.0f), &textBrush);
+
+                int listY = 90;
+                int maxShow = min(stepCount, 8);
+                for (int i = 0; i < maxShow; i++) {
+                    const auto& a = g_wizardMacro.actions[i];
+                    const wchar_t* typeStr = L"Click";
+                    switch (a.type) {
+                        case MacroStepType::ImageClick: typeStr = L"Click"; break;
+                        case MacroStepType::KeyPress: typeStr = L"KeyPress"; break;
+                        case MacroStepType::KeyDown: typeStr = L"KeyDown"; break;
+                        case MacroStepType::KeyUp: typeStr = L"KeyUp"; break;
+                        case MacroStepType::MouseMove: typeStr = L"Move"; break;
+                        case MacroStepType::MouseClick: typeStr = L"Click"; break;
+                        case MacroStepType::Sleep: typeStr = L"Sleep"; break;
+                        case MacroStepType::RandomSleep: typeStr = L"RandSleep"; break;
+                    }
+                    wchar_t line[128];
+                    if (a.type == MacroStepType::ImageClick || a.type == MacroStepType::MouseClick) {
+                        swprintf_s(line, L"  %d. %s (%d,%d) +%dms", i + 1, typeStr, a.x, a.y, a.delayBeforeMs);
+                    } else if (a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyUp || a.type == MacroStepType::KeyPress) {
+                        swprintf_s(line, L"  %d. %s [0x%02X] +%dms", i + 1, typeStr, a.vkCode, a.delayBeforeMs);
+                    } else if (a.type == MacroStepType::MouseMove) {
+                        swprintf_s(line, L"  %d. Move (%d pts) +%dms", i + 1, (int)a.path.size(), a.delayBeforeMs);
+                    } else {
+                        swprintf_s(line, L"  %d. %s +%dms", i + 1, typeStr, a.delayBeforeMs);
+                    }
+                    g.DrawString(line, -1, &smallFont,
+                        Gdiplus::PointF(20.0f, (REAL)(listY + i * 22)), &textBrush);
+                }
+                if (stepCount > maxShow) {
+                    wchar_t more[32];
+                    swprintf_s(more, L"  ... and %d more", stepCount - maxShow);
+                    g.DrawString(more, -1, &smallFont,
+                        Gdiplus::PointF(20.0f, (REAL)(listY + maxShow * 22)), &textBrush);
+                }
+            } else if (g_macroWizardStep == 4) {
+                g.DrawString(L"Step 4/5 \u2014 Configure Triggers", -1, &titleFont,
+                    Gdiplus::PointF(20.0f, 20.0f), &textBrush);
+                g.DrawString(L"Configure when this macro should run:", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 55.0f), &textBrush);
+            } else if (g_macroWizardStep == 5) {
+                g.DrawString(L"Step 5/5 \u2014 Done!", -1, &titleFont,
+                    Gdiplus::PointF(20.0f, 20.0f), &textBrush);
+                g.DrawString(L"Your macro is ready to use.", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 55.0f), &textBrush);
+                g.DrawString(L"Select Custom Macro* from the Action menu", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 80.0f), &textBrush);
+                g.DrawString(L"to enable it in the Anti-AFK cycle.", -1, &stepFont,
+                    Gdiplus::PointF(20.0f, 103.0f), &textBrush);
+            }
+
+            EndPaint(hwnd, &ps);
+            break;
+        }
+        case WM_CTLCOLORSTATIC:
+        case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX: {
+            HDC hdc = (HDC)wParam;
+            SetBkColor(hdc, RGB(40, 40, 40));
+            SetTextColor(hdc, RGB(205, 205, 205));
+            return (LRESULT)GetStockObject(DC_BRUSH);
+        }
+        case WM_COMMAND: {
+            int id = LOWORD(wParam);
+            if (id == IDCANCEL) {
+                if (g_isRecording) {
+                    MacroEngine_StopRecording();
+                }
+                g_macroWizardActive = false;
+                HWND parentWnd = GetParent(hwnd);
+                DestroyWindow(hwnd);
+                g_macroWizardHwnd = NULL;
+                if (parentWnd && IsWindow(parentWnd)) {
+                    PostMessage(parentWnd, WM_APP_SHOW_MACROS, 0, 0);
+                }
+                return 0;
+            }
+            if (id == ID_MACROS_WIZARD_NEXT) {
+                if (g_macroWizardStep == 1) {
+                    wchar_t name[128] = { 0 };
+                    GetDlgItemTextW(hwnd, 1001, name, 128);
+                    if (name[0] == 0) {
+                        ShowStatusBarOverlay(L"Enter a macro name first", 2000, hwnd);
+                        return 0;
+                    }
+
+                    HWND combo = GetDlgItem(hwnd, 1002);
+                    int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
+                    if (sel == CB_ERR) {
+                        ShowStatusBarOverlay(L"Select a target window", 2000, hwnd);
+                        return 0;
+                    }
+
+                    g_wizardMacro = Macro();
+                    g_wizardMacro.name = name;
+
+                    DestroyWindow(GetDlgItem(hwnd, 1001));
+                    DestroyWindow(GetDlgItem(hwnd, 1002));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_NEXT));
+
+                    CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+
+                    g_macroWizardStep = 2;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                } else if (g_macroWizardStep == 3) {
+                    g_wizardMacro.triggerOnCooldown = true;
+                    g_wizardMacro.triggerOnReconnect = false;
+
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_NEXT));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_TEST_RUN));
+
+                    CreateWindowW(L"BUTTON", L"Run on AFK cooldown",
+                        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                        20, 90, 200, 24, hwnd, (HMENU)1003, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"Run on reconnect",
+                        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                        20, 120, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"\u2713 Finish",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
+                    Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
+
+                    g_macroWizardStep = 4;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+            }
+            if (id == ID_MACROS_WIZARD_BACK) {
+                if (g_macroWizardStep == 2) {
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_RECORD));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
+
+                    HWND hNameEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", g_wizardMacro.name.c_str(),
+                        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+                        20, 100, 360, 24, hwnd, (HMENU)1001, g_hInst, NULL);
+                    SendMessage(hNameEdit, EM_SETLIMITTEXT, 64, 0);
+
+                    CreateWindowEx(WS_EX_CLIENTEDGE, L"COMBOBOX", L"",
+                        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
+                        20, 150, 360, 200, hwnd, (HMENU)1002, g_hInst, NULL);
+
+                    CreateWindowW(L"BUTTON", L"Next \u2192",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
+
+                    auto wins = FindAllRobloxWindows(true);
+                    HWND combo2 = GetDlgItem(hwnd, 1002);
+                    if (combo2) {
+                        for (HWND w : wins) {
+                            wchar_t title[256];
+                            GetWindowTextW(w, title, 256);
+                            wchar_t buf[320];
+                            swprintf_s(buf, L"%s [%d]", title, (int)(uintptr_t)w);
+                            SendMessage(combo2, CB_ADDSTRING, 0, (LPARAM)buf);
+                        }
+                        if (!wins.empty()) SendMessage(combo2, CB_SETCURSEL, 0, 0);
+                    }
+
+                    g_macroWizardStep = 1;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                } else if (g_macroWizardStep == 3) {
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_NEXT));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_TEST_RUN));
+
+                    CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+
+                    g_wizardMacro.actions.clear();
+                    g_macroWizardStep = 2;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                } else if (g_macroWizardStep == 4) {
+                    DestroyWindow(GetDlgItem(hwnd, 1003));
+                    DestroyWindow(GetDlgItem(hwnd, 1004));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
+                    DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_FINISH));
+
+                    CreateWindowW(L"BUTTON", L"Next \u2192",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"\u2190 Re-record",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        20, 340, 100, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+                    CreateWindowW(L"BUTTON", L"Test Run",
+                        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                        130, 340, 80, 28, hwnd, (HMENU)ID_MACROS_TEST_RUN, g_hInst, NULL);
+
+                    g_macroWizardStep = 3;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                }
+                return 0;
+            }
+            if (id == ID_MACROS_WIZARD_RECORD) {
+                HWND targetHwnd = NULL;
+                HWND combo = GetDlgItem(hwnd, 1002);
+                if (combo) {
+                    int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
+                    if (sel != CB_ERR) {
+                        wchar_t buf[320];
+                        SendMessage(combo, CB_GETLBTEXT, sel, (LPARAM)buf);
+                        wchar_t* bracket = wcsrchr(buf, L'[');
+                        if (bracket) {
+                            targetHwnd = (HWND)(uintptr_t)_wtoi(bracket + 1);
+                        }
+                    }
+                }
+                if (!targetHwnd) {
+                    auto wins = FindAllRobloxWindows(true);
+                    if (wins.empty()) {
+                        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                        return 0;
+                    }
+                    targetHwnd = wins[0];
+                }
+
+                DestroyWindow(hwnd);
+                g_macroWizardHwnd = NULL;
+                g_wizardMacro.actions.clear();
+                MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name);
+                return 0;
+            }
+            if (id == ID_MACROS_WIZARD_FINISH) {
+                g_wizardMacro.triggerOnCooldown = (Button_GetCheck(GetDlgItem(hwnd, 1003)) == BST_CHECKED);
+                g_wizardMacro.triggerOnReconnect = (Button_GetCheck(GetDlgItem(hwnd, 1004)) == BST_CHECKED);
+
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    g_macros.push_back(g_wizardMacro);
+                    g_selectedMacroIndex = (int)g_macros.size() - 1;
+                    g_selectedAction = 4;
+                }
+                MacroEngine_SaveMacros();
+                g_macroWizardActive = false;
+                HWND parentWnd = GetParent(hwnd);
+                DestroyWindow(hwnd);
+                g_macroWizardHwnd = NULL;
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (parentWnd && IsWindow(parentWnd)) {
+                    PostMessage(parentWnd, WM_APP_SHOW_MACROS, 0, 0);
+                    InvalidateRect(parentWnd, NULL, TRUE);
+                }
+                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr);
+                return 0;
+            }
+            if (id == ID_MACROS_TEST_RUN) {
+                Macro testMacro = g_wizardMacro;
+                HWND testTarget = g_wizardTargetHwnd;
+                if (!testTarget || !IsWindow(testTarget)) {
+                    auto wins = FindAllRobloxWindows(true);
+                    if (!wins.empty()) testTarget = wins[0];
+                }
+                g_macroTestRunning = true;
+                std::thread([testMacro, testTarget]() {
+                    if (testTarget) {
+                        MacroEngine_ExecuteMacro(testMacro, testTarget, true);
+                    }
+                    g_macroTestRunning = false;
+                }).detach();
+                return 0;
+            }
+            break;
+        }
+        case WM_TIMER: {
+            if (wParam == 1) {
+                KillTimer(hwnd, 1);
+                HWND hBtnRecord = CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
+                HWND hBtnBack = CreateWindowW(L"BUTTON", L"\u2190 Back",
+                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                    20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
+                InvalidateRect(hwnd, NULL, TRUE);
+                g_macroWizardStep = 2;
+            }
+            break;
+        }
+        case WM_DESTROY:
+            g_macroWizardActive = false;
+            g_macroWizardHwnd = NULL;
+            break;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+void MacroEngine_ShowWizard(HWND parent, int startStep) {
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        g_macroWizardActive = true;
+        g_macroWizardStep = startStep;
+        if (startStep == 1) {
+            g_wizardMacro = Macro();
+            g_recordingActions.clear();
+        }
+        PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+        return;
+    }
+
+    if (g_macroWizardHwnd && IsWindow(g_macroWizardHwnd)) {
+        SetForegroundWindow(g_macroWizardHwnd);
+        return;
+    }
+
+    g_macroWizardActive = true;
+    g_macroWizardStep = 1;
+    g_wizardMacro = Macro();
+
+    WNDCLASS wc = {};
+    wc.lpfnWndProc = MacroEngine_WizardProc;
+    wc.hInstance = g_hInst;
+    wc.lpszClassName = MACRO_WIZARD_CLASS;
+    wc.hbrBackground = (HBRUSH)GetStockObject(DC_BRUSH);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    RegisterClass(&wc);
+
+    int w = 400, h = 400;
+    int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
+
+    g_macroWizardHwnd = CreateWindowEx(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        MACRO_WIZARD_CLASS, L"AntiAFK-RBX \u2022 New Macro",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU,
+        x, y, w, h, parent, NULL, g_hInst, NULL);
+
+    if (g_macroWizardHwnd) {
+        ShowWindow(g_macroWizardHwnd, SW_SHOW);
+        UpdateWindow(g_macroWizardHwnd);
+    }
+}
+
+void MacroEngine_ShowEditor(HWND parent, int macroIndex) {
+    UNREFERENCED_PARAMETER(macroIndex);
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+        SetForegroundWindow(g_hMainUiWnd);
+        return;
+    }
+    g_mainUiOpenedForMacros = true;
+    ShowMainUIDialog(parent);
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
+    }
+}
+
+void MacroEngine_TestRun(HWND parent, int macroIndex) {
+    Macro copy;
+    {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        if (macroIndex < 0 || macroIndex >= (int)g_macros.size()) return;
+        copy = g_macros[macroIndex];
+    }
+    g_macroTestRunning = true;
+    QueueStatusBarOverlay(L"Test run: " + copy.name + L"...", 3000, parent);
+
+    std::thread([copy, parent]() {
+        auto wins = FindAllRobloxWindows(true);
+        if (!wins.empty()) {
+            MacroEngine_ExecuteMacro(copy, wins[0], true);
+        }
+        g_macroTestRunning = false;
+        if (parent && IsWindow(parent)) {
+            QueueStatusBarOverlay(L"Test run complete", 1500, parent);
+        }
+    }).detach();
+}
+
+void MacroEngine_Init() {
+    MacroEngine_LoadMacros();
+}
+
+void MacroEngine_Shutdown() {
+    if (g_isRecording) {
+        MacroEngine_StopRecording();
+    }
+    MacroEngine_SaveMacros();
+}
+
 // ==========
 
 // Fish/Void/Bloxstrap integration
@@ -6085,8 +9541,13 @@ void RamCleanerThread()
         }
 
         if (shouldClean) {
-            ClearRobloxMemory();
+            int cleanedCount = ClearRobloxMemory();
             lastCleanTime = GetTickCount64();
+            if (cleanedCount > 0) {
+                wchar_t ramSummary[96];
+                swprintf_s(ramSummary, L"RAM Cleaner optimized %d Roblox process(es)", cleanedCount);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::UtilityRam, ramSummary, false);
+            }
         }
     }
     g_isRamCleanerRunning = false;
@@ -6128,7 +9589,7 @@ static void PreciseSleepMs(double ms)
 void FpsCapperThread()
 {
     g_isFpsCapperRunning = true;
-    timeBeginPeriod(1);
+    bool timerPeriodActive = false;
 
     std::vector<HANDLE> threadHandles;
     std::mutex handlesMutex;
@@ -6138,6 +9599,7 @@ void FpsCapperThread()
     {
         int effectiveFpsLimit = GetEffectiveFpsLimit();
         if (!ShouldRunFpsCapperNow() || g_isFpsCapperPaused.load() || effectiveFpsLimit <= 0) {
+            if (timerPeriodActive) { timeEndPeriod(1); timerPeriodActive = false; }
             Sleep(100);
             continue;
         }
@@ -6242,9 +9704,12 @@ void FpsCapperThread()
 
         std::lock_guard<std::mutex> lock(handlesMutex);
         if (threadHandles.empty()) {
+            if (timerPeriodActive) { timeEndPeriod(1); timerPeriodActive = false; }
             Sleep(100);
             continue;
         }
+
+        if (!timerPeriodActive) { timeBeginPeriod(1); timerPeriodActive = true; }
 
         for (HANDLE hThread : threadHandles) {
             SuspendThread(hThread);
@@ -6264,7 +9729,7 @@ void FpsCapperThread()
     }
     threadHandles.clear();
 
-    timeEndPeriod(1);
+    if (timerPeriodActive) timeEndPeriod(1);
     g_isFpsCapperRunning = false;
 }
 // ==========
@@ -6587,6 +10052,8 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_OPEN_UI:                   return 0xE80F;
         case ID_TOGGLE_HOTKEY:             return 0xE765;
         case ID_CAPTURE_HOTKEY:            return 0xE70F;
+        case ID_TOGGLE_GRID_HOTKEY:        return 0xE765;
+        case ID_CAPTURE_GRID_HOTKEY:       return 0xE70F;
         case ID_USE_LEGACY_UI:             return 0xE80F;
         case ID_UPDATE_AVAILABLE:          return 0xE777;
         case ID_EXIT:                      return 0xE711;
@@ -6665,6 +10132,8 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_RESET_STATS:               return 0xE74D;
         case ID_UTILS_SHOW_ALL:            return 0xF19D;
         case ID_UTILS_HIDE_ALL:            return 0xEE47;
+        case ID_MACROS_OPEN:               return 0xE7C9;
+        case ID_RAM_CLEANER_TOGGLE:        return 0xE964;
         case ID_UTILS_TOGGLE_WINDOW_OPACITY: return 0xE727;
         case ID_UTILS_TOGGLE_MUTE:         return 0xE74F;
         case ID_UTILS_TOGGLE_FPS:          return 0xE950;
@@ -6678,12 +10147,23 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_DISCORD_NOTIFY_STOP:       return 0xE768;
         case ID_DISCORD_WEBHOOK_PASTE:     return 0xE16F;
         case ID_DISCORD_WEBHOOK_CLEAR:     return 0xE74D;
+        case ID_WEBHOOK_SET_URL:           return 0xE8BD;
+        case ID_DISCORD_USE_DEFAULT_NAME:  return 0xE8AC;
+        case ID_DISCORD_USE_DEFAULT_AVATAR: return 0xE77B;
+        case ID_DISCORD_USE_TIMESTAMP:     return 0xE916;
+        case ID_DISCORD_NOTIFY_HEARTBEAT:  return 0xE823;
+        case ID_WEBHOOK_SET_HEARTBEAT:     return 0xE916;
+        case ID_DISCORD_NOTIFY_UTILS_RAM:  return 0xE964;
+        case ID_TIMINGS_INFO:              return 0xE823;
+        case ID_RETRY_MULTI_INSTANCE:      return 0xE72E;
         case ID_DISCORD_NOTIFY_ACTION:     return 0xE7C9;
         case ID_DISCORD_NOTIFY_RECONNECT:  return 0xE8AF;
         case ID_DISCORD_NOTIFY_ERRORS:     return 0xE7BA;
         case ID_DISCORD_MENTION_ON_ERRORS: return 0xE781;
         case ID_DISCORD_DISABLE_EMBED:     return 0xE8FD;
         case ID_DISCORD_MENTION_TARGET:    return 0xE713;
+        case ID_DISCORD_NOTIFY_MACRO:      return 0xE9F3;
+        case ID_DISCORD_NOTIFY_INTERVAL_MACROS: return 0xE916;
         case ID_TIME_CUSTOM:
         case ID_TIME_3:
         case ID_TIME_6:
@@ -6700,7 +10180,12 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_MI_INTERVAL_1:
         case ID_MI_INTERVAL_3:
         case ID_MI_INTERVAL_5:
-        case ID_MI_INTERVAL_10:            return 0xE916;
+        case ID_MI_INTERVAL_10:
+        case ID_MI_INTERVAL_CUSTOM:            return 0xE916;
+        case ID_INTERVAL_MACRO_TOGGLE:         return 0xE916;
+        case ID_MACROS_SELECT:                 return 0xE7C9;
+        case ID_MACROS_IMPORT:                 return 0xE896;
+        case ID_RECONNECT_MACRO_DELAY:         return 0xE8AF;
     }
     return 0;
 }
@@ -7195,7 +10680,7 @@ static int NormalizeSelectedTimeValue(int value)
 
 static int NormalizeSelectedAction(int value)
 {
-    return ClampInt(value, 0, 3);
+    return ClampInt(value, 0, 4);
 }
 
 static int NormalizeUserSafeMode(int value)
@@ -7215,17 +10700,9 @@ static int NormalizeFpsLimitValue(int value)
 
 static int NormalizeMultiInstanceIntervalValue(int value)
 {
-    switch (value)
-    {
-    case 0:
-    case 1000:
-    case 3000:
-    case 5000:
-    case 10000:
-        return value;
-    default:
-        return 0;
-    }
+    if (value == 0) return 0;
+    if (value >= 50 && value <= 60000) return value;
+    return 0;
 }
 
 std::wstring GetWin32ErrorText(DWORD error)
@@ -7266,6 +10743,11 @@ std::wstring GetDiscordEventLabel(DiscordWebhookEvent eventType)
     case DiscordWebhookEvent::AutoReconnect: return L"Auto Reconnect";
     case DiscordWebhookEvent::AutoReset: return L"Auto Reset";
     case DiscordWebhookEvent::Error: return L"Error";
+    case DiscordWebhookEvent::Macro: return L"Macro";
+    case DiscordWebhookEvent::IntervalMacrosStarted: return L"Interval Macros Started";
+    case DiscordWebhookEvent::IntervalMacrosStopped: return L"Interval Macros Stopped";
+    case DiscordWebhookEvent::Heartbeat: return L"Heartbeat";
+    case DiscordWebhookEvent::UtilityRam: return L"RAM Cleaner";
     }
     return L"Unknown";
 }
@@ -7281,6 +10763,11 @@ DWORD GetDiscordEventColor(DiscordWebhookEvent eventType)
     case DiscordWebhookEvent::AutoReconnect: return 0x007ACC;
     case DiscordWebhookEvent::AutoReset: return 0x007ACC;
     case DiscordWebhookEvent::Error: return 0xC81E1E;
+    case DiscordWebhookEvent::Macro: return 0x9B59B6;
+    case DiscordWebhookEvent::IntervalMacrosStarted: return 0x007ACC;
+    case DiscordWebhookEvent::IntervalMacrosStopped: return 0x7F8C8D;
+    case DiscordWebhookEvent::Heartbeat: return 0x27AE60;
+    case DiscordWebhookEvent::UtilityRam: return 0xE67E22;
     }
     return 0x007ACC;
 }
@@ -7429,6 +10916,7 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
     case DiscordWebhookEvent::Started:
         appendLine(BuildDiscordStartedInstancesLine());
         appendLine(BuildDiscordStartedDetailsLine());
+        appendLine(BuildDiscordTotalStatsLine());
         break;
     case DiscordWebhookEvent::Stopped:
         if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
@@ -7447,6 +10935,7 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
         {
             appendLine(L"Stopped");
         }
+        appendLine(BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load()));
         break;
     case DiscordWebhookEvent::Error:
         if (summary.find(L"Roblox not found") != std::wstring::npos)
@@ -7467,12 +10956,51 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
         break;
     case DiscordWebhookEvent::Action:
         appendLine(std::wstring(L"Action \u2022 ") + GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel());
+        if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
+        {
+            appendLine(summary);
+        }
         break;
     case DiscordWebhookEvent::Test:
         appendLine(L"Test \u2022 Webhook connected");
         break;
     case DiscordWebhookEvent::AutoReset:
         appendLine(L"Reset");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    case DiscordWebhookEvent::Macro:
+        appendLine(L"Macro executed");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    case DiscordWebhookEvent::IntervalMacrosStarted:
+        appendLine(L"Interval macros enabled");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    case DiscordWebhookEvent::IntervalMacrosStopped:
+        appendLine(L"Interval macros disabled");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    case DiscordWebhookEvent::Heartbeat:
+        appendLine(L"Heartbeat");
+        if (!summary.empty())
+        {
+            appendLine(summary);
+        }
+        break;
+    case DiscordWebhookEvent::UtilityRam:
+        appendLine(GetDiscordEventLabel(eventType));
         if (!summary.empty())
         {
             appendLine(summary);
@@ -7530,6 +11058,11 @@ std::wstring BuildDiscordEmbedTitle(DiscordWebhookEvent eventType)
     case DiscordWebhookEvent::AutoReset: return L"AntiAFK Reset";
     case DiscordWebhookEvent::Error: return L"AntiAFK Error";
     case DiscordWebhookEvent::Test: return L"AntiAFK Test";
+    case DiscordWebhookEvent::Macro: return L"AntiAFK Macro";
+    case DiscordWebhookEvent::IntervalMacrosStarted: return L"Interval Macros Started";
+    case DiscordWebhookEvent::IntervalMacrosStopped: return L"Interval Macros Stopped";
+    case DiscordWebhookEvent::Heartbeat: return L"AntiAFK Heartbeat";
+    case DiscordWebhookEvent::UtilityRam: return L"AntiAFK RAM Cleaner";
     }
     return L"AntiAFK Update";
 }
@@ -7539,17 +11072,24 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
     switch (eventType)
     {
     case DiscordWebhookEvent::Started:
-        return BuildDiscordStartedCompactInstancesLabel() + L" \u2022 " + BuildDiscordStartedDetailsLine();
+        return BuildDiscordStartedCompactInstancesLabel() + L" \u2022 " + BuildDiscordStartedDetailsLine() + L"\n" + BuildDiscordTotalStatsLine();
     case DiscordWebhookEvent::Stopped:
-        if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
         {
-            return L"Manual stop";
+            std::wstring base;
+            if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
+            {
+                base = L"Manual stop";
+            }
+            else if (summary.find(L"Roblox not found") != std::wstring::npos)
+            {
+                base = L"Roblox not found";
+            }
+            else
+            {
+                base = summary.empty() ? L"Stopped" : summary;
+            }
+            return base + L"\n" + BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load());
         }
-        if (summary.find(L"Roblox not found") != std::wstring::npos)
-        {
-            return L"Roblox not found";
-        }
-        return summary.empty() ? L"Stopped" : summary;
     case DiscordWebhookEvent::Error:
         if (summary.find(L"Roblox not found") != std::wstring::npos)
         {
@@ -7559,11 +11099,42 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
     case DiscordWebhookEvent::AutoReconnect:
         return summary.empty() ? L"Reconnect triggered" : summary;
     case DiscordWebhookEvent::Action:
-        return GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel();
+        {
+            std::wstring line = GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel();
+            if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
+            {
+                line += L" \u2022 " + summary;
+            }
+            return line;
+        }
     case DiscordWebhookEvent::Test:
         return L"Webhook connected";
     case DiscordWebhookEvent::AutoReset:
         return summary.empty() ? L"Reset triggered" : summary;
+    case DiscordWebhookEvent::Macro:
+        return summary.empty() ? L"Macro executed" : summary;
+    case DiscordWebhookEvent::IntervalMacrosStarted:
+        return summary.empty() ? L"Interval macros enabled" : summary;
+    case DiscordWebhookEvent::IntervalMacrosStopped:
+        return summary.empty() ? L"Interval macros disabled" : summary;
+    case DiscordWebhookEvent::Heartbeat:
+        {
+            std::wstring line = BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load());
+            if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
+                uint64_t now = GetTickCount64();
+                uint64_t sessionSec = (now - g_afkStartTime.load()) / 1000;
+                uint64_t sinceAction = g_lastAfkActionTimestamp.load() > 0 ? (now - g_lastAfkActionTimestamp.load()) / 1000 : 0;
+                uint64_t nextSec = sinceAction < (uint64_t)g_selectedTime.load() ? (uint64_t)g_selectedTime.load() - sinceAction : 0;
+                wchar_t buf[96];
+                swprintf_s(buf, L"Running \u2022 Session: %s \u2022 Next action in %llu sec", FormatDurationShort(sessionSec).c_str(), (unsigned long long)nextSec);
+                line = std::wstring(buf) + L"\n" + line;
+            } else {
+                line = L"Idle \u2022 No active session\n" + line;
+            }
+            return line;
+        }
+    case DiscordWebhookEvent::UtilityRam:
+        return summary.empty() ? L"Utility event" : summary;
     default:
         return summary.empty() ? GetDiscordEventLabel(eventType) : summary;
     }
@@ -7643,6 +11214,21 @@ std::string BuildDiscordWebhookPayloadJson(DiscordWebhookEvent eventType, const 
         ? "{\"parse\":[]}"
         : "{\"parse\":[\"everyone\",\"users\",\"roles\"]}";
 
+    std::wstring botNameUtf8W = L"AntiAFK-RBX";
+    std::string botNameUtf8 = EscapeJsonStringUtf8(WideToUtf8(botNameUtf8W));
+    std::string headFields;
+    if (!g_discordUseDefaultName.load()) {
+        headFields = "\"username\":\"" + botNameUtf8 + "\"";
+    }
+    if (!g_discordUseDefaultAvatar.load()) {
+        std::wstring avatarUrl = GetDiscordAuthorIconUrl();
+        if (!avatarUrl.empty()) {
+            if (!headFields.empty()) headFields += ",";
+            headFields += "\"avatar_url\":\"" + EscapeJsonStringUtf8(WideToUtf8(avatarUrl)) + "\"";
+        }
+    }
+    std::string headComma = headFields.empty() ? "" : ",";
+
     if (g_discordDisableEmbed.load())
     {
         std::wstring content = BuildDiscordPlainContentLine(eventType, summary);
@@ -7654,7 +11240,7 @@ std::string BuildDiscordWebhookPayloadJson(DiscordWebhookEvent eventType, const 
 
         std::ostringstream json;
         json
-            << "{\"username\":\"AntiAFK-RBX\",\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":\""
+            << "{" << headFields << headComma << "\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":\""
             << contentUtf8
             << "\"}";
         return json.str();
@@ -7674,7 +11260,7 @@ std::string BuildDiscordWebhookPayloadJson(DiscordWebhookEvent eventType, const 
 
     std::ostringstream json;
     json
-        << "{\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":";
+        << "{" << headFields << headComma << "\"allowed_mentions\":" << allowedMentionsJson << ",\"content\":";
     if (!mentionText.empty())
     {
         json << "\"" << mentionUtf8 << "\"";
@@ -7688,7 +11274,11 @@ std::string BuildDiscordWebhookPayloadJson(DiscordWebhookEvent eventType, const 
         << "\"title\":\"" << titleUtf8 << "\","
         << "\"description\":\"" << descriptionUtf8 << "\","
         << "\"author\":{\"name\":\"" << authorNameUtf8 << "\",\"url\":\"" << authorUrlUtf8 << "\",\"icon_url\":\"" << authorIconUrlUtf8 << "\"},"
-        << "\"color\":" << GetDiscordEventColor(eventType)
+        << "\"color\":" << GetDiscordEventColor(eventType);
+    if (g_discordUseTimestamp.load()) {
+        json << ",\"timestamp\":\"" << EscapeJsonStringUtf8(WideToUtf8(GetDiscordUtcTimestamp())) << "\"";
+    }
+    json
         << "}],\"attachments\":[]}";
     return json.str();
 }
@@ -7704,6 +11294,7 @@ uint64_t FinalizeAfkSession()
     uint64_t sessionSeconds = (GetTickCount64() - startTime) / 1000;
     g_totalAfkTimeSeconds += sessionSeconds;
     g_afkSessionsCompleted++;
+    g_lastSessionDurationSeconds = sessionSeconds;
 
     uint64_t longestSession = g_longestAfkSessionSeconds.load();
     while (sessionSeconds > longestSession && !g_longestAfkSessionSeconds.compare_exchange_weak(longestSession, sessionSeconds))
@@ -7720,6 +11311,28 @@ std::wstring FormatDurationShort(uint64_t totalSeconds)
 
     wchar_t buffer[64];
     swprintf_s(buffer, L"%llu h %llu min", hours, minutes);
+    return buffer;
+}
+
+std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
+{
+    wchar_t buffer[224];
+    swprintf_s(buffer, L"Session: %s \u2022 Actions: %llu \u2022 Reconnects: %llu \u2022 Sessions completed: %llu",
+        FormatDurationShort(lastSessionSeconds).c_str(),
+        (unsigned long long)g_afkActionsPerformed.load(),
+        (unsigned long long)g_autoReconnectsPerformed.load(),
+        (unsigned long long)g_afkSessionsCompleted.load());
+    return buffer;
+}
+
+std::wstring BuildDiscordTotalStatsLine()
+{
+    wchar_t buffer[224];
+    swprintf_s(buffer, L"Total time: %s \u2022 Actions: %llu \u2022 Reconnects: %llu \u2022 Sessions completed: %llu",
+        FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
+        (unsigned long long)g_afkActionsPerformed.load(),
+        (unsigned long long)g_autoReconnectsPerformed.load(),
+        (unsigned long long)g_afkSessionsCompleted.load());
     return buffer;
 }
 
@@ -7741,8 +11354,13 @@ bool ShouldSendDiscordWebhookEvent(DiscordWebhookEvent eventType, bool bypassEna
     case DiscordWebhookEvent::Stopped: return g_discordNotifyStop.load();
     case DiscordWebhookEvent::Action: return g_discordNotifyAction.load();
     case DiscordWebhookEvent::AutoReconnect: return g_discordNotifyReconnect.load();
-    case DiscordWebhookEvent::AutoReset: return false;
+    case DiscordWebhookEvent::AutoReset: return g_discordNotifyReset.load();
     case DiscordWebhookEvent::Error: return g_discordNotifyErrors.load();
+    case DiscordWebhookEvent::Macro: return g_discordNotifyMacro.load();
+    case DiscordWebhookEvent::IntervalMacrosStarted:
+    case DiscordWebhookEvent::IntervalMacrosStopped: return g_discordNotifyIntervalMacros.load();
+    case DiscordWebhookEvent::Heartbeat: return g_discordNotifyHeartbeat.load();
+    case DiscordWebhookEvent::UtilityRam: return g_discordNotifyUtilsRam.load();
     case DiscordWebhookEvent::Test: return true;
     }
     return false;
@@ -8141,9 +11759,25 @@ void SaveSettings()
         RegSetValueEx(hKey, L"DiscordNotifyReconnect", 0, REG_DWORD, (const BYTE*)&discordNotifyReconnect, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordNotifyReset", 0, REG_DWORD, (const BYTE*)&discordNotifyReset, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordNotifyErrors", 0, REG_DWORD, (const BYTE*)&discordNotifyErrors, sizeof(DWORD));
+        {
+            DWORD discordNotifyMacro = g_discordNotifyMacro.load();
+            RegSetValueEx(hKey, L"DiscordNotifyMacro", 0, REG_DWORD, (const BYTE*)&discordNotifyMacro, sizeof(DWORD));
+            DWORD discordNotifyIntervalMacros = g_discordNotifyIntervalMacros.load();
+            RegSetValueEx(hKey, L"DiscordNotifyIntervalMacros", 0, REG_DWORD, (const BYTE*)&discordNotifyIntervalMacros, sizeof(DWORD));
+            DWORD discordNotifyHeartbeat = g_discordNotifyHeartbeat.load();
+            RegSetValueEx(hKey, L"DiscordNotifyHeartbeat", 0, REG_DWORD, (const BYTE*)&discordNotifyHeartbeat, sizeof(DWORD));
+            DWORD discordNotifyUtilsRam = g_discordNotifyUtilsRam.load();
+            RegSetValueEx(hKey, L"DiscordNotifyUtilsRam", 0, REG_DWORD, (const BYTE*)&discordNotifyUtilsRam, sizeof(DWORD));
+            DWORD heartbeatInterval = (DWORD)g_discordHeartbeatIntervalMin.load();
+            RegSetValueEx(hKey, L"DiscordHeartbeatIntervalMin", 0, REG_DWORD, (const BYTE*)&heartbeatInterval, sizeof(DWORD));
+        }
         RegSetValueEx(hKey, L"DiscordDisableEmbed", 0, REG_DWORD, (const BYTE*)&discordDisableEmbed, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordMentionOnErrors", 0, REG_DWORD, (const BYTE*)&discordMentionOnErrors, sizeof(DWORD));
         RegSetValueEx(hKey, L"ReconnectCheckInterval", 0, REG_DWORD, (const BYTE*)&reconnectCheckInterval, sizeof(DWORD));
+        {
+            DWORD reconnectMacroDelaySec = g_reconnectMacroDelaySec.load();
+            RegSetValueEx(hKey, L"ReconnectMacroDelaySec", 0, REG_DWORD, (const BYTE*)&reconnectMacroDelaySec, sizeof(DWORD));
+        }
         {
             DWORD hotkeyEnabled = g_hotkeyEnabled.load();
             DWORD hotkeyModifiers = g_hotkeyModifiers.load();
@@ -8151,6 +11785,12 @@ void SaveSettings()
             RegSetValueEx(hKey, L"HotkeyEnabled", 0, REG_DWORD, (const BYTE*)&hotkeyEnabled, sizeof(DWORD));
             RegSetValueEx(hKey, L"HotkeyModifiers", 0, REG_DWORD, (const BYTE*)&hotkeyModifiers, sizeof(DWORD));
             RegSetValueEx(hKey, L"HotkeyVk", 0, REG_DWORD, (const BYTE*)&hotkeyVk, sizeof(DWORD));
+            DWORD gridHotkeyEnabled = g_hotkeyGridEnabled.load();
+            DWORD gridHotkeyModifiers = g_hotkeyGridModifiers.load();
+            DWORD gridHotkeyVk = g_hotkeyGridVk.load();
+            RegSetValueEx(hKey, L"GridHotkeyEnabled", 0, REG_DWORD, (const BYTE*)&gridHotkeyEnabled, sizeof(DWORD));
+            RegSetValueEx(hKey, L"GridHotkeyModifiers", 0, REG_DWORD, (const BYTE*)&gridHotkeyModifiers, sizeof(DWORD));
+            RegSetValueEx(hKey, L"GridHotkeyVk", 0, REG_DWORD, (const BYTE*)&gridHotkeyVk, sizeof(DWORD));
         }
         {
             DWORD actionPreset = g_actionPreset.load();
@@ -8166,6 +11806,14 @@ void SaveSettings()
         }
         RegSetValueExW(hKey, L"DiscordWebhookUrl", 0, REG_SZ, (const BYTE*)discordWebhookUrl.c_str(), (DWORD)((discordWebhookUrl.size() + 1) * sizeof(wchar_t)));
         RegSetValueExW(hKey, L"DiscordMentionTarget", 0, REG_SZ, (const BYTE*)discordMentionTarget.c_str(), (DWORD)((discordMentionTarget.size() + 1) * sizeof(wchar_t)));
+        {
+            DWORD useDefaultName = g_discordUseDefaultName.load() ? 1 : 0;
+            RegSetValueEx(hKey, L"DiscordUseDefaultName", 0, REG_DWORD, (const BYTE*)&useDefaultName, sizeof(DWORD));
+            DWORD useDefaultAvatar = g_discordUseDefaultAvatar.load() ? 1 : 0;
+            RegSetValueEx(hKey, L"DiscordUseDefaultAvatar", 0, REG_DWORD, (const BYTE*)&useDefaultAvatar, sizeof(DWORD));
+            DWORD useTimestamp = g_discordUseTimestamp.load() ? 1 : 0;
+            RegSetValueEx(hKey, L"DiscordUseTimestamp", 0, REG_DWORD, (const BYTE*)&useTimestamp, sizeof(DWORD));
+        }
         DWORD ramCleanerEnabled = g_ramCleanerAutoStart.load();
         RegSetValueEx(hKey, L"RamCleanerEnabled", 0, REG_DWORD, (const BYTE*)&ramCleanerEnabled, sizeof(DWORD));
         DWORD ramCleanerMode = g_ramCleanerMode.load();
@@ -8194,8 +11842,16 @@ void SaveSettings()
             for (DWORD i = 0; i < presetCount; ++i) {
                 const auto& pr = g_instancePresets[i];
                 std::wstring keyName = L"InstancePreset" + std::to_wstring(i);
-                wchar_t buf[512];
-                int written = swprintf_s(buf, L"%s|%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                auto joinNames = [](const std::vector<std::wstring>& names) {
+                    std::wstring s;
+                    for (size_t mi = 0; mi < names.size(); mi++) {
+                        if (mi > 0) s += L", ";
+                        s += names[mi];
+                    }
+                    return s;
+                };
+                wchar_t buf[1024];
+                int written = swprintf_s(buf, L"%s|%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d|%s|%s|%s",
                     pr.name.c_str(),
                     pr.overrideAntiAfk, pr.enableAntiAfk,
                     pr.overrideMute, pr.enableMute,
@@ -8203,7 +11859,13 @@ void SaveSettings()
                     pr.overrideHide, pr.enableHide,
                     pr.overrideFpsLimit, pr.enableFpsLimit, pr.fpsLimitValue,
                     pr.overrideReconnect, pr.enableReconnect,
-                    pr.overrideReset, pr.enableReset);
+                    pr.overrideReset, pr.enableReset,
+                    pr.overrideTimer, pr.enableTimer, pr.timerSeconds,
+                    pr.overrideMacro, pr.enableMacro,
+                    pr.enableReconnectMacro, pr.enableIntervalMacro,
+                    joinNames(pr.macroNames).c_str(),
+                    joinNames(pr.reconnectMacroNames).c_str(),
+                    joinNames(pr.intervalMacroNames).c_str());
                 if (written > 0) {
                     RegSetValueExW(hKey, keyName.c_str(), 0, REG_SZ,
                         (const BYTE*)buf, (DWORD)((wcslen(buf) + 1) * sizeof(wchar_t)));
@@ -8223,7 +11885,7 @@ void LoadSettings()
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
     DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
     DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
-    DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordDisableEmbed = 0, discordMentionOnErrors = 0;
+    DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordNotifyMacro = 0, discordNotifyIntervalMacros = 0, discordDisableEmbed = 0, discordMentionOnErrors = 0;
     DWORD reconnectCheckInterval = 0;    DWORD gridForceSmall = 0, gridAllMonitors = 0, gridKeepAspectRatio = 1;
     DWORD useCustomProcessSearch = 0;
     DWORD excludeBuiltinNames = 0;
@@ -8303,9 +11965,30 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"DiscordNotifyReconnect", NULL, NULL, (LPBYTE)&discordNotifyReconnect, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordNotifyReset", NULL, NULL, (LPBYTE)&discordNotifyReset, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordNotifyErrors", NULL, NULL, (LPBYTE)&discordNotifyErrors, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DiscordNotifyMacro", NULL, NULL, (LPBYTE)&discordNotifyMacro, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DiscordNotifyIntervalMacros", NULL, NULL, (LPBYTE)&discordNotifyIntervalMacros, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD discordNotifyHeartbeat = 0;
+            RegQueryValueEx(hKey, L"DiscordNotifyHeartbeat", NULL, NULL, (LPBYTE)&discordNotifyHeartbeat, &dataSize); dataSize = sizeof(DWORD);
+            g_discordNotifyHeartbeat = (discordNotifyHeartbeat != 0);
+            DWORD discordNotifyUtilsRam = 0;
+            RegQueryValueEx(hKey, L"DiscordNotifyUtilsRam", NULL, NULL, (LPBYTE)&discordNotifyUtilsRam, &dataSize); dataSize = sizeof(DWORD);
+            g_discordNotifyUtilsRam = (discordNotifyUtilsRam != 0);
+            DWORD heartbeatInterval = 60;
+            RegQueryValueEx(hKey, L"DiscordHeartbeatIntervalMin", NULL, NULL, (LPBYTE)&heartbeatInterval, &dataSize); dataSize = sizeof(DWORD);
+            g_discordHeartbeatIntervalMin = (int)heartbeatInterval;
+            if (g_discordHeartbeatIntervalMin.load() < 5) g_discordHeartbeatIntervalMin = 5;
+            if (g_discordHeartbeatIntervalMin.load() > 1440) g_discordHeartbeatIntervalMin = 1440;
+        }
         RegQueryValueEx(hKey, L"DiscordDisableEmbed", NULL, NULL, (LPBYTE)&discordDisableEmbed, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordMentionOnErrors", NULL, NULL, (LPBYTE)&discordMentionOnErrors, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"ReconnectCheckInterval", NULL, NULL, (LPBYTE)&reconnectCheckInterval, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD reconnectMacroDelaySec = 60;
+            RegQueryValueEx(hKey, L"ReconnectMacroDelaySec", NULL, NULL, (LPBYTE)&reconnectMacroDelaySec, &dataSize); dataSize = sizeof(DWORD);
+            g_reconnectMacroDelaySec = (int)reconnectMacroDelaySec;
+            if (g_reconnectMacroDelaySec.load() < 0) g_reconnectMacroDelaySec = 0;
+        }
         {
             DWORD hkEnabled = 1, hkMods = MOD_CONTROL | MOD_SHIFT, hkVk = VK_F1;
             RegQueryValueEx(hKey, L"HotkeyEnabled", NULL, NULL, (LPBYTE)&hkEnabled, &dataSize); dataSize = sizeof(DWORD);
@@ -8314,6 +11997,13 @@ void LoadSettings()
             g_hotkeyEnabled = (hkEnabled != 0);
             g_hotkeyModifiers = hkMods;
             g_hotkeyVk = hkVk;
+            DWORD gkEnabled = 1, gkMods = MOD_CONTROL | MOD_SHIFT, gkVk = VK_F2;
+            RegQueryValueEx(hKey, L"GridHotkeyEnabled", NULL, NULL, (LPBYTE)&gkEnabled, &dataSize); dataSize = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"GridHotkeyModifiers", NULL, NULL, (LPBYTE)&gkMods, &dataSize); dataSize = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"GridHotkeyVk", NULL, NULL, (LPBYTE)&gkVk, &dataSize); dataSize = sizeof(DWORD);
+            g_hotkeyGridEnabled = (gkEnabled != 0);
+            g_hotkeyGridModifiers = gkMods;
+            g_hotkeyGridVk = gkVk;
         }
         RegQueryValueEx(hKey, L"RamCleanerEnabled", NULL, NULL, (LPBYTE)&ramCleanerEnabled, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"RamCleanerMode", NULL, NULL, (LPBYTE)&ramCleanerMode, &dataSize); dataSize = sizeof(DWORD);
@@ -8370,6 +12060,18 @@ void LoadSettings()
             }
         }
 
+        {
+            DWORD useDefaultName = 0;
+            RegQueryValueEx(hKey, L"DiscordUseDefaultName", NULL, NULL, (LPBYTE)&useDefaultName, &dataSize); dataSize = sizeof(DWORD);
+            g_discordUseDefaultName = (useDefaultName != 0);
+            DWORD useDefaultAvatar = 0;
+            RegQueryValueEx(hKey, L"DiscordUseDefaultAvatar", NULL, NULL, (LPBYTE)&useDefaultAvatar, &dataSize); dataSize = sizeof(DWORD);
+            g_discordUseDefaultAvatar = (useDefaultAvatar != 0);
+            DWORD useTimestamp = 1;
+            RegQueryValueEx(hKey, L"DiscordUseTimestamp", NULL, NULL, (LPBYTE)&useTimestamp, &dataSize); dataSize = sizeof(DWORD);
+            g_discordUseTimestamp = (useTimestamp != 0);
+        }
+
         DWORD presetCount = 0;
         DWORD presetSz = sizeof(DWORD);
         if (RegQueryValueEx(hKey, L"InstancePresetCount", NULL, NULL, (LPBYTE)&presetCount, &presetSz) == ERROR_SUCCESS && presetCount > 0 && presetCount <= 32) {
@@ -8385,17 +12087,45 @@ void LoadSettings()
                 size_t sep = valBuf.find(L'|');
                 if (sep == std::wstring::npos) continue;
                 std::wstring name = valBuf.substr(0, sep);
-                std::wstring data = valBuf.substr(sep + 1);
+                std::wstring rest = valBuf.substr(sep + 1);
 
-                int vals[16] = {0};
+                size_t sep2 = rest.find(L'|');
+                std::wstring data = (sep2 == std::wstring::npos) ? rest : rest.substr(0, sep2);
+                std::wstring nameSec = (sep2 == std::wstring::npos) ? L"" : rest.substr(sep2 + 1);
+                std::vector<std::wstring> sections;
+                {
+                    size_t pos = 0;
+                    while (sections.size() < 3) {
+                        size_t bar = nameSec.find(L'|', pos);
+                        sections.push_back((bar == std::wstring::npos) ? nameSec.substr(pos) : nameSec.substr(pos, bar - pos));
+                        if (bar == std::wstring::npos) break;
+                        pos = bar + 1;
+                    }
+                }
+                auto parseNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
+                    out.clear();
+                    size_t pos = 0;
+                    while (pos < raw.size()) {
+                        size_t comma = raw.find(L',', pos);
+                        std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
+                        size_t s = n.find_first_not_of(L' ');
+                        size_t e = n.find_last_not_of(L' ');
+                        if (s != std::wstring::npos) n = n.substr(s, e - s + 1);
+                        if (!n.empty()) out.push_back(n);
+                        if (comma == std::wstring::npos) break;
+                        pos = comma + 1;
+                    }
+                };
+
+                int vals[32] = {0};
                 int nParsed = 0;
                 const wchar_t* p = data.c_str();
-                while (nParsed < 16 && *p) {
+                while (nParsed < 23 && *p) {
                     while (*p == L',' || *p == L' ') ++p;
                     if (!*p) break;
-                    int v = 0;
                     int sign = 1;
                     if (*p == L'-') { sign = -1; ++p; }
+                    int v = 0;
                     while (*p >= L'0' && *p <= L'9') { v = v * 10 + (*p - L'0'); ++p; }
                     vals[nParsed++] = sign * v;
                     if (*p == L',') ++p;
@@ -8420,6 +12150,29 @@ void LoadSettings()
                 pr.enableReconnect = vals[13] != 0;
                 pr.overrideReset = vals[14] != 0;
                 pr.enableReset = vals[15] != 0;
+                if (nParsed >= 23) {
+                    pr.overrideTimer = vals[16] != 0;
+                    pr.enableTimer = vals[17] != 0;
+                    pr.timerSeconds = vals[18];
+                    pr.overrideMacro = vals[19] != 0;
+                    pr.enableMacro = vals[20] != 0;
+                    pr.enableReconnectMacro = vals[21] != 0;
+                    pr.enableIntervalMacro = vals[22] != 0;
+                } else if (nParsed >= 21) {
+                    pr.overrideTimer = vals[16] != 0;
+                    pr.enableTimer = vals[17] != 0;
+                    pr.timerSeconds = vals[18];
+                    pr.overrideMacro = vals[19] != 0;
+                    pr.enableMacro = vals[20] != 0;
+                } else if (nParsed >= 18) {
+                    pr.overrideMacro = vals[16] != 0;
+                    pr.enableMacro = vals[17] != 0;
+                }
+                if (pr.overrideMacro) {
+                    if (!sections.empty()) parseNames(sections[0], pr.macroNames);
+                    if (sections.size() > 1) parseNames(sections[1], pr.reconnectMacroNames);
+                    if (sections.size() > 2) parseNames(sections[2], pr.intervalMacroNames);
+                }
                 loaded.push_back(pr);
             }
             if (!loaded.empty()) {
@@ -8489,6 +12242,8 @@ void LoadSettings()
     g_discordNotifyReconnect = (discordNotifyReconnect != 0);
     g_discordNotifyReset = (discordNotifyReset != 0);
     g_discordNotifyErrors = (discordNotifyErrors != 0);
+    g_discordNotifyMacro = (discordNotifyMacro != 0);
+    g_discordNotifyIntervalMacros = (discordNotifyIntervalMacros != 0);
     g_discordDisableEmbed = (discordDisableEmbed != 0);
     g_discordMentionOnErrors = (discordMentionOnErrors != 0);
     g_reconnectCheckInterval = (int)reconnectCheckInterval;
@@ -8579,6 +12334,9 @@ void ResetSettings()
     g_hotkeyEnabled = true;
     g_hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
     g_hotkeyVk = VK_F1;
+    g_hotkeyGridEnabled = true;
+    g_hotkeyGridModifiers = MOD_CONTROL | MOD_SHIFT;
+    g_hotkeyGridVk = VK_F2;
     g_unmutedPid = 0;
     g_discordWebhookEnabled = false;
     g_discordNotifyStart = true;
@@ -8587,10 +12345,18 @@ void ResetSettings()
     g_discordNotifyReconnect = true;
     g_discordNotifyReset = false;
     g_discordNotifyErrors = true;
+    g_discordNotifyMacro = false;
+    g_discordNotifyIntervalMacros = false;
+    g_discordNotifyHeartbeat = false;
+    g_discordNotifyUtilsRam = false;
+    g_discordHeartbeatIntervalMin = 60;
     g_discordDisableEmbed = false;
     g_discordMentionOnErrors = false;
     SetDiscordWebhookUrl(L"");
     SetDiscordMentionTarget(L"@everyone");
+    g_discordUseDefaultName = false;
+    g_discordUseDefaultAvatar = false;
+    g_discordUseTimestamp = true;
     g_useCustomProcessSearch = false;
     g_excludeBuiltinNames = false;
     {
@@ -8625,6 +12391,7 @@ void ResetSettings()
 
     if (g_isFpsCapperRunning.load()) {
         g_isFpsCapperRunning = false;
+        std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
         if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
     }
 
@@ -8693,6 +12460,14 @@ struct SettingsSnapshot {
     bool discordNotifyReconnect = true;
     bool discordNotifyReset = false;
     bool discordNotifyErrors = true;
+    bool discordNotifyMacro = false;
+    bool discordNotifyIntervalMacros = false;
+    bool discordNotifyHeartbeat = false;
+    bool discordNotifyUtilsRam = false;
+    bool discordUseDefaultName = false;
+    bool discordUseDefaultAvatar = false;
+    bool discordUseTimestamp = true;
+    int discordHeartbeatIntervalMin = 60;
     bool discordDisableEmbed = false;
     bool discordMentionOnErrors = false;
     std::wstring discordWebhookUrl;
@@ -8701,12 +12476,22 @@ struct SettingsSnapshot {
     bool excludeBuiltinNames = false;
     std::wstring customProcessNames;
     int reconnectCheckInterval = 0;
+    int reconnectMacroDelaySec = 60;
     int cpuLimitPercent = 90;
     int cpuLimitPeriod = 100;
     bool cpuLimitMode = false;
     bool hotkeyEnabled = true;
     int hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
     int hotkeyVk = VK_F1;
+    bool gridHotkeyEnabled = true;
+    int gridHotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
+    int gridHotkeyVk = VK_F2;
+    int actionPreset = 0;
+    int preActionDelay = 55;
+    int keyPressDelay = 25;
+    int postActionDelay = 55;
+    int actionRepeatCount = 3;
+    bool ssAlwaysShowExitUI = false;
 };
 
 SettingsSnapshot CaptureSettingsSnapshot()
@@ -8773,10 +12558,18 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.discordNotifyReconnect = g_discordNotifyReconnect.load();
     s.discordNotifyReset = g_discordNotifyReset.load();
     s.discordNotifyErrors = g_discordNotifyErrors.load();
+    s.discordNotifyMacro = g_discordNotifyMacro.load();
+    s.discordNotifyIntervalMacros = g_discordNotifyIntervalMacros.load();
+    s.discordNotifyHeartbeat = g_discordNotifyHeartbeat.load();
+    s.discordNotifyUtilsRam = g_discordNotifyUtilsRam.load();
+    s.discordHeartbeatIntervalMin = g_discordHeartbeatIntervalMin.load();
     s.discordDisableEmbed = g_discordDisableEmbed.load();
     s.discordMentionOnErrors = g_discordMentionOnErrors.load();
     s.discordWebhookUrl = GetDiscordWebhookUrlCopy();
     s.discordMentionTarget = GetDiscordMentionTargetCopy();
+    s.discordUseDefaultName = g_discordUseDefaultName.load();
+    s.discordUseDefaultAvatar = g_discordUseDefaultAvatar.load();
+    s.discordUseTimestamp = g_discordUseTimestamp.load();
     s.useCustomProcessSearch = g_useCustomProcessSearch.load();
     s.excludeBuiltinNames = g_excludeBuiltinNames.load();
     {
@@ -8784,9 +12577,19 @@ SettingsSnapshot CaptureSettingsSnapshot()
         s.customProcessNames = g_customProcessNames;
     }
     s.reconnectCheckInterval = g_reconnectCheckInterval.load();
+    s.reconnectMacroDelaySec = g_reconnectMacroDelaySec.load();
     s.hotkeyEnabled = g_hotkeyEnabled.load();
     s.hotkeyModifiers = g_hotkeyModifiers.load();
     s.hotkeyVk = g_hotkeyVk.load();
+    s.gridHotkeyEnabled = g_hotkeyGridEnabled.load();
+    s.gridHotkeyModifiers = g_hotkeyGridModifiers.load();
+    s.gridHotkeyVk = g_hotkeyGridVk.load();
+    s.actionPreset = g_actionPreset.load();
+    s.preActionDelay = g_preActionDelay.load();
+    s.keyPressDelay = g_keyPressDelay.load();
+    s.postActionDelay = g_postActionDelay.load();
+    s.actionRepeatCount = g_actionRepeatCount.load();
+    s.ssAlwaysShowExitUI = g_ssAlwaysShowExitUI.load();
     return s;
 }
 
@@ -8896,6 +12699,11 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"DiscordNotifyReconnect", s.discordNotifyReconnect, first);
     AppendJsonBool(ss, L"DiscordNotifyReset", s.discordNotifyReset, first);
     AppendJsonBool(ss, L"DiscordNotifyErrors", s.discordNotifyErrors, first);
+    AppendJsonBool(ss, L"DiscordNotifyMacro", s.discordNotifyMacro, first);
+    AppendJsonBool(ss, L"DiscordNotifyIntervalMacros", s.discordNotifyIntervalMacros, first);
+    AppendJsonBool(ss, L"DiscordNotifyHeartbeat", s.discordNotifyHeartbeat, first);
+    AppendJsonBool(ss, L"DiscordNotifyUtilsRam", s.discordNotifyUtilsRam, first);
+    AppendJsonInt(ss, L"DiscordHeartbeatIntervalMin", s.discordHeartbeatIntervalMin, first);
     AppendJsonBool(ss, L"DiscordDisableEmbed", s.discordDisableEmbed, first);
     AppendJsonBool(ss, L"DiscordMentionOnErrors", s.discordMentionOnErrors, first);
     AppendJsonBool(ss, L"UseCustomProcessSearch", s.useCustomProcessSearch, first);
@@ -8906,10 +12714,23 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     first = false;
     ss << (first ? L"" : L",\r\n") << L"  \"DiscordMentionTarget\": \"" << JsonEscape(s.discordMentionTarget) << L"\"";
     first = false;
-    AppendJsonInt(ss, L"ReconnectCheckInterval", s.reconnectCheckInterval, first);
+    AppendJsonBool(ss, L"DiscordUseDefaultName", s.discordUseDefaultName, first);
+    AppendJsonBool(ss, L"DiscordUseDefaultAvatar", s.discordUseDefaultAvatar, first);
+    AppendJsonBool(ss, L"DiscordUseTimestamp", s.discordUseTimestamp, first);
+    AppendJsonInt(ss, L"ReconnectMacroDelaySec", s.reconnectMacroDelaySec, first);
+        AppendJsonInt(ss, L"ReconnectCheckInterval", s.reconnectCheckInterval, first);
     AppendJsonBool(ss, L"HotkeyEnabled", s.hotkeyEnabled, first);
     AppendJsonInt(ss, L"HotkeyModifiers", s.hotkeyModifiers, first);
     AppendJsonInt(ss, L"HotkeyVk", s.hotkeyVk, first);
+    AppendJsonBool(ss, L"GridHotkeyEnabled", s.gridHotkeyEnabled, first);
+    AppendJsonInt(ss, L"GridHotkeyModifiers", s.gridHotkeyModifiers, first);
+    AppendJsonInt(ss, L"GridHotkeyVk", s.gridHotkeyVk, first);
+    AppendJsonInt(ss, L"ActionPreset", s.actionPreset, first);
+    AppendJsonInt(ss, L"PreActionDelay", s.preActionDelay, first);
+    AppendJsonInt(ss, L"KeyPressDelay", s.keyPressDelay, first);
+    AppendJsonInt(ss, L"PostActionDelay", s.postActionDelay, first);
+    AppendJsonInt(ss, L"ActionRepeatCount", s.actionRepeatCount, first);
+    AppendJsonBool(ss, L"SsAlwaysShowText", s.ssAlwaysShowExitUI, first);
     ss << L"\r\n}\r\n";
     return ss.str();
 }
@@ -9296,10 +13117,20 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_discordNotifyReconnect = s.discordNotifyReconnect;
     g_discordNotifyReset = s.discordNotifyReset;
     g_discordNotifyErrors = s.discordNotifyErrors;
+    g_discordNotifyMacro = s.discordNotifyMacro;
+    g_discordNotifyIntervalMacros = s.discordNotifyIntervalMacros;
+    g_discordNotifyHeartbeat = s.discordNotifyHeartbeat;
+    g_discordNotifyUtilsRam = s.discordNotifyUtilsRam;
+    g_discordHeartbeatIntervalMin = s.discordHeartbeatIntervalMin;
+    if (g_discordHeartbeatIntervalMin.load() < 5) g_discordHeartbeatIntervalMin = 5;
+    if (g_discordHeartbeatIntervalMin.load() > 1440) g_discordHeartbeatIntervalMin = 1440;
     g_discordDisableEmbed = s.discordDisableEmbed;
     g_discordMentionOnErrors = s.discordMentionOnErrors;
     SetDiscordWebhookUrl(s.discordWebhookUrl);
     SetDiscordMentionTarget(s.discordMentionTarget);
+    g_discordUseDefaultName = s.discordUseDefaultName;
+    g_discordUseDefaultAvatar = s.discordUseDefaultAvatar;
+    g_discordUseTimestamp = s.discordUseTimestamp;
     g_useCustomProcessSearch = s.useCustomProcessSearch;
     g_excludeBuiltinNames = s.excludeBuiltinNames;
     {
@@ -9307,10 +13138,25 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
         g_customProcessNames = s.customProcessNames;
     }
     g_reconnectCheckInterval = s.reconnectCheckInterval;
+    g_reconnectMacroDelaySec = s.reconnectMacroDelaySec;
     if (g_reconnectCheckInterval.load() < 0) g_reconnectCheckInterval = 0;
     g_hotkeyEnabled = s.hotkeyEnabled;
     g_hotkeyModifiers = s.hotkeyModifiers;
     g_hotkeyVk = s.hotkeyVk;
+    g_hotkeyGridEnabled = s.gridHotkeyEnabled;
+    g_hotkeyGridModifiers = s.gridHotkeyModifiers;
+    g_hotkeyGridVk = s.gridHotkeyVk;
+    g_actionPreset = s.actionPreset;
+    if (g_actionPreset.load() < 0 || g_actionPreset.load() > 2) g_actionPreset = 0;
+    g_preActionDelay = s.preActionDelay;
+    if (g_preActionDelay.load() < 0 || g_preActionDelay.load() > 10000) g_preActionDelay = 55;
+    g_keyPressDelay = s.keyPressDelay;
+    if (g_keyPressDelay.load() < 1 || g_keyPressDelay.load() > 5000) g_keyPressDelay = 25;
+    g_postActionDelay = s.postActionDelay;
+    if (g_postActionDelay.load() < 0 || g_postActionDelay.load() > 10000) g_postActionDelay = 55;
+    g_actionRepeatCount = s.actionRepeatCount;
+    if (g_actionRepeatCount.load() < 1 || g_actionRepeatCount.load() > 100) g_actionRepeatCount = 3;
+    g_ssAlwaysShowExitUI = s.ssAlwaysShowExitUI;
 }
 
 static bool ExportSettingsToFile(HWND owner)
@@ -9324,7 +13170,29 @@ static bool ExportSettingsToFile(HWND owner)
     ofn.lpstrDefExt = L"json";
     ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
     if (!GetSaveFileName(&ofn)) return false;
-    return SaveTextFileUtf8(fileName, BuildSettingsJson(CaptureSettingsSnapshot()));
+    if (!SaveTextFileUtf8(fileName, BuildSettingsJson(CaptureSettingsSnapshot()))) return false;
+
+    int exportMacros = ShowDarkMessageBox(owner, L"Also export macros?", L"AntiAFK-RBX \u2022 Export Settings", MB_YESNO);
+    if (exportMacros == IDYES) {
+        wchar_t macroFile[MAX_PATH] = L"AntiAFK-RBX-macros.json";
+        OPENFILENAME ofn2 = { sizeof(ofn2) };
+        ofn2.hwndOwner = owner;
+        ofn2.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+        ofn2.lpstrFile = macroFile;
+        ofn2.nMaxFile = MAX_PATH;
+        ofn2.lpstrDefExt = L"json";
+        ofn2.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+        if (GetSaveFileName(&ofn2)) {
+            std::wstring macrosSrc = MacroEngine_GetMacrosPath();
+            DWORD attrs = GetFileAttributesW(macrosSrc.c_str());
+            if (attrs != INVALID_FILE_ATTRIBUTES) {
+                CopyFileW(macrosSrc.c_str(), macroFile, FALSE);
+            } else {
+                ShowDarkMessageBox(owner, L"Macros file not found - nothing to export.", L"AntiAFK-RBX \u2022 Export Settings", MB_OK);
+            }
+        }
+    }
+    return true;
 }
 
 static bool ImportSettingsFromFile(HWND owner)
@@ -9403,6 +13271,11 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"DiscordNotifyReconnect", s.discordNotifyReconnect);
     ParseJsonBool(json, L"DiscordNotifyReset", s.discordNotifyReset);
     ParseJsonBool(json, L"DiscordNotifyErrors", s.discordNotifyErrors);
+    ParseJsonBool(json, L"DiscordNotifyMacro", s.discordNotifyMacro);
+    ParseJsonBool(json, L"DiscordNotifyIntervalMacros", s.discordNotifyIntervalMacros);
+    ParseJsonBool(json, L"DiscordNotifyHeartbeat", s.discordNotifyHeartbeat);
+    ParseJsonBool(json, L"DiscordNotifyUtilsRam", s.discordNotifyUtilsRam);
+    ParseJsonInt(json, L"DiscordHeartbeatIntervalMin", s.discordHeartbeatIntervalMin);
     ParseJsonBool(json, L"DiscordDisableEmbed", s.discordDisableEmbed);
     ParseJsonBool(json, L"DiscordMentionOnErrors", s.discordMentionOnErrors);
     ParseJsonBool(json, L"UseCustomProcessSearch", s.useCustomProcessSearch);
@@ -9432,10 +13305,23 @@ static bool ImportSettingsFromFile(HWND owner)
         }
     }
     ParseJsonString(json, L"DiscordMentionTarget", s.discordMentionTarget);
+    ParseJsonBool(json, L"DiscordUseDefaultName", s.discordUseDefaultName);
+    ParseJsonBool(json, L"DiscordUseDefaultAvatar", s.discordUseDefaultAvatar);
+    ParseJsonBool(json, L"DiscordUseTimestamp", s.discordUseTimestamp);
+    ParseJsonInt(json, L"ReconnectMacroDelaySec", s.reconnectMacroDelaySec);
     ParseJsonInt(json, L"ReconnectCheckInterval", s.reconnectCheckInterval);
     ParseJsonBool(json, L"HotkeyEnabled", s.hotkeyEnabled);
     ParseJsonInt(json, L"HotkeyModifiers", s.hotkeyModifiers);
     ParseJsonInt(json, L"HotkeyVk", s.hotkeyVk);
+    ParseJsonBool(json, L"GridHotkeyEnabled", s.gridHotkeyEnabled);
+    ParseJsonInt(json, L"GridHotkeyModifiers", s.gridHotkeyModifiers);
+    ParseJsonInt(json, L"GridHotkeyVk", s.gridHotkeyVk);
+    ParseJsonInt(json, L"ActionPreset", s.actionPreset);
+    ParseJsonInt(json, L"PreActionDelay", s.preActionDelay);
+    ParseJsonInt(json, L"KeyPressDelay", s.keyPressDelay);
+    ParseJsonInt(json, L"PostActionDelay", s.postActionDelay);
+    ParseJsonInt(json, L"ActionRepeatCount", s.actionRepeatCount);
+    ParseJsonBool(json, L"SsAlwaysShowText", s.ssAlwaysShowExitUI);
     ApplySettingsSnapshot(s);
     SaveSettings();
     if (g_hotkeyEnabled.load()) {
@@ -9444,8 +13330,33 @@ static bool ImportSettingsFromFile(HWND owner)
     } else {
         UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
     }
+    if (g_hotkeyGridEnabled.load()) {
+        UnregisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID);
+        RegisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+    } else {
+        UnregisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID);
+    }
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
         InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+    }
+
+    int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX \u2022 Import Settings", MB_YESNO);
+    if (importMacros == IDYES) {
+        wchar_t macroFile[MAX_PATH] = L"";
+        OPENFILENAME ofn2 = { sizeof(ofn2) };
+        ofn2.hwndOwner = owner;
+        ofn2.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+        ofn2.lpstrFile = macroFile;
+        ofn2.nMaxFile = MAX_PATH;
+        ofn2.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+        if (GetOpenFileName(&ofn2)) {
+            if (CopyFileW(ofn2.lpstrFile, MacroEngine_GetMacrosPath().c_str(), FALSE)) {
+                MacroEngine_LoadMacros();
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
+            }
+        }
     }
     return true;
 }
@@ -9502,6 +13413,13 @@ void CreateTrayMenu(bool afk)
             AppendMenu(g_hMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, hkStatus);
         }
         AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"Change Hotkey...");
+        {
+            wchar_t gkStatus[128];
+            std::wstring gkStr = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+            swprintf_s(gkStatus, L"Grid Hotkey: %s [%s]", gkStr.c_str(), g_hotkeyGridEnabled.load() ? L"On" : L"Off");
+            AppendMenu(g_hMenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, gkStatus);
+        }
+        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"Change Grid Hotkey...");
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
         if (g_updateFound)
@@ -9555,11 +13473,16 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+    AppendMenu(hActionSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
     wchar_t actionLabel[32];
-    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*" };
-    swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
+        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
+    swprintf_s(actionLabel, L"Set Action \u2022 %s", actionNames[g_selectedAction.load()]);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
     SetMenuIconPopup(g_hMenu, hActionSubmenu, 0xE7C9);
+    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
+    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : 0) | (g_intervalMacroEnabled.load() ? MF_CHECKED : 0), ID_INTERVAL_MACRO_TOGGLE, L"Interval Macros");
+    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_IMPORT, L"Import Macro...");
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (!g_simpleMode.load()) {
         AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
@@ -9571,6 +13494,8 @@ void CreateTrayMenu(bool afk)
     HMENU hSettingsSubmenu = CreatePopupMenu();
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, L"├ Status Bar: Primary Monitor");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"╰ Status Bar: Position Bottom");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
     if (!g_simpleMode.load()) {
@@ -9604,6 +13529,12 @@ void CreateTrayMenu(bool afk)
         else swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • %d min", intervalVal / 60);
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hReconnectIntervalSubmenu, reconnectIntervalLabel);
         SetMenuIconPopup(hSettingsSubmenu, hReconnectIntervalSubmenu, 0xE8AF);
+        {
+            wchar_t reconnectMacroDelayLabel[64];
+            int rmdVal = g_reconnectMacroDelaySec.load();
+            swprintf_s(reconnectMacroDelayLabel, L"\u2570 Reconnect Macro Delay \u2022 %d sec", rmdVal);
+            AppendMenu(hSettingsSubmenu, MF_STRING, ID_RECONNECT_MACRO_DELAY, reconnectMacroDelayLabel);
+        }
     }
     if (!g_simpleMode.load()) {
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"╰ Manual Reconnect Check*");
@@ -9679,6 +13610,7 @@ void CreateTrayMenu(bool afk)
 
     HMENU hRamCleanerSubmenu = CreatePopupMenu();
     AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerEnabled.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_RUNTIME_TOGGLE, L"Enabled");
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerAutoStart.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_TOGGLE, L"Auto-start with AntiAFK");
     AppendMenu(hRamCleanerSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Smart Clean");
     AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Time Cycle");
@@ -9770,6 +13702,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RETRY_MULTI_INSTANCE, L"Retry Multi-Instance");
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
     {
         wchar_t hkStatus[128];
@@ -9779,6 +13712,8 @@ void CreateTrayMenu(bool afk)
     }
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"├ Enable Hotkey");
     AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"╰ Change Hotkey...");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, L"├ Enable Grid Hotkey");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"╰ Change Grid Hotkey...");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
     SetMenuIconPopup(g_hMenu, hSettingsSubmenu, 0xE713);
 
@@ -9814,10 +13749,21 @@ void CreateTrayMenu(bool afk)
         swprintf_s(statText, L"Program Launches • %llu", g_programLaunches.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7E8);
         std::wstring longestAfk = FormatDurationShort(g_longestAfkSessionSeconds.load());
-        swprintf_s(statText, L"Longest Session • %s", longestAfk.c_str());
+        swprintf_s(statText, L"Longest Session \u2022 %s", longestAfk.c_str());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE823);
+        uint64_t lastActionTs = g_lastAfkActionTimestamp.load();
+        if (lastActionTs > 0) {
+            uint64_t elapsed = (GetTickCount64() - lastActionTs) / 1000;
+            if (elapsed < 60) swprintf_s(statText, L"Last Action \u2022 %llu sec ago", elapsed);
+            else if (elapsed < 3600) swprintf_s(statText, L"Last Action \u2022 %llu min ago", elapsed / 60);
+            else swprintf_s(statText, L"Last Action \u2022 %llu h ago", elapsed / 3600);
+        } else {
+            wcscpy_s(statText, L"Last Action \u2022 Never");
+        }
+        AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE787);
     }
     AppendMenu(hStatsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hStatsSubmenu, MF_STRING, ID_TIMINGS_INFO, L"Current Timings...");
     AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, L"Reset Statistics");
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
     SetMenuIconPopup(g_hMenu, hStatsSubmenu, 0xE9D2);
@@ -9835,11 +13781,24 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyAction.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ACTION, L"Notify Action");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyReconnect.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RECONNECT, L"Notify Reconnect");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyErrors.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ERRORS, L"Notify Errors");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyMacro.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_MACRO, L"Notify Macros");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyIntervalMacros.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_INTERVAL_MACROS, L"Notify Interval Macros");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordDisableEmbed.load() ? MF_CHECKED : 0), ID_DISCORD_DISABLE_EMBED, L"Disable Embed");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordMentionOnErrors.load() ? MF_CHECKED : 0), ID_DISCORD_MENTION_ON_ERRORS, L"Mention on Errors");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_MENTION_TARGET, L"Set Mention Target...");
         AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_WEBHOOK_PASTE, L"Paste URL from Clipboard");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_URL, L"Set Webhook URL...");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultName.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_NAME, L"Use Webhook Default Name");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultAvatar.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_AVATAR, L"Use Webhook Default Avatar");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseTimestamp.load() ? MF_CHECKED : 0), ID_DISCORD_USE_TIMESTAMP, L"Include Timestamp");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyHeartbeat.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_HEARTBEAT, L"Notify Heartbeat");
+        {
+            wchar_t hbLabel[64];
+            swprintf_s(hbLabel, L"Heartbeat Interval \u2022 %d min", g_discordHeartbeatIntervalMin.load());
+            AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_HEARTBEAT, hbLabel);
+        }
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyUtilsRam.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_UTILS_RAM, L"Notify RAM Cleaner");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookUrl.empty() ? MF_GRAYED : 0), ID_DISCORD_WEBHOOK_CLEAR, L"Clear Webhook URL");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, L"Send Test Webhook");
     }
@@ -9858,9 +13817,18 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
     AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
     AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+    AppendMenu(hMiIntervalSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
     wchar_t miIntervalLabel[48];
-    const wchar_t* miLabelV = g_multiInstanceInterval.load() == 0 ? L"Min" : (g_multiInstanceInterval.load() == 1000 ? L"1s" : (g_multiInstanceInterval.load() == 3000 ? L"3s" : (g_multiInstanceInterval.load() == 5000 ? L"5s" : L"10s")));
-    swprintf_s(miIntervalLabel, L"Multi-Instance Interval • %s", miLabelV);
+    wchar_t miLabelV[48];
+    int miVal = g_multiInstanceInterval.load();
+    if (miVal == 0) wcscpy_s(miLabelV, L"Min");
+    else if (miVal == 1000) wcscpy_s(miLabelV, L"1s");
+    else if (miVal == 3000) wcscpy_s(miLabelV, L"3s");
+    else if (miVal == 5000) wcscpy_s(miLabelV, L"5s");
+    else if (miVal == 10000) wcscpy_s(miLabelV, L"10s");
+    else swprintf_s(miLabelV, L"%d ms", miVal);
+    swprintf_s(miIntervalLabel, L"Multi-Instance Delay \u2022 %s", miLabelV);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
     SetMenuIconPopup(g_hMenu, hMiIntervalSubmenu, 0xE916);
 
@@ -9876,6 +13844,24 @@ void UpdateTrayIcon()
     g_nid.hIcon = CreateCustomIcon();
     Shell_NotifyIcon(NIM_MODIFY, &g_nid);
     if (oldIcon) DestroyIcon(oldIcon);
+}
+
+static constexpr UINT TRAY_READD_RETRY_TIMER = 9001;
+static constexpr int TRAY_READD_MAX_ATTEMPTS = 10;
+static int g_trayReaddAttempts = 0;
+
+static bool TryReAddTrayIcon(HWND hwnd)
+{
+    HICON oldIcon = g_nid.hIcon;
+    g_nid.hIcon = CreateCustomIcon();
+    bool ok = Shell_NotifyIcon(NIM_ADD, &g_nid) != FALSE;
+    if (ok) {
+        if (oldIcon && oldIcon != g_nid.hIcon) DestroyIcon(oldIcon);
+    } else {
+        if (g_nid.hIcon && g_nid.hIcon != oldIcon) DestroyIcon(g_nid.hIcon);
+        g_nid.hIcon = oldIcon;
+    }
+    return ok;
 }
 // ==========
 
@@ -9972,7 +13958,123 @@ struct CustomInputDialogData {
     wchar_t inputText[4][512] = { {0}, {0}, {0}, {0} };
     wchar_t inputLabels[4][64] = { {0}, {0}, {0}, {0} };
     HCURSOR hCursorHand = NULL, hCursorArrow = NULL, hCursorText = NULL;
+    HWND hEditCtrl = NULL;
 };
+
+std::wstring CustomInputDialog_GetMacroRenameTitle() {
+    std::wstring title = L"AntiAFK-RBX \u2022 Rename Macro";
+    int sel = g_selectedMacroIndex.load();
+    if (sel >= 0) {
+        std::lock_guard<std::mutex> lock(g_macrosMutex);
+        if (sel < (int)g_macros.size()) {
+            title = L"AntiAFK-RBX \u2022 Rename Macro: " + g_macros[sel].name;
+        }
+    }
+    return title;
+}
+
+void MainUI_UpdateMacroWizardName(HWND hwndOwner, const wchar_t* name);
+
+std::wstring Macro_ToString(const Macro& m) {
+    std::wstring s;
+    for (const auto& a : m.actions) {
+        wchar_t line[256];
+        if (a.type == MacroStepType::ImageClick) {
+            swprintf_s(line, L"click img %d %d %d %d\r\n", a.x, a.y, a.mouseButton, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::MouseClick) {
+            swprintf_s(line, L"click %d %d %d %d\r\n", a.x, a.y, a.mouseButton, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::KeyPress) {
+            swprintf_s(line, L"key press %d %d\r\n", a.vkCode, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::KeyDown) {
+            swprintf_s(line, L"key down %d %d\r\n", a.vkCode, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::KeyUp) {
+            swprintf_s(line, L"key up %d %d\r\n", a.vkCode, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::MouseMove) {
+            swprintf_s(line, L"move %d %d %d\r\n", a.x, a.y, a.delayBeforeMs);
+        } else if (a.type == MacroStepType::Sleep) {
+            swprintf_s(line, L"wait %d\r\n", a.delayBeforeMs);
+        } else if (a.type == MacroStepType::RandomSleep) {
+            swprintf_s(line, L"randwait %d %d\r\n", a.delayBeforeMs, a.tolerance);
+        }
+        s += line;
+    }
+    return s;
+}
+
+void Macro_FromString(Macro& m, const std::wstring& text) {
+    m.actions.clear();
+    std::wstringstream ss(text);
+    std::wstring line;
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line.back() == L'\r') line.pop_back();
+        if (line.empty()) continue;
+
+        std::wstringstream ls(line);
+        std::wstring cmd;
+        ls >> cmd;
+        if (cmd == L"click") {
+            std::wstring sub;
+            ls >> sub;
+            if (sub == L"img") {
+                int x = 0, y = 0, btn = 0, delay = 0;
+                ls >> x >> y >> btn >> delay;
+                MacroAction a;
+                a.type = MacroStepType::ImageClick;
+                a.x = (uint16_t)x;
+                a.y = (uint16_t)y;
+                a.mouseButton = (uint8_t)btn;
+                a.delayBeforeMs = (uint16_t)delay;
+                m.actions.push_back(a);
+            } else {
+                int x = _wtoi(sub.c_str());
+                int y = 0, btn = 0, delay = 0;
+                ls >> y >> btn >> delay;
+                MacroAction a;
+                a.type = MacroStepType::MouseClick;
+                a.x = (uint16_t)x;
+                a.y = (uint16_t)y;
+                a.mouseButton = (uint8_t)btn;
+                a.delayBeforeMs = (uint16_t)delay;
+                m.actions.push_back(a);
+            }
+        } else if (cmd == L"key") {
+            std::wstring dir;
+            int vk = 0, delay = 0;
+            ls >> dir >> vk >> delay;
+            MacroAction a;
+            if (dir == L"press") a.type = MacroStepType::KeyPress;
+            else if (dir == L"down") a.type = MacroStepType::KeyDown;
+            else if (dir == L"up") a.type = MacroStepType::KeyUp;
+            a.vkCode = (uint8_t)vk;
+            a.delayBeforeMs = (uint16_t)delay;
+            m.actions.push_back(a);
+        } else if (cmd == L"move") {
+            int x = 0, y = 0, delay = 0;
+            ls >> x >> y >> delay;
+            MacroAction a;
+            a.type = MacroStepType::MouseMove;
+            a.x = (uint16_t)x;
+            a.y = (uint16_t)y;
+            a.delayBeforeMs = (uint16_t)delay;
+            m.actions.push_back(a);
+        } else if (cmd == L"wait") {
+            int delay = 0;
+            ls >> delay;
+            MacroAction a;
+            a.type = MacroStepType::Sleep;
+            a.delayBeforeMs = (uint16_t)delay;
+            m.actions.push_back(a);
+        } else if (cmd == L"randwait") {
+            int delay = 0, tol = 0;
+            ls >> delay >> tol;
+            MacroAction a;
+            a.type = MacroStepType::RandomSleep;
+            a.delayBeforeMs = (uint16_t)delay;
+            a.tolerance = (uint8_t)tol;
+            m.actions.push_back(a);
+        }
+    }
+}
 
 LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -10013,7 +14115,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        const int inputMargin = 0, btnH = 30, btnGap = 0, inputH = 30, inputVGap = 6, topBarH = 30, bannerH = 23;
+        const int inputMargin = 0, btnH = 30, btnGap = 0, inputH = 30, topBarH = 30, bannerH = 23;
+        int inputVGap = 6;
+        if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) inputVGap = -1;
 
         pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, topBarH };
 
@@ -10031,6 +14135,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else {
             btnY = pData->inputRect[pData->numInputs - 1].bottom;
         }
+        if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) btnY = pData->inputRect[1].bottom - 1;
 
         int totalWidth = clientRect.right;
         int btnWidth = (totalWidth - btnGap) / 2;
@@ -10052,6 +14157,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             pData->cancelButtonRect = { 0, btnY, btnWidth, btnY + btnH };
             pData->okButtonRect = { btnWidth + btnGap, btnY, btnWidth + btnGap + btnWidth, btnY + btnH };
         }
+
+
 
         if (pData->type == CustomInputDialogType::Interval) {
             _itow_s(g_selectedTime.load(), pData->inputText[0], 10);
@@ -10087,6 +14194,13 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else if (pData->type == CustomInputDialogType::DiscordMentionTarget) {
             std::wstring target = GetDiscordMentionTargetCopy();
             wcsncpy_s(pData->inputText[0], target.c_str(), _TRUNCATE);
+        } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
+            std::wstring url = GetDiscordWebhookUrlCopy();
+            wcsncpy_s(pData->inputText[0], url.c_str(), _TRUNCATE);
+        } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
+            _itow_s(g_discordHeartbeatIntervalMin.load(), pData->inputText[0], 10);
+        } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
+            _itow_s(g_multiInstanceInterval.load(), pData->inputText[0], 10);
         } else if (pData->type == CustomInputDialogType::PreActionDelay) {
             _itow_s(g_preActionDelay.load(), pData->inputText[0], 10);
         } else if (pData->type == CustomInputDialogType::KeyPressDelay) {
@@ -10112,6 +14226,33 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             _itow_s(r.top, pData->inputText[1], 10);
             _itow_s(r.right - r.left, pData->inputText[2], 10);
             _itow_s(r.bottom - r.top, pData->inputText[3], 10);
+        } else if (pData->type == CustomInputDialogType::InstanceTimer) {
+            int val = 540;
+            if (!g_instanceTimerTargetWindows.empty() && IsWindow(g_instanceTimerTargetWindows[0])) {
+                GetWindowInstanceSetting_Timer(g_instanceTimerTargetWindows[0], g_selectedTime.load(), val);
+            }
+            _itow_s(val, pData->inputText[0], 10);
+        } else if (pData->type == CustomInputDialogType::MacroName) {
+            wcsncpy_s(pData->inputText[0], g_wizardMacro.name.c_str(), _TRUNCATE);
+        } else if (pData->type == CustomInputDialogType::MacroRename) {
+            int sel = g_selectedMacroIndex.load();
+            if (sel >= 0) {
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+                if (sel < (int)g_macros.size()) {
+                    wcsncpy_s(pData->inputText[0], g_macros[sel].name.c_str(), _TRUNCATE);
+                }
+            }
+        } else if (pData->type == CustomInputDialogType::MacroInterval) {
+            int sel = g_macroIntervalTargetIndex.load();
+            if (sel < 0) sel = g_selectedMacroIndex.load();
+            int val = 30;
+            if (sel >= 0) {
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+                if (sel < (int)g_macros.size()) {
+                    val = g_macros[sel].intervalSec;
+                }
+            }
+            _itow_s(val, pData->inputText[0], 10);
         }
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
@@ -10124,9 +14265,11 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     case WM_SETFOCUS:
     {
         pData->hasFocus = true;
-        const RECT& r = pData->inputRect[pData->focusedInput];
-        CreateCaret(hwnd, (HBITMAP)NULL, 1, r.bottom - r.top - 8);
-        ShowCaret(hwnd);
+        if (pData->numInputs > 0) {
+            const RECT& r = pData->inputRect[pData->focusedInput];
+            CreateCaret(hwnd, (HBITMAP)NULL, 1, r.bottom - r.top - 8);
+            ShowCaret(hwnd);
+        }
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     }
@@ -10262,6 +14405,42 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 }
                 SetDiscordMentionTarget(text);
                 SaveSettings();
+            } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
+                std::wstring text = pData->inputText[0];
+                size_t start = text.find_first_not_of(L" \t\r\n");
+                size_t end = text.find_last_not_of(L" \t\r\n");
+                if (start == std::wstring::npos) {
+                    text.clear();
+                } else {
+                    text = text.substr(start, end - start + 1);
+                }
+                SetDiscordWebhookUrl(text);
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
+            } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
+                int val = _wtoi(pData->inputText[0]);
+                if (val < 5) val = 5;
+                if (val > 1440) val = 1440; // limit to 24h
+                g_discordHeartbeatIntervalMin = val;
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
+            } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
+                int val = _wtoi(pData->inputText[0]);
+                if (val < 0) val = 0;
+                if (val > 0 && val < 50) val = 50;
+                if (val > 60000) val = 60000; // limit to 60s
+                g_multiInstanceInterval = val;
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
             } else if (pData->type == CustomInputDialogType::PreActionDelay) {
                 int val = _wtoi(pData->inputText[0]);
                 if (val < 0) val = 0;
@@ -10297,6 +14476,13 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 g_reconnectCheckInterval = val;
                 if (g_isAfkStarted.load() && g_autoReconnect.load() && val > 0) StartReconnectMonitor();
                 else if (val == 0) StopReconnectMonitor();
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
+            } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
+                int val = _wtoi(pData->inputText[0]);
+                if (val < 0) val = 0;
+                if (val > 3600) val = 3600;
+                g_reconnectMacroDelaySec = val;
                 SaveSettings();
                 CreateTrayMenu(g_isAfkStarted.load());
             } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
@@ -10353,6 +14539,24 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     }
                 }
                 g_renameTargetWindows.clear();
+            } else if (pData->type == CustomInputDialogType::InstanceTimer) {
+                int val = _wtoi(pData->inputText[0]);
+                if (val <= 0) val = 1;
+                if (val > 86400) val = 86400;
+                std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+                for (HWND hw : g_instanceTimerTargetWindows) {
+                    if (hw && IsWindow(hw)) {
+                        auto& s2 = g_instanceSettings[hw];
+                        s2.overrideTimer = true;
+                        s2.enableTimer = true;
+                        s2.timerSeconds = val;
+                        s2.presetName = L"Custom";
+                    }
+                }
+                g_instanceTimerTargetWindows.clear();
+                if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                    InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
+                }
             } else if (pData->type == CustomInputDialogType::PresetName) {
                 if (wcslen(pData->inputText[0]) > 0) {
                     std::wstring newName = pData->inputText[0];
@@ -10388,11 +14592,72 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                 newPreset.enableReconnect = s.enableReconnect;
                                 newPreset.overrideReset = s.overrideReset;
                                 newPreset.enableReset = s.enableReset;
+                                newPreset.overrideMacro = s.overrideMacro;
+                                newPreset.enableMacro = s.enableMacro;
+                                newPreset.macroNames = s.macroNames;
+                                newPreset.enableReconnectMacro = s.enableReconnectMacro;
+                                newPreset.reconnectMacroNames = s.reconnectMacroNames;
+                                newPreset.enableIntervalMacro = s.enableIntervalMacro;
+                                newPreset.intervalMacroNames = s.intervalMacroNames;
                             }
                         }
                         g_instancePresets.push_back(newPreset);
+                        SaveSettings();
                         }
                     }
+                }
+            } else if (pData->type == CustomInputDialogType::MacroName) {
+                HWND owner = GetWindow(hwnd, GW_OWNER);
+                if (owner) {
+                    MainUI_UpdateMacroWizardName(owner, pData->inputText[0]);
+                }
+                g_wizardMacro.name = pData->inputText[0];
+            } else if (pData->type == CustomInputDialogType::MacroRename) {
+                if (wcslen(pData->inputText[0]) > 0) {
+                    int sel = g_selectedMacroIndex.load();
+                    bool saveNeeded = false;
+                    {
+                        std::lock_guard<std::mutex> lock(g_macrosMutex);
+                        if (sel >= 0 && sel < (int)g_macros.size()) {
+                            g_macros[sel].name = pData->inputText[0];
+                            saveNeeded = true;
+                        }
+                    }
+                    if (saveNeeded) {
+                        MacroEngine_SaveMacros();
+                        HWND owner = GetWindow(hwnd, GW_OWNER);
+                        if (owner && IsWindow(owner)) {
+                            PostMessage(owner, WM_APP_SHOW_MACROS, 0, 0);
+                        }
+                    }
+                }
+            } else if (pData->type == CustomInputDialogType::MacroInterval) {
+                int val = _wtoi(pData->inputText[0]);
+                int targetIdx = g_macroIntervalTargetIndex.load();
+                int sel = (targetIdx >= 0) ? targetIdx : g_selectedMacroIndex.load();
+                bool fromInstanceManager = (targetIdx >= 0);
+                g_macroIntervalTargetIndex = -1;
+                bool saveNeeded = false;
+                if (sel >= 0) {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (sel < (int)g_macros.size()) {
+                        if (fromInstanceManager) {
+                            g_macros[sel].intervalSec = (val > 0) ? val : 0;
+                        } else {
+                            bool wasOn = g_macros[sel].triggerOnInterval;
+                            g_macros[sel].intervalSec = (val > 0) ? val : 0;
+                            g_macros[sel].triggerOnInterval = (val > 0);
+                            if (val > 0 && !wasOn) {
+                                g_macros[sel].triggerOrderInterval = ++g_macroTriggerOrderCounter;
+                            } else if (val <= 0) {
+                                g_macros[sel].triggerOrderInterval = 0;
+                            }
+                        }
+                        saveNeeded = true;
+                    }
+                }
+                if (saveNeeded) {
+                    MacroEngine_SaveMacros();
                 }
             }
             HWND owner = GetWindow(hwnd, GW_OWNER);
@@ -10427,7 +14692,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     case WM_CHAR:
     {
         int fi = pData->focusedInput;
-        if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::DiscordMentionTarget || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName) {
+        if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::DiscordMentionTarget || pData->type == CustomInputDialogType::DiscordWebhookUrl || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename) {
             if (wParam == VK_BACK) {
                 size_t len = wcslen(pData->inputText[fi]);
                 if (len > 0) {
@@ -10439,6 +14704,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 size_t maxLen = (pData->type == CustomInputDialogType::DiscordMentionTarget) ? 127 : 511;
                 if (pData->type == CustomInputDialogType::InstanceTitle) maxLen = 63;
                 if (pData->type == CustomInputDialogType::PresetName) maxLen = 63;
+                if (pData->type == CustomInputDialogType::MacroName) maxLen = 63;
+                if (pData->type == CustomInputDialogType::MacroRename) maxLen = 63;
                 if (len < maxLen) {
                     pData->inputText[fi][len] = (wchar_t)wParam;
                     pData->inputText[fi][len + 1] = L'\0';
@@ -10478,10 +14745,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else {
             if (wParam >= '0' && wParam <= '9') {
                 size_t len = wcslen(pData->inputText[fi]);
-                int maxLen = (pData->type == CustomInputDialogType::Interval ||
-                              pData->type == CustomInputDialogType::RamCleanInterval ||
-                              pData->type == CustomInputDialogType::RamCleanLimit ||
-                              pData->type == CustomInputDialogType::ReconnectInterval) ? 6 : 3;
+                int maxLen = 8;
                 if (len < maxLen) {
                     pData->inputText[fi][len] = (wchar_t)wParam;
                     pData->inputText[fi][len + 1] = L'\0';
@@ -10501,7 +14765,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     case WM_KEYDOWN:
         if (wParam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000))
         {
-            if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::InstanceGeometry || pData->type == CustomInputDialogType::PresetName)
+            if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::DiscordWebhookUrl || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::InstanceGeometry || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)
             {
                 if (OpenClipboard(hwnd))
                 {
@@ -10513,7 +14777,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         {
                             int fi = pData->focusedInput;
                             size_t currentLen = wcslen(pData->inputText[fi]);
-                            size_t maxLen = (pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName) ? 63 :
+                            size_t maxLen = (pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename) ? 63 :
                                             (pData->type == CustomInputDialogType::InstanceGeometry) ? 15 : 511;
                             while (*pText && currentLen < maxLen)
                             {
@@ -10634,6 +14898,11 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
+        std::wstring macroRenameTitlePaint = L"AntiAFK-RBX \u2022 Rename Macro";
+        if (pData->type == CustomInputDialogType::MacroRename) {
+            macroRenameTitlePaint = CustomInputDialog_GetMacroRenameTitle();
+        }
+
         const wchar_t* titleText = (pData->type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX \u2022 Set Custom Interval" :
                                    (pData->type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX \u2022 Set FPS Limit" :
                                    (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX \u2022 Set CPU Limit %" :
@@ -10648,9 +14917,19 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                    (pData->type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX \u2022 Key Press Delay (ms)" :
                                    (pData->type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX \u2022 Delay After Action (ms)" :
                                    (pData->type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX \u2022 Change Window Geometry" :
-                                    (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
-                                    (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" :
-                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX \u2022 Action Repeat Count" : L"AntiAFK-RBX \u2022 Configure Mention Target";
+                                   (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
+                                   (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" :
+                                   (pData->type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX \u2022 Custom AFK Timer (Instance)" :
+                                   (pData->type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX \u2022 Enter Macro Name" :
+                                   (pData->type == CustomInputDialogType::MacroRename) ? macroRenameTitlePaint.c_str() :
+                                   (pData->type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX \u2022 Set Macro Interval" :
+                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX \u2022 Action Repeat Count" :
+                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX \u2022 Reconnect Check Interval (sec)" :
+                                    (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX \u2022 Reconnect Macro Delay (sec)" :
+                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"AntiAFK-RBX \u2022 Set Webhook URL" :
+                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"AntiAFK-RBX \u2022 Heartbeat Interval (min)" :
+                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"AntiAFK-RBX \u2022 Multi-Instance Delay (ms)" :
+                                    (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX \u2022 Configure Mention Target" : L"AntiAFK-RBX \u2022 Custom Input";
         Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, titleText, pData->isHoveringClose);
 
         RECT infoRect = { 0, 30, clientRect.right, 53 };
@@ -10671,13 +14950,22 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                     (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"\uE9F3" :
                                     (pData->type == CustomInputDialogType::InstanceGeometry) ? L"\uE740" :
                                     (pData->type == CustomInputDialogType::InstanceTitle) ? L"\uE8AC" :
-                                    (pData->type == CustomInputDialogType::PresetName) ? L"\uE771" :
-                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? L"\uE8AF" : L"\uE725";
+                                    (pData->type == CustomInputDialogType::InstanceTimer) ? L"\uE916" :
+                                    (pData->type == CustomInputDialogType::PresetName) ? L"\uE8AC" :
+                                    (pData->type == CustomInputDialogType::MacroName) ? L"\uE8AC" :
+                                    (pData->type == CustomInputDialogType::MacroRename) ? L"\uE70F" :
+                                    (pData->type == CustomInputDialogType::MacroInterval) ? L"\uE916" :
+                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"\uE8BD" :
+                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"\uE916" :
+                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"\uE916" :
+                                    (pData->type == CustomInputDialogType::ReconnectInterval || pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"\uE8AF" : L"\uE725";
 
-        wchar_t dynamicBannerText[128] = { 0 };
+        wchar_t dynamicBannerText[256] = { 0 };
         const wchar_t* bannerText = dynamicBannerText;
         if (pData->type == CustomInputDialogType::Interval) {
             bannerText = L"Enter interval in seconds. Maximum value is 1200.";
+        } else if (pData->type == CustomInputDialogType::InstanceTimer) {
+            bannerText = L"Enter AFK action interval in seconds for selected instance(s).";
         } else if (pData->type == CustomInputDialogType::FpsLimit) {
             bannerText = L"Set FPS cap from 0 to 60. Use 0 to turn it off.";
         } else if (pData->type == CustomInputDialogType::ProcessNames) {
@@ -10715,6 +15003,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             bannerText = L"Enter how many times to repeat the action per cycle (1 to 100).";
         } else if (pData->type == CustomInputDialogType::ReconnectInterval) {
             bannerText = L"Independent reconnect check interval in seconds. 0 = only with main cycle.";
+        } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
+            bannerText = L"Delay before reconnect macros run (0-3600 sec).";
         } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
             bannerText = L"Enter target CPU Limit percentage (1 to 99).";
         } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
@@ -10727,6 +15017,18 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             bannerText = L"Enter new title for this Roblox client window.";
         } else if (pData->type == CustomInputDialogType::PresetName) {
             bannerText = L"Enter a name for the new preset.";
+        } else if (pData->type == CustomInputDialogType::MacroName) {
+            bannerText = L"Enter a descriptive name for your custom macro.";
+        } else if (pData->type == CustomInputDialogType::MacroRename) {
+            bannerText = L"Enter a new name for this macro.";
+        } else if (pData->type == CustomInputDialogType::MacroInterval) {
+            bannerText = L"Interval in seconds for this macro.";
+        } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
+            bannerText = L"Paste or type a Discord webhook URL (https://discord.com/api/webhooks/...).";
+        } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
+            bannerText = L"How often to send a status ping while Anti-AFK is running (5 to 1440 minutes).";
+        } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
+            bannerText = L"Delay between Roblox windows in milliseconds (50 to 60000).";
         }
 
         const wchar_t* placeholders[4] = { L"", L"", L"", L"" };
@@ -10738,9 +15040,15 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                           (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"@everyone" :
                           (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"90" :
                           (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"100" :
-                           (pData->type == CustomInputDialogType::InstanceTitle) ? L"Roblox Client" :
-                           (pData->type == CustomInputDialogType::PresetName) ? L"My Preset" :
-                            (pData->type == CustomInputDialogType::ReconnectInterval) ? L"120" : L"0";
+                          (pData->type == CustomInputDialogType::InstanceTitle) ? L"Roblox Client" :
+                          (pData->type == CustomInputDialogType::PresetName) ? L"My Preset" :
+                          (pData->type == CustomInputDialogType::MacroName) ? L"My Macro" :
+                          (pData->type == CustomInputDialogType::MacroRename) ? L"My Macro" :
+                          (pData->type == CustomInputDialogType::MacroInterval) ? L"30" :
+                          (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"https://discord.com/api/webhooks/..." :
+                          (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"60" :
+                          (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"5000" :
+                          (pData->type == CustomInputDialogType::ReconnectInterval) ? L"120" : (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"60" : L"0";
         placeholders[1] = (pData->type == CustomInputDialogType::GridModeValue) ? L"600" : L"";
         placeholders[2] = L"";
         placeholders[3] = L"";
@@ -10755,15 +15063,22 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 RectF labelSize;
                 g.MeasureString(pData->inputLabels[i], -1, &labelFont, RectF(0, 0, 1000, 1000), &labelSize);
                 labelW = (int)(labelSize.Width + 16);
-                Gdiplus::SolidBrush labelBgBrush(Gdiplus::Color(160, 0, 122, 204));
+                if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) labelW = 110;
+                BYTE lbA = 160, lbR = 0, lbG = 122, lbB = 204;
+                if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) { lbA = 150; lbG = 80; lbB = 140; }
+                Gdiplus::SolidBrush labelBgBrush(Gdiplus::Color(lbA, lbR, lbG, lbB));
                 Gdiplus::SolidBrush labelBorderBrush(Gdiplus::Color(180, 56, 56, 56));
                 REAL lx = (REAL)pData->inputRect[i].left;
                 REAL ly = (REAL)pData->inputRect[i].top;
                 REAL lw = (REAL)labelW;
                 REAL lh = (REAL)(pData->inputRect[i].bottom - pData->inputRect[i].top);
                 g.FillRectangle(&labelBgBrush, lx, ly, lw, lh);
-                g.FillRectangle(&labelBorderBrush, lx, ly, lw, 1.0f);
-                g.FillRectangle(&labelBorderBrush, lx, ly + lh - 1.0f, lw, 1.0f);
+                if (!(pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 0)) {
+                    g.FillRectangle(&labelBorderBrush, lx, ly + lh - 1.0f, lw, 1.0f);
+                }
+                if (!(pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 1)) {
+                    g.FillRectangle(&labelBorderBrush, lx, ly, lw, 1.0f);
+                }
                 Gdiplus::SolidBrush labelTextBrush(Gdiplus::Color(255, 255, 255, 255));
                 StringFormat sfL;
                 sfL.SetAlignment(Gdiplus::StringAlignmentNear);
@@ -10773,10 +15088,12 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             }
             RECT inputContentRect = pData->inputRect[i];
             inputContentRect.left += labelW;
-            Popup_DrawTextInputJoinedToButtons(&g, memDC, inputContentRect, pData->hFontInput, pData->inputText[i], placeholders[i], pData->isHoveringInput[i], isFocused);
+            bool skipTopBorder = (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 1);
+            bool isLastInput = (i == pData->numInputs - 1);
+            Popup_DrawTextInputJoinedToButtons(&g, memDC, inputContentRect, pData->hFontInput, pData->inputText[i], placeholders[i], pData->isHoveringInput[i], isFocused, !skipTopBorder, !isLastInput);
         }
 
-        if (pData->hasFocus) {
+        if (pData->hasFocus && pData->numInputs > 0) {
              const RECT& r = pData->inputRect[pData->focusedInput];
              int labelW = 0;
              if (pData->inputLabels[pData->focusedInput][0] != L'\0') {
@@ -10784,6 +15101,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                  RectF ls;
                  g.MeasureString(pData->inputLabels[pData->focusedInput], -1, &lf, RectF(0, 0, 1000, 1000), &ls);
                  labelW = (int)(ls.Width + 16);
+                 if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) labelW = 110;
              }
              Font inputFont(memDC, pData->hFontInput);
              RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
@@ -10794,8 +15112,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
              SetCaretPos(caretX, caretY);
         }
 
-        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
-        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
+        Popup_DrawActionButton(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
+        Popup_DrawActionButton(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -10860,6 +15178,10 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 g_hCustomActionRepeatCountWnd = NULL;
             } else if (pData->type == CustomInputDialogType::ReconnectInterval) {
                 g_hCustomReconnectIntervalWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
+                g_hCustomReconnectMacroDelayWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::InstanceTimer) {
+                g_hCustomInstanceTimerWnd = NULL;
             } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
                 g_hCustomCpuLimitPercentWnd = NULL;
             } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
@@ -10870,6 +15192,18 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 g_hCustomRenameWnd = NULL;
             } else if (pData->type == CustomInputDialogType::PresetName) {
                 g_hCustomPresetNameWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::MacroName) {
+                g_hCustomMacroNameWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::MacroRename) {
+                g_hCustomMacroRenameWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::MacroInterval) {
+                g_hCustomMacroIntervalWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
+                g_hCustomWebhookUrlWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
+                g_hCustomHeartbeatIntervalWnd = NULL;
+            } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
+                g_hCustomMultiInstanceIntervalWnd = NULL;
             }
 
             if (owner)
@@ -10902,11 +15236,19 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
     else if (type == CustomInputDialogType::PostActionDelay) pGlobalWnd = &g_hCustomPostActionDelayWnd;
     else if (type == CustomInputDialogType::ActionRepeatCount) pGlobalWnd = &g_hCustomActionRepeatCountWnd;
     else if (type == CustomInputDialogType::ReconnectInterval) pGlobalWnd = &g_hCustomReconnectIntervalWnd;
+    else if (type == CustomInputDialogType::ReconnectMacroDelay) pGlobalWnd = &g_hCustomReconnectMacroDelayWnd;
     else if (type == CustomInputDialogType::CpuLimitPercent) pGlobalWnd = &g_hCustomCpuLimitPercentWnd;
     else if (type == CustomInputDialogType::CpuLimitPeriod) pGlobalWnd = &g_hCustomCpuLimitPeriodWnd;
     else if (type == CustomInputDialogType::InstanceGeometry) pGlobalWnd = &g_hCustomGeometryWnd;
     else if (type == CustomInputDialogType::InstanceTitle) pGlobalWnd = &g_hCustomRenameWnd;
     else if (type == CustomInputDialogType::PresetName) pGlobalWnd = &g_hCustomPresetNameWnd;
+    else if (type == CustomInputDialogType::InstanceTimer) pGlobalWnd = &g_hCustomInstanceTimerWnd;
+    else if (type == CustomInputDialogType::MacroName) pGlobalWnd = &g_hCustomMacroNameWnd;
+    else if (type == CustomInputDialogType::MacroRename) pGlobalWnd = &g_hCustomMacroRenameWnd;
+    else if (type == CustomInputDialogType::MacroInterval) pGlobalWnd = &g_hCustomMacroIntervalWnd;
+    else if (type == CustomInputDialogType::DiscordWebhookUrl) pGlobalWnd = &g_hCustomWebhookUrlWnd;
+    else if (type == CustomInputDialogType::DiscordHeartbeatInterval) pGlobalWnd = &g_hCustomHeartbeatIntervalWnd;
+    else if (type == CustomInputDialogType::MultiInstanceInterval) pGlobalWnd = &g_hCustomMultiInstanceIntervalWnd;
 
     if (pGlobalWnd && *pGlobalWnd && IsWindow(*pGlobalWnd))
     {
@@ -10930,8 +15272,11 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
 
     int dlgW = (type == CustomInputDialogType::DiscordMentionTarget) ? 370 :
                (type == CustomInputDialogType::ProcessNames) ? 450 :
-               (type == CustomInputDialogType::GridModeValue ||
-                type == CustomInputDialogType::GridSpacingBetween ||
+               (type == CustomInputDialogType::DiscordWebhookUrl) ? 500 :
+               (type == CustomInputDialogType::DiscordHeartbeatInterval) ? 500 :
+               (type == CustomInputDialogType::MultiInstanceInterval) ? 420 :
+               (type == CustomInputDialogType::GridModeValue) ? 340 :
+               (type == CustomInputDialogType::GridSpacingBetween ||
                 type == CustomInputDialogType::GridSpacingBorders) ? 340 :
                (type == CustomInputDialogType::PresetName) ? 340 :
                (type == CustomInputDialogType::InstanceGeometry) ? 360 : 344;
@@ -10943,6 +15288,11 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
         GetWindowRect(owner, &ownerRect);
         x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
         y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    }
+
+    std::wstring macroRenameTitle = L"AntiAFK-RBX \u2022 Rename Macro";
+    if (type == CustomInputDialogType::MacroRename) {
+        macroRenameTitle = CustomInputDialog_GetMacroRenameTitle();
     }
 
     const wchar_t* titleStr = (type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX \u2022 Set Custom Interval" :
@@ -10958,11 +15308,15 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
                               (type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX \u2022 Delay After Action (ms)" :
                               (type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX \u2022 Action Repeat Count" :
                               (type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX \u2022 Reconnect Check Interval (sec)" :
+                              (type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX \u2022 Reconnect Macro Delay (sec)" :
                               (type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX \u2022 Set CPU Limit %" :
                               (type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX \u2022 Set Cycle Period (ms)" :
-                               (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX \u2022 Change Window Geometry" :
-                               (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
-                               (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" : L"AntiAFK-RBX \u2022 Set RAM Limit";
+                              (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX \u2022 Change Window Geometry" :
+                              (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
+                              (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" :
+                              (type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX \u2022 Enter Macro Name" :
+                              (type == CustomInputDialogType::MacroRename) ? macroRenameTitle.c_str() :
+                              (type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX \u2022 Set Macro Interval" : L"AntiAFK-RBX \u2022 Set RAM Limit";
 
     if (!pGlobalWnd) return;
 
@@ -10976,6 +15330,461 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
         if (owner) EnableWindow(owner, FALSE);
         ShowWindow(*pGlobalWnd, SW_SHOW);
         UpdateWindow(*pGlobalWnd);
+    }
+}
+// ==========
+
+// Macro Order Dialog
+struct MacroOrderDialogData {
+    HFONT hFontTitle = NULL, hFontText = NULL;
+    RECT closeButtonRect = { 0 }, okButtonRect = { 0 }, cancelButtonRect = { 0 };
+    RECT listRect = { 0 };
+    int rowH = 32;
+    bool isHoveringClose = false, isHoveringOk = false, isHoveringCancel = false;
+    int draggingIndex = -1;
+    int hoverIndex = -1;
+    int fadeAlpha = 0;
+    HCURSOR hCursorHand = NULL, hCursorArrow = NULL;
+};
+
+static HWND g_hMacroOrderWnd = NULL;
+static std::vector<HWND> g_macroOrderTargets;
+static MacroOrderListType g_macroOrderListType = MacroOrderListType::AfkAction;
+static std::vector<std::wstring> g_macroOrderNames;
+
+static const wchar_t* MacroOrder_TitleText(MacroOrderListType t) {
+    switch (t) {
+        case MacroOrderListType::AfkAction: return L"AntiAFK-RBX \u2022 Macro Order: AFK Action";
+        case MacroOrderListType::Reconnect: return L"AntiAFK-RBX \u2022 Macro Order: Reconnect";
+        default: return L"AntiAFK-RBX \u2022 Macro Order: Interval";
+    }
+}
+
+static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    MacroOrderDialogData* pData = (MacroOrderDialogData*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+
+    switch (msg)
+    {
+    case WM_CREATE:
+    {
+        pData = new MacroOrderDialogData();
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
+
+        EnableAcrylic(hwnd);
+        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
+        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+
+        HDC screen = GetDC(NULL);
+        int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+        ReleaseDC(NULL, screen);
+        pData->hFontTitle = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+
+        RECT clientRect;
+        GetClientRect(hwnd, &clientRect);
+        const int topBarH = 30, bannerH = 23, btnH = 30;
+        pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, topBarH };
+        pData->listRect = { 0, topBarH + bannerH, clientRect.right, clientRect.bottom - btnH };
+        pData->cancelButtonRect = { 0, clientRect.bottom - btnH, clientRect.right / 2, clientRect.bottom };
+        pData->okButtonRect = { clientRect.right / 2, clientRect.bottom - btnH, clientRect.right, clientRect.bottom };
+        pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
+        pData->hCursorArrow = LoadCursor(NULL, IDC_ARROW);
+        SetTimer(hwnd, 1, 16, NULL);
+        SetFocus(hwnd);
+        return 0;
+    }
+    case WM_NCHITTEST:
+    {
+        LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
+        if (hit == HTCLIENT && pData) {
+            POINT pt = { (int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam) };
+            ScreenToClient(hwnd, &pt);
+            if (pt.y < 30 && !PtInRect(&pData->closeButtonRect, pt)) return HTCAPTION;
+        }
+        return hit;
+    }
+    case WM_TIMER:
+        if (wParam == 1 && pData) {
+            pData->fadeAlpha += 34;
+            if (pData->fadeAlpha >= 255) {
+                pData->fadeAlpha = 255;
+                KillTimer(hwnd, 1);
+            }
+            SetLayeredWindowAttributes(hwnd, 0, (BYTE)pData->fadeAlpha, LWA_ALPHA);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    case WM_LBUTTONDOWN:
+    {
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        if (pData->draggingIndex >= 0) return 0;
+        if (PtInRect(&pData->closeButtonRect, pt) || PtInRect(&pData->cancelButtonRect, pt)) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        if (PtInRect(&pData->okButtonRect, pt)) {
+            {
+                std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+                for (HWND tWnd : g_macroOrderTargets) {
+                    if (!IsWindow(tWnd)) continue;
+                    auto it2 = g_instanceSettings.find(tWnd);
+                    RobloxInstanceSettings s2 = (it2 != g_instanceSettings.end()) ? it2->second : GetDefaultInstanceSettingsForWindow(tWnd);
+                    s2.overrideMacro = true;
+                    switch (g_macroOrderListType) {
+                        case MacroOrderListType::AfkAction: s2.macroNames = g_macroOrderNames; s2.enableMacro = true; break;
+                        case MacroOrderListType::Reconnect: s2.reconnectMacroNames = g_macroOrderNames; s2.enableReconnectMacro = true; break;
+                        default: s2.intervalMacroNames = g_macroOrderNames; s2.enableIntervalMacro = true; break;
+                    }
+                    s2.presetName = L"Custom";
+                    g_instanceSettings[tWnd] = s2;
+                }
+            }
+            HWND owner = GetWindow(hwnd, GW_OWNER);
+            if (owner && IsWindow(owner)) InvalidateRect(owner, NULL, FALSE);
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        if (PtInRect(&pData->listRect, pt) && !g_macroOrderNames.empty()) {
+            int row = (pt.y - pData->listRect.top) / pData->rowH;
+            if (row >= 0 && row < (int)g_macroOrderNames.size()) {
+                if (g_macroOrderListType == MacroOrderListType::Interval) {
+                    int macroIdx = -1;
+                    {
+                        std::lock_guard<std::mutex> lock(g_macrosMutex);
+                        for (size_t mi = 0; mi < g_macros.size(); mi++) {
+                            if (g_macros[mi].name == g_macroOrderNames[row]) { macroIdx = (int)mi; break; }
+                        }
+                    }
+                    if (macroIdx >= 0) {
+                        g_macroIntervalTargetIndex = macroIdx;
+                        ShowCustomInputDialog(hwnd, CustomInputDialogType::MacroInterval);
+                    }
+                    return 0;
+                }
+                pData->draggingIndex = row;
+                pData->hoverIndex = row;
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+    case WM_MOUSEMOVE:
+    {
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        bool oldClose = pData->isHoveringClose, oldOk = pData->isHoveringOk, oldCancel = pData->isHoveringCancel;
+        int oldRow = pData->hoverIndex;
+        pData->isHoveringClose = PtInRect(&pData->closeButtonRect, pt) != FALSE;
+        pData->isHoveringOk = PtInRect(&pData->okButtonRect, pt) != FALSE;
+        pData->isHoveringCancel = PtInRect(&pData->cancelButtonRect, pt) != FALSE;
+        pData->hoverIndex = -1;
+        if (!g_macroOrderNames.empty() && PtInRect(&pData->listRect, pt)) {
+            int row = (pt.y - pData->listRect.top) / pData->rowH;
+            if (row >= 0 && row < (int)g_macroOrderNames.size()) pData->hoverIndex = row;
+        }
+        if (pData->draggingIndex >= 0) {
+            int row = (pt.y - pData->listRect.top) / pData->rowH;
+            if (row < 0) row = 0;
+            if (row >= (int)g_macroOrderNames.size()) row = (int)g_macroOrderNames.size() - 1;
+            if (row != pData->draggingIndex) {
+                std::swap(g_macroOrderNames[pData->draggingIndex], g_macroOrderNames[row]);
+                pData->draggingIndex = row;
+                pData->hoverIndex = row;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        bool handOverRow = (pData->hoverIndex >= 0);
+        SetCursor((pData->isHoveringClose || pData->isHoveringOk || pData->isHoveringCancel || handOverRow) ? pData->hCursorHand : pData->hCursorArrow);
+        if (oldClose != pData->isHoveringClose || oldOk != pData->isHoveringOk || oldCancel != pData->isHoveringCancel || oldRow != pData->hoverIndex) {
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    }
+    case WM_LBUTTONUP:
+    {
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        if (pData->draggingIndex >= 0) {
+            pData->draggingIndex = -1;
+            pData->hoverIndex = -1;
+            ReleaseCapture();
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+        if (PtInRect(&pData->cancelButtonRect, pt)) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        if (PtInRect(&pData->okButtonRect, pt)) {
+            {
+                std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+                for (HWND tWnd : g_macroOrderTargets) {
+                    if (!IsWindow(tWnd)) continue;
+                    auto it2 = g_instanceSettings.find(tWnd);
+                    RobloxInstanceSettings s2 = (it2 != g_instanceSettings.end()) ? it2->second : GetDefaultInstanceSettingsForWindow(tWnd);
+                    s2.overrideMacro = true;
+                    switch (g_macroOrderListType) {
+                        case MacroOrderListType::AfkAction: s2.macroNames = g_macroOrderNames; s2.enableMacro = true; break;
+                        case MacroOrderListType::Reconnect: s2.reconnectMacroNames = g_macroOrderNames; s2.enableReconnectMacro = true; break;
+                        default: s2.intervalMacroNames = g_macroOrderNames; s2.enableIntervalMacro = true; break;
+                    }
+                    s2.presetName = L"Custom";
+                    g_instanceSettings[tWnd] = s2;
+                }
+            }
+            HWND owner = GetWindow(hwnd, GW_OWNER);
+            if (owner && IsWindow(owner)) InvalidateRect(owner, NULL, FALSE);
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        return 0;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_RETURN && pData) {
+            PostMessage(hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(pData->okButtonRect.left, pData->okButtonRect.top));
+            return 0;
+        }
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        return 0;
+    case WM_CAPTURECHANGED:
+        if (pData) {
+            pData->draggingIndex = -1;
+            pData->hoverIndex = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        RECT clientRect;
+        GetClientRect(hwnd, &clientRect);
+        HDC hdc = BeginPaint(hwnd, &ps);
+
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
+        HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+
+        Graphics g(memDC);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetPixelOffsetMode(PixelOffsetModeHalf);
+        g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, MacroOrder_TitleText(g_macroOrderListType), pData->isHoveringClose);
+
+        RECT infoRect = { 0, 30, clientRect.right, 53 };
+        const wchar_t* bannerIcon = (g_macroOrderListType == MacroOrderListType::AfkAction) ? L"\uE7C9"
+            : (g_macroOrderListType == MacroOrderListType::Reconnect) ? L"\uE8AF" : L"\uE916";
+        const wchar_t* bannerText = (g_macroOrderListType == MacroOrderListType::Interval)
+            ? L"Click a macro to change its interval time."
+            : L"Drag rows to reorder the execution sequence.";
+        Popup_DrawInfoBannerNoBottomBorder(&g, memDC, infoRect, pData->hFontText, bannerIcon, RGB(0, 122, 204), bannerText);
+        {
+            Gdiplus::SolidBrush sepB(Gdiplus::Color(180, 56, 56, 56));
+            PixelOffsetMode oldMode = g.GetPixelOffsetMode();
+            SmoothingMode oldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            g.FillRectangle(&sepB, 0.0f, 53.0f, (REAL)clientRect.right, 1.0f);
+            g.SetPixelOffsetMode(oldMode);
+            g.SetSmoothingMode(oldSmooth);
+        }
+
+        Gdiplus::Font rowFont(memDC, pData->hFontText);
+        StringFormat sfL, sfC, sfR;
+        sfL.SetAlignment(StringAlignmentNear);
+        sfL.SetLineAlignment(StringAlignmentCenter);
+        sfC.SetAlignment(StringAlignmentCenter);
+        sfC.SetLineAlignment(StringAlignmentCenter);
+        sfR.SetAlignment(StringAlignmentFar);
+        sfR.SetLineAlignment(StringAlignmentCenter);
+
+        if (g_macroOrderNames.empty()) {
+            Gdiplus::SolidBrush emptyBrush(Gdiplus::Color(255, 130, 130, 130));
+            Gdiplus::RectF emptyR((REAL)(pData->listRect.left + 12), (REAL)pData->listRect.top, (REAL)(pData->listRect.right - pData->listRect.left - 24), 30.0f);
+            g.DrawString(L"No macros assigned yet. Select them in the instance settings.", -1, &rowFont, emptyR, &sfL, &emptyBrush);
+        }
+
+        for (size_t i = 0; i < g_macroOrderNames.size(); i++) {
+            RECT rowRc = { pData->listRect.left, pData->listRect.top + (int)i * pData->rowH, pData->listRect.right, pData->listRect.top + (int)(i + 1) * pData->rowH };
+            bool isDragged = ((int)i == pData->draggingIndex);
+            bool isHoverRow = ((int)i == pData->hoverIndex);
+            Gdiplus::SolidBrush rowBg(isDragged ? Gdiplus::Color(70, 0, 122, 204) : isHoverRow ? Gdiplus::Color(50, 0, 122, 204) : ((i % 2 == 0) ? Gdiplus::Color(50, 35, 35, 35) : Gdiplus::Color(60, 45, 45, 45)));
+            g.FillRectangle(&rowBg, (REAL)rowRc.left, (REAL)rowRc.top, (REAL)(rowRc.right - rowRc.left), (REAL)(rowRc.bottom - rowRc.top));
+
+            if (g_macroOrderListType != MacroOrderListType::Interval) {
+                wchar_t num[16];
+                swprintf_s(num, L"%zu.", i + 1);
+                Gdiplus::RectF numR((REAL)(rowRc.left + 8), (REAL)rowRc.top, 30.0f, (REAL)(rowRc.bottom - rowRc.top));
+                Gdiplus::SolidBrush numBrush(Gdiplus::Color(255, 100, 150, 255));
+                g.DrawString(num, -1, &rowFont, numR, &sfC, &numBrush);
+            }
+
+            int nameL = (g_macroOrderListType == MacroOrderListType::Interval) ? 12 : 44;
+            int nameRightPad = (g_macroOrderListType == MacroOrderListType::Interval) ? 112 : 36;
+            Gdiplus::RectF nameR((REAL)(rowRc.left + nameL), (REAL)rowRc.top, (REAL)(rowRc.right - rowRc.left - nameL - nameRightPad), (REAL)(rowRc.bottom - rowRc.top));
+            Gdiplus::SolidBrush nameBrush(Gdiplus::Color(255, 205, 205, 205));
+            g.DrawString(g_macroOrderNames[i].c_str(), -1, &rowFont, nameR, &sfL, &nameBrush);
+
+            if (g_macroOrderListType != MacroOrderListType::Interval) {
+                HFONT handleFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(memDC, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+                Font handleFont(memDC, handleFontH);
+                Gdiplus::RectF handleR((REAL)(rowRc.right - 26), (REAL)rowRc.top, 18.0f, (REAL)(rowRc.bottom - rowRc.top));
+                Gdiplus::SolidBrush handleBrush(Gdiplus::Color(255, 120, 120, 120));
+                g.DrawString(L"\uE700", -1, &handleFont, handleR, &sfC, &handleBrush);
+                DeleteObject(handleFontH);
+            } else {
+                int sec = 0;
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    for (size_t mi = 0; mi < g_macros.size(); mi++) {
+                        if (g_macros[mi].name == g_macroOrderNames[i]) {
+                            sec = (g_macros[mi].intervalSec > 0) ? g_macros[mi].intervalSec : 0;
+                            break;
+                        }
+                    }
+                }
+                wchar_t tbuf[32];
+                swprintf_s(tbuf, sec > 0 ? L"%ds" : L"not set", sec);
+                Gdiplus::SolidBrush timeBrush(sec > 0 ? Gdiplus::Color(255, 0, 180, 255) : Gdiplus::Color(200, 120, 120, 120));
+                Gdiplus::RectF timeR((REAL)(rowRc.right - 100), (REAL)rowRc.top, 68.0f, (REAL)(rowRc.bottom - rowRc.top));
+                g.DrawString(tbuf, -1, &rowFont, timeR, &sfR, &timeBrush);
+                HFONT timeFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(memDC, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+                Font timeFont(memDC, timeFontH);
+                Gdiplus::RectF clockR((REAL)(rowRc.right - 26), (REAL)rowRc.top, 18.0f, (REAL)(rowRc.bottom - rowRc.top));
+                Gdiplus::SolidBrush clockBrush(Gdiplus::Color(255, 0, 180, 255));
+                g.DrawString(L"\uE916", -1, &timeFont, clockR, &sfC, &clockBrush);
+                DeleteObject(timeFontH);
+            }
+        }
+
+        {
+            Gdiplus::SolidBrush sepBrush(Gdiplus::Color(180, 56, 56, 56));
+            PixelOffsetMode oldMode = g.GetPixelOffsetMode();
+            SmoothingMode oldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            g.FillRectangle(&sepBrush, 0.0f, (REAL)(clientRect.bottom - 30), (REAL)clientRect.right, 1.0f);
+            g.SetPixelOffsetMode(oldMode);
+            g.SetSmoothingMode(oldSmooth);
+        }
+
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
+
+        BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBMP);
+        DeleteObject(memBMP);
+        DeleteDC(memDC);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    case WM_NCDESTROY:
+        if (pData) {
+            KillTimer(hwnd, 1);
+            if (pData->hFontTitle) DeleteObject(pData->hFontTitle);
+            if (pData->hFontText) DeleteObject(pData->hFontText);
+
+            HWND owner = GetWindow(hwnd, GW_OWNER);
+            if (owner) {
+                EnableWindow(owner, TRUE);
+                EnableAcrylic(owner);
+                SetForegroundWindow(owner);
+                InvalidateRect(owner, NULL, FALSE);
+            }
+            delete pData;
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)NULL);
+        }
+        g_hMacroOrderWnd = NULL;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+void ShowMacroOrderDialog(HWND owner, const std::vector<HWND>& targets, MacroOrderListType listType) {
+    if (g_hMacroOrderWnd && IsWindow(g_hMacroOrderWnd)) {
+        SetForegroundWindow(g_hMacroOrderWnd);
+        return;
+    }
+
+    g_macroOrderTargets = targets;
+    g_macroOrderListType = listType;
+    g_macroOrderNames.clear();
+    if (!targets.empty() && IsWindow(targets[0])) {
+        HWND selWnd = targets[0];
+        RobloxInstanceSettings s;
+        {
+            std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+            auto it = g_instanceSettings.find(selWnd);
+            s = (it != g_instanceSettings.end()) ? it->second : GetDefaultInstanceSettingsForWindow(selWnd);
+        }
+        const std::vector<std::wstring>* src = NULL;
+        if (s.overrideMacro) {
+            switch (listType) {
+                case MacroOrderListType::AfkAction: src = &s.macroNames; break;
+                case MacroOrderListType::Reconnect: src = &s.reconnectMacroNames; break;
+                default: src = &s.intervalMacroNames; break;
+            }
+        } else if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
+            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+            for (const auto& pr : g_instancePresets) {
+                if (pr.name == s.presetName) {
+                    switch (listType) {
+                        case MacroOrderListType::AfkAction: src = &pr.macroNames; break;
+                        case MacroOrderListType::Reconnect: src = &pr.reconnectMacroNames; break;
+                        default: src = &pr.intervalMacroNames; break;
+                    }
+                    break;
+                }
+            }
+        }
+        if (src) g_macroOrderNames = *src;
+    }
+
+    static bool registered = false;
+    const wchar_t CLASS_NAME[] = L"AntiAFK-RBX-MacroOrder";
+    if (!registered) {
+        WNDCLASSEX wc = { sizeof(WNDCLASSEX) };
+        wc.lpfnWndProc = MacroOrderDialogProc;
+        wc.hInstance = g_hInst;
+        wc.lpszClassName = CLASS_NAME;
+        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        wc.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_MAIN));
+        wc.hIconSm = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_MAIN));
+        registered = RegisterClassEx(&wc) != 0;
+    }
+
+    int rowH = 32;
+    int dlgW = 360;
+    int dlgH = 30 + 23 + (int)g_macroOrderNames.size() * rowH + 30;
+    if (dlgH < 115) dlgH = 115;
+    if (dlgH > 500) dlgH = 500;
+
+    RECT ownerRect = { 0 };
+    int x = (GetSystemMetrics(SM_CXSCREEN) - dlgW) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - dlgH) / 2;
+    if (owner) {
+        GetWindowRect(owner, &ownerRect);
+        x = ownerRect.left + ((ownerRect.right - ownerRect.left) - dlgW) / 2;
+        y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
+    }
+
+    g_hMacroOrderWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CLASS_NAME,
+        MacroOrder_TitleText(listType), WS_POPUP,
+        x, y, dlgW, dlgH, owner, NULL, g_hInst, NULL);
+
+    if (g_hMacroOrderWnd) {
+        SetLayeredWindowAttributes(g_hMacroOrderWnd, 0, 0, LWA_ALPHA);
+        if (owner) EnableWindow(owner, FALSE);
+        ShowWindow(g_hMacroOrderWnd, SW_SHOW);
+        UpdateWindow(g_hMacroOrderWnd);
     }
 }
 // ==========
@@ -11049,12 +15858,10 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         int x = (screenW - dlgW) / 2, y = (screenH - dlgH) / 2;
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, dlgW, dlgH, SWP_SHOWWINDOW);
 
-        pData->uTimerId = SetTimer(hwnd, 3, 16, NULL);
         return 0;
     }
     case WM_TIMER:
         if (wParam == 3 && pData) {
-            InvalidateRect(hwnd, NULL, FALSE);
         }
         return 0;
     case WM_NCHITTEST:
@@ -11574,6 +16381,9 @@ struct MainUIData {
     RECT mutexStatusRect = { 0 };
     RECT advancedFpsCapperLinkRect = { 0 };
     RECT testActionButtonRect = { 0 };
+    RECT macrosBtnRect = { 0 };
+    RECT macrosIntervalToggleCompactRect = { 0 };
+    RECT macrosOkButtonRect = { 0 };
     RECT instanceManagerBtnRect = { 0 };
     RECT resetAllCompactRect = { 0 };
     RECT showRobloxCompactRect = { 0 };
@@ -11648,6 +16458,14 @@ struct MainUIData {
     RECT discordNotifyReconnectToggleRect = { 0 };
     RECT discordNotifyResetToggleRect = { 0 };
     RECT discordNotifyErrorsToggleRect = { 0 };
+    RECT discordNotifyMacroToggleRect = { 0 };
+    RECT discordNotifyIntervalMacrosToggleRect = { 0 };
+    RECT discordUseDefaultNameToggleRect = { 0 };
+    RECT discordUseDefaultAvatarToggleRect = { 0 };
+    RECT discordUseTimestampToggleRect = { 0 };
+    RECT discordNotifyHeartbeatToggleRect = { 0 };
+    RECT discordHeartbeatIntervalBtnRect = { 0 };
+    RECT discordNotifyUtilsRamToggleRect = { 0 };
     RECT discordDisableEmbedToggleRect = { 0 };
     RECT discordMentionOnErrorsToggleRect = { 0 };
     RECT discordMentionTargetSettingsRect = { 0 };
@@ -11697,6 +16515,10 @@ struct MainUIData {
     bool isHoveringRamCleanerToggleCompact = false;
     bool isHoveringAdvancedRamCleanerLink = false;
     bool isHoveringTestAction = false;
+    bool isHoveringMacros = false;
+    bool isHoveringMacrosIntervalToggle = false;
+    bool isHoveringMacrosBackIcon = false;
+    bool isHoveringMacrosOkButton = false;
     bool isHoveringInstanceManager = false;
     bool isHoveringActionDelaysEdit = false;
     bool isHoveringResetAllCompact = false;
@@ -11735,6 +16557,14 @@ struct MainUIData {
     bool isHoveringDiscordNotifyActionToggle = false;
     bool isHoveringDiscordNotifyReconnectToggle = false;
     bool isHoveringDiscordNotifyErrorsToggle = false;
+    bool isHoveringDiscordNotifyMacroToggle = false;
+    bool isHoveringDiscordNotifyIntervalMacrosToggle = false;
+    bool isHoveringDiscordUseDefaultNameToggle = false;
+    bool isHoveringDiscordUseDefaultAvatarToggle = false;
+    bool isHoveringDiscordUseTimestampToggle = false;
+    bool isHoveringDiscordNotifyHeartbeatToggle = false;
+    bool isHoveringDiscordHeartbeatIntervalBtn = false;
+    bool isHoveringDiscordNotifyUtilsRamToggle = false;
     bool isHoveringDiscordDisableEmbedToggle = false;
     bool isHoveringDiscordMentionOnErrorsToggle = false;
     bool isHoveringDiscordMentionTargetSettings = false;
@@ -11816,6 +16646,13 @@ struct MainUIData {
     float discordNotifyReconnectAnim = 0.0f;
     float discordNotifyResetAnim = 0.0f;
     float discordNotifyErrorsAnim = 0.0f;
+    float discordNotifyMacroAnim = 0.0f;
+    float discordNotifyIntervalMacrosAnim = 0.0f;
+    float discordNotifyHeartbeatAnim = 0.0f;
+    float discordNotifyUtilsRamAnim = 0.0f;
+    float discordUseDefaultNameAnim = 0.0f;
+    float discordUseDefaultAvatarAnim = 0.0f;
+    float discordUseTimestampAnim = 0.0f;
     float discordDisableEmbedAnim = 0.0f;
     float discordMentionOnErrorsAnim = 0.0f;
 
@@ -11834,21 +16671,27 @@ struct MainUIData {
     bool isHoveringGridModeValue = false;
     bool isHoveringGridSpacingBetween = false;
     bool isHoveringGridSpacingBorders = false;
+    bool isHoveringGridHotkeyChange = false;
+    bool isHoveringGridHotkeyToggle = false;
     bool isHoveringGridOkButton = false;
     int hoveringGridHelpButton = -1;
     RECT gridForceSmallToggleRect = { 0 };
     RECT gridAllMonitorsToggleRect = { 0 };
     RECT gridKeepAspectRatioToggleRect = { 0 };
     RECT gridModeDropdownRect = { 0 };
+    RECT gridHotkeyToggleRect = { 0 };
+    RECT gridHotkeyChangeBtnRect = { 0 };
+    RECT gridHotkeyBindTextRect = { 0 };
+    RECT gridHelpButtonRects[8] = {0};
     RECT gridModeValueDropdownRect = { 0 };
     RECT gridSpacingBetweenDropdownRect = { 0 };
     RECT gridSpacingBordersDropdownRect = { 0 };
     RECT gridOkButtonRect = { 0 };
-    RECT gridHelpButtonRects[7] = { 0 };
     RECT gridBackIconRect = { 0 };
     float gridForceSmallAnim = 0.0f;
     float gridAllMonitorsAnim = 0.0f;
     float gridKeepAspectRatioAnim = 0.0f;
+    float gridHotkeyAnim = 0.0f;
     int gridSettingsPreviousPage = 0;
 
     bool showingActionDelays = false;
@@ -11859,6 +16702,8 @@ struct MainUIData {
     bool isHoveringActionDelaysBackIcon = false;
     bool isHoveringActionDelaysSettingsCompact = false;
     RECT actionDelaysSettingsCompactRect = { 0 };
+    bool isHoveringActionSeq = false;
+    RECT actionSeqRect = { 0 };
     bool isHoveringPreActionDelayDropdown = false;
     bool isHoveringKeyPressDelayDropdown = false;
     bool isHoveringPostActionDelayDropdown = false;
@@ -11946,6 +16791,11 @@ struct MainUIData {
     bool isHoveringAlphaInfoReleasesLink = false;
     bool isHoveringAlphaInfoWhatsNewLink = false;
     int alphaInfoScrollOffset = 0;
+    int webhookScrollOffset = 0;
+    int webhookMaxScroll = 0;
+    int webhookScrollAreaTop = 0;
+    int webhookScrollAreaBottom = 0;
+    int webhookFixedBottom = 0;
     int alphaInfoContentHeight = 0;
     int alphaInfoScrollAreaTop = 0;
     RECT alphaInfoBackIconRect = { 0 };
@@ -11959,8 +16809,78 @@ struct MainUIData {
     int disclaimerContext = -1;
     int prevDisclaimerContext = -1;
     float disclaimerTextAnim = 1.0f;
+
+    bool showingMacros = false;
+    float macrosViewAnim = 0.0f;
+    float macrosIntervalToggleAnim = 0.0f;
+    int macrosViewDirection = 0;
+    int macrosPreviousPage = 0;
+    RECT macrosBackIconRect = { 0 };
+    RECT macrosRecordBtnRect = { 0 };
+    RECT macrosTestBtnRect = { 0 };
+    RECT macrosDeleteBtnRect = { 0 };
+    RECT macrosEditBtnRect = { 0 };
+    RECT macrosListRect = { 0 };
+    RECT macrosBtnRectNew = { 0 };
+    RECT macrosBtnRectEdit = { 0 };
+    RECT macrosBtnRectDelete = { 0 };
+    RECT macrosBtnRectTest = { 0 };
+    RECT macrosBtnRectNext = { 0 };
+    RECT macrosBtnRectBack = { 0 };
+    RECT macrosBtnRectRecord = { 0 };
+    RECT macrosBtnRectCooldown = { 0 };
+    RECT macrosBtnRectReconnect = { 0 };
+    RECT macrosBtnRectInterval = { 0 };
+    RECT macrosBtnRectImport = { 0 };
+    RECT macrosBtnRectFolder = { 0 };
+    RECT macrosReconnectDelayBtnRect = { 0 };
+    RECT macrosTriggerRectCd = { 0 };
+    RECT macrosTriggerRectRc = { 0 };
+    RECT macrosTriggerRectInt = { 0 };
+    std::vector<RECT> macrosExportBtnRects;
+    std::vector<RECT> macrosTriggerCdRects;
+    std::vector<RECT> macrosTriggerRcRects;
+    std::vector<RECT> macrosTriggerIntRects;
+    RECT macrosBtnRectFinish = { 0 };
+    RECT macrosBtnRectNameEdit = { 0 };
+    RECT macrosBtnRectTestWin = { 0 };
+    RECT macrosBtnRectFocus = { 0 };
+    int deleteMacroIndex = -1;
+    int macrosSelectedIndex = -1;
+    int macrosHoveringItem = -1;
+    int macrosScrollOffset = 0;
+    bool macrosScrollDragging = false;
+    RECT macrosScrollbarRect = { 0 };
+    bool macrosHoverRenameIcon = false;
+    bool macrosHoverExportIcon = false;
+    bool macrosHoverDeleteIcon = false;
+    int macrosViewMode = 0;
+    bool macrosHoverNew = false;
+    bool macrosHoverEdit = false;
+    bool macrosHoverDelete = false;
+    bool macrosHoverTest = false;
+    bool macrosHoverNext = false;
+    bool macrosHoverBack = false;
+    bool macrosHoverRecord = false;
+    bool macrosHoverRecordMovements = false;
+    RECT macrosRecordMovementsToggleRect = {0};
+    RECT macrosHelpBtnRect = {0};
+    bool macrosHoverCooldown = false;
+    bool macrosHoverReconnect = false;
+    bool macrosHoverInterval = false;
+    bool macrosHoverFinish = false;
+    float macrosRecordMovementsAnim = 0.0f;
+    bool macrosNameFocused = false;
+    std::wstring macrosWizardName;
+
     bool isOffscreenRender = false;
 };
+void MainUI_UpdateMacroWizardName(HWND hwndOwner, const wchar_t* name) {
+    MainUIData* pOwnerData = (MainUIData*)GetWindowLongPtr(hwndOwner, GWLP_USERDATA);
+    if (pOwnerData) {
+        pOwnerData->macrosWizardName = name;
+    }
+}
 void DrawRoundedRectangle(Graphics* g, Pen* pen, REAL x, REAL y, REAL width, REAL height, REAL radius)
 {
     GraphicsPath path;
@@ -12495,7 +17415,7 @@ void UpdateStatusBarPlacement(HWND hwnd, StatusBarData* pData)
     UpdateStatusBarWindowRegion(hwnd);
 }
 
-void HideStatusBarOverlay(bool animate = false)
+void HideStatusBarOverlay(bool animate)
 {
     if (!g_hStatusBarWnd || !IsWindow(g_hStatusBarWnd)) {
         return;
@@ -12545,7 +17465,7 @@ void EnsureStatusBarWindow()
         STATUS_BAR_CLASS_NAME,
         L"",
         WS_POPUP,
-        0, 0, 360, 40,
+        0, 0, 0, 0,
         NULL, NULL, g_hInst, NULL);
 }
 
@@ -13132,7 +18052,9 @@ void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, 
         tooltipX = anchorRect.right - tooltipW;
     }
     int tooltipY = anchorRect.top - tooltipH - 6 - extraTopOffset;
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
     if (tooltipX < 8) tooltipX = 8;
+    if (tooltipX + tooltipW > screenW - 8) tooltipX = screenW - 8 - tooltipW;
     if (tooltipY < 34) tooltipY = anchorRect.bottom + 6;
     RECT tooltipRect = { tooltipX, tooltipY, tooltipX + tooltipW, tooltipY + tooltipH };
 
@@ -13308,7 +18230,38 @@ void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const 
     RectF rectF((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
     g.DrawString(text, -1, &textFont, rectF, &sf, &textBrush);
 }
-void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isRowHovering, bool isButtonHovering, const wchar_t* icon = nullptr, bool thin = false, const RECT* clickBtnRect = nullptr, const wchar_t* btnLabel = L"click", bool isEnabled = true) {
+
+float MainUI_Paint_DrawBadge(Graphics& g, float x, float y, float badgeH, const wchar_t* badgeText, int textAlpha) {
+    Font badgeFont(L"Segoe UI", 7.0f);
+    StringFormat sfText;
+    sfText.SetAlignment(StringAlignmentNear);
+    sfText.SetLineAlignment(StringAlignmentCenter);
+    sfText.SetFormatFlags(StringFormatFlagsNoClip);
+    RectF measureRect;
+    g.MeasureString(badgeText, -1, &badgeFont, PointF(0, 0), &sfText, &measureRect);
+
+    float badgeW = measureRect.Width + 3.0f;
+
+    GraphicsPath badgePath;
+    REAL br = 3.0f;
+    badgePath.AddArc(x, y, br * 2, br * 2, 180, 90);
+    badgePath.AddArc(x + badgeW - br * 2, y, br * 2, br * 2, 270, 90);
+    badgePath.AddArc(x + badgeW - br * 2, y + badgeH - br * 2, br * 2, br * 2, 0, 90);
+    badgePath.AddArc(x, y + badgeH - br * 2, br * 2, br * 2, 90, 90);
+    badgePath.CloseFigure();
+
+    SmoothingMode oldSM = g.GetSmoothingMode();
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    SolidBrush badgeBg(Color(textAlpha > 200 ? 60 : textAlpha, 120, 120, 120));
+    g.FillPath(&badgeBg, &badgePath);
+    g.SetSmoothingMode(oldSM);
+
+    SolidBrush badgeTextColor(Color(textAlpha, 200, 200, 200));
+    RectF badgeRectF(x + 2.0f, y + 1.0f, badgeW - 2.0f, badgeH - 1.0f);
+    g.DrawString(badgeText, -1, &badgeFont, badgeRectF, &sfText, &badgeTextColor);
+    return badgeW;
+}
+void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isRowHovering, bool isButtonHovering, const wchar_t* icon = nullptr, bool thin = false, const RECT* clickBtnRect = nullptr, const wchar_t* btnLabel = L"click", bool isEnabled = true, const wchar_t* badge = nullptr) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeNone);
     g.SetPixelOffsetMode(PixelOffsetModeHalf);
@@ -13357,6 +18310,18 @@ void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const
     sfText.SetAlignment(StringAlignmentNear);
     sfText.SetLineAlignment(StringAlignmentCenter);
     g.DrawString(text, -1, &textFont, textRect, &sfText, &textBrush);
+
+    if (badge && badge[0] != L'\0') {
+        int badgeReleaseType = (currentVersion / 100) % 10;
+        if (badgeReleaseType != STABLE && badgeReleaseType != 0) {
+            RectF textBounds;
+            g.MeasureString(text, -1, &textFont, PointF(0, 0), &textBounds);
+            float badgeH = 13.0f;
+            float badgeX = (REAL)contentLeft + textBounds.Width + 6.0f;
+            float badgeY = (REAL)rect.top + ((REAL)(rect.bottom - rect.top) - badgeH) / 2.0f - 1.0f;
+            MainUI_Paint_DrawBadge(g, badgeX, badgeY, badgeH, badge, alpha);
+        }
+    }
 
     RECT btnRect;
     if (clickBtnRect) {
@@ -13872,6 +18837,15 @@ void MainUI_Paint_DrawTableRow(HDC hdc, const RECT& rowRect, HFONT font, const w
         MainUI_Paint_DrawHelpButton(hdc, helpButtonRect, font, isHelpHovering);
     }
 }
+static void FocusRobloxWindow(HWND hwnd) {
+    if (!hwnd || !IsWindow(hwnd)) return;
+    if (IsIconic(hwnd)) {
+        ShowWindow(hwnd, SW_RESTORE);
+        Sleep(80);
+    }
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+}
 void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     if (pData->showingActionDelays || pData->actionDelaysViewAnim > 0.0f) {
 
@@ -14059,7 +19033,7 @@ title = L"CPU Limit %";
         return;
     }
 
-    if (pData->currentPage == 0 && PtInRect(&pData->actionDelaysSettingsCompactRect, pt)) {
+    if (!(pData->showingMacros || pData->macrosViewAnim > 0.0f) && pData->currentPage == 0 && PtInRect(&pData->actionDelaysSettingsCompactRect, pt)) {
         pData->actionDelaysPreviousPage = pData->currentPage;
         pData->actionDelaysViewDirection = 1;
         pData->actionDelaysViewAnim = 0.0f;
@@ -14115,20 +19089,406 @@ title = L"CPU Limit %";
         return;
     }
 
+    if (pData->showingMacros || pData->macrosViewAnim > 0.0f) {
+        if (PtInRect(&pData->macrosBackIconRect, pt)) {
+            if (g_isRecording && pData->macrosViewMode == 5) {
+                QueueStatusBarOverlay(L"Recording in progress \u2022 press Ctrl+Shift+R to stop", 1500, hwnd);
+                return;
+            }
+            if (pData->macrosViewMode > 0) {
+                pData->macrosViewMode = 0;
+                g_macroWizardActive = false;
+                g_macroReRecording = false;
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else {
+                if (g_mainUiOpenedForMacros.load()) {
+                    g_mainUiOpenedForMacros = false;
+                    DestroyWindow(hwnd);
+                } else {
+                    pData->macrosViewDirection = -1;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+            }
+            return;
+        }
+        if (PtInRect(&pData->macrosOkButtonRect, pt)) {
+            if (g_isRecording && pData->macrosViewMode == 5) {
+                QueueStatusBarOverlay(L"Recording in progress \u2022 press Ctrl+Shift+R to stop", 1500, hwnd);
+                return;
+            }
+            if (g_mainUiOpenedForMacros.load()) {
+                g_mainUiOpenedForMacros = false;
+                DestroyWindow(hwnd);
+            } else {
+                pData->macrosViewDirection = -1;
+                pData->macrosViewMode = 0;
+                g_macroWizardActive = false;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+            return;
+        }
+
+        if (pData->macrosViewMode == 0) {
+            if (PtInRect(&pData->macrosReconnectDelayBtnRect, pt)) {
+                ShowCustomInputDialog(hwnd, CustomInputDialogType::ReconnectMacroDelay);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectFolder, pt)) {
+                std::wstring macroPath = MacroEngine_GetMacrosPath();
+                DWORD attrs = GetFileAttributesW(macroPath.c_str());
+                if (attrs != INVALID_FILE_ATTRIBUTES) {
+                    std::wstring cmd = L"/select,\"" + macroPath + L"\"";
+                    ShellExecuteW(NULL, L"open", L"explorer.exe", cmd.c_str(), NULL, SW_SHOWNORMAL);
+                } else {
+                    QueueStatusBarOverlay(L"Macros file not found - it will be created on first save", 2500, hwnd);
+                    std::wstring dir = macroPath.substr(0, macroPath.find_last_of(L'\\'));
+                    ShellExecuteW(NULL, L"open", dir.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                }
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectImport, pt)) {
+                MacroEngine_ImportMacroFromFile(hwnd);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectNew, pt)) {
+                MacroEngine_ShowWizard(hwnd);
+                return;
+            }
+            if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectFocus, pt)) {
+                if (g_testTargetHwnd && IsWindow(g_testTargetHwnd)) {
+                    FocusRobloxWindow(g_testTargetHwnd);
+                }
+                return;
+            }
+            if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectTestWin, pt)) {
+                auto wins = FindAllRobloxWindows(true);
+                if (!wins.empty()) {
+                    int idx = -1;
+                    for (size_t i = 0; i < wins.size(); i++) {
+                        if (wins[i] == g_testTargetHwnd) { idx = (int)i; break; }
+                    }
+                    idx = (idx + 1) % (int)wins.size();
+                    g_testTargetHwnd = wins[idx];
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                return;
+            }
+            if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectTest, pt)) {
+                if (g_macroTestRunning) return;
+                int sel = pData->macrosSelectedIndex;
+                if (sel >= 0 && sel < (int)g_macros.size()) {
+                    g_selectedMacroIndex = sel;
+                    HWND targetHwnd = g_testTargetHwnd;
+                    if (!targetHwnd || !IsWindow(targetHwnd)) {
+                        auto wins = FindAllRobloxWindows(true);
+                        if (!wins.empty()) targetHwnd = wins[0];
+                    }
+                    if (targetHwnd && IsWindow(targetHwnd)) {
+                        Macro testCopy;
+                        {
+                            std::lock_guard<std::mutex> lock(g_macrosMutex);
+                            if (sel >= 0 && sel < (int)g_macros.size()) {
+                                testCopy = g_macros[sel];
+                            }
+                        }
+                        if (testCopy.name.empty()) {
+                            QueueStatusBarOverlay(L"Macro not found", 2000, hwnd);
+                            return;
+                        }
+                        g_macroTestRunning = true;
+                        QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd);
+                        std::thread([testCopy, targetHwnd, hwnd]() {
+                            MacroEngine_ExecuteMacro(testCopy, targetHwnd, true);
+                            g_macroTestRunning = false;
+                            if (hwnd && IsWindow(hwnd)) {
+                                QueueStatusBarOverlay(L"Test run complete", 1500, hwnd);
+                            }
+                        }).detach();
+                    } else {
+                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                    }
+                }
+                return;
+            }
+            if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectEdit, pt)) {
+                int sel = pData->macrosSelectedIndex;
+                if (sel >= 0 && sel < (int)g_macros.size()) {
+                    HWND targetHwnd = g_testTargetHwnd;
+                    if (!targetHwnd || !IsWindow(targetHwnd)) {
+                        auto wins = FindAllRobloxWindows(true);
+                        if (!wins.empty()) targetHwnd = wins[0];
+                    }
+                    if (targetHwnd && IsWindow(targetHwnd)) {
+                        {
+                            std::lock_guard<std::mutex> lock(g_macrosMutex);
+                            g_wizardMacro = g_macros[sel];
+                        }
+                        g_selectedMacroIndex = sel;
+                        g_wizardTargetHwnd = targetHwnd;
+                        g_macroReRecording = true;
+                        g_macroWizardActive = true;
+                        g_macroWizardStep = 2;
+                        pData->macrosViewMode = 2;
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    } else {
+                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                    }
+                }
+                return;
+            }
+            if (PtInRect(&pData->macrosListRect, pt)) {
+                int relY = pt.y - pData->macrosListRect.top + pData->macrosScrollOffset;
+                int itemIdx = relY / 32;
+                bool deleted = false;
+                bool needSave = false;
+                bool needExport = false;
+                int showDialogType = -1;
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (itemIdx >= 0 && itemIdx < (int)g_macros.size()) {
+                        RECT clientRect;
+                        GetClientRect(hwnd, &clientRect);
+                        int rightEdge = clientRect.right;
+                        if (pt.x > rightEdge - 14 - 22) {
+                            pData->deleteMacroIndex = itemIdx;
+                            PostMessage(hwnd, WM_APP + 60, 0, 0);
+                            InvalidateRect(hwnd, NULL, FALSE);
+                            return;
+                        }
+                        int btnW = 22, gap = 2;
+                        int triggerX = (rightEdge - 14 - 22 - 22 - 4) - (btnW * 3 + gap * 2) - 4;
+                        if (pt.x >= 14 && pt.x < 34) {
+                            pData->macrosSelectedIndex = itemIdx;
+                            g_selectedMacroIndex = itemIdx;
+                            showDialogType = 3;
+                        } else if (pt.x > rightEdge - 14 - 44 && pt.x <= rightEdge - 14 - 22) {
+                            needExport = true;
+                        } else if (pt.x >= triggerX && pt.x < triggerX + btnW) {
+                            g_macros[itemIdx].triggerOnCooldown = !g_macros[itemIdx].triggerOnCooldown;
+                            g_macros[itemIdx].triggerOrderCooldown = g_macros[itemIdx].triggerOnCooldown ? ++g_macroTriggerOrderCounter : 0;
+                            needSave = true;
+                        } else if (pt.x >= triggerX + btnW + gap && pt.x < triggerX + btnW * 2 + gap) {
+                            g_macros[itemIdx].triggerOnReconnect = !g_macros[itemIdx].triggerOnReconnect;
+                            g_macros[itemIdx].triggerOrderReconnect = g_macros[itemIdx].triggerOnReconnect ? ++g_macroTriggerOrderCounter : 0;
+                            needSave = true;
+                        } else if (pt.x >= triggerX - 44 && pt.x < triggerX + (btnW + gap) * 3) {
+                            pData->macrosSelectedIndex = itemIdx;
+                            g_selectedMacroIndex = itemIdx;
+                            if (pt.x < triggerX + (btnW + gap) * 2) {
+                                showDialogType = 2;
+                            } else {
+                                if (g_macros[itemIdx].triggerOnInterval) {
+                                    g_macros[itemIdx].triggerOnInterval = false;
+                                    g_macros[itemIdx].intervalSec = 0;
+                                    g_macros[itemIdx].triggerOrderInterval = 0;
+                                    needSave = true;
+                                } else {
+                                    if (g_macros[itemIdx].intervalSec <= 0) {
+                                        showDialogType = 2;
+                                    } else {
+                                        g_macros[itemIdx].triggerOnInterval = true;
+                                        g_macros[itemIdx].triggerOrderInterval = ++g_macroTriggerOrderCounter;
+                                        needSave = true;
+                                    }
+                                }
+                            }
+                        } else {
+                            pData->macrosSelectedIndex = itemIdx;
+                            g_selectedMacroIndex = itemIdx;
+                        }
+                    }
+                }
+                if (showDialogType == 2) {
+                    ShowCustomInputDialog(hwnd, CustomInputDialogType::MacroInterval);
+                    return;
+                }
+                if (showDialogType == 3) {
+                    ShowCustomInputDialog(hwnd, CustomInputDialogType::MacroRename);
+                    return;
+                }
+                if (needExport) {
+                    MacroEngine_ExportMacroToFile(hwnd, itemIdx);
+                    QueueStatusBarOverlay(L"Macro exported", 1500, hwnd);
+                }
+                if (needSave) {
+                    MacroEngine_SaveMacros();
+                }
+                if (deleted) {
+                    MacroEngine_SaveMacros();
+                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd);
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+        } else if (pData->macrosViewMode == 1) {
+            if (PtInRect(&pData->macrosBtnRectNameEdit, pt)) {
+                ShowCustomInputDialog(hwnd, CustomInputDialogType::MacroName);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectFocus, pt)) {
+                HWND fw = g_wizardTargetHwnd;
+                if (!fw || !IsWindow(fw)) { auto fWins = FindAllRobloxWindows(true); if (!fWins.empty()) fw = fWins[0]; }
+                if (fw && IsWindow(fw)) FocusRobloxWindow(fw);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectTestWin, pt)) {
+                auto wins = FindAllRobloxWindows(true);
+                if (!wins.empty()) {
+                    int idx = -1;
+                    for (size_t i = 0; i < wins.size(); i++) {
+                        if (wins[i] == g_wizardTargetHwnd) { idx = (int)i; break; }
+                    }
+                    idx = (idx + 1) % (int)wins.size();
+                    g_wizardTargetHwnd = wins[idx];
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectNext, pt)) {
+                if (pData->macrosWizardName.empty()) {
+                    QueueStatusBarOverlay(L"Enter a macro name", 1500, hwnd);
+                } else {
+                    g_wizardMacro.name = pData->macrosWizardName;
+                    g_macroWizardStep = 2;
+                    pData->macrosViewMode = 2;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectBack, pt)) {
+                pData->macrosViewMode = 0;
+                g_macroWizardActive = false;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+        } else if (pData->macrosViewMode == 2) {
+            if (PtInRect(&pData->macrosBtnRectRecord, pt)) {
+                HWND targetHwnd = g_wizardTargetHwnd;
+                if (!targetHwnd || !IsWindow(targetHwnd)) {
+                    auto wins = FindAllRobloxWindows(true);
+                    if (!wins.empty()) targetHwnd = wins[0];
+                }
+                if (targetHwnd && IsWindow(targetHwnd)) {
+                    if (g_macroReRecording) {
+                        g_wizardMacro.actions.clear();
+                    }
+                    pData->macrosViewMode = 5;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    SetTimer(hwnd, 1003, 250, NULL);
+                    MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name);
+                } else {
+                    QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                }
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectBack, pt)) {
+                if (g_macroReRecording) {
+                    g_macroReRecording = false;
+                    g_macroWizardActive = false;
+                    pData->macrosViewMode = 0;
+                } else {
+                    pData->macrosViewMode = 1;
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (pData->macrosRecordMovementsToggleRect.left != 0 && PtInRect(&pData->macrosRecordMovementsToggleRect, pt)) {
+                g_recordingMovementsEnabled = !g_recordingMovementsEnabled;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (pData->macrosHelpBtnRect.left != 0 && PtInRect(&pData->macrosHelpBtnRect, pt)) {
+                ShowDarkMessageBox(hwnd, L"While the mouse button is held, AntiAFK-RBX also records the cursor movement path for more realistic playback.\n\nDisable this option to record only clicks and key presses.", L"Record Mouse Movements", MB_OK);
+                return;
+            }
+        } else if (pData->macrosViewMode == 3) {
+            if (PtInRect(&pData->macrosBtnRectNext, pt)) {
+                pData->macrosViewMode = 4;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectBack, pt)) {
+                pData->macrosViewMode = 2;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+        } else if (pData->macrosViewMode == 4) {
+            if (PtInRect(&pData->macrosBtnRectCooldown, pt)) {
+                g_wizardMacro.triggerOnCooldown = !g_wizardMacro.triggerOnCooldown;
+                g_wizardMacro.triggerOrderCooldown = g_wizardMacro.triggerOnCooldown ? ++g_macroTriggerOrderCounter : 0;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectReconnect, pt)) {
+                g_wizardMacro.triggerOnReconnect = !g_wizardMacro.triggerOnReconnect;
+                g_wizardMacro.triggerOrderReconnect = g_wizardMacro.triggerOnReconnect ? ++g_macroTriggerOrderCounter : 0;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectFinish, pt)) {
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    for (auto& m : g_macros) {
+                        if (m.name == pData->macrosWizardName) {
+                            QueueStatusBarOverlay(L"Macro name already exists", 2000, hwnd);
+                            InvalidateRect(hwnd, NULL, FALSE);
+                            return;
+                        }
+                    }
+                    g_macros.push_back(g_wizardMacro);
+                    g_selectedMacroIndex = (int)g_macros.size() - 1;
+                    g_selectedAction = 4;
+                }
+                MacroEngine_SaveMacros();
+                pData->macrosViewMode = 0;
+                g_macroWizardActive = false;
+                InvalidateRect(hwnd, NULL, FALSE);
+                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, hwnd);
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectBack, pt)) {
+                pData->macrosViewMode = 3;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+        } else if (pData->macrosViewMode == 5) {
+            if (PtInRect(&pData->macrosBtnRectRecord, pt)) {
+                MacroEngine_StopRecording();
+                return;
+            }
+            if (PtInRect(&pData->macrosBtnRectBack, pt)) {
+                MacroEngine_CancelRecording();
+                return;
+            }
+        }
+        return;
+    }
+
     if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
         if (PtInRect(&pData->gridBackIconRect, pt)) {
-            pData->gridSettingsViewDirection = -1;
+            if (g_mainUiOpenedForGrid.load()) {
+                g_mainUiOpenedForGrid = false;
+                DestroyWindow(hwnd);
+            } else {
+                pData->gridSettingsViewDirection = -1;
+            }
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
 
         if (PtInRect(&pData->gridOkButtonRect, pt)) {
-            pData->gridSettingsViewDirection = -1;
+            if (g_mainUiOpenedForGrid.load()) {
+                g_mainUiOpenedForGrid = false;
+                DestroyWindow(hwnd);
+            } else {
+                pData->gridSettingsViewDirection = -1;
+            }
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
 
-        for (int i = 0; i < 7; ++i) {
+        for (int i = 0; i < 8; ++i) {
             if (pData->gridHelpButtonRects[i].left != 0 && PtInRect(&pData->gridHelpButtonRects[i], pt)) {
                 const wchar_t* title = L"Help";
                 const wchar_t* text = L"";
@@ -14159,6 +19519,9 @@ title = L"CPU Limit %";
                 } else if (i == 6) {
                     title = L"Spacing From Borders";
                     text = L"Sets the outer margin (in pixels) around the edges of the screen.";
+                } else if (i == 7) {
+                    title = L"Grid Hotkey";
+                    text = L"Global hotkey to apply the window grid layout to all Roblox windows instantly.\n\nSame effect as Grid Snap Roblox*. Click the pencil to record a new key combination.";
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -14228,6 +19591,19 @@ title = L"CPU Limit %";
             ShowCustomInputDialog(hwnd, CustomInputDialogType::GridSpacingBorders);
             InvalidateRect(hwnd, NULL, FALSE);
             return;
+        }
+
+        if (g_hotkeyGridEnabled.load() && PtInRect(&pData->gridHotkeyChangeBtnRect, pt)) {
+            PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_GRID_HOTKEY, 0);
+            return;
+        }
+        {
+            RECT gridHkHitbox;
+            MainUI_Paint_DrawToggleGetHitbox(pData->gridHotkeyToggleRect, &gridHkHitbox);
+            if (PtInRect(&gridHkHitbox, pt)) {
+                PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_GRID_HOTKEY, 0);
+                return;
+            }
         }
 
         return;
@@ -14352,18 +19728,38 @@ title = L"CPU Limit %";
 
         if (webhookEnabled) {
             RECT toggleHitboxLocal;
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyStartToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyStart); g_discordNotifyStop = g_discordNotifyStart.load(); return; }
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyActionToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyAction); return; }
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyReconnectToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyReconnect); return; }
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyErrorsToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyErrors); return; }
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordDisableEmbedToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordDisableEmbed); return; }
-            MainUI_Paint_DrawToggleGetHitbox(pData->discordMentionOnErrorsToggleRect, &toggleHitboxLocal);
-            if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordMentionOnErrors); return; }
+            if (pt.y >= pData->webhookFixedBottom) {
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyStartToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyStart); g_discordNotifyStop = g_discordNotifyStart.load(); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyActionToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyAction); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyReconnectToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyReconnect); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyErrorsToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyErrors); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyMacroToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyMacro); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyIntervalMacrosToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyIntervalMacros); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordDisableEmbedToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordDisableEmbed); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordMentionOnErrorsToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordMentionOnErrors); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordUseDefaultNameToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordUseDefaultName); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordUseDefaultAvatarToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordUseDefaultAvatar); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordUseTimestampToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordUseTimestamp); return; }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyHeartbeatToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyHeartbeat); return; }
+                if (webhookEnabled && PtInRect(&pData->discordHeartbeatIntervalBtnRect, pt)) {
+                    ShowCustomInputDialog(hwnd, CustomInputDialogType::DiscordHeartbeatInterval);
+                    return;
+                }
+                MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyUtilsRamToggleRect, &toggleHitboxLocal);
+                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyUtilsRam); return; }
+            }
         }
     }
 
@@ -14375,10 +19771,10 @@ title = L"CPU Limit %";
                 if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
                 if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
                 if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
-                if (i == 3) { title = L"Test Action"; text = L"Performs the selected Anti-AFK action once, so you can verify it works in your current session without waiting for the next interval tick."; }
+                if (i == 3) { title = L"Macros"; text = L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Custom Macro*' in the Action menu."; }
                 if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance AntiAFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for muti-instance setups."; }
                 if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
-                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Interval, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
+                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
             } else if (pData->currentPage == 1) { // Auto+Utils
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."; }
                 if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
@@ -14400,7 +19796,7 @@ title = L"CPU Limit %";
                 if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures."; }
-                if (i == 1) { title = L"Multi-Instance Interval"; text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC."; }
+                if (i == 1) { title = L"Multi-Instance Delay"; text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC."; }
                 if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
                 if (i == 3) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions.\n- Disabled: turns off memory cleaning.\n\nUse 'Set...' to configure thresholds and intervals."; }
                 if (i == 4) { title = L"Reconnect Interval"; text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus."; }
@@ -14413,8 +19809,15 @@ title = L"CPU Limit %";
                 if (i == 2) { title = L"Action"; text = L"Notifies Discord after every Anti-AFK cycle.\n\nProvides a detailed activity log. Can be noisy with short intervals (e.g. 1 message every 60 sec)."; }
                 if (i == 3) { title = L"Reconnect"; text = L"Notifies Discord when Auto Reconnect tries to press the reconnect button.\n\nUseful to see when Roblox needed recovery while you were away."; }
                 if (i == 4) { title = L"Errors"; text = L"Notifies Discord about important problems (Roblox not found, feature failures).\n\nRecommended for unattended setups, you'll be alerted only when something actually needs attention."; }
-                if (i == 5) { title = L"Disable embed"; text = L"Sends webhook messages as plain text instead of rich embeds.\n\nUse for simple log channels, mobile previews, or destinations where embeds are filtered or look too large."; }
-                if (i == 6) { title = L"Mention on errors"; text = L"Adds an @everyone (or whatever you add) mention for Error and Reconnect events. You can change @everyone to anything you want via the Configure mention target button to the right of the toggle."; }
+                if (i == 5) { title = L"Macros"; text = L"Notifies Discord every time a macro is executed (cooldown, reconnect, or interval trigger).\n\nThe message includes the macro name and the Roblox window title."; }
+                if (i == 6) { title = L"Interval Macros"; text = L"Notifies Discord when interval macro mode is enabled or disabled (manually, or automatically with Anti-AFK start/stop)."; }
+                if (i == 7) { title = L"Disable embed"; text = L"Sends webhook messages as plain text instead of rich embeds.\n\nUse for simple log channels, mobile previews, or destinations where embeds are filtered or look too large."; }
+                if (i == 8) { title = L"Mention on errors"; text = L"Adds an @everyone (or whatever you add) mention for Error and Reconnect events. You can change @everyone to anything you want via the Configure mention target button to the right of the toggle."; }
+                if (i == 9) { title = L"Default name"; text = L"Omits the app username from webhook messages, so Discord shows the webhook's own name configured in Discord.\n\nOff: messages are posted as AntiAFK-RBX."; }
+                if (i == 10) { title = L"Default avatar"; text = L"Omits the app avatar from webhook messages, so Discord shows the webhook's own avatar configured in Discord.\n\nOff: messages use the AntiAFK-RBX icon."; }
+                if (i == 11) { title = L"Timestamp"; text = L"Adds a Discord timestamp (UTC) to embed messages, shown next to the event.\n\nOff: messages have no timestamp."; }
+                if (i == 12) { title = L"Heartbeat"; text = L"Sends a periodic status ping while Anti-AFK is running: session time, next action countdown and statistics.\n\nUseful to monitor that the app is alive. Set the interval with the clock button (5 to 1440 minutes). The first ping is sent after one full interval."; }
+                if (i == 13) { title = L"RAM Cleaner"; text = L"Notifies when the RAM Cleaner optimizes Roblox processes, including how many were cleaned."; }
             }
             ShowDarkMessageBox(hwnd, text, title, MB_OK);
             return;
@@ -14582,6 +19985,8 @@ title = L"CPU Limit %";
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
             POINT menuPt;
             menuPt.x = pData->actionDropdownRect.left;
             menuPt.y = pData->actionDropdownRect.bottom;
@@ -14620,6 +20025,22 @@ title = L"CPU Limit %";
             return;
         }
         if (PtInRect(&pData->testActionButtonRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TEST_ACTION, 0); return; }
+        if (PtInRect(&pData->macrosIntervalToggleCompactRect, pt)) {
+            PostMessage(g_hwnd, WM_COMMAND, ID_INTERVAL_MACRO_TOGGLE, 0);
+            return;
+        }
+        if (PtInRect(&pData->macrosBtnRect, pt)) {
+            if (g_macroWizardHwnd && IsWindow(g_macroWizardHwnd) && (GetWindowLong(g_macroWizardHwnd, GWL_STYLE) & WS_CHILD)) {
+                DestroyWindow(g_macroWizardHwnd);
+                g_macroWizardHwnd = NULL;
+                g_macroWizardActive = false;
+            }
+            pData->macrosPreviousPage = pData->currentPage;
+            pData->macrosViewDirection = 1;
+            pData->macrosViewAnim = 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
         if (PtInRect(&pData->instanceManagerBtnRect, pt)) {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -14664,6 +20085,8 @@ title = L"CPU Limit %";
             AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
             AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
             AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
             POINT menuPt;
             menuPt.x = pData->multiInstanceIntervalDropdownRect.left;
             menuPt.y = pData->multiInstanceIntervalDropdownRect.bottom;
@@ -14832,6 +20255,7 @@ title = L"CPU Limit %";
             pData->gridForceSmallAnim = g_gridForceSmall.load() ? 1.0f : 0.0f;
             pData->gridAllMonitorsAnim = g_gridAllMonitors.load() ? 1.0f : 0.0f;
             pData->gridKeepAspectRatioAnim = g_gridKeepAspectRatio.load() ? 1.0f : 0.0f;
+            pData->gridHotkeyAnim = g_hotkeyGridEnabled.load() ? 1.0f : 0.0f;
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
@@ -14859,6 +20283,61 @@ title = L"CPU Limit %";
         return;
     }
 }
+static void MainUI_Paint_DrawGridHotkeyRow(HDC hdc, MainUIData* pData, Gdiplus::Graphics* pG) {
+    std::wstring gkText = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+    bool gkEn = g_hotkeyGridEnabled.load();
+    bool recording = g_hotkeyCaptureActive.load() && g_hotkeyCaptureIsGrid.load();
+
+    MainUI_Paint_DrawToggle(hdc, pData->gridHotkeyToggleRect, pData->hFontText, L"Grid Hotkey", gkEn, pData->isHoveringGridHotkeyToggle, pData->gridHotkeyAnim, false, L"\uE80A", true, pG);
+
+    {
+        RECT btn = pData->gridHotkeyChangeBtnRect;
+        REAL bw = (REAL)(btn.right - btn.left);
+        REAL bh = (REAL)(btn.bottom - btn.top);
+        Color fillC, borderC;
+        if (!gkEn) {
+            fillC = Color(50, 45, 45, 45);
+            borderC = Color(80, 56, 56, 56);
+        } else {
+            fillC = (pData->isHoveringGridHotkeyChange || recording) ? Color(140, 80, 80, 80) : Color(140, 55, 55, 55);
+            borderC = Color(180, 56, 56, 56);
+        }
+        SolidBrush bg(fillC);
+        Pen borderPen(borderC, 1.0f);
+        {
+            SmoothingMode oldS = pG->GetSmoothingMode();
+            PixelOffsetMode oldO = pG->GetPixelOffsetMode();
+            pG->SetSmoothingMode(SmoothingModeAntiAlias);
+            pG->SetPixelOffsetMode(PixelOffsetModeHalf);
+            FillRoundedRectangle(pG, &bg, (REAL)btn.left, (REAL)btn.top, bw, bh, 5);
+            pG->SetPixelOffsetMode(PixelOffsetModeNone);
+            DrawRoundedRectangle(pG, &borderPen, (REAL)btn.left, (REAL)btn.top, bw, bh, 5);
+            pG->SetPixelOffsetMode(oldO);
+            pG->SetSmoothingMode(oldS);
+        }
+        HFONT btnIconF = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+        Font gdiBtnIconF(hdc, btnIconF);
+        SolidBrush btnIconBr(gkEn ? Color(255, 200, 200, 200) : Color(100, 140, 140, 140));
+        StringFormat sfBtnIc;
+        sfBtnIc.SetAlignment(StringAlignmentCenter);
+        sfBtnIc.SetLineAlignment(StringAlignmentCenter);
+        RectF btnIcR((REAL)(btn.left + 1), (REAL)(btn.top + 1.5f), (REAL)(btn.right - btn.left), (REAL)(btn.bottom - btn.top));
+        pG->DrawString(recording ? L"\uE7C8" : L"\uE70F", -1, &gdiBtnIconF, btnIcR, &sfBtnIc, &btnIconBr);
+        DeleteObject(btnIconF);
+    }
+
+    HFONT gkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    Font gdiGkBindFont(hdc, gkBindFont);
+    SolidBrush gkBindBrush(Color(gkEn ? 255 : 100, 180, 180, 180));
+    StringFormat sfGkBind;
+    sfGkBind.SetAlignment(StringAlignmentFar);
+    sfGkBind.SetLineAlignment(StringAlignmentCenter);
+    RECT gkTr = pData->gridHotkeyBindTextRect;
+    RectF gkTrF((REAL)gkTr.left, (REAL)gkTr.top, (REAL)(gkTr.right - gkTr.left), (REAL)(gkTr.bottom - gkTr.top));
+    pG->DrawString(gkText.c_str(), -1, &gdiGkBindFont, gkTrF, &sfGkBind, &gkBindBrush);
+    DeleteObject(gkBindFont);
+}
+
 bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData)
 {
     bool needsRedraw = false;
@@ -14911,6 +20390,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         animateToggle(pData->gridForceSmallAnim, g_gridForceSmall.load());
         animateToggle(pData->gridAllMonitorsAnim, g_gridAllMonitors.load());
         animateToggle(pData->gridKeepAspectRatioAnim, g_gridKeepAspectRatio.load());
+        animateToggle(pData->gridHotkeyAnim, g_hotkeyGridEnabled.load());
 
         gridAnim = pData->gridSettingsViewAnim;
         wasShowingGrid = pData->showingGridSettings;
@@ -15038,6 +20518,38 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         needsRedraw = true;
     }
 
+    bool wasShowingMacros = pData->showingMacros;
+    float macrosAnim = pData->macrosViewAnim;
+    if (wasShowingMacros || pData->macrosViewDirection != 0) {
+        if (pData->macrosViewDirection == 1) {
+            pData->macrosViewAnim += (1.0f - pData->macrosViewAnim) * animSpeed;
+            if (pData->macrosViewAnim > 0.995f) {
+                pData->macrosViewAnim = 1.0f;
+                pData->macrosViewDirection = 0;
+                pData->showingMacros = true;
+            }
+            needsRedraw = true;
+        } else if (pData->macrosViewDirection == -1) {
+            pData->macrosViewAnim += (0.0f - pData->macrosViewAnim) * animSpeed;
+            if (pData->macrosViewAnim < 0.005f) {
+                pData->macrosViewAnim = 0.0f;
+                pData->macrosViewDirection = 0;
+                pData->showingMacros = false;
+            }
+            needsRedraw = true;
+        }
+        macrosAnim = pData->macrosViewAnim;
+        wasShowingMacros = pData->showingMacros;
+    }
+    {
+        float t = g_recordingMovementsEnabled ? 1.0f : 0.0f;
+        if (fabs(pData->macrosRecordMovementsAnim - t) > 0.001f) {
+            pData->macrosRecordMovementsAnim += (t - pData->macrosRecordMovementsAnim) * 0.18f;
+            if (fabs(pData->macrosRecordMovementsAnim - t) < 0.005f) pData->macrosRecordMovementsAnim = t;
+            needsRedraw = true;
+        }
+    }
+
     {
         int disclaimerContext = -1;
         if (pData->actionDelaysViewDirection != 0 || pData->showingActionDelays) {
@@ -15050,6 +20562,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             disclaimerContext = 103;
         } else if (pData->timingsViewDirection != 0 || pData->showingTimings) {
             disclaimerContext = 104;
+        } else if (pData->macrosViewDirection != 0 || pData->showingMacros) {
+            disclaimerContext = 105;
         } else {
             disclaimerContext = pData->currentPage;
         }
@@ -15080,8 +20594,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     bool renderFpsCapperSettingsPrimary = wasShowingFpsCapperSettings || fpsCapperSettingsAnim > 0.0f;
     bool renderAlphaInfoPrimary = wasShowingAlphaInfo || alphaInfoAnim > 0.0f;
     bool renderTimingsPrimary = wasShowingTimings || timingsAnim > 0.0f;
-
-    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim)));
+    bool renderMacrosPrimary = (pData->showingMacros || pData->macrosViewAnim > 0.0f);
+    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim), macrosAnim)));
     bool renderMainPrimary = overlayAlpha < 0.5f;
 
     pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
@@ -15097,9 +20611,10 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     pData->fpsCapperSettingsBackIconRect = pData->iconButtonRect;
     pData->alphaInfoBackIconRect = pData->iconButtonRect;
     pData->timingsBackIconRect = pData->iconButtonRect;
+    pData->macrosBackIconRect = pData->iconButtonRect;
 
-    float activeBackAnim = max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim);
-    bool isHoveringActiveBack = pData->isHoveringBackIcon || pData->isHoveringActionDelaysBackIcon || pData->isHoveringFpsCapperSettingsBackIcon || pData->isHoveringAlphaInfoBackIcon || pData->isHoveringTimingsBackIcon;
+    float activeBackAnim = max(max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+    bool isHoveringActiveBack = pData->isHoveringBackIcon || pData->isHoveringActionDelaysBackIcon || pData->isHoveringFpsCapperSettingsBackIcon || pData->isHoveringAlphaInfoBackIcon || pData->isHoveringTimingsBackIcon || pData->isHoveringMacrosBackIcon;
 
     if (activeBackAnim > 0.0f) {
         if (isHoveringActiveBack) {
@@ -15190,14 +20705,27 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
         if (alphaInfoAnim > 0.0f) {
             SolidBrush textBrushAlpha(Color((BYTE)(255 * alphaInfoAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX \u2022 About v.4.0.0 Alpha", -1, &gdiFont, titleRect, &sf, &textBrushAlpha);
+            wchar_t aboutTitle[64];
+            swprintf_s(aboutTitle, L"AntiAFK-RBX \u2022 About \u00B7 %ls", GetReleaseChannelName());
+            g.DrawString(aboutTitle, -1, &gdiFont, titleRect, &sf, &textBrushAlpha);
         }
         if (timingsAnim > 0.0f) {
             SolidBrush textBrushTimings(Color((BYTE)(255 * timingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX \u2022 Timings", -1, &gdiFont, titleRect, &sf, &textBrushTimings);
         }
+        float macrosAnim = pData->macrosViewAnim;
+        if (macrosAnim > 0.0f) {
+            SolidBrush textBrushMacros(Color((BYTE)(255 * macrosAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            const wchar_t* titleText = L"AntiAFK-RBX \u2022 Macros";
+            if (pData->macrosViewMode == 1) titleText = L"AntiAFK-RBX \u2022 New Macro: Name";
+            else if (pData->macrosViewMode == 2) titleText = g_macroReRecording ? L"AntiAFK-RBX \u2022 Re-record Macro" : L"AntiAFK-RBX \u2022 New Macro: Record";
+            else if (pData->macrosViewMode == 3) titleText = L"AntiAFK-RBX \u2022 New Macro: Review";
+            else if (pData->macrosViewMode == 4) titleText = L"AntiAFK-RBX \u2022 New Macro: Triggers";
+            else if (pData->macrosViewMode == 5) titleText = L"AntiAFK-RBX \u2022 Recording...";
+            g.DrawString(titleText, -1, &gdiFont, titleRect, &sf, &textBrushMacros);
+        }
         float badgeAnim = pData->badgeRevealAnim;
-        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), badgeAnim);
+        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim);
         if (mainTitleFade > 0.0f) {
             SolidBrush textBrushNormal(Color((BYTE)(255 * mainTitleFade), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX", -1, &gdiFont, titleRect, &sf, &textBrushNormal);
@@ -15206,41 +20734,21 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         int releaseType = (currentVersion / 100) % 10;
         if (badgeAnim > 0.0f && releaseType != STABLE && releaseType != 0) {
-            const wchar_t* badgeText = L"ALPHA";
-            BYTE colR = 244, colG = 254, colB = 167;
-            if (releaseType == BETA) { badgeText = L"BETA"; colR = 167; colG = 254; colB = 203; }
-            else if (releaseType == RC) { badgeText = L"RC"; colR = 167; colG = 174; colB = 254; }
-
             Font badgeFont(L"Segoe UI", 7.0f);
-            StringFormat sfCentered;
-            sfCentered.SetAlignment(StringAlignmentCenter);
-            sfCentered.SetLineAlignment(StringAlignmentCenter);
+            StringFormat sfBadgeText;
+            sfBadgeText.SetAlignment(StringAlignmentNear);
+            sfBadgeText.SetLineAlignment(StringAlignmentCenter);
+            sfBadgeText.SetFormatFlags(StringFormatFlagsNoClip);
             RectF measureRect;
-            g.MeasureString(badgeText, -1, &badgeFont, PointF(0, 0), &measureRect);
+            g.MeasureString(L"PREVIEW", -1, &badgeFont, PointF(0, 0), &sfBadgeText, &measureRect);
 
             float badgeH = 14.0f;
-            float badgeW = measureRect.Width + 8.0f;
+            float badgeW = measureRect.Width + 3.0f;
             float cx = (REAL)clientRect.right / 2.0f;
             float badgeX = cx - badgeW / 2.0f;
             float badgeY = 14.0f - badgeH / 2;
 
-            GraphicsPath badgePath;
-            REAL br = 3.0f;
-            badgePath.AddArc(badgeX, badgeY, br * 2, br * 2, 180, 90);
-            badgePath.AddArc(badgeX + badgeW - br * 2, badgeY, br * 2, br * 2, 270, 90);
-            badgePath.AddArc(badgeX + badgeW - br * 2, badgeY + badgeH - br * 2, br * 2, br * 2, 0, 90);
-            badgePath.AddArc(badgeX, badgeY + badgeH - br * 2, br * 2, br * 2, 90, 90);
-            badgePath.CloseFigure();
-
-            SmoothingMode oldSM = g.GetSmoothingMode();
-            g.SetSmoothingMode(SmoothingModeAntiAlias);
-            SolidBrush badgeBg(Color((BYTE)(70 * badgeAnim), colR, colG, colB));
-            g.FillPath(&badgeBg, &badgePath);
-            g.SetSmoothingMode(oldSM);
-
-            SolidBrush badgeTextColor(Color((BYTE)(220 * badgeAnim), colR, colG, colB));
-            RectF badgeRectF(badgeX, badgeY, badgeW, badgeH);
-            g.DrawString(badgeText, -1, &badgeFont, badgeRectF, &sfCentered, &badgeTextColor);
+            MainUI_Paint_DrawBadge(g, badgeX, badgeY, badgeH, L"PREVIEW", (int)(220 * badgeAnim));
         }
 
         SelectObject(hdc, oldFont);
@@ -15269,12 +20777,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     BYTE g_normal = (BYTE)(g_state_normal * (1.0f - progress) + GetGValue(errorColor) * progress);
     BYTE b_normal = (BYTE)(b_state_normal * (1.0f - progress) + GetBValue(errorColor) * progress);
 
-    float overlayAnim = max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim);
+    float overlayAnim = max(max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
 
     bool isContinueBtn = pData->alphaInfoAutoShown && alphaInfoAnim > 0.0f && alphaInfoAnim >= overlayAnim * 0.99f;
     COLORREF startColor_back = isContinueBtn ? RGB(0, 100, 180) : RGB(80, 80, 80);
     COLORREF startHoverColor_back = isContinueBtn ? RGB(0, 130, 210) : RGB(100, 100, 100);
-    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton;
+    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton || pData->isHoveringMacrosOkButton;
     COLORREF currentBackColor = isOverlayOkHovered ? startHoverColor_back : startColor_back;
     BYTE r_back = GetRValue(currentBackColor);
     BYTE g_back = GetGValue(currentBackColor);
@@ -15326,22 +20834,22 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
     SelectObject(hdc, oldFont2);
 
+    {
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        SolidBrush headerLineBrush(Color(180, 56, 56, 56));
+        g.FillRectangle(&headerLineBrush, 0.0f, 30.0f, (REAL)clientRect.right, 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
     if (renderMainPrimary) {
         {
             RECT navBarRect = { 0, 31, clientRect.right, 61 };
         SolidBrush navBrush(Color(100, 35, 35, 35));
         g.FillRectangle(&navBrush, (REAL)navBarRect.left, (REAL)navBarRect.top, (REAL)(navBarRect.right - navBarRect.left), (REAL)(navBarRect.bottom - navBarRect.top));
-
-        {
-            PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-            SmoothingMode oldSmooth = g.GetSmoothingMode();
-            g.SetPixelOffsetMode(PixelOffsetModeNone);
-            g.SetSmoothingMode(SmoothingModeNone);
-            SolidBrush headerLineBrush(Color(180, 56, 56, 56));
-            g.FillRectangle(&headerLineBrush, 0.0f, 30.0f, (REAL)clientRect.right, 1.0f);
-            g.SetPixelOffsetMode(oldOffset);
-            g.SetSmoothingMode(oldSmooth);
-        }
 
         const int margin = 20, rowH = 32, vGap = 10;
     const int nav_bar_y = 31, nav_bar_h = 30;
@@ -15362,8 +20870,15 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     if (pData->currentPage == 0) { // General
         int ddW_interval = 166, ddW_action = 144;
         int inlineGap = 4;
+        int btnW = 48, btnH = 22;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->testActionButtonRect = {
+            ctrlEndX - ddW_interval - help_btn_size - 4 - help_btn_size,
+            y + (rowH - help_btn_size) / 2 + 4,
+            ctrlEndX - ddW_interval - help_btn_size - 4,
+            y + (rowH - help_btn_size) / 2 + help_btn_size + 4
+        };
         pData->intervalDropdownRect = { ctrlEndX - ddW_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
@@ -15386,25 +20901,29 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        int clickBtnW = 50;
-        int clickBtnH = 24;
-        int clickGap = 0;
-        pData->testActionButtonRect = { clientRect.right - help_btn_size - 20 - clickGap - clickBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20 - clickGap, y + (rowH - help_btn_size) / 2 + 4 + clickBtnH };
-        pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        {
+            int macrosBtnW = 58, macrosBtnH = 24;
+            pData->macrosBtnRect = { clientRect.right - help_btn_size - 20 - macrosBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + macrosBtnH };
+            int mCtrlTop = y + (rowH - help_btn_size) / 2 + 4;
+            pData->macrosIntervalToggleCompactRect = { pData->macrosBtnRect.left - inlineGap - help_btn_size, mCtrlTop, pData->macrosBtnRect.left - inlineGap, mCtrlTop + help_btn_size };
+            pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        }
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        int instBtnW = 58;
-        int instBtnH = 24;
-        pData->instanceManagerBtnRect = { clientRect.right - help_btn_size - 20 - instBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + instBtnH };
-        pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        {
+            int instBtnW = 58, instBtnH = 24;
+            pData->instanceManagerBtnRect = { clientRect.right - help_btn_size - 20 - instBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + instBtnH };
+            pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        }
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        int timingsBtnW = 58;
-        int timingsBtnH = 24;
-        pData->timingsBtnRect = { clientRect.right - help_btn_size - 20 - timingsBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + timingsBtnH };
-        pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        {
+            int timingsBtnW = 58, timingsBtnH = 24;
+            pData->timingsBtnRect = { clientRect.right - help_btn_size - 20 - timingsBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + timingsBtnH };
+            pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        }
         y += rowH + vGap;
 
         int genCtrlW = ctrlEndX - ctrlStartX - help_btn_size;
@@ -15568,7 +21087,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->importSettingsRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, halfX, clientRect.bottom - startBtnH - disclaimerH + 1 };
         pData->exportSettingsRect = { halfX, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
     } else if (pData->currentPage == 3) { // Advanced
-        int ddW_fps = 156, ddW_mi_interval = 143, ddW_userSafe = 110;
+        int ddW_fps = 156, ddW_mi_interval = 155, ddW_userSafe = 110;
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
         int compactW = help_btn_size;
         int inlineGap = 4;
@@ -15666,6 +21185,10 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             pData->discordWebhookTestRect = { pData->discordWebhookClearRect.right + buttonGap, y, clientRect.right, y + rowH };
             y += rowH;
 
+        pData->webhookFixedBottom = y;
+        y -= pData->webhookScrollOffset;
+        pData->webhookScrollAreaTop = y;
+
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->discordNotifyStartToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
@@ -15687,6 +21210,16 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyMacroToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyIntervalMacrosToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->discordDisableEmbedToggleRect = { ctrlStartX, y, ctrlStartX + toggleW, y + rowH };
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
@@ -15700,6 +21233,40 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->discordMentionOnErrorsToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
         int toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
         pData->discordMentionTargetSettingsRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordUseDefaultNameToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordUseDefaultAvatarToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordUseTimestampToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyHeartbeatToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        pData->discordHeartbeatIntervalBtnRect = { pData->discordNotifyHeartbeatToggleRect.right - 50 - 4 - 24, y + (rowH - 24) / 2 + 4, pData->discordNotifyHeartbeatToggleRect.right - 50 - 4, y + (rowH - 24) / 2 + 28 };
+        y += rowH + vGap;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->discordNotifyUtilsRamToggleRect = { ctrlStartX, y, ctrlEndX - help_btn_size, y + rowH };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
+
+        int scrollAreaBottom = clientRect.bottom - startBtnH - disclaimerH;
+        pData->webhookScrollAreaBottom = scrollAreaBottom;
+        int maxWebhookScroll = y + pData->webhookScrollOffset - scrollAreaBottom - 1;
+        if (maxWebhookScroll < 0) maxWebhookScroll = 0;
+        pData->webhookMaxScroll = maxWebhookScroll;
+        if (pData->webhookScrollOffset > maxWebhookScroll) pData->webhookScrollOffset = maxWebhookScroll;
     }
 
     const int total_nav_w = clientRect.right;
@@ -16107,14 +21674,14 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         grid_y += grid_rowH + grid_vGap;
 
         gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
-        int ddW_mode = 166;
+        int ddW_mode = 182;
         pData->gridModeDropdownRect = { grid_ctrlEndX - ddW_mode - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
         pData->gridHelpButtonRects[3] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
         grid_y += grid_rowH + grid_vGap;
 
         if (currentMode > 0) {
             gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
-            int ddW_value = 120;
+            int ddW_value = 136;
             pData->gridModeValueDropdownRect = { grid_ctrlEndX - ddW_value - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
             pData->gridHelpButtonRects[4] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
             grid_y += grid_rowH + grid_vGap;
@@ -16132,6 +21699,18 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
         pData->gridSpacingBordersDropdownRect = { grid_ctrlEndX - ddW_spacing - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
         pData->gridHelpButtonRects[6] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
+        grid_y += grid_rowH + grid_vGap;
+
+        gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
+        {
+            int hkBtnH = 24, hkToggleW = 50, hkBtnW = 24, hkTextMaxW = 130;
+            pData->gridHotkeyToggleRect = { grid_margin, grid_y, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
+            int hkSwitchLeft = pData->gridHotkeyToggleRect.right - hkToggleW;
+            pData->gridHotkeyChangeBtnRect = { hkSwitchLeft - 4 - hkBtnW, grid_y + (grid_rowH - hkBtnH) / 2 + 4, hkSwitchLeft - 4, grid_y + (grid_rowH - hkBtnH) / 2 + 4 + hkBtnH };
+            pData->gridHotkeyBindTextRect = { pData->gridHotkeyChangeBtnRect.left - hkTextMaxW, grid_y + 8, pData->gridHotkeyChangeBtnRect.left - 6, grid_y + grid_rowH };
+            pData->gridHelpButtonRects[7] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
+        }
+        grid_y += grid_rowH + grid_vGap;
 
         pData->gridOkButtonRect = pData->startButtonRect;
 
@@ -16220,7 +21799,9 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
             MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &gridG, 1, 0, L"\uE70F");
 
-            for (int i = 0; i < 7; ++i) {
+            MainUI_Paint_DrawGridHotkeyRow(hdc, pData, &gridG);
+
+            for (int i = 0; i < 8; ++i) {
                 if (pData->gridHelpButtonRects[i].left != 0) {
                     MainUI_Paint_DrawHelpButton(hdc, pData->gridHelpButtonRects[i], pData->hFontText, pData->hoveringGridHelpButton == i, false, &gridG);
                 }
@@ -16308,7 +21889,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
             MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, nullptr, 1, 0, L"\uE70F");
 
-            for (int i = 0; i < 7; ++i) {
+            {
+                Gdiplus::Graphics gHk(hdc);
+                MainUI_Paint_DrawGridHotkeyRow(hdc, pData, &gHk);
+            }
+
+            for (int i = 0; i < 8; ++i) {
                 if (pData->gridHelpButtonRects[i].left != 0) {
                     MainUI_Paint_DrawHelpButton(hdc, pData->gridHelpButtonRects[i], pData->hFontText, pData->hoveringGridHelpButton == i, false);
                 }
@@ -16339,10 +21925,13 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         wchar_t buffer[64];
         swprintf_s(buffer, L"%d sec (%d min)", g_selectedTime.load(), g_selectedTime.load() / 60);
+        MainUI_Paint_DrawCompactButton(hdc, pData->testActionButtonRect, pData->hFontText, L"\uE768", pData->isHoveringTestAction, L"\uE768", false);
         MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval, true, L"\uE916", true, nullptr, 1, -1);
 
-        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*" };
-        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[g_selectedAction.load()], pData->isHoveringAction, true, L"\uE7C9");
+    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
+        int curAction = g_selectedAction.load();
+        if (curAction < 0 || curAction > 4) curAction = 0;
+        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[curAction], pData->isHoveringAction, true, L"\uE7C9");
         MainUI_Paint_DrawCompactButton(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringActionDelaysSettingsCompact, L"\uE713", false);
 
         MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance bypass", g_multiSupport.load(), pData->isHoveringMultiInstanceToggle, pData->multiInstanceAnim, true, L"\uE81E");
@@ -16400,8 +21989,11 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             }
             DeleteObject(iconFontH);
         }
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, L"Test AntiAFK action", false, pData->isHoveringTestAction, L"\uE768", false, &pData->testActionButtonRect, L"test");
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, L"Instance Manager (Beta)", false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, L"open", !g_simpleMode.load());
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, L"Macros", false, pData->isHoveringMacros, L"\uE7C9", false, &pData->macrosBtnRect, L"open", true, L"PREVIEW");
+        if (pData->macrosIntervalToggleCompactRect.left != 0) {
+            MainUI_Paint_DrawCompactOptionButton(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontText, L"\uE916", g_intervalMacroEnabled.load(), pData->isHoveringMacrosIntervalToggle && !g_isAfkStarted.load(), pData->macrosIntervalToggleAnim, true);
+        }
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, L"Instance Manager", false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, L"open", !g_simpleMode.load(), L"PREVIEW");
         MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
         MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, L"Simple Mode", g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
 
@@ -16623,6 +22215,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             MainUI_Paint_DrawHoverTooltip(hdc, pData->mutexStatusRect, pData->hFontSmall, statusText, false);
         }
         if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, L"Configure custom action delays & repeats", false);
+        if (pData->isHoveringTestAction) MainUI_Paint_DrawHoverTooltip(hdc, pData->testActionButtonRect, pData->hFontSmall, L"Test Anti-AFK action on Roblox windows", false);
+        if (pData->isHoveringMacrosIntervalToggle) MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontSmall, g_isAfkStarted.load() ? L"Locked while Anti-AFK is running" : (g_intervalMacroEnabled.load() ? L"Interval Macros: running" : L"Start Interval Macros (work without Anti-AFK)"), false);
     }
     else if (pData->currentPage == 1) { // Auto+Utils
         int rowCount = (int)pData->rowRects.size();
@@ -16645,7 +22239,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             }
         }
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Start AntiAFK", g_autoStartAfk.load(), pData->isHoveringAutoStartToggle, pData->autoStartAnim, true, L"\uE768");
+        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Auto-start AntiAFK", g_autoStartAfk.load(), pData->isHoveringAutoStartToggle, pData->autoStartAnim, true, L"\uE768");
         MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, L"Auto-Reconnect", g_autoReconnect.load(), pData->isHoveringAutoReconnectToggle, pData->autoReconnectAnim, true, L"\uE8AF");
         MainUI_Paint_DrawCompactButton(hdc, pData->reconnectManualCheckCompactRect, pData->hFontText, L"\uE72C", pData->isHoveringReconnectManualCheck, L"\uE72C", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedReconnectLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedReconnectLink, L"\uE713", false);
@@ -16828,11 +22422,18 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
         int miIntervalIndex = 0;
-        if (g_multiInstanceInterval.load() == 1000) miIntervalIndex = 1;
-        else if (g_multiInstanceInterval.load() == 3000) miIntervalIndex = 2;
-        else if (g_multiInstanceInterval.load() == 5000) miIntervalIndex = 3;
-        else if (g_multiInstanceInterval.load() == 10000) miIntervalIndex = 4;
-        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Interval", miIntervalNames[miIntervalIndex], pData->isHoveringMultiInstanceInterval, true, L"\uE916", !smAdvanced);
+        int miValDisp = g_multiInstanceInterval.load();
+        if (miValDisp == 1000) miIntervalIndex = 1;
+        else if (miValDisp == 3000) miIntervalIndex = 2;
+        else if (miValDisp == 5000) miIntervalIndex = 3;
+        else if (miValDisp == 10000) miIntervalIndex = 4;
+        wchar_t miCustomDisp[48] = { 0 };
+        const wchar_t* miDispText = miIntervalNames[miIntervalIndex];
+        if (miValDisp != 0 && miValDisp != 1000 && miValDisp != 3000 && miValDisp != 5000 && miValDisp != 10000) {
+            swprintf_s(miCustomDisp, L"Custom (%d ms)", miValDisp);
+            miDispText = miCustomDisp;
+        }
+        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Delay", miDispText, pData->isHoveringMultiInstanceInterval, true, L"\uE916", !smAdvanced);
 
         MainUI_Paint_DrawToggle(hdc, pData->customProcessSearchToggleRect, pData->hFontText, L"Custom Process Search", g_useCustomProcessSearch.load(), pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchAnim, true, L"\uE721", !smAdvanced);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->customProcessSearchExcludeRect, pData->hFontText, L"\uE711", g_excludeBuiltinNames.load(), pData->isHoveringCustomProcessSearchExclude, pData->customProcessSearchExcludeAnim, smAdvanced ? false : g_useCustomProcessSearch.load());
@@ -16890,7 +22491,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             g.DrawString(L"Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
             DeleteObject(hkIconF);
 
-            bool isRecording = g_hotkeyCaptureActive.load();
+            bool isRecording = g_hotkeyCaptureActive.load() && !g_hotkeyCaptureIsGrid.load();
             MainUI_Paint_DrawCompactButton(hdc, pData->hotkeyChangeBtnRect, pData->hFontText, isRecording ? L"\uE7C8" : L"\uE70F", isRecording, L"", isRecording, 0, hkEn && !isRecording);
 
             HFONT hkBindFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
@@ -17203,8 +22804,9 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         g.SetSmoothingMode(SmoothingModeNone);
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         int rowCount = (int)pData->rowRects.size();
-        for (int i = 0; i < rowCount; ++i) {
-            RECT rr = pData->rowRects[i];
+        const bool webhookEnabled = g_discordWebhookEnabled.load();
+
+        auto drawWebhookRowBg = [&](int i, const RECT& rr) {
             Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
             SolidBrush rowBrush(rowBgColor);
             g.FillRectangle(&rowBrush, (REAL)rr.left, (REAL)rr.top, (REAL)(rr.right - rr.left), (REAL)(rr.bottom - rr.top));
@@ -17218,6 +22820,36 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 g.SetPixelOffsetMode(oldOffset);
                 g.SetSmoothingMode(oldSmooth);
             }
+        };
+
+        int webhookClipTop = pData->webhookFixedBottom;
+        int webhookClipBottom = pData->webhookScrollAreaBottom + 1;
+        if (rowCount > 0) drawWebhookRowBg(0, pData->rowRects[0]);
+        if (webhookClipBottom > webhookClipTop) {
+            int savedDC = SaveDC(hdc);
+            IntersectClipRect(hdc, 0, webhookClipTop, clientRect.right, webhookClipBottom);
+            for (int i = 1; i < rowCount; ++i) {
+                drawWebhookRowBg(i, pData->rowRects[i]);
+            }
+
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyStartToggleRect, pData->hFontText, L"Start / Stop", g_discordNotifyStart.load(), pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartAnim, true, L"\uE768", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyActionToggleRect, pData->hFontText, L"Action", g_discordNotifyAction.load(), pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionAnim, true, L"\uE7C9", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyReconnectToggleRect, pData->hFontText, L"Reconnect", g_discordNotifyReconnect.load(), pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectAnim, true, L"\uE8AF", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyErrorsToggleRect, pData->hFontText, L"Errors", g_discordNotifyErrors.load(), pData->isHoveringDiscordNotifyErrorsToggle, pData->discordNotifyErrorsAnim, true, L"\uE7BA", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyMacroToggleRect, pData->hFontText, L"Macros", g_discordNotifyMacro.load(), pData->isHoveringDiscordNotifyMacroToggle, pData->discordNotifyMacroAnim, true, L"\uE7C9", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyIntervalMacrosToggleRect, pData->hFontText, L"Interval Macros", g_discordNotifyIntervalMacros.load(), pData->isHoveringDiscordNotifyIntervalMacrosToggle, pData->discordNotifyIntervalMacrosAnim, true, L"\uE916", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordDisableEmbedToggleRect, pData->hFontText, L"Disable embed", g_discordDisableEmbed.load(), pData->isHoveringDiscordDisableEmbedToggle, pData->discordDisableEmbedAnim, true, L"\uE8FD", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordMentionOnErrorsToggleRect, pData->hFontText, L"Mention on errors", g_discordMentionOnErrors.load(), pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsAnim, true, L"\uE781", webhookEnabled);
+            MainUI_Paint_DrawCompactButton(hdc, pData->discordMentionTargetSettingsRect, pData->hFontText, L"\uE713", pData->isHoveringDiscordMentionTargetSettings, L"\uE713", false, 0, webhookEnabled);
+
+        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultNameToggleRect, pData->hFontText, L"Default name", g_discordUseDefaultName.load(), pData->isHoveringDiscordUseDefaultNameToggle, pData->discordUseDefaultNameAnim, false, L"\uE8AC", webhookEnabled);
+        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultAvatarToggleRect, pData->hFontText, L"Default avatar", g_discordUseDefaultAvatar.load(), pData->isHoveringDiscordUseDefaultAvatarToggle, pData->discordUseDefaultAvatarAnim, false, L"\uE77B", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordUseTimestampToggleRect, pData->hFontText, L"Timestamp", g_discordUseTimestamp.load(), pData->isHoveringDiscordUseTimestampToggle, pData->discordUseTimestampAnim, false, L"\uE916", webhookEnabled);
+
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyHeartbeatToggleRect, pData->hFontText, L"Heartbeat", g_discordNotifyHeartbeat.load(), pData->isHoveringDiscordNotifyHeartbeatToggle, pData->discordNotifyHeartbeatAnim, true, L"\uE823", webhookEnabled);
+            MainUI_Paint_DrawCompactButton(hdc, pData->discordHeartbeatIntervalBtnRect, pData->hFontText, L"\uE916", pData->isHoveringDiscordHeartbeatIntervalBtn, L"\uE916", false, 0, webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyUtilsRamToggleRect, pData->hFontText, L"RAM Cleaner", g_discordNotifyUtilsRam.load(), pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamAnim, false, L"\uE964", webhookEnabled);
+            RestoreDC(hdc, savedDC);
         }
 
         SolidBrush infoBgBrush(Color(60, 45, 45, 45));
@@ -17254,7 +22886,6 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         g.DrawString(L"Discord webhook posts short status updates.", -1, &discordInfoFont, discordInfoTextRect, &sfDiscordInfoText, &discordInfoTextBrush);
 
         std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
-        const bool webhookEnabled = g_discordWebhookEnabled.load();
         MainUI_Paint_DrawToggle(hdc, pData->discordWebhookEnableToggleRect, pData->hFontText, L"Enable webhook", webhookEnabled, pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableAnim, true, L"\uE8BD");
         MainUI_Paint_DrawTextInput(hdc, pData->discordWebhookInputRect, pData->hFontSmall, pData->hFontText, L"", webhookUrl, pData->isHoveringDiscordWebhookInput, pData->isDiscordWebhookInputFocused, &pData->discordWebhookCaretPos, &pData->discordWebhookViewOffset, L"Enter webhook URL...", webhookEnabled);
 
@@ -17274,16 +22905,18 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             webhookEnabled,
             false);
 
-        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyStartToggleRect, pData->hFontText, L"Start / Stop", g_discordNotifyStart.load(), pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartAnim, true, L"\uE768", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyActionToggleRect, pData->hFontText, L"Action", g_discordNotifyAction.load(), pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionAnim, true, L"\uE7C9", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyReconnectToggleRect, pData->hFontText, L"Reconnect", g_discordNotifyReconnect.load(), pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectAnim, true, L"\uE8AF", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordNotifyErrorsToggleRect, pData->hFontText, L"Errors", g_discordNotifyErrors.load(), pData->isHoveringDiscordNotifyErrorsToggle, pData->discordNotifyErrorsAnim, true, L"\uE7BA", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordDisableEmbedToggleRect, pData->hFontText, L"Disable embed", g_discordDisableEmbed.load(), pData->isHoveringDiscordDisableEmbedToggle, pData->discordDisableEmbedAnim, true, L"\uE8FD", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordMentionOnErrorsToggleRect, pData->hFontText, L"Mention on errors", g_discordMentionOnErrors.load(), pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsAnim, true, L"\uE781", webhookEnabled);
-        MainUI_Paint_DrawCompactButton(hdc, pData->discordMentionTargetSettingsRect, pData->hFontText, L"\uE713", pData->isHoveringDiscordMentionTargetSettings, L"\uE713", false, 0, webhookEnabled);
-
-        for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
-            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
+        if (!pData->helpButtonRects.empty()) {
+            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[0], pData->hFontText, pData->hoveringHelpButton == 0);
+        }
+        if (webhookClipBottom > webhookClipTop) {
+            int savedDC = SaveDC(hdc);
+            IntersectClipRect(hdc, 0, webhookClipTop, clientRect.right, webhookClipBottom);
+            for (size_t i = 1; i < pData->helpButtonRects.size(); ++i) {
+                if (pData->helpButtonRects[i].left != 0) {
+                    MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == (int)i);
+                }
+            }
+            RestoreDC(hdc, savedDC);
         }
         if (pData->isHoveringDiscordMentionTargetSettings) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->discordMentionTargetSettingsRect, pData->hFontSmall, webhookEnabled ? L"Configure mention target (e.g. @everyone)" : L"Enable webhook first", false);
@@ -17298,9 +22931,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 pData->discordNotifyActionToggleRect,
                 pData->discordNotifyReconnectToggleRect,
                 pData->discordNotifyErrorsToggleRect,
+                pData->discordNotifyMacroToggleRect,
+                pData->discordNotifyIntervalMacrosToggleRect,
                 pData->discordDisableEmbedToggleRect,
                 pData->discordMentionOnErrorsToggleRect,
-                pData->discordMentionTargetSettingsRect
+                pData->discordMentionTargetSettingsRect,
+                pData->discordHeartbeatIntervalBtnRect
             };
             for (const RECT& disabledRect : disabledWebhookRects) {
                 if (PtInRect(&disabledRect, pData->hoverPoint)) {
@@ -17434,40 +23070,19 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 gTarget.MeasureString(L"AntiAFK-RBX", -1, &fontTitle, PointF(0, 0), &sfMeasure, &titleBounds);
                 gTarget.DrawString(L"AntiAFK-RBX", -1, &fontTitle, PointF((REAL)contentX, (REAL)fixedY), &sfMeasure, &whiteBrush);
 
-                const wchar_t* badgeText = L"ALPHA";
+                const wchar_t* badgeText = L"PREVIEW";
                 RectF badgeBounds;
                 gTarget.MeasureString(badgeText, -1, &fontBadge, PointF(0, 0), &sfMeasure, &badgeBounds);
-                REAL badgeW = badgeBounds.Width + 6.0f;
                 REAL badgeH = 12.0f;
                 REAL badgeX = (REAL)contentX + titleBounds.Width + 3.0f;
                 REAL badgeY = (REAL)fixedY + (titleBounds.Height - badgeH) / 2.0f - 0.5f;
 
-                GraphicsPath badgePath;
-                REAL br = 2.5f;
-                badgePath.AddArc(badgeX, badgeY, br * 2, br * 2, 180, 90);
-                badgePath.AddArc(badgeX + badgeW - br * 2, badgeY, br * 2, br * 2, 270, 90);
-                badgePath.AddArc(badgeX + badgeW - br * 2, badgeY + badgeH - br * 2, br * 2, br * 2, 0, 90);
-                badgePath.AddArc(badgeX, badgeY + badgeH - br * 2, br * 2, br * 2, 90, 90);
-                badgePath.CloseFigure();
-
-                SmoothingMode oldSM = gTarget.GetSmoothingMode();
-                gTarget.SetSmoothingMode(SmoothingModeAntiAlias);
-                SolidBrush badgeBg(Color(70, 244, 254, 167));
-                gTarget.FillPath(&badgeBg, &badgePath);
-                gTarget.SetSmoothingMode(oldSM);
-
-                SolidBrush badgeTextBrush(Color(220, 244, 254, 167));
-                StringFormat sfBadge;
-                sfBadge.SetAlignment(StringAlignmentCenter);
-                sfBadge.SetLineAlignment(StringAlignmentCenter);
-                sfBadge.SetFormatFlags(StringFormatFlagsNoClip);
-                RectF badgeRectF(badgeX, badgeY + 1.5f, badgeW, badgeH - 1.0f);
-                gTarget.DrawString(badgeText, -1, &fontBadge, badgeRectF, &sfBadge, &badgeTextBrush);
+                MainUI_Paint_DrawBadge(gTarget, badgeX, badgeY, badgeH, badgeText);
             }
             fixedY += (int)(fontTitle.GetHeight(&gTarget) + 2.0f);
 
             wchar_t verStr[64];
-            swprintf_s(verStr, L"%ls  \u00B7  Preview", g_Version);
+            swprintf_s(verStr, L"%ls", g_Version);
             fixedY += drawWrapped(&fontBody, verStr, contentX, fixedY, contentW, Color(255, 160, 160, 160)) + 8;
 
             int scrollAreaTop = fixedY + 4;
@@ -17710,12 +23325,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             int contentY = 31;
 
             std::vector<RECT> tRowRects;
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 8; i++) {
                 tRowRects.push_back({ 0, contentY, tW, contentY + rowH + vGap });
                 contentY += rowH + vGap;
             }
 
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 8; i++) {
                 RECT rr = tRowRects[i];
                 Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
                 SolidBrush rowBrush(rowBgColor);
@@ -17756,6 +23371,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             drawTIcon(3, L"\uE7FC");
             drawTIcon(4, L"\uE8EE");
             drawTIcon(5, L"\uE7FC");
+            drawTIcon(6, L"\uE916");
+            drawTIcon(7, L"\uE70F");
 
             DeleteObject(tIconFontH);
 
@@ -17779,6 +23396,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             drawTLabel(3, L"Session time");
             drawTLabel(4, L"Actions performed");
             drawTLabel(5, L"Auto-reconnects");
+            drawTLabel(6, L"Next interval macro in");
+            drawTLabel(7, L"Next interval macro is");
 
             HFONT tMonoFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH, L"Consolas");
             Font tValFont(hdc, tMonoFontH);
@@ -17839,6 +23458,40 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             swprintf_s(tbuf, L"%llu", (unsigned long long)reconnects);
             drawTValueBox(5, tbuf, false);
 
+            std::wstring intervalMacroStatus = L"\u2014";
+            std::wstring nextMacroName = L"\u2014";
+            {
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+                ULONGLONG minRemMs = (ULONGLONG)-1;
+                bool foundAny = false;
+                ULONGLONG nowMs = GetTickCount64();
+                for (const auto& m : g_macros) {
+                    if (!(m.triggerOnInterval && m.intervalSec > 0)) continue;
+                    ULONGLONG intervalMs = (ULONGLONG)m.intervalSec * 1000;
+                    ULONGLONG bestRem = intervalMs;
+                    {
+                        std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+                        for (const auto& kv : g_lastIntervalMacroRun) {
+                            if (kv.first.second == m.name) {
+                                ULONGLONG elapsed = nowMs - kv.second;
+                                ULONGLONG rem = (elapsed >= intervalMs) ? 0 : (intervalMs - elapsed);
+                                if (rem < bestRem) bestRem = rem;
+                            }
+                        }
+                    }
+                    if (bestRem < minRemMs) {
+                        minRemMs = bestRem;
+                        nextMacroName = m.name;
+                        foundAny = true;
+                    }
+                }
+                if (foundAny) {
+                    intervalMacroStatus = formatHMS(minRemMs / 1000);
+                }
+            }
+            drawTValueBox(6, intervalMacroStatus.c_str(), false);
+            drawTValueBox(7, nextMacroName.c_str(), false);
+
             DeleteObject(tMonoFontH);
         };
 
@@ -17893,14 +23546,14 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             grid_y += grid_rowH + grid_vGap;
 
             gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
-            int ddW_mode = 166;
+            int ddW_mode = 182;
             pData->gridModeDropdownRect = { grid_ctrlEndX - ddW_mode - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
             pData->gridHelpButtonRects[3] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
             grid_y += grid_rowH + grid_vGap;
 
             if (currentMode > 0) {
                 gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
-                int ddW_value = 120;
+                int ddW_value = 136;
                 pData->gridModeValueDropdownRect = { grid_ctrlEndX - ddW_value - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
                 pData->gridHelpButtonRects[4] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
                 grid_y += grid_rowH + grid_vGap;
@@ -17918,6 +23571,18 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
             pData->gridSpacingBordersDropdownRect = { grid_ctrlEndX - ddW_spacing - help_btn_size, grid_y + 8, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
             pData->gridHelpButtonRects[6] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
+            grid_y += grid_rowH + grid_vGap;
+
+            gridRowRects.push_back({ 0, grid_y, clientRect.right, grid_y + grid_rowH + grid_vGap });
+            {
+                int hkBtnH = 24, hkToggleW = 50, hkBtnW = 24, hkTextMaxW = 130;
+                pData->gridHotkeyToggleRect = { grid_margin, grid_y, grid_ctrlEndX - help_btn_size, grid_y + grid_rowH };
+                int hkSwitchLeft = pData->gridHotkeyToggleRect.right - hkToggleW;
+                pData->gridHotkeyChangeBtnRect = { hkSwitchLeft - 4 - hkBtnW, grid_y + (grid_rowH - hkBtnH) / 2 + 4, hkSwitchLeft - 4, grid_y + (grid_rowH - hkBtnH) / 2 + 4 + hkBtnH };
+                pData->gridHotkeyBindTextRect = { pData->gridHotkeyChangeBtnRect.left - hkTextMaxW, grid_y + 8, pData->gridHotkeyChangeBtnRect.left - 6, grid_y + grid_rowH };
+                pData->gridHelpButtonRects[7] = { grid_ctrlEndX - help_btn_size, grid_y + (grid_rowH - help_btn_size) / 2 + 4, grid_ctrlEndX, grid_y + (grid_rowH - help_btn_size) / 2 + help_btn_size + 4 };
+            }
+            grid_y += grid_rowH + grid_vGap;
 
             pData->gridOkButtonRect = pData->startButtonRect;
 
@@ -18000,7 +23665,9 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
             MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &transG, 1, 0, L"\uE70F");
 
-            for (int i = 0; i < 7; ++i) {
+            MainUI_Paint_DrawGridHotkeyRow(hdc, pData, &transG);
+
+            for (int i = 0; i < 8; ++i) {
                 if (pData->gridHelpButtonRects[i].left != 0) {
                     MainUI_Paint_DrawHelpButton(hdc, pData->gridHelpButtonRects[i], pData->hFontText, pData->hoveringGridHelpButton == i, false, &transG);
                 }
@@ -18020,7 +23687,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             }
     }
 
-        float overlayAlphaInner = (std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim);
+        float overlayAlphaInner = (std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
 
         if (alphaInfoAnim > 0.001f && pData->alphaInfoViewDirection != -1) {
             pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
@@ -18031,6 +23698,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             if (ctx >= 100) {
                 if (ctx == 101) return L"Arrange Roblox windows";
                 if (ctx == 102) return L"Configure FPS Capper (CPU Limiter) settings";
+                if (ctx == 104) return L"Live session timings";
+                if (ctx == 105) return L"Create and manage custom macros";
                 return L"Customize action delays";
             }
             switch (ctx) {
@@ -18088,7 +23757,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         bool showMoreVisible = isPreRelease && noOverlay && pData->currentPage == 0;
         int showMoreReservedW = 0;
         if (showMoreVisible) {
-            const wchar_t* showMoreText = L"alpha info";
+            const wchar_t* showMoreText = L"preview info";
             RectF smBounds;
             g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
             showMoreReservedW = (int)smBounds.Width + 20;
@@ -18155,7 +23824,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         {
             if (showMoreVisible) {
-                const wchar_t* showMoreText = L"alpha info";
+                const wchar_t* showMoreText = L"preview info";
                 RectF smBounds;
                 g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
                 int smW = (int)smBounds.Width + 14;
@@ -18178,6 +23847,801 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
             }
         }
+
+    if (renderMacrosPrimary) {
+        pData->macrosOkButtonRect = pData->startButtonRect;
+        float mAnimVal = pData->macrosViewAnim;
+        int mW = clientRect.right;
+        int mH = clientRect.bottom;
+
+        auto drawMacrosContent = [&](Graphics& gTarget) {
+            pData->macrosBtnRectNew = {0};
+            pData->macrosBtnRectNameEdit = {0};
+            pData->macrosBtnRectBack = {0};
+            pData->macrosBtnRectNext = {0};
+            pData->macrosBtnRectRecord = {0};
+            pData->macrosBtnRectCooldown = {0};
+            pData->macrosBtnRectReconnect = {0};
+            pData->macrosBtnRectInterval = {0};
+                    pData->macrosBtnRectImport = {0};
+                    pData->macrosBtnRectFolder = {0};
+                    pData->macrosReconnectDelayBtnRect = {0};
+            pData->macrosBtnRectFinish = {0};
+            pData->macrosListRect = {0};
+
+            const int mlY = 30;
+
+            SolidBrush textColor(Color(255, 180, 180, 180));
+            SolidBrush accentColor(Color(255, 100, 150, 255));
+            SolidBrush dimColor(Color(255, 120, 120, 120));
+
+            Font rowFont(L"Segoe UI", 10.0f);
+            Font smallFont(L"Segoe UI", 9.0f);
+
+            StringFormat sfDef;
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            sfCenter.SetLineAlignment(StringAlignmentCenter);
+            StringFormat sfLeft;
+            sfLeft.SetAlignment(StringAlignmentNear);
+            sfLeft.SetLineAlignment(StringAlignmentCenter);
+            StringFormat sfRight;
+            sfRight.SetAlignment(StringAlignmentFar);
+            sfRight.SetLineAlignment(StringAlignmentCenter);
+
+            const int margin = 0;
+            int mcy = mlY + 1;
+
+            int btnH = 32;
+            int safeBottom = mH - 65 - btnH;
+
+            auto drawCrispBorder = [&](RECT r, Color c) {
+                SolidBrush b(c);
+                int w = r.right - r.left;
+                int h = r.bottom - r.top;
+                gTarget.FillRectangle(&b, (REAL)r.left, (REAL)r.top, (REAL)w, 1.0f);
+                gTarget.FillRectangle(&b, (REAL)r.left, (REAL)r.top, 1.0f, (REAL)h);
+                gTarget.FillRectangle(&b, (REAL)(r.right - 1), (REAL)r.top, 1.0f, (REAL)h);
+                gTarget.FillRectangle(&b, (REAL)r.left, (REAL)(r.bottom - 1), (REAL)w, 1.0f);
+            };
+
+            if (pData->macrosViewMode == 0) {
+                gTarget.SetClip(Rect(0, mlY + 1, mW, safeBottom - mlY - btnH - 1));
+                int rowH = 32;
+
+                {
+                    RECT rowRc = { 0, mcy, mW, mcy + rowH };
+                    bool isHovered = pData->macrosHoverNew;
+                    SolidBrush rowBrush(isHovered ? Color(40, 50, 50, 50) : Color(23, 23, 23, 0));
+                    gTarget.FillRectangle(&rowBrush, 0.0f, (REAL)rowRc.top, (REAL)mW, (REAL)rowH);
+
+                    PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
+                    SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
+                    gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                    gTarget.SetSmoothingMode(SmoothingModeNone);
+                    SolidBrush sepBrush(Color(120, 56, 56, 56));
+                    gTarget.FillRectangle(&sepBrush, 0.0f, (REAL)(rowRc.bottom - 1), (REAL)mW, 1.0f);
+                    gTarget.SetPixelOffsetMode(oldOffset);
+                    gTarget.SetSmoothingMode(oldSmooth);
+
+                    RectF textRect((REAL)(margin + 14), (REAL)rowRc.top, (REAL)(mW - 28), (REAL)rowH);
+                    gTarget.DrawString(L"+ Create New Macro", -1, &rowFont, textRect, &sfLeft, &accentColor);
+
+                    Font iconFont(L"Segoe MDL2 Assets", 9.0f);
+                    bool isImpHovered = (isHovered && pData->hoverPoint.x > mW - 14 - 22 && pData->hoverPoint.x <= mW - 14);
+                    RectF impRect((REAL)(mW - 14 - 20), (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                    SolidBrush impBrush(isImpHovered ? Color(255, 100, 150, 255) : Color(120, 120, 120, 120));
+                    gTarget.DrawString(L"\uE896", -1, &iconFont, impRect, &sfCenter, &impBrush);
+                    pData->macrosBtnRectImport = { mW - 14 - 22, rowRc.top, mW - 14, rowRc.bottom };
+
+                    bool isFolderHovered = (isHovered && pData->hoverPoint.x > mW - 14 - 44 && pData->hoverPoint.x <= mW - 14 - 22);
+                    RectF folderRect((REAL)(mW - 14 - 42), (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                    SolidBrush folderBrush(isFolderHovered ? Color(255, 100, 150, 255) : Color(120, 120, 120, 120));
+                    gTarget.DrawString(L"\uE8B7", -1, &iconFont, folderRect, &sfCenter, &folderBrush);
+                    pData->macrosBtnRectFolder = { mW - 14 - 44, rowRc.top, mW - 14 - 22, rowRc.bottom };
+
+                    bool isDelayHovered = (isHovered && pData->hoverPoint.x > mW - 14 - 66 && pData->hoverPoint.x <= mW - 14 - 44);
+                    RectF delayRect((REAL)(mW - 14 - 64), (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                    SolidBrush delayBrush(isDelayHovered ? Color(255, 100, 150, 255) : Color(120, 120, 120, 120));
+                    gTarget.DrawString(L"\uE8AF", -1, &iconFont, delayRect, &sfCenter, &delayBrush);
+                    pData->macrosReconnectDelayBtnRect = { mW - 14 - 66, rowRc.top, mW - 14 - 44, rowRc.bottom };
+
+                    wchar_t delayTxt[16];
+                    swprintf_s(delayTxt, L"%ds", g_reconnectMacroDelaySec.load());
+                    RectF delayTextRect((REAL)(mW - 14 - 108), (REAL)rowRc.top, 38.0f, (REAL)rowH);
+                    SolidBrush delayTextBrush(Color(150, 140, 140, 140));
+                    gTarget.DrawString(delayTxt, -1, &smallFont, delayTextRect, &sfRight, &delayTextBrush);
+
+                    pData->macrosBtnRectNew = rowRc;
+                    mcy += rowH;
+                }
+
+                int listStartNewY = mcy;
+                int listVisibleBottom = safeBottom - btnH;
+                int listVisibleH = listVisibleBottom - listStartNewY;
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+
+                auto buildOrder = [&](bool (Macro::*onFlag), int (Macro::*orderField), std::vector<int>& outPos) {
+                    outPos.assign(g_macros.size(), 0);
+                    std::vector<int> order;
+                    for (size_t i = 0; i < g_macros.size(); i++) {
+                        if (g_macros[i].*onFlag) order.push_back((int)i);
+                    }
+                    std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+                        int oa = g_macros[a].*orderField, ob = g_macros[b].*orderField;
+                        if (oa == 0 || ob == 0) return false;
+                        return oa < ob;
+                    });
+                    for (size_t k = 0; k < order.size(); k++) outPos[order[k]] = (int)k + 1;
+                };
+                std::vector<int> cdPos, rcPos, intPos;
+                buildOrder(&Macro::triggerOnCooldown, &Macro::triggerOrderCooldown, cdPos);
+                buildOrder(&Macro::triggerOnReconnect, &Macro::triggerOrderReconnect, rcPos);
+                buildOrder(&Macro::triggerOnInterval, &Macro::triggerOrderInterval, intPos);
+
+                int contentH = (int)g_macros.size() * rowH;
+                int maxScroll = (std::max)(0, contentH - listVisibleH);
+                if (pData->macrosScrollOffset > maxScroll) pData->macrosScrollOffset = maxScroll;
+                if (pData->macrosScrollOffset < 0) pData->macrosScrollOffset = 0;
+                pData->macrosListRect = { 0, listStartNewY, mW, listVisibleBottom };
+                gTarget.SetClip(Rect(0, listStartNewY, mW, listVisibleBottom - listStartNewY));
+
+                if (g_macros.empty()) {
+                    gTarget.DrawString(L"No macros saved yet.", -1, &rowFont, PointF((REAL)14, (REAL)(mcy + 8)), &dimColor);
+                } else {
+                    for (size_t i = 0; i < g_macros.size(); i++) {
+                        auto& m = g_macros[i];
+                        RECT rowRc = { 0, mcy - pData->macrosScrollOffset, mW, mcy - pData->macrosScrollOffset + rowH };
+                        bool isSelected = ((int)i == pData->macrosSelectedIndex);
+                        bool isHovered = ((int)i == pData->macrosHoveringItem);
+
+                        Color rowBgColor = (i % 2 == 0) ? Color(23, 23, 23, 0) : Color(23, 35, 35, 35);
+                        if (isSelected) {
+                            rowBgColor = Color(50, 100, 150, 255);
+                        } else if (isHovered) {
+                            rowBgColor = Color(30, 255, 255, 255);
+                        }
+
+                        SolidBrush rowBrush(rowBgColor);
+                        gTarget.FillRectangle(&rowBrush, 0.0f, (REAL)rowRc.top, (REAL)mW, (REAL)rowH);
+
+                        PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush sepBrush(Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&sepBrush, 0.0f, (REAL)(rowRc.bottom - 1), (REAL)mW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldOffset);
+                        gTarget.SetSmoothingMode(oldSmooth);
+
+                        Font iconFont(L"Segoe MDL2 Assets", 9.0f);
+                        int renameX = margin + 14;
+                        bool isRenameHovered = (isHovered && pData->hoverPoint.x >= renameX && pData->hoverPoint.x < renameX + 20);
+                        SolidBrush renameBrush(isRenameHovered ? Color(255, 100, 150, 255) : Color(120, 120, 120, 120));
+                        RectF renameRect((REAL)renameX, (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                        gTarget.DrawString(L"\uE70F", -1, &iconFont, renameRect, &sfCenter, &renameBrush);
+
+                        std::wstring label = m.name;
+
+                        SolidBrush labelBrush(isSelected ? Color(255, 255, 255, 255) : Color(255, 180, 180, 180));
+                        RectF textRect((REAL)(margin + 36), (REAL)rowRc.top, (REAL)(mW - 50 - 30 - 140), (REAL)rowH);
+                        StringFormat sfName;
+                        sfName.SetAlignment(StringAlignmentNear);
+                        sfName.SetLineAlignment(StringAlignmentCenter);
+                        sfName.SetFormatFlags(StringFormatFlagsNoWrap);
+                        sfName.SetTrimming(StringTrimmingEllipsisCharacter);
+                        gTarget.DrawString(label.c_str(), -1, &rowFont, textRect, &sfName, &labelBrush);
+
+                        int rightEdge = mW - 14;
+
+                        bool isDelHovered = (isHovered && pData->hoverPoint.x > rightEdge - 22);
+                        SolidBrush delBrush(isDelHovered ? Color(255, 220, 80, 80) : Color(120, 120, 120, 120));
+                        RectF delRect((REAL)(rightEdge - 20), (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                        gTarget.DrawString(L"\uE74D", -1, &iconFont, delRect, &sfCenter, &delBrush);
+                        rightEdge -= 22;
+
+                        bool isExpHovered = (isHovered && pData->hoverPoint.x > rightEdge - 22 && pData->hoverPoint.x <= rightEdge);
+                        SolidBrush expBrush(isExpHovered ? Color(255, 100, 150, 255) : Color(120, 120, 120, 120));
+                        RectF expRect((REAL)(rightEdge - 20), (REAL)rowRc.top, 20.0f, (REAL)rowH);
+                        gTarget.DrawString(L"\uE898", -1, &iconFont, expRect, &sfCenter, &expBrush);
+                        rightEdge -= 22;
+
+                        rightEdge -= 4;
+
+                        auto drawTriggerBtn = [&](int x, bool enabled, const wchar_t* icon, bool hovered, int btnW, RECT& storeRect, int runNum) {
+                            int bw = btnW, bh = btnW;
+                            int bx = x, by = rowRc.top + (rowH - bh) / 2 - 1;
+                            storeRect = { bx, by, bx + bw, by + bh };
+                            Color fillCol = enabled ? Color(200, 0, 122, 204) : (hovered ? Color(80, 65, 65, 65) : Color(60, 45, 45, 45));
+                            SolidBrush bgBrush(fillCol);
+                            SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
+                            PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
+                            gTarget.SetSmoothingMode(SmoothingModeAntiAlias);
+                            gTarget.SetPixelOffsetMode(PixelOffsetModeHalf);
+                            FillRoundedRectangle(&gTarget, &bgBrush, (REAL)bx, (REAL)by, (REAL)bw, (REAL)bh, (REAL)4);
+                            gTarget.SetPixelOffsetMode(oldOffset);
+                            gTarget.SetSmoothingMode(oldSmooth);
+                            SolidBrush tBrush(enabled ? Color(255, 255, 255, 255) : Color(150, 150, 150, 150));
+                            if (hovered && runNum > 0) {
+                                Font numFont9(L"Segoe UI", 9.0f);
+                                RectF nRect((REAL)(bx + 1), (REAL)(by + 1), (REAL)(bw - 2), (REAL)(bh - 2));
+                                wchar_t num[8];
+                                swprintf_s(num, L"%d", runNum);
+                                gTarget.DrawString(num, -1, &numFont9, nRect, &sfCenter, &tBrush);
+                            } else {
+                                Font iconFont9(L"Segoe MDL2 Assets", 10.0f);
+                                RectF tRect((REAL)(bx + 3), (REAL)(by + 4), (REAL)(bw - 5), (REAL)(bh - 5));
+                                gTarget.DrawString(icon, -1, &iconFont9, tRect, &sfCenter, &tBrush);
+                            }
+                        };
+                        int btnW = 22;
+                        int gap = 2;
+                        int triggerX = rightEdge - (btnW * 3 + gap * 2) - 4;
+
+                        std::wstring timeStr = (m.triggerOnInterval && m.intervalSec > 0) ? (std::to_wstring(m.intervalSec) + L"s") : L"";
+                        Font timeFont(L"Segoe UI", 8.0f);
+                        SolidBrush timeBrush((m.triggerOnInterval && m.intervalSec > 0) ? Color(255, 0, 180, 255) : Color(140, 140, 140, 140));
+                        RectF timeRect((REAL)(triggerX - 44), (REAL)rowRc.top, 40.0f, (REAL)rowH);
+                        gTarget.DrawString(timeStr.c_str(), -1, &timeFont, timeRect, &sfRight, &timeBrush);
+
+                        RECT dummyRc = { 0 };
+                        drawTriggerBtn(triggerX, m.triggerOnCooldown, L"\uE7C9", isHovered && pData->hoverPoint.x > triggerX && pData->hoverPoint.x <= triggerX + btnW, btnW, isHovered ? pData->macrosTriggerRectCd : dummyRc, cdPos[i]);
+                        drawTriggerBtn(triggerX + btnW + gap, m.triggerOnReconnect, L"\uE8AF", isHovered && pData->hoverPoint.x > triggerX + btnW + gap && pData->hoverPoint.x <= triggerX + btnW * 2 + gap * 2, btnW, isHovered ? pData->macrosTriggerRectRc : dummyRc, rcPos[i]);
+                        drawTriggerBtn(triggerX + (btnW + gap) * 2, m.triggerOnInterval, L"\uE916", isHovered && pData->hoverPoint.x > triggerX + (btnW + gap) * 2 && pData->hoverPoint.x <= triggerX + (btnW + gap) * 3, btnW, isHovered ? pData->macrosTriggerRectInt : dummyRc, intPos[i]);
+
+                        mcy += rowH;
+                    }
+                }
+                gTarget.ResetClip();
+
+                int splitX = mW / 2;
+                auto drawBorderedBtn = [&](const RECT& rect, const wchar_t* text, bool hovered, bool primary, bool enabled = true) {
+                    Color fill = enabled
+                        ? (primary ? (hovered ? Color(170, 20, 142, 224) : Color(140, 0, 122, 204)) : (hovered ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50)))
+                        : Color(40, 40, 40, 40);
+                    SolidBrush fillBrush(fill);
+                    gTarget.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+                    TextRenderingHint oldT = gTarget.GetTextRenderingHint();
+                    gTarget.SetTextRenderingHint(TextRenderingHintAntiAlias);
+                    Font f(hdc, pData->hFontText);
+                    SolidBrush tb(enabled ? Color(255, 255, 255, 255) : Color(120, 120, 120, 120));
+                    StringFormat sf;
+                    sf.SetAlignment(StringAlignmentCenter);
+                    sf.SetLineAlignment(StringAlignmentCenter);
+                    RectF rf((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+                    gTarget.DrawString(text, -1, &f, rf, &sf, &tb);
+                    gTarget.SetTextRenderingHint(oldT);
+                };
+
+                if (pData->macrosSelectedIndex >= 0) {
+                    RECT twRc = { 0, safeBottom - btnH, mW, safeBottom };
+                    bool twHovered = pData->macrosHoverTest;
+                    SolidBrush twBg(twHovered ? Color(45, 55, 55, 55) : Color(25, 25, 25, 25));
+                    gTarget.FillRectangle(&twBg, (REAL)twRc.left, (REAL)twRc.top, (REAL)(twRc.right - twRc.left), (REAL)(twRc.bottom - twRc.top));
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush twBorderBrush(twHovered ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
+                        gTarget.FillRectangle(&twBorderBrush, (REAL)twRc.left, (REAL)twRc.top, (REAL)(twRc.right - twRc.left), 1.0f);
+                        gTarget.FillRectangle(&twBorderBrush, (REAL)twRc.left, (REAL)twRc.top, 1.0f, (REAL)(twRc.bottom - twRc.top));
+                        gTarget.FillRectangle(&twBorderBrush, (REAL)(twRc.right - 1), (REAL)twRc.top, 1.0f, (REAL)(twRc.bottom - twRc.top));
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+
+                    auto twWins = FindAllRobloxWindows(true);
+                    HWND twSel = g_testTargetHwnd;
+                    if (!twSel || !IsWindow(twSel)) {
+                        if (!twWins.empty()) { twSel = twWins[0]; g_testTargetHwnd = twSel; }
+                    }
+                    int focusBtnW = 56;
+                    RECT focusBtnRc = { mW - focusBtnW - 8, twRc.top + 3, mW - 8, twRc.bottom - 1 };
+                    bool focusHovered = pData->macrosHoverFinish;
+                    if (twSel && IsWindow(twSel)) {
+                        wchar_t twTitle[256];
+                        GetWindowTextW(twSel, twTitle, 256);
+                        DWORD twPid = 0;
+                        GetWindowThreadProcessId(twSel, &twPid);
+                        wchar_t twLabel[384];
+                        swprintf_s(twLabel, L"  %s  [PID: %d]", twTitle, twPid);
+                        RectF twTextRect((REAL)14, (REAL)twRc.top, (REAL)(mW - focusBtnW - 28), (REAL)(twRc.bottom - twRc.top));
+                        gTarget.DrawString(twLabel, -1, &smallFont, twTextRect, &sfLeft, &textColor);
+                        Font iconFont(L"Segoe MDL2 Assets", 11.0f);
+                        RectF fgTextRect((REAL)focusBtnRc.left, (REAL)focusBtnRc.top, (REAL)(focusBtnRc.right - focusBtnRc.left), (REAL)(focusBtnRc.bottom - focusBtnRc.top));
+                        SolidBrush fgColor(focusHovered ? Color(255, 100, 150, 255) : Color(180, 120, 120, 120));
+                        gTarget.DrawString(L"\uE7B3", -1, &iconFont, fgTextRect, &sfCenter, &fgColor);
+                        pData->macrosBtnRectFocus = focusBtnRc;
+                    } else {
+                        RectF twTextRect((REAL)14, (REAL)twRc.top, (REAL)(mW - 28), (REAL)(twRc.bottom - twRc.top));
+                        gTarget.DrawString(L"  (no Roblox windows)", -1, &smallFont, twTextRect, &sfLeft, &dimColor);
+                        pData->macrosBtnRectFocus = {0};
+                    }
+                    pData->macrosBtnRectTestWin = twRc;
+
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush sepBrush(twHovered ? Color(255, 100, 150, 255) : Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&sepBrush, 0.0f, (REAL)safeBottom, (REAL)mW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+
+                    int splitX2 = mW / 2;
+                    pData->macrosBtnRectTest = { 0, safeBottom, splitX2, safeBottom + btnH };
+                    pData->macrosBtnRectEdit = { splitX2, safeBottom, mW, safeBottom + btnH };
+                    drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", pData->macrosHoverRecord, false);
+                    drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", pData->macrosHoverEdit, true);
+                } else {
+                    RECT hintRc = { 0, safeBottom - btnH, mW, safeBottom };
+                    SolidBrush hintBg(Color(25, 25, 25, 25));
+                    gTarget.FillRectangle(&hintBg, (REAL)hintRc.left, (REAL)hintRc.top, (REAL)(hintRc.right - hintRc.left), (REAL)(hintRc.bottom - hintRc.top));
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush hintBorder(Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&hintBorder, 0.0f, (REAL)hintRc.top, (REAL)mW, 1.0f);
+                        gTarget.FillRectangle(&hintBorder, 0.0f, (REAL)safeBottom, (REAL)mW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+                    RectF hintRect((REAL)14, (REAL)hintRc.top, (REAL)(mW - 28), (REAL)(hintRc.bottom - hintRc.top));
+                    gTarget.DrawString(L"Select a macro to test or re-record it", -1, &smallFont, hintRect, &sfLeft, &dimColor);
+                    pData->macrosBtnRectTestWin = hintRc;
+                    pData->macrosBtnRectFocus = {0};
+                    pData->macrosBtnRectTest = { 0, safeBottom, splitX, safeBottom + btnH };
+                    pData->macrosBtnRectEdit = { splitX, safeBottom, mW, safeBottom + btnH };
+                    drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", false, false, false);
+                    drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", false, true, false);
+                }
+            } else {
+                gTarget.ResetClip();
+
+                auto drawFlushButtons = [&](RECT& leftRect, const wchar_t* leftText, bool leftHovered,
+                                           RECT& rightRect, const wchar_t* rightText, bool rightHovered) {
+                    int btnY = mH - 65 - btnH;
+                    int splitX = mW / 2;
+                    leftRect = { 0, btnY, splitX, btnY + btnH };
+                    rightRect = { splitX, btnY, mW, btnY + btnH };
+
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush sepBrush(Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&sepBrush, 0.0f, (REAL)btnY, (REAL)mW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+
+                    auto drawFb = [&](const RECT& rect, const wchar_t* text, bool hovered, bool primary) {
+                        Color fill = primary ? (hovered ? Color(170, 20, 142, 224) : Color(140, 0, 122, 204)) : (hovered ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
+                        SolidBrush fillBrush(fill);
+                        gTarget.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+                        TextRenderingHint oldT = gTarget.GetTextRenderingHint();
+                        gTarget.SetTextRenderingHint(TextRenderingHintAntiAlias);
+                        Font f(hdc, pData->hFontText);
+                        SolidBrush tb(Color(255, 255, 255, 255));
+                        StringFormat sf;
+                        sf.SetAlignment(StringAlignmentCenter);
+                        sf.SetLineAlignment(StringAlignmentCenter);
+                        RectF rf((REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+                        gTarget.DrawString(text, -1, &f, rf, &sf, &tb);
+                        gTarget.SetTextRenderingHint(oldT);
+                    };
+                    drawFb(leftRect, leftText, leftHovered, false);
+                    drawFb(rightRect, rightText, rightHovered, true);
+                };
+
+                if (pData->macrosViewMode == 1) {
+                    Font iconFont12(L"Segoe MDL2 Assets", 10.0f);
+                    RECT labelRc = { 0, mcy, mW, mcy + 24 };
+                    RectF labelTextRect((REAL)28, (REAL)labelRc.top, (REAL)(mW - 42), (REAL)24);
+                    gTarget.DrawString(L"Name:", -1, &rowFont, labelTextRect, &sfLeft, &textColor);
+                    RectF nameIconRect((REAL)8, (REAL)(labelRc.top + 1), 16.0f, 24.0f);
+                    gTarget.DrawString(L"\uE8AC", -1, &iconFont12, nameIconRect, &sfCenter, &accentColor);
+                    mcy += 24;
+
+                    RECT editRc = { 0, mcy, mW, mcy + 32 };
+                    bool isHoveredName = pData->macrosHoverNew;
+                    SolidBrush editBg(Color(40, 50, 50, 50));
+                    gTarget.FillRectangle(&editBg, (REAL)editRc.left, (REAL)editRc.top, (REAL)(editRc.right - editRc.left), (REAL)(editRc.bottom - editRc.top));
+                    drawCrispBorder(editRc, isHoveredName ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
+
+                    std::wstring displayName = pData->macrosWizardName;
+                    const Brush& nb = displayName.empty() ? (const Brush&)dimColor : (const Brush&)textColor;
+                    RectF textRect((REAL)14, (REAL)editRc.top, (REAL)(mW - 28), 32.0f);
+                    gTarget.DrawString(displayName.empty() ? L"(click to enter name)" : displayName.c_str(),
+                        -1, &rowFont, textRect, &sfLeft, displayName.empty() ? &dimColor : &nb);
+
+                    pData->macrosBtnRectNameEdit = editRc;
+                    mcy += 32;
+
+                    RECT targetLabelRc = { 0, mcy, mW, mcy + 24 };
+                    RectF targetLabelTextRect((REAL)30, (REAL)targetLabelRc.top, (REAL)(mW - 44), (REAL)24);
+                    gTarget.DrawString(L"Target Window:", -1, &rowFont, targetLabelTextRect, &sfLeft, &textColor);
+                    RectF winIconRect((REAL)10, (REAL)(targetLabelRc.top + 1), 16.0f, 24.0f);
+                    gTarget.DrawString(L"\uE7C4", -1, &iconFont12, winIconRect, &sfCenter, &accentColor);
+                    mcy += 24;
+
+                    auto wins = FindAllRobloxWindows(true);
+                    RECT winRc = { 0, mcy, mW, mcy + 32 };
+                    bool winHovered = pData->macrosHoverTest;
+                    SolidBrush winBg(winHovered ? Color(45, 55, 55, 55) : Color(25, 25, 25, 25));
+                    gTarget.FillRectangle(&winBg, (REAL)winRc.left, (REAL)winRc.top, (REAL)(winRc.right - winRc.left), (REAL)(winRc.bottom - winRc.top));
+                    drawCrispBorder(winRc, winHovered ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
+
+                    int wizFocusW = 30;
+                    RECT wizFocusRc = { mW - wizFocusW - 8, winRc.top + 5, mW - 8, winRc.bottom - 3 };
+                    if (!wins.empty()) {
+                        HWND targetWin = g_wizardTargetHwnd ? g_wizardTargetHwnd : wins[0];
+                        if (!g_wizardTargetHwnd) g_wizardTargetHwnd = targetWin;
+                        wchar_t title[256];
+                        GetWindowTextW(targetWin, title, 256);
+                        DWORD targetPid = 0;
+                        GetWindowThreadProcessId(targetWin, &targetPid);
+                        wchar_t winLabel[384];
+                        swprintf_s(winLabel, L"  %s  [PID: %d]", title, targetPid);
+                        RectF winTextRect((REAL)14, (REAL)winRc.top, (REAL)(mW - wizFocusW - 28), 32.0f);
+                        gTarget.DrawString(winLabel, -1, &smallFont, winTextRect, &sfLeft, &textColor);
+                        Font wizIconFont(L"Segoe MDL2 Assets", 11.0f);
+                        bool wizFocusHover = pData->macrosHoverFinish;
+                        SolidBrush wizFgColor(wizFocusHover ? Color(255, 100, 150, 255) : Color(180, 120, 120, 120));
+                        RectF wizFgTextRect((REAL)wizFocusRc.left, (REAL)wizFocusRc.top, (REAL)(wizFocusRc.right - wizFocusRc.left), (REAL)(wizFocusRc.bottom - wizFocusRc.top));
+                        gTarget.DrawString(L"\uE7B3", -1, &wizIconFont, wizFgTextRect, &sfCenter, &wizFgColor);
+                        pData->macrosBtnRectFocus = wizFocusRc;
+                    } else {
+                        RectF winTextRect((REAL)14, (REAL)winRc.top, (REAL)(mW - 28), 32.0f);
+                        gTarget.DrawString(L"  (no Roblox windows found)", -1, &smallFont, winTextRect, &sfLeft, &dimColor);
+                        pData->macrosBtnRectFocus = {0};
+                    }
+                    pData->macrosBtnRectTestWin = winRc;
+
+                    drawFlushButtons(pData->macrosBtnRectBack, L"Cancel", pData->macrosHoverBack,
+                                     pData->macrosBtnRectNext, L"Next", pData->macrosHoverNext);
+                }
+                else if (pData->macrosViewMode == 2) {
+                    bool reRecording = g_macroReRecording;
+                    int availH = (mH - 65 - btnH) - mcy;
+                    int panelX = 14;
+                    int panelW = mW - 28;
+                    int cy = mcy + 8;
+
+                    Font iconFont12(L"Segoe MDL2 Assets", 10.0f);
+                    RECT titleRc = { panelX, cy, panelX + panelW, cy + 24 };
+                    RectF titleTextRect((REAL)(panelX + 20), (REAL)titleRc.top, (REAL)(panelW - 20), (REAL)24);
+                    gTarget.DrawString(reRecording ? L"Re-record Macro" : L"Ready to Record", -1, &rowFont, titleTextRect, &sfLeft, &accentColor);
+                    RectF titleIconRect((REAL)panelX, (REAL)(titleRc.top + 1), 16.0f, 24.0f);
+                    gTarget.DrawString(L"\uE714", -1, &iconFont12, titleIconRect, &sfCenter, &accentColor);
+                    cy += 28;
+
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush sepBrush(Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&sepBrush, (REAL)panelX, (REAL)cy, (REAL)panelW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+                    cy += 8;
+
+                    SolidBrush descCol(Color(200, 170, 170, 170));
+                    Font descFont(L"Segoe UI", 9.0f);
+                    StringFormat sfWrap;
+                    sfWrap.SetAlignment(StringAlignmentNear);
+                    sfWrap.SetLineAlignment(StringAlignmentNear);
+                    sfWrap.SetFormatFlags(StringFormatFlagsNoClip);
+                    RectF descRect((REAL)(panelX + 2), (REAL)cy, (REAL)(panelW - 4), 18.0f);
+                    if (reRecording) {
+                        wchar_t descTmp[160];
+                        swprintf_s(descTmp, L"This will replace the %d recorded actions of \"%s\".", (int)g_wizardMacro.actions.size(), g_wizardMacro.name.c_str());
+                        gTarget.DrawString(descTmp, -1, &descFont, descRect, &sfWrap, &descCol);
+                    } else {
+                        gTarget.DrawString(L"The target Roblox window must be active during recording.", -1, &descFont, descRect, &sfWrap, &descCol);
+                    }
+                    cy += 24;
+
+                    auto drawStep = [&](const wchar_t* stepNum, const wchar_t* text, int y) {
+                        SolidBrush stepDotCol(Color(255, 100, 150, 255));
+                        Font stepFont(L"Segoe UI", 9.0f);
+                        wchar_t label[32];
+                        swprintf_s(label, L"%s.", stepNum);
+                        RectF numR((REAL)(panelX + 2), (REAL)y, 18.0f, 20.0f);
+                        gTarget.DrawString(label, -1, &stepFont, numR, &sfLeft, &stepDotCol);
+                        RectF textR((REAL)(panelX + 24), (REAL)y, (REAL)(panelW - 28), (REAL)20);
+                        gTarget.DrawString(text, -1, &smallFont, textR, &sfLeft, &textColor);
+                    };
+                    drawStep(L"1", L"Roblox window will be focused and resized to 800\u2009\u00D7\u2009600", cy);
+                    cy += 22;
+                    drawStep(L"2", L"Recording starts: clicks, keys and mouse movement", cy);
+                    cy += 22;
+                    drawStep(L"3", L"Press Ctrl+Shift+R to stop recording", cy);
+                    cy += 18;
+
+                    mcy = cy + 36;
+
+                    {
+                        int btnY = mH - 65 - btnH;
+                        int barH = 30;
+                        int barY = btnY - barH - 9;
+                        RECT toggleRowRc = { 14, barY, mW - 14 - 24, barY + barH };
+                        pData->macrosRecordMovementsToggleRect = toggleRowRc;
+                        MainUI_Paint_DrawToggle(hdc, toggleRowRc, pData->hFontSmall, L"Record mouse movements", g_recordingMovementsEnabled, pData->macrosHoverRecordMovements, pData->macrosRecordMovementsAnim, false, L"\uE7C3", true, &gTarget);
+                        int swY = barY + (barH - 24) / 2 + 4;
+                        RECT helpRc = { mW - 14 - 24, swY, mW - 14, swY + 24 };
+                        pData->macrosHelpBtnRect = helpRc;
+                        MainUI_Paint_DrawHelpButton(hdc, helpRc, pData->hFontSmall, pData->macrosHoverFinish, false, &gTarget);
+                    }
+
+                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
+                                     pData->macrosBtnRectRecord, L"Record", pData->macrosHoverRecord);
+                }
+                else if (pData->macrosViewMode == 3) {
+                    int stepCount = (int)g_wizardMacro.actions.size();
+                    wchar_t cntMsg[64];
+                    swprintf_s(cntMsg, L"Recorded %d steps:", stepCount);
+                    gTarget.DrawString(cntMsg, -1, &rowFont, PointF((REAL)14, (REAL)mcy), &textColor);
+                    mcy += 24;
+
+                    int maxShow = min(stepCount, 8);
+                    for (int i = 0; i < maxShow; i++) {
+                        const auto& a = g_wizardMacro.actions[i];
+                        const wchar_t* ts = L"Click";
+                        if (a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyPress) ts = L"Key";
+                        else if (a.type == MacroStepType::KeyUp) ts = L"KeyUp";
+                        else if (a.type == MacroStepType::MouseMove) ts = L"Move";
+                        else if (a.type == MacroStepType::MouseDown) ts = L"MouseDown";
+                        else if (a.type == MacroStepType::MouseUp) ts = L"MouseUp";
+                        else if (a.type == MacroStepType::Sleep) ts = L"Wait";
+                        wchar_t ln[128];
+                        swprintf_s(ln, L"  %d. %s (%dms)", i + 1, ts, a.delayBeforeMs);
+                        gTarget.DrawString(ln, -1, &smallFont, PointF((REAL)14, (REAL)mcy), &textColor);
+                        mcy += 18;
+                    }
+                    if (stepCount > maxShow) {
+                        wchar_t more[32];
+                        swprintf_s(more, L"  ... +%d more steps", stepCount - maxShow);
+                        gTarget.DrawString(more, -1, &smallFont, PointF((REAL)14, (REAL)mcy), &dimColor);
+                    }
+
+                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
+                                     pData->macrosBtnRectNext, L"Next", pData->macrosHoverNext);
+                }
+                else if (pData->macrosViewMode == 4) {
+                    RECT qRc = { 0, mcy, mW, mcy + 28 };
+                    RectF qTextRect((REAL)14, (REAL)qRc.top, (REAL)(mW - 28), (REAL)28);
+                    gTarget.DrawString(L"When should it run?", -1, &rowFont, qTextRect, &sfLeft, &textColor);
+                    mcy += 28;
+
+                    auto drawCheckbox = [&](RectF rect, bool checked, bool hovered) {
+                        SolidBrush chkBg(Color(30, 40, 40, 40));
+                        gTarget.FillRectangle(&chkBg, rect);
+                        RECT rRect = { (int)rect.X, (int)rect.Y, (int)(rect.X + rect.Width), (int)(rect.Y + rect.Height) };
+                        drawCrispBorder(rRect, hovered ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
+                        if (checked) {
+                            SolidBrush chkMark(Color(255, 100, 150, 255));
+                            RectF markRect = rect;
+                            markRect.Inflate(-3.0f, -3.0f);
+                            gTarget.FillRectangle(&chkMark, markRect);
+                        }
+                    };
+
+                    {
+                        RECT rowRc = { 0, mcy, mW, mcy + 30 };
+                        bool isHovered = pData->macrosHoverNew;
+                        SolidBrush rowBrush(isHovered ? Color(30, 35, 35, 35) : Color(0, 0, 0, 0));
+                        gTarget.FillRectangle(&rowBrush, (REAL)rowRc.left, (REAL)rowRc.top, (REAL)(rowRc.right - rowRc.left), (REAL)(rowRc.bottom - rowRc.top));
+
+                        RectF chkRect((REAL)14, (REAL)(mcy + 7), 16.0f, 16.0f);
+                        drawCheckbox(chkRect, g_wizardMacro.triggerOnCooldown, isHovered);
+
+                        RectF textRect((REAL)38, (REAL)rowRc.top, (REAL)(mW - 38), 30.0f);
+                        gTarget.DrawString(L"Run on AFK cooldown", -1, &smallFont, textRect, &sfLeft, &textColor);
+
+                        pData->macrosBtnRectCooldown = rowRc;
+                        mcy += 30;
+                    }
+
+                    {
+                        RECT rowRc = { 0, mcy, mW, mcy + 30 };
+                        bool isHovered = pData->macrosHoverRecord;
+                        SolidBrush rowBrush(isHovered ? Color(30, 35, 35, 35) : Color(0, 0, 0, 0));
+                        gTarget.FillRectangle(&rowBrush, (REAL)rowRc.left, (REAL)rowRc.top, (REAL)(rowRc.right - rowRc.left), (REAL)(rowRc.bottom - rowRc.top));
+
+                        RectF chkRect((REAL)14, (REAL)(mcy + 7), 16.0f, 16.0f);
+                        drawCheckbox(chkRect, g_wizardMacro.triggerOnReconnect, isHovered);
+
+                        RectF textRect((REAL)38, (REAL)rowRc.top, (REAL)(mW - 38), 30.0f);
+                        gTarget.DrawString(L"Run on reconnect", -1, &smallFont, textRect, &sfLeft, &textColor);
+
+                        pData->macrosBtnRectReconnect = rowRc;
+                        mcy += 30;
+                    }
+
+                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
+                                     pData->macrosBtnRectFinish, L"Save", pData->macrosHoverFinish);
+                }
+                else if (pData->macrosViewMode == 5) {
+                    int panelX = 14;
+                    int panelW = mW - 28;
+                    int cy = mcy + 8;
+
+                    RECT titleRc = { panelX, cy, panelX + panelW, cy + 24 };
+                    Color recCol(255, 230, 70, 70);
+                    SolidBrush recTitleBrush(recCol);
+                    Font iconFont12(L"Segoe MDL2 Assets", 10.0f);
+                    RectF titleIconRect((REAL)panelX, (REAL)(titleRc.top + 1), 16.0f, 24.0f);
+                    gTarget.DrawString(L"\uE714", -1, &iconFont12, titleIconRect, &sfCenter, &recTitleBrush);
+                    RectF titleTextRect((REAL)(panelX + 20), (REAL)titleRc.top, (REAL)(panelW - 20), (REAL)24);
+                    gTarget.DrawString(L"Recording...", -1, &rowFont, titleTextRect, &sfLeft, &recTitleBrush);
+                    cy += 28;
+
+                    {
+                        PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                        SmoothingMode oldS = gTarget.GetSmoothingMode();
+                        gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                        gTarget.SetSmoothingMode(SmoothingModeNone);
+                        SolidBrush sepBrush(Color(120, 56, 56, 56));
+                        gTarget.FillRectangle(&sepBrush, (REAL)panelX, (REAL)cy, (REAL)panelW, 1.0f);
+                        gTarget.SetPixelOffsetMode(oldP);
+                        gTarget.SetSmoothingMode(oldS);
+                    }
+                    cy += 8;
+
+                    SolidBrush descCol(Color(200, 170, 170, 170));
+                    Font descFont(L"Segoe UI", 9.0f);
+                    StringFormat sfWrap;
+                    sfWrap.SetAlignment(StringAlignmentNear);
+                    sfWrap.SetLineAlignment(StringAlignmentNear);
+                    sfWrap.SetFormatFlags(StringFormatFlagsNoClip);
+                    RectF descRect((REAL)(panelX + 2), (REAL)cy, (REAL)(panelW - 4), 18.0f);
+                    gTarget.DrawString(L"Recording your actions in the Roblox client.", -1, &descFont, descRect, &sfWrap, &descCol);
+                    cy += 24;
+
+                    auto drawStep = [&](const wchar_t* stepNum, const wchar_t* text, int y) {
+                        SolidBrush stepDotCol(Color(255, 100, 150, 255));
+                        Font stepFont(L"Segoe UI", 9.0f);
+                        wchar_t label[32];
+                        swprintf_s(label, L"%s.", stepNum);
+                        RectF numR((REAL)(panelX + 2), (REAL)y, 18.0f, 20.0f);
+                        gTarget.DrawString(label, -1, &stepFont, numR, &sfLeft, &stepDotCol);
+                        RectF textR((REAL)(panelX + 24), (REAL)y, (REAL)(panelW - 28), (REAL)20);
+                        gTarget.DrawString(text, -1, &smallFont, textR, &sfLeft, &textColor);
+                    };
+                    drawStep(L"1", L"Recording clicks, keys and mouse movement", cy);
+                    cy += 22;
+                    drawStep(L"2", L"Press Ctrl+Shift+R to stop recording", cy);
+                    cy += 22;
+                    drawStep(L"3", L"Roblox window resized to 800\u2009\u00D7\u2009600", cy);
+                    cy += 18;
+
+                    mcy = cy + 36;
+
+                    {
+                        int btnY = mH - 65 - btnH;
+                        DWORD elapsed = (g_recordingStartTime > 0) ? (DWORD)((MacroEngine_NowMs() - g_recordingStartTime) / 1000) : 0;
+                        wchar_t stats[128];
+                        swprintf_s(stats, L"%d clicks \u2022 %d keys \u2022 %d wheel \u2022 %ds", g_recordingClickCount, g_recordingKeyCount, g_recordingWheelCount, elapsed);
+                        RectF statsRect((REAL)0, (REAL)(btnY - 28), (REAL)mW, 24.0f);
+                        gTarget.DrawString(stats, -1, &smallFont, statsRect, &sfCenter, &accentColor);
+                    }
+
+                    drawFlushButtons(pData->macrosBtnRectBack, L"Cancel", pData->macrosHoverBack,
+                                     pData->macrosBtnRectRecord, L"Stop", pData->macrosHoverRecord);
+                }
+            }
+        };
+
+        if (mAnimVal < 1.0f) {
+            Bitmap mBmp(mW, mH);
+            Graphics mG(&mBmp);
+            mG.SetSmoothingMode(g.GetSmoothingMode());
+            mG.SetPixelOffsetMode(g.GetPixelOffsetMode());
+            mG.SetTextRenderingHint(g.GetTextRenderingHint());
+            mG.Clear(Color(0, 0, 0, 0));
+            drawMacrosContent(mG);
+            ColorMatrix cm = {
+                1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, mAnimVal, 0.0f,
+                0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+            };
+            ImageAttributes ia;
+            ia.SetColorMatrix(&cm, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
+            g.DrawImage(&mBmp, Rect(0, 0, mW, mH), 0, 0, mW, mH, UnitPixel, &ia);
+        } else {
+            drawMacrosContent(g);
+        }
+
+        if (renderMacrosPrimary && pData->macrosViewMode == 0) {
+            if (pData->macrosBtnRectFolder.left != 0 && PtInRect(&pData->macrosBtnRectFolder, pData->hoverPoint)) {
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosBtnRectFolder, pData->hFontSmall, MacroEngine_GetMacrosPath().c_str(), false);
+            }
+            if (pData->macrosBtnRectImport.left != 0 && PtInRect(&pData->macrosBtnRectImport, pData->hoverPoint)) {
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosBtnRectImport, pData->hFontSmall, L"Import macro from file", false);
+            }
+            if (pData->macrosReconnectDelayBtnRect.left != 0 && PtInRect(&pData->macrosReconnectDelayBtnRect, pData->hoverPoint)) {
+                wchar_t delayTip[64];
+                swprintf_s(delayTip, L"Reconnect macro delay: %ds (click to change)", g_reconnectMacroDelaySec.load());
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosReconnectDelayBtnRect, pData->hFontSmall, delayTip, false);
+            }
+            if (pData->macrosHoveringItem >= 0) {
+                int rowTop = 63 + pData->macrosHoveringItem * 32 - pData->macrosScrollOffset;
+                if (pData->macrosHoverRenameIcon) {
+                    RECT iconRc = { 14, rowTop, 34, rowTop + 32 };
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Rename macro", true);
+                } else if (pData->macrosHoverExportIcon) {
+                    RECT iconRc = { mW - 14 - 44, rowTop, mW - 14 - 22, rowTop + 32 };
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Export macro to file", false);
+                } else if (pData->macrosHoverDeleteIcon) {
+                    RECT iconRc = { mW - 14 - 22, rowTop, mW - 14, rowTop + 32 };
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Delete macro", false);
+                }
+            }
+            auto runPosOf = [&](int idx, int which) -> int {
+                if (idx < 0) return 0;
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+                if (idx >= (int)g_macros.size()) return 0;
+                std::vector<int> order;
+                for (size_t i = 0; i < g_macros.size(); i++) {
+                    bool on = (which == 0) ? g_macros[i].triggerOnCooldown
+                            : (which == 1) ? g_macros[i].triggerOnReconnect
+                                           : g_macros[i].triggerOnInterval;
+                    if (on) order.push_back((int)i);
+                }
+                std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+                    int oa = (which == 0) ? g_macros[a].triggerOrderCooldown
+                          : (which == 1) ? g_macros[a].triggerOrderReconnect
+                                         : g_macros[a].triggerOrderInterval;
+                    int ob = (which == 0) ? g_macros[b].triggerOrderCooldown
+                          : (which == 1) ? g_macros[b].triggerOrderReconnect
+                                         : g_macros[b].triggerOrderInterval;
+                    if (oa == 0 || ob == 0) return false;
+                    return oa < ob;
+                });
+                for (size_t k = 0; k < order.size(); k++) {
+                    if (order[k] == idx) return (int)k + 1;
+                }
+                return 0;
+            };
+            int selIdx = pData->macrosHoveringItem;
+            if (pData->macrosHoverCooldown && pData->macrosTriggerRectCd.left != 0) {
+                int pos = runPosOf(selIdx, 0);
+                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" \u2022 Run on each AFK action") : L"Run on each AFK action";
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectCd, pData->hFontSmall, tip.c_str(), false);
+            }
+            if (pData->macrosHoverReconnect && pData->macrosTriggerRectRc.left != 0) {
+                int pos = runPosOf(selIdx, 1);
+                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" \u2022 Run on reconnect") : L"Run on reconnect";
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectRc, pData->hFontSmall, tip.c_str(), false);
+            }
+            if (pData->macrosHoverInterval && pData->macrosTriggerRectInt.left != 0) {
+                std::wstring tip = L"Run on interval timer";
+                int sec = 0;
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (selIdx >= 0 && selIdx < (int)g_macros.size()) {
+                        sec = g_macros[selIdx].intervalSec;
+                    }
+                }
+                int pos = runPosOf(selIdx, 2);
+                if (pos > 0) tip = L"Playback order: " + std::to_wstring(pos) + L" \u2022 " + tip;
+                if (sec > 0) tip += L" (" + std::to_wstring(sec) + L"s)";
+                else tip += L" (Not set - Click to set time)";
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectInt, pData->hFontSmall, tip.c_str(), false);
+            }
+        }
+    }
 
     return needsRedraw;
 }
@@ -18279,6 +24743,13 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->discordNotifyReconnectAnim = g_discordNotifyReconnect.load() ? 1.0f : 0.0f;
         pData->discordNotifyResetAnim = g_discordNotifyReset.load() ? 1.0f : 0.0f;
         pData->discordNotifyErrorsAnim = g_discordNotifyErrors.load() ? 1.0f : 0.0f;
+        pData->discordNotifyMacroAnim = g_discordNotifyMacro.load() ? 1.0f : 0.0f;
+        pData->discordNotifyIntervalMacrosAnim = g_discordNotifyIntervalMacros.load() ? 1.0f : 0.0f;
+        pData->discordNotifyHeartbeatAnim = g_discordNotifyHeartbeat.load() ? 1.0f : 0.0f;
+        pData->discordNotifyUtilsRamAnim = g_discordNotifyUtilsRam.load() ? 1.0f : 0.0f;
+        pData->discordUseDefaultNameAnim = g_discordUseDefaultName.load() ? 1.0f : 0.0f;
+        pData->discordUseDefaultAvatarAnim = g_discordUseDefaultAvatar.load() ? 1.0f : 0.0f;
+        pData->discordUseTimestampAnim = g_discordUseTimestamp.load() ? 1.0f : 0.0f;
         pData->discordDisableEmbedAnim = g_discordDisableEmbed.load() ? 1.0f : 0.0f;
         pData->discordMentionOnErrorsAnim = g_discordMentionOnErrors.load() ? 1.0f : 0.0f;
         pData->customProcessSearchAnim = g_useCustomProcessSearch.load() ? 1.0f : 0.0f;
@@ -18306,6 +24777,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 pData->alphaInfoAutoShown = true;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
+        } else if (wParam == 1003) {
+            if (pData && pData->macrosViewMode == 5 && g_isRecording) {
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else {
+                KillTimer(hwnd, 1003);
+            }
         }
         break;
     }
@@ -18320,6 +24797,96 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->startupOverlayFadeDirection = -1;
             InvalidateRect(hwnd, NULL, FALSE);
             UpdateWindow(hwnd);
+        }
+        return 0;
+
+    case WM_APP + 60:
+        if (pData && pData->deleteMacroIndex >= 0) {
+            int delIdx = pData->deleteMacroIndex;
+            pData->deleteMacroIndex = -1;
+            std::wstring confirmMsg;
+            {
+                std::lock_guard<std::mutex> lock(g_macrosMutex);
+                if (delIdx >= 0 && delIdx < (int)g_macros.size()) {
+                    confirmMsg = L"Delete macro \"" + g_macros[delIdx].name + L"\"?\nThis cannot be undone.";
+                }
+            }
+            if (!confirmMsg.empty()) {
+                EnableWindow(hwnd, FALSE);
+                int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), L"AntiAFK-RBX \u2022 Delete Macro", MB_YESNO | MB_DEFBUTTON2);
+                EnableWindow(hwnd, TRUE);
+                SetForegroundWindow(hwnd);
+                if (delResult == IDYES) {
+                    {
+                        std::lock_guard<std::mutex> lock(g_macrosMutex);
+                        if (delIdx >= 0 && delIdx < (int)g_macros.size()) {
+                            g_macros.erase(g_macros.begin() + delIdx);
+                            if (g_selectedMacroIndex.load() == delIdx) g_selectedMacroIndex = -1;
+                            else if (g_selectedMacroIndex.load() > delIdx) g_selectedMacroIndex--;
+                        }
+                    }
+                    pData->macrosSelectedIndex = -1;
+                    MacroEngine_SaveMacros();
+                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd);
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+
+    case WM_APP_SHOW_MACROS:
+        if (pData) {
+            KillTimer(hwnd, 1003);
+            pData->macrosPreviousPage = pData->currentPage;
+            if (g_mainUiOpenedForMacros.load()) {
+                pData->macrosViewDirection = 0;
+                pData->macrosViewAnim = 1.0f;
+                pData->showingMacros = true;
+            } else if (!pData->showingMacros) {
+                pData->macrosViewDirection = 1;
+                pData->macrosViewAnim = 0.0f;
+            }
+            if (g_macroWizardActive && g_macroWizardStep >= 1 && g_macroWizardStep <= 4) {
+                pData->macrosViewMode = g_macroWizardStep;
+            } else {
+                pData->macrosViewMode = 0;
+            }
+            pData->macrosWizardName = g_wizardMacro.name;
+            pData->macrosNameFocused = false;
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+
+    case WM_APP_CLOSE_MACROS:
+        if (pData) {
+            if (g_mainUiOpenedForMacros.load()) {
+                g_mainUiOpenedForMacros = false;
+                DestroyWindow(hwnd);
+            } else {
+                pData->macrosViewDirection = -1;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+
+    case WM_APP_SHOW_GRID:
+        if (pData) {
+            if (g_mainUiOpenedForGrid.load()) {
+                pData->currentPage = 0;
+                pData->gridSettingsPreviousPage = 0;
+                pData->gridSettingsViewDirection = 1;
+                pData->gridSettingsViewAnim = 1.0f;
+                pData->showingGridSettings = true;
+            } else if (!pData->showingGridSettings) {
+                pData->gridSettingsPreviousPage = pData->currentPage;
+                pData->gridSettingsViewDirection = 1;
+                pData->gridSettingsViewAnim = 0.0f;
+            }
+            pData->gridForceSmallAnim = g_gridForceSmall.load() ? 1.0f : 0.0f;
+            pData->gridAllMonitorsAnim = g_gridAllMonitors.load() ? 1.0f : 0.0f;
+            pData->gridKeepAspectRatioAnim = g_gridKeepAspectRatio.load() ? 1.0f : 0.0f;
+            pData->gridHotkeyAnim = g_hotkeyGridEnabled.load() ? 1.0f : 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
         }
         return 0;
 
@@ -18347,33 +24914,45 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         if (pData->currentPage == 0) { // General
             int ddW_interval = 166, ddW_action = 144;
             int inlineGap = 4;
+            int btnW = 48, btnH = 22;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            int testBtnW = 48, testBtnH = 22, testBtnGap = 4;
+            pData->testActionButtonRect = {
+                ctrlEndX - ddW_interval - help_btn_size - testBtnGap - testBtnW,
+                y + (rowH - testBtnH) / 2,
+                ctrlEndX - ddW_interval - help_btn_size - testBtnGap,
+                y + (rowH - testBtnH) / 2 + testBtnH
+            };
             pData->intervalDropdownRect = { ctrlEndX - ddW_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-            pData->actionDropdownRect = { ctrlEndX - ddW_action - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
+            int compactW = help_btn_size;
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            pData->actionDropdownRect = { pData->helpButtonRects.back().left - ddW_action, y + 8, pData->helpButtonRects.back().left, y + rowH };
+            pData->actionDelaysSettingsCompactRect = { pData->actionDropdownRect.left - inlineGap - compactW, y + 8, pData->actionDropdownRect.left - inlineGap, y + rowH };
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             int controlTop = y + (rowH - help_btn_size) / 2 + 4;
             int controlBottom = controlTop + help_btn_size;
-            int toggleSwitchW = 50;
-            int statusBtnW = help_btn_size;
-            int statusBtnGap = 4;
-            pData->advancedMultiInstanceLinkRect = { ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom };
-            pData->helpButtonRects.push_back({ pData->advancedMultiInstanceLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedMultiInstanceLinkRect.left - inlineGap, controlBottom });
-            int toggleRight = pData->helpButtonRects.back().left;
-            int toggleSwitchLeft = toggleRight - toggleSwitchW;
-            pData->multiInstanceToggleRect = { ctrlStartX, y, toggleRight, y + rowH };
-            pData->mutexStatusRect = { toggleSwitchLeft - statusBtnGap - statusBtnW, controlTop, toggleSwitchLeft - statusBtnGap, controlBottom };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+            pData->multiInstanceToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+            int toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+            pData->advancedMultiInstanceLinkRect = { toggleSwitchLeft - inlineGap - help_btn_size, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+            pData->mutexStatusRect = { pData->advancedMultiInstanceLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedMultiInstanceLinkRect.left - inlineGap, controlBottom };
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-            pData->testActionButtonRect = { 0, y, clientRect.right, y + rowH + vGap };
+            {
+                int macrosBtnW = 58, macrosBtnH = 24;
+                pData->macrosBtnRect = { clientRect.right - help_btn_size - 20 - macrosBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + macrosBtnH };
+                int mCtrlTop = y + (rowH - help_btn_size) / 2 + 4;
+                pData->macrosIntervalToggleCompactRect = { pData->macrosBtnRect.left - inlineGap - help_btn_size, mCtrlTop, pData->macrosBtnRect.left - inlineGap, mCtrlTop + help_btn_size };
+                pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            }
             y += rowH + vGap;
         } else if (pData->currentPage == 1) { // Auto+Utils
             int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
@@ -18478,7 +25057,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->importSettingsRect = { 0, bottomY, halfX, bottomY + rowH + 1 };
             pData->exportSettingsRect = { halfX, bottomY, clientRect.right, bottomY + rowH + 1 };
         } else if (pData->currentPage == 3) { // Advanced
-            int ddW_fps = 156, ddW_restore = 161, ddW_mi_interval = 143;
+            int ddW_fps = 156, ddW_restore = 161, ddW_mi_interval = 155;
             int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
             int compactW = help_btn_size;
             int inlineGap = 4;
@@ -18569,6 +25148,16 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->discordNotifyErrorsToggleRect = { ctrlStartX, y, ctrlStartX + toggleWPage, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyMacroToggleRect = { ctrlStartX, y, ctrlStartX + toggleWPage, y + rowH };
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->discordNotifyIntervalMacrosToggleRect = { ctrlStartX, y, ctrlStartX + toggleWPage, y + rowH };
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
 
@@ -18665,6 +25254,30 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         break;
     case WM_CHAR:
+        if (pData && pData->macrosNameFocused) {
+            if (wParam == VK_BACK) {
+                if (!pData->macrosWizardName.empty())
+                    pData->macrosWizardName.pop_back();
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam == VK_RETURN) {
+                pData->macrosNameFocused = false;
+                if (!pData->macrosWizardName.empty()) {
+                    g_wizardMacro.name = pData->macrosWizardName;
+                    g_macroWizardStep = 2;
+                    pData->macrosViewMode = 2;
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam == VK_ESCAPE) {
+                pData->macrosNameFocused = false;
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam >= 0x20 && !iswcntrl((wchar_t)wParam)) {
+                if (pData->macrosWizardName.size() < 64) {
+                    pData->macrosWizardName.push_back((wchar_t)wParam);
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+            }
+            return 0;
+        }
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
             size_t* caretPos = &pData->discordWebhookCaretPos;
@@ -18720,7 +25333,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                              pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f ||
                              pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f ||
                              pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f ||
-                             pData->showingTimings || pData->timingsViewAnim > 0.0f;
+                             pData->showingTimings || pData->timingsViewAnim > 0.0f ||
+                             pData->showingMacros || pData->macrosViewAnim > 0.0f;
 
         if (pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f) {
             anyHover |= checkHover(pData->isHoveringFpsCapperSettingsBackIcon, pData->fpsCapperSettingsBackIconRect);
@@ -18802,6 +25416,74 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= checkHover(pData->isHoveringTimingsOkButton, pData->timingsOkButtonRect);
         }
 
+        if (pData->showingMacros || pData->macrosViewAnim > 0.0f) {
+            anyHover |= checkHover(pData->isHoveringMacrosBackIcon, pData->macrosBackIconRect);
+            anyHover |= checkHover(pData->isHoveringMacrosOkButton, pData->macrosOkButtonRect);
+            if (pData->macrosViewMode == 0) {
+                anyHover |= checkHover(pData->macrosHoverNew, pData->macrosBtnRectNew);
+                anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectTest);
+                anyHover |= checkHover(pData->macrosHoverEdit, pData->macrosBtnRectEdit);
+                anyHover |= checkHover(pData->macrosHoverTest, pData->macrosBtnRectTestWin);
+                anyHover |= checkHover(pData->macrosHoverFinish, pData->macrosBtnRectFocus);
+            } else if (pData->macrosViewMode == 1) {
+                anyHover |= checkHover(pData->macrosHoverNew, pData->macrosBtnRectNameEdit);
+                anyHover |= checkHover(pData->macrosHoverTest, pData->macrosBtnRectTestWin);
+                anyHover |= checkHover(pData->macrosHoverFinish, pData->macrosBtnRectFocus);
+                anyHover |= checkHover(pData->macrosHoverBack, pData->macrosBtnRectBack);
+                anyHover |= checkHover(pData->macrosHoverNext, pData->macrosBtnRectNext);
+            } else if (pData->macrosViewMode == 2) {
+                anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectRecord);
+                anyHover |= checkHover(pData->macrosHoverBack, pData->macrosBtnRectBack);
+                if (pData->macrosRecordMovementsToggleRect.left != 0)
+                    anyHover |= checkHover(pData->macrosHoverRecordMovements, pData->macrosRecordMovementsToggleRect);
+                if (pData->macrosHelpBtnRect.left != 0)
+                    anyHover |= checkHover(pData->macrosHoverFinish, pData->macrosHelpBtnRect);
+            } else if (pData->macrosViewMode == 3) {
+                anyHover |= checkHover(pData->macrosHoverBack, pData->macrosBtnRectBack);
+                anyHover |= checkHover(pData->macrosHoverNext, pData->macrosBtnRectNext);
+            } else if (pData->macrosViewMode == 4) {
+                anyHover |= checkHover(pData->macrosHoverNew, pData->macrosBtnRectCooldown);
+                anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectReconnect);
+                anyHover |= checkHover(pData->macrosHoverBack, pData->macrosBtnRectBack);
+                anyHover |= checkHover(pData->macrosHoverFinish, pData->macrosBtnRectFinish);
+            } else if (pData->macrosViewMode == 5) {
+                anyHover |= checkHover(pData->macrosHoverBack, pData->macrosBtnRectBack);
+                anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectRecord);
+            }
+            if (pData->macrosViewMode == 0) {
+                int oldHover = pData->macrosHoveringItem;
+                bool oldRenameIcon = pData->macrosHoverRenameIcon;
+                bool oldExportIcon = pData->macrosHoverExportIcon;
+                bool oldDeleteIcon = pData->macrosHoverDeleteIcon;
+                pData->macrosHoveringItem = -1;
+                pData->macrosHoverRenameIcon = false;
+                pData->macrosHoverExportIcon = false;
+                pData->macrosHoverDeleteIcon = false;
+                if (PtInRect(&pData->macrosListRect, pt)) {
+                    int relY = pt.y - pData->macrosListRect.top + pData->macrosScrollOffset;
+                    int itemIdx = relY / 32;
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (itemIdx >= 0 && itemIdx < (int)g_macros.size()) {
+                        pData->macrosHoveringItem = itemIdx;
+                        anyHover = true;
+                        RECT clientRect2;
+                        GetClientRect(hwnd, &clientRect2);
+                        int rightEdge2 = clientRect2.right;
+                        if (pt.x >= 14 && pt.x < 34) pData->macrosHoverRenameIcon = true;
+                        else if (pt.x > rightEdge2 - 14 - 44 && pt.x <= rightEdge2 - 14 - 22) pData->macrosHoverExportIcon = true;
+                        else if (pt.x > rightEdge2 - 14 - 22) pData->macrosHoverDeleteIcon = true;
+                    }
+                }
+                anyHover |= checkHover(pData->macrosHoverCooldown, pData->macrosTriggerRectCd);
+                anyHover |= checkHover(pData->macrosHoverReconnect, pData->macrosTriggerRectRc);
+                anyHover |= checkHover(pData->macrosHoverInterval, pData->macrosTriggerRectInt);
+                if (oldHover != pData->macrosHoveringItem ||
+                    oldRenameIcon != pData->macrosHoverRenameIcon ||
+                    oldExportIcon != pData->macrosHoverExportIcon ||
+                    oldDeleteIcon != pData->macrosHoverDeleteIcon) InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+
         if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= checkHover(pData->isHoveringBackIcon, pData->gridBackIconRect);
             anyHover |= checkHover(pData->isHoveringGridOkButton, pData->gridOkButtonRect);
@@ -18814,9 +25496,15 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             }
             anyHover |= checkHover(pData->isHoveringGridSpacingBetween, pData->gridSpacingBetweenDropdownRect);
             anyHover |= checkHover(pData->isHoveringGridSpacingBorders, pData->gridSpacingBordersDropdownRect);
+            anyHover |= checkHover(pData->isHoveringGridHotkeyChange, pData->gridHotkeyChangeBtnRect);
+            {
+                RECT gridHkHitbox;
+                MainUI_Paint_DrawToggleGetHitbox(pData->gridHotkeyToggleRect, &gridHkHitbox);
+                anyHover |= checkHover(pData->isHoveringGridHotkeyToggle, gridHkHitbox);
+            }
 
             int newHoveringGridHelpButton = -1;
-            for (int i = 0; i < 7; ++i) {
+            for (int i = 0; i < 8; ++i) {
                 if (pData->gridHelpButtonRects[i].left != 0 && PtInRect(&pData->gridHelpButtonRects[i], pt)) {
                     newHoveringGridHelpButton = i;
                     break;
@@ -18845,6 +25533,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringActionDelaysSettingsCompact, pData->actionDelaysSettingsCompactRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringAdvancedMultiInstanceLink, pData->advancedMultiInstanceLinkRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringTestAction, pData->testActionButtonRect));
+            anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringMacros, pData->macrosBtnRect));
+            anyHover |= (pData->currentPage == 0 && pData->macrosIntervalToggleCompactRect.left != 0 && checkHover(pData->isHoveringMacrosIntervalToggle, pData->macrosIntervalToggleCompactRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringInstanceManager, pData->instanceManagerBtnRect));
             anyHover |= (pData->currentPage == 0 && (g_updateFound.load() || g_updateCheckFailed.load()) && checkHover(pData->isHoveringUpdateBanner, pData->updateBannerRect));
             anyHover |= (pData->currentPage == 0 && !g_mutexBannerMessage.empty() && checkHover(pData->isHoveringMutexBanner, pData->mutexBannerRect));
@@ -18914,20 +25604,29 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 bool webhookClearHover = checkHover(pData->isHoveringDiscordWebhookClear, pData->discordWebhookClearRect);
                 bool webhookTestHover = checkHover(pData->isHoveringDiscordWebhookTest, pData->discordWebhookTestRect);
                 bool mentionTargetSettingsHover = checkHover(pData->isHoveringDiscordMentionTargetSettings, pData->discordMentionTargetSettingsRect);
+                bool heartbeatIntervalHover = checkHover(pData->isHoveringDiscordHeartbeatIntervalBtn, pData->discordHeartbeatIntervalBtnRect);
                 anyTextHover |= webhookEnabled && webhookInputHover;
                 anyHover |= webhookEnabled && webhookPasteHover;
                 anyHover |= webhookEnabled && webhookClearHover;
                 anyHover |= webhookEnabled && webhookTestHover;
                 anyHover |= webhookEnabled && mentionTargetSettingsHover;
-                anyDisabledHover |= !webhookEnabled && (webhookInputHover || webhookPasteHover || webhookClearHover || webhookTestHover || mentionTargetSettingsHover);
+                anyHover |= webhookEnabled && heartbeatIntervalHover;
+                anyDisabledHover |= !webhookEnabled && (webhookInputHover || webhookPasteHover || webhookClearHover || webhookTestHover || mentionTargetSettingsHover || heartbeatIntervalHover);
                 anyHover |= checkToggleHover(pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableToggleRect);
                 bool webhookDependentToggleHover =
                     checkToggleHover(pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyErrorsToggle, pData->discordNotifyErrorsToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordNotifyMacroToggle, pData->discordNotifyMacroToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordNotifyIntervalMacrosToggle, pData->discordNotifyIntervalMacrosToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordDisableEmbedToggle, pData->discordDisableEmbedToggleRect) ||
-                    checkToggleHover(pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsToggleRect);
+                    checkToggleHover(pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordUseDefaultNameToggle, pData->discordUseDefaultNameToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordUseDefaultAvatarToggle, pData->discordUseDefaultAvatarToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordUseTimestampToggle, pData->discordUseTimestampToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordNotifyHeartbeatToggle, pData->discordNotifyHeartbeatToggleRect) ||
+                    checkToggleHover(pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamToggleRect);
                 anyHover |= webhookEnabled && webhookDependentToggleHover;
                 anyDisabledHover |= !webhookEnabled && webhookDependentToggleHover;
             }
@@ -19000,6 +25699,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringGridModeValue = false;
         pData->isHoveringGridSpacingBetween = false;
         pData->isHoveringGridSpacingBorders = false;
+        pData->isHoveringGridHotkeyChange = false;
+        pData->isHoveringGridHotkeyToggle = false;
         pData->hoveringGridHelpButton = -1;
         pData->isHoveringDiscord = false;
         pData->isHoveringUpdateBanner = false;
@@ -19014,6 +25715,21 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringAlphaInfoReleasesLink = false;
         pData->isHoveringAlphaInfoWhatsNewLink = false;
         pData->isHoveringTimingsBackIcon = false;
+        pData->isHoveringMacrosBackIcon = false;
+        pData->isHoveringMacrosOkButton = false;
+        pData->macrosHoverNew = false;
+        pData->macrosHoverEdit = false;
+        pData->macrosHoverDelete = false;
+        pData->macrosHoverTest = false;
+        pData->macrosHoverNext = false;
+        pData->macrosHoverBack = false;
+        pData->macrosHoverRecord = false;
+        pData->macrosHoverRecordMovements = false;
+        pData->macrosHoverCooldown = false;
+        pData->macrosHoverReconnect = false;
+        pData->macrosHoverInterval = false;
+        pData->macrosHoverFinish = false;
+        pData->macrosHoveringItem = -1;
         pData->isHoveringDisclaimerShowMore = false;
         pData->isHoveringFpsCapperSettingsOkButton = false;
         pData->isHoveringFpsCapperModeDropdown = false;
@@ -19049,6 +25765,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringRamCleanerSweepCompact = false;
         pData->isHoveringRamCleanerToggleCompact = false;
         pData->isHoveringTestAction = false;
+        pData->isHoveringMacros = false;
+        pData->isHoveringMacrosIntervalToggle = false;
         pData->isHoveringInstanceManager = false;
         pData->isHoveringResetAllCompact = false;
         pData->isHoveringShowRobloxCompact = false;
@@ -19082,6 +25800,14 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringDiscordNotifyActionToggle = false;
         pData->isHoveringDiscordNotifyReconnectToggle = false;
         pData->isHoveringDiscordNotifyErrorsToggle = false;
+        pData->isHoveringDiscordNotifyMacroToggle = false;
+        pData->isHoveringDiscordNotifyIntervalMacrosToggle = false;
+        pData->isHoveringDiscordUseDefaultNameToggle = false;
+        pData->isHoveringDiscordUseDefaultAvatarToggle = false;
+        pData->isHoveringDiscordUseTimestampToggle = false;
+        pData->isHoveringDiscordNotifyHeartbeatToggle = false;
+        pData->isHoveringDiscordHeartbeatIntervalBtn = false;
+        pData->isHoveringDiscordNotifyUtilsRamToggle = false;
         pData->isHoveringDiscordDisableEmbedToggle = false;
         pData->isHoveringDiscordMentionOnErrorsToggle = false;
         pData->isHoveringDiscordMentionTargetSettings = false;
@@ -19130,12 +25856,32 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     }
     case WM_MOUSEWHEEL:
     {
+        if (pData && (pData->showingMacros || pData->macrosViewAnim > 0.0f) && pData->macrosViewMode == 0 && pData->macrosListRect.right > 0) {
+            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+            pData->macrosScrollOffset -= zDelta / 3;
+            if (pData->macrosScrollOffset < 0) pData->macrosScrollOffset = 0;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
         if (pData && (pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f)) {
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
             pData->alphaInfoScrollOffset -= zDelta / 3;
             if (pData->alphaInfoScrollOffset < 0) pData->alphaInfoScrollOffset = 0;
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
+        }
+        if (pData && pData->currentPage == 5) {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+            if (pt.y >= pData->webhookFixedBottom) {
+                int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+                pData->webhookScrollOffset -= zDelta / WHEEL_DELTA * 30;
+                if (pData->webhookScrollOffset < 0) pData->webhookScrollOffset = 0;
+                if (pData->webhookScrollOffset > pData->webhookMaxScroll) pData->webhookScrollOffset = pData->webhookMaxScroll;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
         }
         break;
     }
@@ -19294,6 +26040,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->utilsMuteAnim, ShouldMuteRobloxNow());
         animateToggle(pData->utilsFpsAnim, ShouldRunFpsCapperNow());
         animateToggle(pData->utilsRamCleanerAnim, g_ramCleanerEnabled.load());
+        animateToggle(pData->macrosIntervalToggleAnim, g_intervalMacroEnabled.load());
         animateToggle(pData->discordWebhookEnableAnim, g_discordWebhookEnabled.load());
         animateToggle(pData->discordNotifyStartAnim, g_discordNotifyStart.load());
         animateToggle(pData->discordNotifyStopAnim, g_discordNotifyStop.load());
@@ -19301,6 +26048,13 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         animateToggle(pData->discordNotifyReconnectAnim, g_discordNotifyReconnect.load());
         animateToggle(pData->discordNotifyResetAnim, g_discordNotifyReset.load());
         animateToggle(pData->discordNotifyErrorsAnim, g_discordNotifyErrors.load());
+        animateToggle(pData->discordNotifyMacroAnim, g_discordNotifyMacro.load());
+        animateToggle(pData->discordNotifyIntervalMacrosAnim, g_discordNotifyIntervalMacros.load());
+        animateToggle(pData->discordNotifyHeartbeatAnim, g_discordNotifyHeartbeat.load());
+        animateToggle(pData->discordNotifyUtilsRamAnim, g_discordNotifyUtilsRam.load());
+        animateToggle(pData->discordUseDefaultNameAnim, g_discordUseDefaultName.load());
+        animateToggle(pData->discordUseDefaultAvatarAnim, g_discordUseDefaultAvatar.load());
+        animateToggle(pData->discordUseTimestampAnim, g_discordUseTimestamp.load());
         animateToggle(pData->discordDisableEmbedAnim, g_discordDisableEmbed.load());
         animateToggle(pData->discordMentionOnErrorsAnim, g_discordMentionOnErrors.load());
         animateToggle(pData->customProcessSearchAnim, g_useCustomProcessSearch.load());
@@ -19434,6 +26188,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)NULL);
         }
         g_hMainUiWnd = NULL;
+        g_mainUiOpenedForMacros = false;
+        g_mainUiOpenedForGrid = false;
         break;
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -19870,6 +26626,14 @@ struct FpsCapperPauseGuard {
     FpsCapperPauseGuard& operator=(const FpsCapperPauseGuard&) = delete;
 };
 
+static void InterruptibleSleepMs(DWORD ms) {
+    while (ms > 0 && !g_stopThread.load() && g_isAfkStarted.load()) {
+        DWORD chunk = (std::min)(ms, (DWORD)100);
+        Sleep(chunk);
+        ms -= chunk;
+    }
+}
+
 // Main thread
 void main_thread(bool arg_tray)
 {
@@ -19928,6 +26692,7 @@ void main_thread(bool arg_tray)
 
     if (GetEffectiveFpsLimit() > 0) {
         UpdateSplashStatus(L"Starting FPS Capper (CPU Limiter)...");
+        std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
         if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
         g_fpsCapperThread = std::thread(FpsCapperThread);
     }
@@ -20139,6 +26904,10 @@ void main_thread(bool arg_tray)
                         if (CheckForAutoReconnect(w)) {
                             g_autoReconnectsPerformed++;
                             autoReconnectTriggered = true;
+                            {
+                                std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
+                                g_reconnectMacroPending[w] = GetTickCount64();
+                            }
                         }
                     }
 
@@ -20148,15 +26917,49 @@ void main_thread(bool arg_tray)
                         break;
                     }
 
+                    std::vector<std::wstring> customMacroNames;
+                    bool hasCustomMacro = GetWindowInstanceSetting_Macro(w, customMacroNames);
+                    bool perInstanceAction = hasCustomMacro && !customMacroNames.empty();
+
                     g_randomCyclePick = -1;
-                    for (int j = 0; j < g_actionRepeatCount.load(); j++)
-                    {
-                        if (g_stopThread.load() || !g_isAfkStarted.load()) {
-                            cancelPendingAction = true;
-                            break;
+                    if (!(g_selectedAction.load() == 4 && perInstanceAction)) {
+                        int actionRepeats = (g_selectedAction.load() == 4) ? 1 : g_actionRepeatCount.load();
+                        for (int j = 0; j < actionRepeats; j++)
+                        {
+                            if (g_stopThread.load() || !g_isAfkStarted.load()) {
+                                cancelPendingAction = true;
+                                break;
+                            }
+                            AntiAFK_Action(w);
+                            anyActionPerformed = true;
                         }
-                        AntiAFK_Action(w);
-                        anyActionPerformed = true;
+                    }
+
+                    if (!cancelPendingAction && perInstanceAction) {
+                        for (const auto& macroName : customMacroNames) {
+                            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+                            std::unique_lock<std::mutex> lockM(g_macrosMutex);
+                            Macro* m = MacroEngine_FindMacro(macroName);
+                            if (m && !m->triggerOnInterval) {
+                                Macro macroCopy = *m;
+                                lockM.unlock();
+                                lock.unlock();
+                                MacroEngine_ExecuteMacro(macroCopy, w);
+                                lock.lock();
+                                anyActionPerformed = true;
+                            }
+                        }
+                    }
+
+                    if (!perInstanceAction && g_selectedAction.load() != 4 && !cancelPendingAction) {
+                        std::vector<Macro> afterMacros = MacroEngine_GetCooldownMacros();
+                        for (const auto& am : afterMacros) {
+                            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+                            lock.unlock();
+                            MacroEngine_ExecuteMacro(am, w);
+                            lock.lock();
+                            anyActionPerformed = true;
+                        }
                     }
                     if (cancelPendingAction) {
                         if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
@@ -20173,7 +26976,7 @@ void main_thread(bool arg_tray)
                         if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
                         break;
                     }
-                    Sleep(g_postActionDelay.load());
+                    InterruptibleSleepMs((DWORD)g_postActionDelay.load());
 
                     if (wasMinimized)
                         ShowWindow(w, SW_MINIMIZE);
@@ -20183,7 +26986,7 @@ void main_thread(bool arg_tray)
                             cancelPendingAction = true;
                             break;
                         }
-                        Sleep(g_multiInstanceInterval.load());
+                        InterruptibleSleepMs((DWORD)g_multiInstanceInterval.load());
                     }
                 }
 
@@ -20230,6 +27033,62 @@ void main_thread(bool arg_tray)
             while (true) {
                 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
 
+                {
+                    ULONGLONG now = GetTickCount64();
+                    for (HWND w : wins) {
+                        if (!IsWindow(w)) continue;
+                        std::vector<Macro> intervalMacros;
+                        {
+                            std::vector<std::wstring> macroNames;
+                            if (GetWindowInstanceSetting_IntervalMacro(w, macroNames) && !macroNames.empty()) {
+                                std::lock_guard<std::mutex> lockM(g_macrosMutex);
+                                for (const auto& macroName : macroNames) {
+                                    Macro* m = MacroEngine_FindMacro(macroName);
+                                    if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+                                }
+                            } else {
+                                std::lock_guard<std::mutex> lockM(g_macrosMutex);
+                                for (const auto& m : g_macros) {
+                                    if (m.triggerOnInterval && m.intervalSec > 0) intervalMacros.push_back(m);
+                                }
+                            }
+                        }
+                            for (const auto& m : intervalMacros) {
+                                if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+                                bool shouldRun = false;
+                                {
+                                    std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+                                    auto key = std::make_pair(w, m.name);
+                                    auto it = g_lastIntervalMacroRun.find(key);
+                                    if (it == g_lastIntervalMacroRun.end()) {
+                                        g_lastIntervalMacroRun[key] = now;
+                                        shouldRun = false;
+                                    } else {
+                                        ULONGLONG elapsed = now - it->second;
+                                        if (elapsed >= (ULONGLONG)m.intervalSec * 1000) {
+                                            it->second = now;
+                                            shouldRun = true;
+                                        }
+                                    }
+                                }
+                                if (shouldRun) {
+                                    bool wasMinimized = IsIconic(w);
+                                    if (wasMinimized) ShowWindow(w, SW_RESTORE);
+                                    SetForegroundWindow(w);
+                                    Sleep(g_preActionDelay.load());
+                                    lock.unlock();
+                                    MacroEngine_ExecuteMacro(m, w);
+                                    lock.lock();
+                                    if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                                    g_afkActionsPerformed++;
+                                    g_lastAfkActionTimestamp = GetTickCount64();
+                                }
+                            }
+                    }
+                }
+
+                if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+
                 if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
                     ApplyAutoRobloxWindowLayout();
                 }
@@ -20267,6 +27126,19 @@ void main_thread(bool arg_tray)
 
                 g_cv.wait_for(lock, std::chrono::milliseconds(waitInterval), [] { return g_stopThread.load() || g_updateInterval.load() || !g_isAfkStarted.load(); });
                 if (g_updateInterval.load()) break;
+                if (g_discordNotifyHeartbeat.load() && g_discordWebhookEnabled.load()) {
+                    int hbMin = g_discordHeartbeatIntervalMin.load();
+                    if (hbMin > 0) {
+                        uint64_t now = GetTickCount64();
+                        uint64_t last = g_lastHeartbeatSend.load();
+                        if (last == 0) {
+                            g_lastHeartbeatSend = now;
+                        } else if (now - last >= (uint64_t)hbMin * 60000) {
+                            g_lastHeartbeatSend = now;
+                            QueueDiscordWebhookEvent(DiscordWebhookEvent::Heartbeat, L"", false);
+                        }
+                    }
+                }
             }
             MuteUnmutedPid();
             g_unmutedPid = 0;
@@ -20421,8 +27293,13 @@ LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
                     if (g_hkShift) mods |= MOD_SHIFT;
                     if (g_hkAlt) mods |= MOD_ALT;
                     if (g_hkWin) mods |= MOD_WIN;
-                    g_hotkeyModifiers = mods;
-                    g_hotkeyVk = vk;
+                    if (g_hotkeyCaptureIsGrid.load()) {
+                        g_hotkeyGridModifiers = mods;
+                        g_hotkeyGridVk = vk;
+                    } else {
+                        g_hotkeyModifiers = mods;
+                        g_hotkeyVk = vk;
+                    }
                     g_hotkeyCaptureActive = false;
                     g_hkCtrl = g_hkShift = g_hkAlt = g_hkWin = false;
                     if (g_hotkeyCaptureWnd) {
@@ -20447,6 +27324,16 @@ LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
 // Main tray worker & winapi worker
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    static const UINT taskbarRestartMsg = RegisterWindowMessageW(L"TaskbarCreated");
+    if (msg == taskbarRestartMsg)
+    {
+        g_trayReaddAttempts = 0;
+        if (!TryReAddTrayIcon(hwnd))
+        {
+            SetTimer(hwnd, TRAY_READD_RETRY_TIMER, 2000, NULL);
+        }
+        return 0;
+    }
     switch (msg)
     {
     case WM_CREATE:
@@ -20464,12 +27351,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (g_hotkeyEnabled.load()) {
             RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
         }
+        if (g_hotkeyGridEnabled.load()) {
+            RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+        }
+        {
+            RAWINPUTDEVICE rid;
+            rid.usUsagePage = 0x01;
+            rid.usUsage = 0x02;
+            rid.dwFlags = RIDEV_INPUTSINK;
+            rid.hwndTarget = hwnd;
+            g_recordingRawInputRegistered = RegisterRawInputDevices(&rid, 1, sizeof(rid)) != FALSE;
+        }
         break;
     case WM_SHOWWINDOW:
         if (wParam == TRUE)
         {
             ShowWindow(hwnd, SW_HIDE);
             return 0;
+        }
+        break;
+    case WM_INPUT:
+        if (g_isRecording)
+        {
+            UINT dwSize = 0;
+            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
+            if (dwSize > 0 && dwSize <= 1024)
+            {
+                BYTE buffer[1024];
+                if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buffer, &dwSize, sizeof(RAWINPUTHEADER)) == dwSize)
+                {
+                    RAWINPUT* raw = (RAWINPUT*)buffer;
+                    if (raw->header.dwType == RIM_TYPEMOUSE)
+                    {
+                        std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
+                        g_recordingRawDeltaX += raw->data.mouse.lLastX;
+                        g_recordingRawDeltaY += raw->data.mouse.lLastY;
+                    }
+                }
+            }
         }
         break;
     case WM_APP + 12:
@@ -20500,22 +27419,36 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SaveSettings();
         return 0;
     case WM_APP + 10:
+    {
         if (g_hHotkeyHook) {
             UnhookWindowsHookEx(g_hHotkeyHook);
             g_hHotkeyHook = NULL;
         }
         g_hotkeyCaptureActive = false;
         g_hotkeyCaptureWnd = NULL;
-        if (g_hotkeyEnabled.load()) {
-            RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+        bool wasGrid = g_hotkeyCaptureIsGrid.load();
+        g_hotkeyCaptureIsGrid = false;
+        if (wasGrid) {
+            if (g_hotkeyGridEnabled.load()) {
+                RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+            }
+        } else {
+            if (g_hotkeyEnabled.load()) {
+                RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            }
         }
         SaveSettings();
         CreateTrayMenu(g_isAfkStarted.load());
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             InvalidateRect(g_hMainUiWnd, NULL, TRUE);
         }
-        ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 2000, hwnd);
+        if (wasGrid) {
+            ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 2000, hwnd);
+        } else {
+            ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 2000, hwnd);
+        }
         break;
+    }
     case WM_APP_SHOW_STATUS_BAR:
     {
         StatusBarPayload* payload = reinterpret_cast<StatusBarPayload*>(wParam);
@@ -20574,9 +27507,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ApplyDarkMode(hwnd, true);
             TrackPopupMenu(g_hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
             PostMessage(hwnd, WM_NULL, 0, 0);
-            if (g_pendingExit.exchange(false)) {
-                DestroyWindow(g_hwnd);
-            }
         }
         else if (lParam == WM_LBUTTONDOWN)
         {
@@ -20638,11 +27568,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (!wins.empty())
             {
+                if (!g_isAfkStarted.load() && g_selectedAction.load() == 4 && MacroEngine_GetCooldownMacros().empty() && !MacroEngine_AllWindowsHaveInstanceMacros()) {
+                    HWND owner = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd;
+                    EnableWindow(owner, FALSE);
+                    int res = ShowDarkMessageBox(owner, L"'Macros Only' is selected, but no AFK action macros are enabled.\n\nWithout AFK action macros AntiAFK will NOT work correctly - nothing will be performed.\n\nStart anyway?\n\nTip: change the action to something else, or add at least 1 macro with the AFK action trigger.", L"AntiAFK-RBX \u2022 Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                    EnableWindow(owner, TRUE);
+                    SetForegroundWindow(owner);
+                    if (res != IDYES) {
+                        break;
+                    }
+                }
                 if (!g_isAfkStarted.load())
                 {
                     g_afkStartTime = GetTickCount64();
                 }
                 g_isAfkStarted = true;
+                if (!g_intervalMacroEnabled.load()) {
+                    g_intervalMacroEnabled = true;
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled with Anti-AFK.", false);
+                }
+                if (!g_intervalMacroThreadRunning.load()) {
+                    if (g_intervalMacroThread.joinable()) {
+                        g_intervalMacroThread.join();
+                    }
+                    g_intervalMacroThread = std::thread(IntervalMacroThread);
+                }
                 {
                     std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
                     g_manuallyStoppedPids.clear();
@@ -20685,6 +27635,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_STOP_AFK:
         {
             bool wasRunning = g_isAfkStarted.exchange(false);
+            if (g_intervalMacroEnabled.exchange(false)) {
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+            }
             if (wasRunning && g_afkStartTime.load() > 0) {
                 FinalizeAfkSession();
                 SaveSettings();
@@ -20875,10 +27828,38 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_CAPTURE_HOTKEY:
         {
             g_hotkeyCaptureWnd = hwnd;
+            g_hotkeyCaptureIsGrid = false;
             UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
             g_hotkeyCaptureActive = true;
             g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
             ShowStatusBarOverlay(L"Press new hotkey combination...", 5000, hwnd);
+            break;
+        }
+        case ID_TOGGLE_GRID_HOTKEY:
+        {
+            g_hotkeyGridEnabled = !g_hotkeyGridEnabled.load();
+            if (g_hotkeyGridEnabled.load()) {
+                RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+                ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 1800, hwnd);
+            } else {
+                UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
+                ShowStatusBarOverlay(L"Grid hotkey disabled", 1800, hwnd);
+            }
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            break;
+        }
+        case ID_CAPTURE_GRID_HOTKEY:
+        {
+            g_hotkeyCaptureWnd = hwnd;
+            g_hotkeyCaptureIsGrid = true;
+            UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
+            g_hotkeyCaptureActive = true;
+            g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+            ShowStatusBarOverlay(L"Press new grid hotkey combination...", 5000, hwnd);
             break;
         }
         case ID_AUTO_UPDATE:
@@ -21102,10 +28083,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_GRID_SETTINGS:
-            ShowGridSettingsDialog(g_hMainUiWnd);
+        {
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                PostMessage(g_hMainUiWnd, WM_APP_SHOW_GRID, 0, 0);
+                SetForegroundWindow(g_hMainUiWnd);
+            } else {
+                g_mainUiOpenedForGrid = true;
+                ShowMainUIDialog(hwnd);
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    PostMessage(g_hMainUiWnd, WM_APP_SHOW_GRID, 0, 0);
+                }
+            }
             break;
+        }
         case ID_OPEN_INSTANCE_MANAGER:
-            ShowInstanceManagerWindow(g_hMainUiWnd);
+            ShowInstanceManagerWindow(NULL);
             break;
         case ID_I_CAN_FORGET:
             g_afkReminderEnabled = !g_afkReminderEnabled.load();
@@ -21139,6 +28131,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
+        case ID_MACROS_OPEN:
+        {
+            MacroEngine_ShowEditor(hwnd, g_selectedMacroIndex.load());
+            break;
+        }
         case ID_DO_NOT_SLEEP:
             g_doNotSleep = !g_doNotSleep.load();
             if (g_doNotSleep.load()) {
@@ -21397,6 +28394,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateTrayMenu(g_isAfkStarted.load());
             ShowStatusBarOverlay(g_discordNotifyErrors.load() ? L"Webhook Errors enabled" : L"Webhook Errors disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
+        case ID_DISCORD_NOTIFY_MACRO:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordNotifyMacro = !g_discordNotifyMacro.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyMacro.load() ? L"Webhook Macros enabled" : L"Webhook Macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_INTERVAL_MACROS:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordNotifyIntervalMacros = !g_discordNotifyIntervalMacros.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyIntervalMacros.load() ? L"Webhook Interval Macros enabled" : L"Webhook Interval Macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
         case ID_DISCORD_DISABLE_EMBED:
             if (!g_discordWebhookEnabled.load()) break;
             g_discordDisableEmbed = !g_discordDisableEmbed.load();
@@ -21454,6 +28471,102 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             CreateTrayMenu(g_isAfkStarted.load());
             ShowStatusBarOverlay(L"Webhook URL cleared", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
+        case ID_WEBHOOK_SET_URL:
+            if (!g_discordWebhookEnabled.load()) break;
+            ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::DiscordWebhookUrl);
+            break;
+        case ID_DISCORD_USE_DEFAULT_NAME:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordUseDefaultName = !g_discordUseDefaultName.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordUseDefaultName.load() ? L"Webhook default name enabled" : L"Webhook default name disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_USE_DEFAULT_AVATAR:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordUseDefaultAvatar = !g_discordUseDefaultAvatar.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordUseDefaultAvatar.load() ? L"Webhook default avatar enabled" : L"Webhook default avatar disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_USE_TIMESTAMP:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordUseTimestamp = !g_discordUseTimestamp.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordUseTimestamp.load() ? L"Webhook timestamp enabled" : L"Webhook timestamp disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_DISCORD_NOTIFY_HEARTBEAT:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordNotifyHeartbeat = !g_discordNotifyHeartbeat.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyHeartbeat.load() ? L"Webhook Heartbeat enabled" : L"Webhook Heartbeat disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_WEBHOOK_SET_HEARTBEAT:
+            if (!g_discordWebhookEnabled.load()) break;
+            ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::DiscordHeartbeatInterval);
+            break;
+        case ID_DISCORD_NOTIFY_UTILS_RAM:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordNotifyUtilsRam = !g_discordNotifyUtilsRam.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyUtilsRam.load() ? L"Webhook RAM Cleaner enabled" : L"Webhook RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        case ID_TIMINGS_INFO:
+        {
+            uint64_t now = GetTickCount64();
+            wchar_t timingsBuf[768];
+            if (g_isAfkStarted.load() && g_afkStartTime.load() > 0) {
+                uint64_t sessionSec = (now - g_afkStartTime.load()) / 1000;
+                uint64_t sinceAction = g_lastAfkActionTimestamp.load() > 0 ? (now - g_lastAfkActionTimestamp.load()) / 1000 : 0;
+                uint64_t nextSec = sinceAction < (uint64_t)g_selectedTime.load() ? (uint64_t)g_selectedTime.load() - sinceAction : 0;
+                swprintf_s(timingsBuf,
+                    L"Status: Running\n\nSession time: %s\nNext action in: %llu sec\nLast action: %llu sec ago\nActions performed: %llu\nAuto reconnects: %llu",
+                    FormatDurationShort(sessionSec).c_str(),
+                    (unsigned long long)nextSec,
+                    (unsigned long long)sinceAction,
+                    (unsigned long long)g_afkActionsPerformed.load(),
+                    (unsigned long long)g_autoReconnectsPerformed.load());
+            } else {
+                swprintf_s(timingsBuf,
+                    L"Status: Stopped\n\nTotal AFK time: %s\nActions performed: %llu\nAuto reconnects: %llu\nSessions completed: %llu",
+                    FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
+                    (unsigned long long)g_afkActionsPerformed.load(),
+                    (unsigned long long)g_autoReconnectsPerformed.load(),
+                    (unsigned long long)g_afkSessionsCompleted.load());
+            }
+            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, timingsBuf, L"AntiAFK-RBX \u2022 Current Timings", MB_OK);
+            break;
+        }
+        case ID_RETRY_MULTI_INSTANCE:
+        {
+            MutexCreateResult result = EnableMultiInstanceSupport();
+            if (result == MUTEX_CREATED || result == MUTEX_ALREADY_EXISTS) {
+                ClearMutexBanner();
+                ShowTrayNotification(L"AntiAFK-RBX \u2022 Multi-Instance", L"Multi-Instance mutex acquired. Bypass is active.");
+            } else {
+                ShowMutexErrorDialog(hwnd);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        }
         case ID_DISCORD_WEBHOOK_TEST:
         {
             if (!g_discordWebhookEnabled.load()) break;
@@ -21575,6 +28688,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             break;
         }
+        case ID_MI_INTERVAL_CUSTOM:
+        {
+            ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::MultiInstanceInterval);
+            break;
+        }
+        case ID_RECONNECT_MACRO_DELAY:
+        {
+            ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::ReconnectMacroDelay);
+            break;
+        }
+        case ID_MACROS_IMPORT:
+        {
+            MacroEngine_ImportMacroFromFile(hwnd);
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            break;
+        }
         case ID_MI_INTERVAL_0:
         case ID_MI_INTERVAL_1:
         case ID_MI_INTERVAL_3:
@@ -21605,6 +28736,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             ShowStatusBarOverlay(g_ramCleanerAutoStart.load() ? L"Auto RAM Cleaner enabled" : L"Auto RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
+        }
+        case ID_INTERVAL_MACRO_TOGGLE:
+        {
+            if (g_isAfkStarted.load()) {
+                ShowStatusBarOverlay(L"Interval macros are locked while Anti-AFK is running", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                break;
+            }
+            g_intervalMacroEnabled = !g_intervalMacroEnabled.load();
+            if (g_intervalMacroEnabled.load()) {
+                g_intervalMacroEnabled = false;
+                if (g_intervalMacroThread.joinable()) {
+                    g_intervalMacroThread.join();
+                }
+                g_intervalMacroEnabled = true;
+                g_intervalMacroThread = std::thread(IntervalMacroThread);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled manually.", false);
+            } else {
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Disabled manually.", false);
+            }
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_intervalMacroEnabled.load() ? L"Interval macros enabled" : L"Interval macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_RAM_CLEANER_RUNTIME_TOGGLE:
@@ -21840,7 +28996,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_ACTION_WS:
         case ID_ACTION_ZOOM:
         case ID_ACTION_RANDOM:
+        case ID_MACROS_SELECT:
+            if (LOWORD(wParam) == ID_MACROS_SELECT && g_selectedAction.load() != 4) {
+                int confirm = ShowDarkMessageBox(hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX \u2022 Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                if (confirm != IDYES) {
+                    break;
+                }
+            }
             g_selectedAction = NormalizeSelectedAction(LOWORD(wParam) - ID_ACTION_SPACE);
+            if (LOWORD(wParam) == ID_MACROS_SELECT) {
+                g_selectedAction = 4;
+            }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -21888,7 +29054,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         }
         case ID_EXIT:
-            g_pendingExit = true;
+            PostMessage(g_hwnd, WM_CLOSE, 0, 0);
             break;
         default:
             if (LOWORD(wParam) >= ID_FPS_CAP_CUSTOM_BASE && LOWORD(wParam) <= ID_FPS_CAP_CUSTOM_BASE + 60) {
@@ -21913,10 +29079,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_HOTKEY:
         if (wParam == HOTKEY_START_STOP_ID) {
             PostMessage(hwnd, WM_COMMAND, g_isAfkStarted.load() ? ID_STOP_AFK : ID_START_AFK, 0);
+        } else if (wParam == HOTKEY_GRID_SNAP_ID) {
+            PostMessage(hwnd, WM_COMMAND, ID_GRID_SNAP, 0);
+        }
+        break;
+    case WM_TIMER:
+        if (wParam == TRAY_READD_RETRY_TIMER) {
+            if (++g_trayReaddAttempts > TRAY_READD_MAX_ATTEMPTS) {
+                KillTimer(hwnd, TRAY_READD_RETRY_TIMER);
+                return 0;
+            }
+            if (TryReAddTrayIcon(hwnd)) {
+                KillTimer(hwnd, TRAY_READD_RETRY_TIMER);
+            }
+            return 0;
         }
         break;
     case WM_DESTROY:
         UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
+        UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
         if (g_hHotkeyHook) {
             UnhookWindowsHookEx(g_hHotkeyHook);
             g_hHotkeyHook = NULL;
@@ -21964,6 +29145,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 
     LoadSettings();
+    MacroEngine_Init();
     g_programLaunches++;
     SaveSettings();
     g_lastActivityTime = GetTickCount64();
@@ -22625,21 +29807,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     if (g_isFpsCapperRunning.load()) {
         g_isFpsCapperRunning = false;
+        std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
         if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
     }
 
     g_isRamCleanerRunning = false;
     if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
 
+    g_intervalMacroEnabled = false;
+    if (g_intervalMacroThread.joinable()) g_intervalMacroThread.join();
+
     g_webhookThreadRunning = false;
     g_webhookCv.notify_all();
-    if (g_webhookThread.joinable()) g_webhookThread.join();
+    if (g_webhookThread.joinable()) g_webhookThread.detach();
 
     if (g_reconnectMonitorRunning.load()) {
         g_reconnectMonitorRunning = false;
     }
     if (g_reconnectMonitorThread.joinable()) g_reconnectMonitorThread.join();
 
+    MacroEngine_Shutdown();
     DisableMultiInstanceSupport();
     StopActivityMonitor();
 
