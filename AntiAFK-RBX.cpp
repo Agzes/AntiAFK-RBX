@@ -1,4 +1,4 @@
-// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
+﻿// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 #define ALPHA   1
@@ -15024,7 +15024,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else if (pData->type == CustomInputDialogType::MacroInterval) {
             bannerText = L"Interval in seconds for this macro.";
         } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
-            bannerText = L"Paste or type a Discord webhook URL (https://discord.com/api/webhooks/...).";
+            bannerText = L"Paste or type a Discord webhook URL.";
         } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
             bannerText = L"How often to send a status ping while Anti-AFK is running (5 to 1440 minutes).";
         } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
@@ -15045,7 +15045,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                           (pData->type == CustomInputDialogType::MacroName) ? L"My Macro" :
                           (pData->type == CustomInputDialogType::MacroRename) ? L"My Macro" :
                           (pData->type == CustomInputDialogType::MacroInterval) ? L"30" :
-                          (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"https://discord.com/api/webhooks/..." :
+                          (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"https://..." :
                           (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"60" :
                           (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"5000" :
                           (pData->type == CustomInputDialogType::ReconnectInterval) ? L"120" : (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"60" : L"0";
