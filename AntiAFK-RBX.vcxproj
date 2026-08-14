@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -111,4 +111,36 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <UsingTask TaskName="CheckUtf8Bom" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var bad = new System.Collections.Generic.List<string>();
+        foreach (var item in Files)
+        {
+            string path = item.GetMetadata("FullPath");
+            if (!System.IO.File.Exists(path)) continue;
+            byte[] b = System.IO.File.ReadAllBytes(path);
+            if (b.Length < 3 || b[0] != 0xEF || b[1] != 0xBB || b[2] != 0xBF)
+                bad.Add(path);
+        }
+        if (bad.Count > 0)
+        {
+            Log.LogError("Encoding check failed: {0} source file(s) are not UTF-8 with BOM.", bad.Count);
+            foreach (var p in bad) Log.LogError("  " + p);
+            return false;
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+  <Target Name="CheckSourceEncoding" BeforeTargets="ClCompile">
+    <ItemGroup>
+      <SourceFilesForEncodingCheck Include="@(ClCompile);@(ClInclude);@(ResourceCompile)" />
+    </ItemGroup>
+    <CheckUtf8Bom Files="@(SourceFilesForEncodingCheck)" />
+  </Target>
 </Project>
