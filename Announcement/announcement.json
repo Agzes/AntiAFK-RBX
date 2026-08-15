@@ -1,8 +1,8 @@
-﻿﻿{
-    "enabled": false,
+﻿{
+    "enabled": true,
     "notify": false,
     "icon": "\uE734",
     "iconColor": "#305af2",
-    "title": "Ready to AntiAFK-RBX V4?",
-    "description": "Download v.4.0.0-alpha1 now from the preview branch!"
+    "title": "AntiAFK-RBX V4 beta is now available!",
+    "description": "Macros, Instance Manager, RAM cleaner, custom process search, and more..."
 }
