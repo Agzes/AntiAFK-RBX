@@ -29130,7 +29130,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         typedef BOOL(WINAPI* SetProcessDpiAwarenessContext_fn)(HANDLE);
         auto fn = (SetProcessDpiAwarenessContext_fn)GetProcAddress(
             GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext");
-        if (fn) fn((HANDLE)-4);
+        if (fn) fn((HANDLE)-5);
     }
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
