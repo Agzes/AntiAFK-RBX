@@ -447,6 +447,61 @@ std::mutex g_manuallyStoppedPidsMutex;
 std::mutex g_autoWindowLayoutMutex;
 std::vector<UINT_PTR> g_lastAutoGridWindowSignature;
 std::mutex g_cv_m;
+std::mutex g_selfHiddenMutex;
+std::map<HWND, DWORD> g_selfHiddenRobloxWindows;
+
+void HideRobloxWindowTracked(HWND w)
+{
+    if (!w || !IsWindow(w)) return;
+    if (!IsWindowVisible(w) && !IsIconic(w)) {
+        return;
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    {
+        std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
+        for (auto it = g_selfHiddenRobloxWindows.begin(); it != g_selfHiddenRobloxWindows.end(); ) {
+            if (!IsWindow(it->first)) it = g_selfHiddenRobloxWindows.erase(it);
+            else ++it;
+        }
+        g_selfHiddenRobloxWindows[w] = pid;
+    }
+    ShowWindow(w, SW_HIDE);
+}
+
+void ShowRobloxWindowTracked(HWND w)
+{
+    if (!w) return;
+    {
+        std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
+        g_selfHiddenRobloxWindows.erase(w);
+    }
+    ShowWindow(w, SW_SHOW);
+}
+
+bool IsRobloxWindowClosedToTray(HWND w)
+{
+    if (!IsWindow(w)) return false;
+    if (IsWindowVisible(w)) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
+    auto it = g_selfHiddenRobloxWindows.find(w);
+    if (it != g_selfHiddenRobloxWindows.end() && it->second == pid)
+        return false;
+    return true;
+}
+
+bool IsRobloxWindowSelfHidden(HWND w)
+{
+    if (!IsWindow(w) || IsWindowVisible(w)) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(w, &pid);
+    std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
+    auto it = g_selfHiddenRobloxWindows.find(w);
+    return it != g_selfHiddenRobloxWindows.end() && it->second == pid;
+}
+
 std::mutex g_discordWebhookMutex;
 std::mutex g_announcementMutex;
 std::wstring g_discordWebhookUrl;
@@ -4257,7 +4312,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 });
                 if (g_isAfkStarted.load()) {
                     for (HWND tWnd : targets) {
-                        ShowWindow(tWnd, GetWindowInstanceSetting_Hide(tWnd, g_autoHideRoblox.load()) ? SW_HIDE : SW_SHOW);
+                        if (GetWindowInstanceSetting_Hide(tWnd, g_autoHideRoblox.load())) HideRobloxWindowTracked(tWnd); else ShowRobloxWindowTracked(tWnd);
                     }
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
@@ -4521,7 +4576,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (!tgts.empty()) {
                     bool visible = IsWindowVisible(tgts[0]) != 0;
                     for (HWND tWnd : tgts) {
-                        if (IsWindow(tWnd)) ShowWindow(tWnd, visible ? SW_HIDE : SW_SHOW);
+                        if (IsWindow(tWnd)) { if (visible) HideRobloxWindowTracked(tWnd); else ShowRobloxWindowTracked(tWnd); }
                     }
                     InvalidateRect(hwnd, NULL, FALSE);
                 }
@@ -5128,6 +5183,17 @@ struct EnumWindowsData
     bool includeHidden;
     std::vector<HWND>* wins;
 };
+bool IsIgnorableHelperWindow(HWND h)
+{
+    auto isHelperName = [](const wchar_t* s) -> bool {
+        if (!s) return false;
+        return _wcsicmp(s, L"MSCTFIME UI") == 0 || _wcsicmp(s, L"Default IME") == 0;
+    };
+    wchar_t buf[128];
+    if (GetClassNameW(h, buf, 128) > 0 && isHelperName(buf)) return true;
+    if (GetWindowTextW(h, buf, 128) > 0 && isHelperName(buf)) return true;
+    return false;
+}
 BOOL CALLBACK EnumWindowsProc(HWND h, LPARAM lParam)
 {
     auto* data = reinterpret_cast<EnumWindowsData*>(lParam);
@@ -5135,7 +5201,10 @@ BOOL CALLBACK EnumWindowsProc(HWND h, LPARAM lParam)
     GetWindowThreadProcessId(h, &pid);
     if (pid == data->processId && GetWindowTextLength(h) > 0 &&
         (data->includeHidden || IsWindowVisible(h)))
+    {
+        if (IsIgnorableHelperWindow(h)) return TRUE;
         data->wins->push_back(h);
+    }
     return TRUE;
 }
 // ==========
@@ -5241,7 +5310,7 @@ BOOL CALLBACK CustomEnumWindowsProc(HWND h, LPARAM lParam)
     GetWindowThreadProcessId(h, &pid);
     if (GetWindowTextLength(h) > 0 && (data->includeHidden || IsWindowVisible(h)))
     {
-        if (MatchesCustomTarget(pid, h, data->targets))
+        if (!IsIgnorableHelperWindow(h) && MatchesCustomTarget(pid, h, data->targets))
         {
             data->wins->push_back(h);
         }
@@ -5680,7 +5749,7 @@ void ApplyAutoUtilsStartEffects()
     if (g_autoHideRoblox.load()) {
         auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
-            ShowWindow(w, SW_HIDE);
+            HideRobloxWindowTracked(w);
         }
     }
     if (g_autoGrid.load()) {
@@ -5702,7 +5771,7 @@ void ApplyAutoUtilsStopEffects()
     auto wins = FindAllRobloxWindows(true);
     if (g_autoHideRoblox.load()) {
         for (HWND w : wins) {
-            ShowWindow(w, SW_SHOW);
+            ShowRobloxWindowTracked(w);
         }
     }
     RefreshRobloxWindowOpacity(false);
@@ -6285,7 +6354,7 @@ void ShowAllRobloxWindows_Multi()
     {
         if (!IsWindowVisible(w) || IsIconic(w))
         {
-            ShowWindow(w, SW_SHOW);
+            ShowRobloxWindowTracked(w);
         }
     }
 }
@@ -6294,7 +6363,7 @@ void HideAllRobloxWindows()
     auto wins = FindAllRobloxWindows(true);
     for (HWND w : wins)
     {
-        ShowWindow(w, SW_HIDE);
+        HideRobloxWindowTracked(w);
     }
 }
 void RefreshRobloxWindowOpacity(bool forceDisable)
@@ -6367,7 +6436,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
         bool wasMinimized = IsIconic(w);
 
         if (!wasVisible && showHiddenWindows) {
-            ShowWindow(w, SW_SHOW);
+            ShowRobloxWindowTracked(w);
         }
         if (wasMinimized) {
             ShowWindow(w, SW_RESTORE);
@@ -6382,7 +6451,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
 
         if (GetForegroundWindow() != w) {
             if (!wasVisible && showHiddenWindows) {
-                ShowWindow(w, SW_HIDE);
+                HideRobloxWindowTracked(w);
             }
             else if (wasMinimized) {
                 ShowWindow(w, SW_MINIMIZE);
@@ -6399,7 +6468,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
         Sleep(g_postActionDelay.load());
 
         if (!wasVisible && showHiddenWindows) {
-            ShowWindow(w, SW_HIDE);
+            HideRobloxWindowTracked(w);
         }
         else if (wasMinimized) {
             ShowWindow(w, SW_MINIMIZE);
@@ -6681,6 +6750,7 @@ static bool KickDialogDetected(HWND hRobloxWnd)
 bool CheckForAutoReconnect(HWND hRobloxWnd)
 {
     if (g_stopThread.load() || !g_isAfkStarted.load()) return false;
+    if (IsRobloxWindowClosedToTray(hRobloxWnd)) return false;
     if (!IsWindow(hRobloxWnd) || !IsWindowVisible(hRobloxWnd)) {
         return false;
     }
@@ -6742,6 +6812,8 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
 bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 {
     if (g_stopThread.load() || !g_isAfkStarted.load()) return false;
+    if (IsRobloxWindowClosedToTray(hRobloxWnd)) return false;
+    if (IsRobloxWindowSelfHidden(hRobloxWnd)) return false;
     if (!IsWindow(hRobloxWnd)) {
         return false;
     }
@@ -6762,13 +6834,13 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     }
 
     if (!KickDialogDetected(hRobloxWnd)) {
-        if (windowWasHidden) ShowWindow(hRobloxWnd, SW_HIDE);
+        if (windowWasHidden) HideRobloxWindowTracked(hRobloxWnd);
         return false;
     }
 
     RECT rc2;
     if (!GetClientRect(hRobloxWnd, &rc2)) {
-        if (windowWasHidden) ShowWindow(hRobloxWnd, SW_HIDE);
+        if (windowWasHidden) HideRobloxWindowTracked(hRobloxWnd);
         return false;
     }
     int ww = rc2.right - rc2.left;
@@ -6802,7 +6874,7 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     SetCursorPos(oldCursorPos.x, oldCursorPos.y);
 
     if (windowWasHidden) {
-        ShowWindow(hRobloxWnd, SW_HIDE);
+        HideRobloxWindowTracked(hRobloxWnd);
     }
 
     return true;
@@ -7653,6 +7725,7 @@ std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
 
 static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
     if (!IsWindow(w)) return;
+    if (IsRobloxWindowClosedToTray(w)) return;
     std::vector<Macro> intervalMacros;
     {
         std::vector<std::wstring> macroNames;
@@ -7803,20 +7876,24 @@ void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
 void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool allowWithoutAfk) {
     if (g_macroTestRunning && !isTest) return;
     if (!hwnd || !IsWindow(hwnd)) return;
+    if (IsRobloxWindowClosedToTray(hwnd)) return;
 
     RECT origRect;
     GetWindowRect(hwnd, &origRect);
     bool wasHidden = !IsWindowVisible(hwnd) || IsIconic(hwnd);
-    if (wasHidden) {
+    bool selfHidden = IsRobloxWindowSelfHidden(hwnd);
+    if (wasHidden && !selfHidden) {
         ShowWindow(hwnd, SW_RESTORE);
         Sleep(200);
     }
 
-    SetWindowPos(hwnd, HWND_TOP, origRect.left, origRect.top, 800, 600, SWP_NOACTIVATE);
-    Sleep(100);
-    SetForegroundWindow(hwnd);
-    BringWindowToTop(hwnd);
-    Sleep(200);
+    if (!selfHidden) {
+        SetWindowPos(hwnd, HWND_TOP, origRect.left, origRect.top, 800, 600, SWP_NOACTIVATE);
+        Sleep(100);
+        SetForegroundWindow(hwnd);
+        BringWindowToTop(hwnd);
+        Sleep(200);
+    }
 
     POINT cursorRestore;
     GetCursorPos(&cursorRestore);
@@ -8006,7 +8083,7 @@ macroEngineEnd:
                  origRect.right - origRect.left,
                  origRect.bottom - origRect.top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
-    if (wasHidden) ShowWindow(hwnd, SW_HIDE);
+    if (wasHidden && !selfHidden) HideRobloxWindowTracked(hwnd);
 
     if (!isTest) {
         wchar_t winTitle[128] = L"";
@@ -26673,6 +26750,7 @@ void main_thread(bool arg_tray)
     if (g_autoStartAfk.load())
     {
         auto wins = FindAllRobloxWindows(true);
+        wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
         if (!wins.empty())
         {
             UpdateSplashStatus(L"Auto-starting Anti-AFK...");
@@ -26741,6 +26819,7 @@ void main_thread(bool arg_tray)
         {
             HWND user = GetForegroundWindow();
             auto wins = FindAllRobloxWindows(true);
+            wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
             if (wins.empty())
             {
                 if (g_autoStartAfk.load() && g_isAfkStarted.load())
@@ -27151,7 +27230,13 @@ void main_thread(bool arg_tray)
 
             if (g_autoStartAfk.load())
             {
-                auto wins = FindAllRobloxWindows(true);
+                auto allWins = FindAllRobloxWindows(true);
+                std::vector<HWND> wins;
+                bool anyClosedToTray = false;
+                for (HWND hw : allWins) {
+                    if (IsRobloxWindowClosedToTray(hw)) anyClosedToTray = true;
+                    else wins.push_back(hw);
+                }
                 if (!wins.empty()) {
                     bool shouldStart = false;
                     std::lock_guard<std::mutex> pidsLock(g_manuallyStoppedPidsMutex);
@@ -27177,7 +27262,7 @@ void main_thread(bool arg_tray)
                             shouldStart = true;
                         } else {
                             std::vector<DWORD> currentPids;
-                            for (HWND w : wins) {
+                            for (HWND w : allWins) {
                                 DWORD pid; GetWindowThreadProcessId(w, &pid);
                                 if (std::find(currentPids.begin(), currentPids.end(), pid) == currentPids.end()) {
                                     currentPids.push_back(pid);
@@ -27219,7 +27304,7 @@ void main_thread(bool arg_tray)
                     }
                 } else {
                     std::lock_guard<std::mutex> pidsLock(g_manuallyStoppedPidsMutex);
-                    if (!g_manuallyStoppedPids.empty()) {
+                    if (!g_manuallyStoppedPids.empty() && !anyClosedToTray) {
                         g_manuallyStoppedPids.clear();
                     }
                 }
@@ -27566,6 +27651,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_START_AFK:
         {
             auto wins = FindAllRobloxWindows(true);
+            wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
             if (!wins.empty())
             {
                 if (!g_isAfkStarted.load() && g_selectedAction.load() == 4 && MacroEngine_GetCooldownMacros().empty() && !MacroEngine_AllWindowsHaveInstanceMacros()) {
@@ -27713,7 +27799,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             auto wins = FindAllRobloxWindows();
             for (HWND w : wins)
-                ShowWindow(w, SW_HIDE);
+                HideRobloxWindowTracked(w);
             break;
         }
         case ID_SCREEN_SAVER:
