@@ -14195,6 +14195,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         const int inputMargin = 0, btnH = 30, btnGap = 0, inputH = 30, topBarH = 30, bannerH = 23;
         int inputVGap = 6;
         if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) inputVGap = -1;
+        if (pData->type == CustomInputDialogType::InstanceGeometry) inputVGap = -1;
 
         pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, topBarH };
 
@@ -14213,6 +14214,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             btnY = pData->inputRect[pData->numInputs - 1].bottom;
         }
         if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) btnY = pData->inputRect[1].bottom - 1;
+        if (pData->type == CustomInputDialogType::InstanceGeometry) btnY = pData->inputRect[3].bottom - 1;
 
         int totalWidth = clientRect.right;
         int btnWidth = (totalWidth - btnGap) / 2;
@@ -15134,15 +15136,17 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         for (int i = 0; i < pData->numInputs; ++i) {
             bool isFocused = (pData->hasFocus && pData->focusedInput == i);
+            bool joinedInputs = (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) ||
+                                pData->type == CustomInputDialogType::InstanceGeometry;
             int labelW = 0;
             if (pData->inputLabels[i][0] != L'\0') {
                 Font labelFont(memDC, pData->hFontText);
                 RectF labelSize;
                 g.MeasureString(pData->inputLabels[i], -1, &labelFont, RectF(0, 0, 1000, 1000), &labelSize);
                 labelW = (int)(labelSize.Width + 16);
-                if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) labelW = 110;
+                if (joinedInputs) labelW = 110;
                 BYTE lbA = 160, lbR = 0, lbG = 122, lbB = 204;
-                if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) { lbA = 150; lbG = 80; lbB = 140; }
+                if (joinedInputs) { lbA = 150; lbG = 80; lbB = 140; }
                 Gdiplus::SolidBrush labelBgBrush(Gdiplus::Color(lbA, lbR, lbG, lbB));
                 Gdiplus::SolidBrush labelBorderBrush(Gdiplus::Color(180, 56, 56, 56));
                 REAL lx = (REAL)pData->inputRect[i].left;
@@ -15150,10 +15154,11 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 REAL lw = (REAL)labelW;
                 REAL lh = (REAL)(pData->inputRect[i].bottom - pData->inputRect[i].top);
                 g.FillRectangle(&labelBgBrush, lx, ly, lw, lh);
-                if (!(pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 0)) {
+                if (joinedInputs) {
+                    g.FillRectangle(&labelBorderBrush, lx, ly, lw, 1.0f);
+                    if (i == pData->numInputs - 1) g.FillRectangle(&labelBorderBrush, lx, ly + lh - 1.0f, lw, 1.0f);
+                } else {
                     g.FillRectangle(&labelBorderBrush, lx, ly + lh - 1.0f, lw, 1.0f);
-                }
-                if (!(pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 1)) {
                     g.FillRectangle(&labelBorderBrush, lx, ly, lw, 1.0f);
                 }
                 Gdiplus::SolidBrush labelTextBrush(Gdiplus::Color(255, 255, 255, 255));
@@ -15165,7 +15170,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             }
             RECT inputContentRect = pData->inputRect[i];
             inputContentRect.left += labelW;
-            bool skipTopBorder = (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2 && i == 1);
+            bool skipTopBorder = false;
             bool isLastInput = (i == pData->numInputs - 1);
             Popup_DrawTextInputJoinedToButtons(&g, memDC, inputContentRect, pData->hFontInput, pData->inputText[i], placeholders[i], pData->isHoveringInput[i], isFocused, !skipTopBorder, !isLastInput);
         }
@@ -15178,7 +15183,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                  RectF ls;
                  g.MeasureString(pData->inputLabels[pData->focusedInput], -1, &lf, RectF(0, 0, 1000, 1000), &ls);
                  labelW = (int)(ls.Width + 16);
-                 if (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) labelW = 110;
+                 bool joinedInputs = (pData->type == CustomInputDialogType::GridModeValue && pData->numInputs == 2) ||
+                                     pData->type == CustomInputDialogType::InstanceGeometry;
+                 if (joinedInputs) labelW = 110;
              }
              Font inputFont(memDC, pData->hFontInput);
              RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
