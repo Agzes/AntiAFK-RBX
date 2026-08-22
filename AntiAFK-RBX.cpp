@@ -1865,7 +1865,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
 
-        pData->uTimerId = SetTimer(hwnd, 1, 33, NULL);
+        pData->uTimerId = SetTimer(hwnd, 1, 16, NULL);
 
         return 0;
     }
@@ -2237,7 +2237,15 @@ void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
     default: targetColor = pData->isHoveringUpdate ? RGB(255, 255, 255) : RGB(160, 160, 160); break;
     }
 
-    if (pData->updateButtonCurrentColor != targetColor) {
+    if (pData->updateButtonCurrentColor == targetColor) {
+        if (pData->uTimerId != 0) {
+            KillTimer(hwnd, pData->uTimerId);
+            pData->uTimerId = 0;
+        }
+        return;
+    }
+
+    {
         BYTE currentR = GetRValue(pData->updateButtonCurrentColor);
         BYTE currentG = GetGValue(pData->updateButtonCurrentColor);
         BYTE currentB = GetBValue(pData->updateButtonCurrentColor);
@@ -2256,6 +2264,18 @@ void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
             pData->updateButtonCurrentColor = targetColor;
         }
         InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
+
+        if (pData->updateButtonCurrentColor == targetColor && pData->uTimerId != 0) {
+            KillTimer(hwnd, pData->uTimerId);
+            pData->uTimerId = 0;
+        }
+    }
+}
+
+static void About_StartAnimTimer(HWND hwnd, AboutData* pData)
+{
+    if (hwnd && pData && pData->uTimerId == 0 && IsWindow(hwnd)) {
+        pData->uTimerId = SetTimer(hwnd, 2, 16, NULL);
     }
 }
 LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -2305,7 +2325,6 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
         pData->hCursorArrow = LoadCursor(NULL, IDC_ARROW);
 
-        pData->uTimerId = SetTimer(hwnd, 2, 16, NULL);
         return 0;
     }
     case WM_TIMER:
@@ -2317,6 +2336,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (pData) {
             pData->updateCheckState = static_cast<int>(wParam);
             pData->updateButtonText = (wParam == 2) ? L"Update Found!" : ((wParam == 4) ? L"Error to check" : L"You are up to date!");
+            About_StartAnimTimer(hwnd, pData);
             InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
         }
         return 0;
@@ -2348,6 +2368,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         bool nowHoveringUpdate = PtInRect(&pData->updateButtonRect, pt);
         if (nowHoveringUpdate != pData->isHoveringUpdate) {
             pData->isHoveringUpdate = nowHoveringUpdate;
+            About_StartAnimTimer(hwnd, pData);
             InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
         }
 
@@ -16673,6 +16694,9 @@ struct MainUIData {
     int errorAnimationDirection = 0;
 
     UINT_PTR uTimerId = 0;
+    ULONGLONG lastAnimTick = 0;
+    float lastAnimDtMs = 16.6667f;
+    bool statsTimerActive = false;
     bool isTrackingMouse = false;
     HCURSOR hCursorHand = NULL, hCursorArrow = NULL, hCursorText = NULL;
     HICON hIcon = NULL;
@@ -17366,6 +17390,7 @@ struct StatusBarData {
     RECT targetBounds = { 0 };
     BYTE currentAlpha = 0;
     BYTE targetAlpha = 0;
+    ULONGLONG lastFadeTick = 0;
     bool persistent = false;
 };
 
@@ -17519,7 +17544,8 @@ void HideStatusBarOverlay(bool animate)
         return;
     }
     pData->targetAlpha = 0;
-    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 33, NULL);
+    pData->lastFadeTick = 0;
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 16, NULL);
 }
 
 void EnsureStatusBarWindow()
@@ -17638,7 +17664,8 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
         SetLayeredWindowAttributes(g_hStatusBarWnd, 0, 0, LWA_ALPHA);
         ShowWindow(g_hStatusBarWnd, SW_SHOWNOACTIVATE);
     }
-    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 33, NULL);
+    pData->lastFadeTick = 0;
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 16, NULL);
     InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
     UpdateWindow(g_hStatusBarWnd);
 }
@@ -17679,10 +17706,13 @@ void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWind
         SetLayeredWindowAttributes(g_hStatusBarWnd, 0, 0, LWA_ALPHA);
         ShowWindow(g_hStatusBarWnd, SW_SHOWNOACTIVATE);
     }
-    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 33, NULL);
+    pData->lastFadeTick = 0;
+    SetTimer(g_hStatusBarWnd, STATUS_BAR_ANIM_TIMER, 16, NULL);
     InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
     UpdateWindow(g_hStatusBarWnd);
 }
+
+
 
 void UpdateStatusBarMessage(const std::wstring& message)
 {
@@ -17843,14 +17873,23 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             return 0;
         }
         if (wParam == STATUS_BAR_ANIM_TIMER) {
+            ULONGLONG fadeNow = GetTickCount64();
+            float fadeDtMs = (pData->lastFadeTick == 0) ? 16.6667f : (float)(fadeNow - pData->lastFadeTick);
+            if (fadeDtMs < 1.0f) fadeDtMs = 16.6667f;
+            if (fadeDtMs > 100.0f) fadeDtMs = 100.0f;
+            pData->lastFadeTick = fadeNow;
+
             int currentAlpha = (int)pData->currentAlpha;
             int targetAlpha = (int)pData->targetAlpha;
 
+            float stepIn = 840.0f * (fadeDtMs * 0.001f);
+            float stepOut = 720.0f * (fadeDtMs * 0.001f);
+
             if (currentAlpha < targetAlpha) {
-                currentAlpha = (std::min)(targetAlpha, currentAlpha + 28);
+                currentAlpha = (std::min)(targetAlpha, currentAlpha + (int)(stepIn + 0.5f));
             }
             else if (currentAlpha > targetAlpha) {
-                currentAlpha = (std::max)(targetAlpha, currentAlpha - 24);
+                currentAlpha = (std::max)(targetAlpha, currentAlpha - (int)(stepOut + 0.5f));
             }
 
             pData->currentAlpha = (BYTE)currentAlpha;
@@ -17858,6 +17897,7 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 
             if (pData->currentAlpha == pData->targetAlpha) {
                 KillTimer(hwnd, STATUS_BAR_ANIM_TIMER);
+                pData->lastFadeTick = 0;
                 if (pData->currentAlpha == 0) {
                     ShowWindow(hwnd, SW_HIDE);
                 }
@@ -20422,20 +20462,38 @@ static void MainUI_Paint_DrawGridHotkeyRow(HDC hdc, MainUIData* pData, Gdiplus::
     DeleteObject(gkBindFont);
 }
 
+static inline float MainUI_AnimFrameScale(float dtMs)
+{
+    return dtMs / 16.6667f;
+}
+
+static inline float MainUI_AnimFactor(float dtMs, float baseRate)
+{
+    float s = MainUI_AnimFrameScale(dtMs);
+    if (s < 0.0f) s = 0.0f;
+    if (s > 4.0f) s = 4.0f;
+    return 1.0f - powf(1.0f - baseRate, s);
+}
+
 bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData)
 {
     bool needsRedraw = false;
-    const float animSpeed = 0.2f;
+    const bool advanceAnims = !pData->isOffscreenRender;
+    const float animSpeed = advanceAnims ? MainUI_AnimFactor(pData->lastAnimDtMs, 0.26f) : 0.0f;
+    const float animSpeedLegacy = advanceAnims ? MainUI_AnimFactor(pData->lastAnimDtMs, 0.18f) : 0.0f;
+    const float toggleAnimSpeed = animSpeedLegacy;
 
     auto animateToggle = [&](float& val, bool target) {
+        if (!advanceAnims) return;
         float targetVal = target ? 1.0f : 0.0f;
         if (abs(val - targetVal) > 0.001f) {
-            val += (targetVal - val) * animSpeed;
+            val += (targetVal - val) * toggleAnimSpeed;
             needsRedraw = true;
             if (abs(val - targetVal) < 0.01f) val = targetVal;
         }
     };
     auto animateFloat = [&](float& val, float targetVal) {
+        if (!advanceAnims) return;
         if (abs(val - targetVal) > 0.5f) {
             val += (targetVal - val) * animSpeed;
             needsRedraw = true;
@@ -20627,8 +20685,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     }
     {
         float t = g_recordingMovementsEnabled ? 1.0f : 0.0f;
-        if (fabs(pData->macrosRecordMovementsAnim - t) > 0.001f) {
-            pData->macrosRecordMovementsAnim += (t - pData->macrosRecordMovementsAnim) * 0.18f;
+        if (advanceAnims && fabs(pData->macrosRecordMovementsAnim - t) > 0.001f) {
+            pData->macrosRecordMovementsAnim += (t - pData->macrosRecordMovementsAnim) * animSpeedLegacy;
             if (fabs(pData->macrosRecordMovementsAnim - t) < 0.005f) pData->macrosRecordMovementsAnim = t;
             needsRedraw = true;
         }
@@ -25992,14 +26050,22 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
         bool needsRedraw = false;
 
+        ULONGLONG animNowTick = GetTickCount64();
+        float animDtMs = (pData->lastAnimTick == 0) ? 16.6667f : (float)(animNowTick - pData->lastAnimTick);
+        if (animDtMs < 1.0f) animDtMs = 16.6667f;
+        if (animDtMs > 100.0f) animDtMs = 100.0f;
+        pData->lastAnimTick = animNowTick;
+        pData->lastAnimDtMs = animDtMs;
+        const float animDtSec = animDtMs * 0.001f;
+
         if (pData->errorAnimationDirection == 1) {
-            pData->errorAnimationProgress += 0.04f;
+            pData->errorAnimationProgress += 2.4f * animDtSec;
             if (pData->errorAnimationProgress >= 1.0f) {
                 pData->errorAnimationProgress = 1.0f;
                 pData->errorAnimationDirection = 0;
             }
         } else if (pData->errorAnimationDirection == -1) {
-            pData->errorAnimationProgress -= 0.04f;
+            pData->errorAnimationProgress -= 2.4f * animDtSec;
             if (pData->errorAnimationProgress <= 0.0f) {
                 pData->errorAnimationProgress = 0.0f;
                 pData->errorAnimationDirection = 0;
@@ -26012,7 +26078,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
 
         if (pData->stateChangeDirection == 1) {
-            pData->stateChangeProgress += 0.05f;
+            pData->stateChangeProgress += 3.0f * animDtSec;
             if (pData->stateChangeProgress >= 1.0f) {
                 pData->stateChangeProgress = 1.0f;
                 pData->stateChangeDirection = 0;
@@ -26026,7 +26092,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             float target = pData->startupOverlayVisible ? 1.0f : 0.0f;
             float diff = target - pData->badgeRevealAnim;
             if (abs(diff) > 0.001f) {
-                pData->badgeRevealAnim += diff * 0.08f;
+                pData->badgeRevealAnim += diff * MainUI_AnimFactor(animDtMs, 0.14f);
                 needsRedraw = true;
                 if (abs(diff) < 0.005f) pData->badgeRevealAnim = target;
             }
@@ -26037,7 +26103,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         needsRedraw = needsRedraw || (pData->errorAnimationDirection != 0) || (pData->stateChangeDirection != 0);
         if (pData->startupOverlayVisible) {
             if (pData->startupOverlayFadeDirection < 0) {
-                pData->startupOverlayAlpha -= 0.055f;
+                pData->startupOverlayAlpha -= 2.4f * animDtSec;
                 if (pData->startupOverlayAlpha <= 0.0f) {
                     pData->startupOverlayAlpha = 0.0f;
                     pData->startupOverlayVisible = false;
@@ -26058,22 +26124,24 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        const float spring = 0.1f;
+        const float spring = 0.12f;
         const float friction = 0.75f;
         float targetScale = pData->isPressingStart ? 0.92f : 1.0f;
-        float force = (targetScale - pData->startButtonScale) * spring;
+        float springScale = (std::min)(MainUI_AnimFrameScale(animDtMs), 2.0f);
+        float force = (targetScale - pData->startButtonScale) * spring * springScale * springScale;
         pData->startButtonVelocity += force;
-        pData->startButtonVelocity *= friction;
-        pData->startButtonScale += pData->startButtonVelocity;
+        pData->startButtonVelocity *= powf(friction, springScale);
+        pData->startButtonScale += pData->startButtonVelocity * springScale;
         if (abs(pData->startButtonScale - targetScale) > 0.001f || abs(pData->startButtonVelocity) > 0.001f) {
             if (!needsRedraw) needsRedraw = true;
         }
 
-        const float animSpeed = 0.2f;
+        const float animSpeed = MainUI_AnimFactor(animDtMs, 0.26f);
+        const float toggleAnimSpeed = MainUI_AnimFactor(animDtMs, 0.18f);
         auto animateToggle = [&](float& val, bool target) {
             float targetVal = target ? 1.0f : 0.0f;
             if (abs(val - targetVal) > 0.001f) {
-                val += (targetVal - val) * animSpeed;
+                val += (targetVal - val) * toggleAnimSpeed;
                 needsRedraw = true;
                 if (abs(val - targetVal) < 0.01f) val = targetVal;
             }
@@ -26223,7 +26291,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         DeleteObject(memBMP);
         DeleteDC(memDC);
         if (needsRedraw && pData->uTimerId == 0) {
-            pData->uTimerId = SetTimer(hwnd, 1000, 33, NULL);
+            pData->uTimerId = SetTimer(hwnd, 1000, 16, NULL);
 
         } else if (!needsRedraw && pData->uTimerId != 0) {
             KillTimer(hwnd, pData->uTimerId);
@@ -26232,10 +26300,14 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && pData->currentPage == 2) {
-            SetTimer(hwnd, 1001, 1000, NULL);
+            if (!pData->statsTimerActive) {
+                SetTimer(hwnd, 1001, 1000, NULL);
+                pData->statsTimerActive = true;
+            }
         }
-        else {
+        else if (pData->statsTimerActive) {
             KillTimer(hwnd, 1001);
+            pData->statsTimerActive = false;
         }
 
         EndPaint(hwnd, &ps);
