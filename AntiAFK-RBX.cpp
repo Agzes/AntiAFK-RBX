@@ -167,6 +167,13 @@ using namespace std::chrono_literals;
 #define ID_EXPORT_SETTINGS 321
 #define ID_STATUS_BAR_PRIMARY_MONITOR 319
 #define ID_STATUS_BAR_POSITION_BOTTOM 330
+#define ID_STATUS_BAR_CONTENT_ICON 331
+#define ID_STATUS_BAR_CONTENT_BRAND 332
+#define ID_STATUS_BAR_EVENT_SESSION 334
+#define ID_STATUS_BAR_EVENT_ACTION 335
+#define ID_STATUS_BAR_EVENT_RECONNECT 336
+#define ID_STATUS_BAR_EVENT_MACRO 337
+#define ID_STATUS_BAR_EVENT_UI 338
 #define ID_CUSTOM_PROCESS_SEARCH_TOGGLE 322
 #define ID_CUSTOM_PROCESS_SEARCH_SETTINGS 323
 #define ID_CUSTOM_PROCESS_SEARCH_EXCLUDE 324
@@ -383,6 +390,13 @@ std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
 std::atomic<bool> g_statusBarPrimaryMonitor(false);
 std::atomic<bool> g_statusBarPositionBottom(false);
+std::atomic<bool> g_statusBarShowIcon(true);
+std::atomic<bool> g_statusBarShowBrand(true);
+std::atomic<bool> g_statusBarEventSession(true);
+std::atomic<bool> g_statusBarEventAction(true);
+std::atomic<bool> g_statusBarEventReconnect(true);
+std::atomic<bool> g_statusBarEventMacro(true);
+std::atomic<bool> g_statusBarEventUi(true);
 std::atomic<bool> g_hotkeyEnabled(true);
 std::atomic<UINT> g_hotkeyModifiers(MOD_CONTROL | MOD_SHIFT);
 std::atomic<UINT> g_hotkeyVk(VK_F1);
@@ -1039,10 +1053,13 @@ const COLORREF DARK_BG = RGB(30, 30, 30);
 const COLORREF DARK_TEXT = RGB(235, 235, 235);
 const COLORREF DARK_EDIT_BG = RGB(45, 45, 45);
 
+enum class StatusBarEventType { Ui, Session, Action, Reconnect, Macro };
+
 struct StatusBarPayload {
     std::wstring text;
     UINT durationMs;
     HWND anchorWindow;
+    StatusBarEventType eventType = StatusBarEventType::Ui;
 };
 
 
@@ -1094,11 +1111,12 @@ std::wstring GetDiscordWebhookUrlCopy();
 std::wstring GetDiscordMentionTargetCopy();
 void SetDiscordMentionTarget(const std::wstring& value);
 bool IsDiscordWebhookUrl(const std::wstring& url);
-void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL);
-void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow);
-void QueueStatusBarMessage(const std::wstring& message);
-void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL);
-void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow);
+bool StatusBarEventEnabled(StatusBarEventType eventType);
+void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL, StatusBarEventType eventType = StatusBarEventType::Ui);
+void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType = StatusBarEventType::Ui);
+void QueueStatusBarMessage(const std::wstring& message, StatusBarEventType eventType = StatusBarEventType::Ui);
+void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL, StatusBarEventType eventType = StatusBarEventType::Ui);
+void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType = StatusBarEventType::Ui);
 void HideStatusBarOverlay(bool animate = false);
 void UpdateStatusBarMessage(const std::wstring& message);
 bool TryParseOnOffValue(const std::wstring& value, bool& outValue);
@@ -2223,7 +2241,7 @@ void About_Paint_DrawContent(HDC hdc, const RECT& clientRect, HFONT hFont28, HFO
 
     Font font12b_c(hdc, hFont12b);
     RectF authorRectF((REAL)20, (REAL)contentY + 60, (REAL)(clientRect.right - 20), (REAL)100);
-    g.DrawString(L"Developed with \u2764 by Agzes\nLicensed under the MIT License", -1, &font12_c, authorRectF, NULL, &grayBrush);
+    g.DrawString(L"Developed with ❤ by Agzes\nLicensed under the MIT License", -1, &font12_c, authorRectF, NULL, &grayBrush);
 }
 void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
     if (!pData) return;
@@ -2597,7 +2615,7 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
-        Popup_DrawChrome(&g, memDC, cr, d->closeButtonRect, d->hFontText, L"AntiAFK-RBX \u2022 Multi-Instance Mutex", d->hCloseX);
+        Popup_DrawChrome(&g, memDC, cr, d->closeButtonRect, d->hFontText, L"AntiAFK-RBX • Multi-Instance Mutex", d->hCloseX);
 
         Font textFont(memDC, d->hFontText);
         SolidBrush textBrush(Color(255, 220, 220, 220));
@@ -2608,8 +2626,8 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             L"multiple Roblox windows simultaneously.",
             L"",
             L"Possible reasons for failure:",
-            L"\u2022 Roblox was started before AntiAFK-RBX",
-            L"\u2022 Another app holds the mutex",
+            L"• Roblox was started before AntiAFK-RBX",
+            L"• Another app holds the mutex",
             L"  (FishStrap, VoidStrap, Roblox Account Manager)",
             L"",
             L"Note: Anti-AFK will still work on all open",
@@ -2708,7 +2726,7 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
         else if (PtInRect(&d->fullBtnRect, pt)) {
             int confirm =             ShowDarkMessageBox(hwnd,
                 L"Close all Roblox windows and try again?\n\nAll running Roblox instances will be closed.",
-                L"AntiAFK-RBX \u2022 Close All Roblox",
+                L"AntiAFK-RBX • Close All Roblox",
                 MB_YESNO | MB_DEFBUTTON2);
             if (confirm == IDYES) {
                 d->tryCount++;
@@ -2769,7 +2787,7 @@ int ShowMutexErrorDialog(HWND owner)
     int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
     int dlgW = 380, dlgH = 370;
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, DLG_CLASS,
-        L"AntiAFK-RBX \u2022 Multi-Instance Mutex", WS_POPUP,
+        L"AntiAFK-RBX • Multi-Instance Mutex", WS_POPUP,
         (screenW - dlgW) / 2, (screenH - dlgH) / 2, dlgW, dlgH,
         owner, NULL, g_hInst, NULL);
     if (!h) return 0;
@@ -2818,7 +2836,7 @@ void ShowAboutDialog(HWND owner)
     int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
 
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, ABOUT_CLASS_NAME,
-        L"AntiAFK-RBX \u2022 About", WS_POPUP,
+        L"AntiAFK-RBX • About", WS_POPUP,
         x, y, winW, winH, owner, NULL, g_hInst, NULL);
 
     if (h)
@@ -3276,7 +3294,7 @@ LRESULT CALLBACK GridSettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
             gfx.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
 
-            Popup_DrawChrome(&gfx, memDC, cr, pData->closeButtonRect, pData->hFont14, L"AntiAFK-RBX \u2022 Grid Settings", pData->isHoveringClose);
+            Popup_DrawChrome(&gfx, memDC, cr, pData->closeButtonRect, pData->hFont14, L"AntiAFK-RBX • Grid Settings", pData->isHoveringClose);
 
             int currentMode = g_gridMode.load();
             int rowLeft = 0;
@@ -3455,7 +3473,7 @@ void ShowGridSettingsDialog(HWND owner)
     int winW = 380, winH = 430;
     int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, GRID_CLASS_NAME,
-        L"AntiAFK-RBX \u2022 Grid Settings", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
+        L"AntiAFK-RBX • Grid Settings", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
     if (h) {
         g_hGridSettingsDlg = h;
         EnableWindow(owner, FALSE);
@@ -4119,7 +4137,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             ShowDarkMessageBox(hwnd, L"Instance Manager allows you to configure per-instance overrides for each running Roblox client.\n\n"
                 L"You can change AFK, Mute, Opacity, Hide, FPS Cap, Reconnect, and Reset settings independently per window.\n\n"
                 L"Use Ctrl+Click to select multiple windows and apply settings to all of them at once.\n\n"
-                L"Presets allow you to save and quickly apply different configurations.",                 L"AntiAFK-RBX \u2022 About Instance Manager", MB_OK);
+                L"Presets allow you to save and quickly apply different configurations.",                 L"AntiAFK-RBX • About Instance Manager", MB_OK);
             return 0;
         }
 
@@ -4546,9 +4564,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                         std::wstring item = g_macros[i].name;
                         if (g_macros[i].intervalSec > 0) {
-                            item += L" \u2014 " + std::to_wstring(g_macros[i].intervalSec) + L"s";
+                            item += L" - " + std::to_wstring(g_macros[i].intervalSec) + L"s";
                         } else {
-                            item += L" \u2014 (interval not set)";
+                            item += L" - (interval not set)";
                         }
                         AppendMenu(hMenu, flags, 8001 + i, item.c_str());
                     }
@@ -4624,7 +4642,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 std::wstring msg = (tgts.size() == 1)
                     ? L"Are you sure you want to close this Roblox client?"
                     : L"Are you sure you want to close these " + std::to_wstring((int)tgts.size()) + L" Roblox clients?";
-                int res = ShowDarkMessageBox(hwnd, msg.c_str(), L"AntiAFK-RBX \u2022 Close Roblox Client", MB_YESNO);
+                int res = ShowDarkMessageBox(hwnd, msg.c_str(), L"AntiAFK-RBX • Close Roblox Client", MB_YESNO);
                 if (res == IDYES) {
                     for (HWND tWnd : tgts) {
                         if (IsWindow(tWnd)) PostMessage(tWnd, WM_CLOSE, 0, 0);
@@ -4701,7 +4719,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 sf.SetAlignment(Gdiplus::StringAlignmentCenter);
                 sf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
                 Gdiplus::RectF titleRect(0.0f, 0.0f, (REAL)cr.right, 30.0f);
-                gfx.DrawString(L"AntiAFK-RBX \u2022 Instance Manager", -1, &popupTitleFont, titleRect, &sf, &titleBrush);
+                gfx.DrawString(L"AntiAFK-RBX • Instance Manager", -1, &popupTitleFont, titleRect, &sf, &titleBrush);
                 MainUI_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
                 {
                     RECT& minBtn = pData->minimizeButtonRect;
@@ -5184,7 +5202,7 @@ void ShowInstanceManagerWindow(HWND owner) {
     int y = (screenH - winH) / 2;
 
     HWND h = CreateWindowEx(WS_EX_APPWINDOW, INST_CLASS_NAME,
-        L"AntiAFK-RBX \u2022 Instance Manager", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
+        L"AntiAFK-RBX • Instance Manager", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
 
     if (h) {
         g_hInstanceManagerDlg = h;
@@ -6959,7 +6977,7 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
     MacroEngine_RunPendingReconnectMacros();
     if (reconnectTriggered) {
         QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered (interval check).", false);
-        QueueStatusBarOverlay(L"Auto-Reconnect triggered", 2000, wins.front());
+        QueueStatusBarOverlay(L"Auto-Reconnect triggered", 2000, wins.front(), StatusBarEventType::Reconnect);
     }
 }
 
@@ -7667,7 +7685,7 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
 
     Macro imported = parseMacroJson(content);
     if (imported.name.empty() && imported.actions.empty()) {
-        QueueStatusBarOverlay(L"Invalid macro file", 2000, parent);
+        QueueStatusBarOverlay(L"Invalid macro file", 2000, parent, StatusBarEventType::Macro);
         return false;
     }
 
@@ -7688,7 +7706,7 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         g_selectedAction = 4;
     }
     MacroEngine_SaveMacros();
-    QueueStatusBarOverlay(L"Imported: " + imported.name, 2000, parent);
+    QueueStatusBarOverlay(L"Imported: " + imported.name, 2000, parent, StatusBarEventType::Macro);
     return true;
 }
 
@@ -8735,12 +8753,12 @@ void MacroEngine_StopRecording() {
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
         }
-        QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr);
+        QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
     }
     g_macroWizardStep = 3;
 
     HideStatusBarOverlay(true);
-    QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr);
+    QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr, StatusBarEventType::Macro);
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
@@ -8781,7 +8799,7 @@ static void MacroEngine_CancelRecording() {
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
         PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
     }
-    QueueStatusBarOverlay(L"Recording cancelled", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : nullptr);
+    QueueStatusBarOverlay(L"Recording cancelled", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : nullptr, StatusBarEventType::Macro);
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
@@ -8861,7 +8879,7 @@ static void MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     });
 
     ShowRecordingOverlayWindow(targetHwnd);
-    ShowStatusBarOverlayPersistent(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop", targetHwnd);
+    ShowStatusBarOverlayPersistent(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop", targetHwnd, StatusBarEventType::Macro);
 
     CreateTrayMenu(g_isAfkStarted.load());
 }
@@ -8880,7 +8898,7 @@ static void MacroEngine_Wizard_DrawStep1(HDC hdc, const RECT& rc) {
     g.FillRectangle(&dimBrush, (INT)rc.left, (INT)rc.top, (INT)(rc.right - rc.left), (INT)(rc.bottom - rc.top));
 
     int cy = rc.top + 40;
-    g.DrawString(L"Step 1/5 \u2014 Name && Window", -1, &font, Gdiplus::PointF((REAL)(rc.left + 20), (REAL)cy), &textBrush);
+    g.DrawString(L"Step 1/5 - Name && Window", -1, &font, Gdiplus::PointF((REAL)(rc.left + 20), (REAL)cy), &textBrush);
     cy += 50;
     g.DrawString(L"Give your macro a name:", -1, &smallFont, Gdiplus::PointF((REAL)(rc.left + 20), (REAL)cy), &textBrush);
 }
@@ -8907,7 +8925,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
                     mg, 90, cw - mg * 2, 200, hwnd, (HMENU)1002, g_hInst, NULL);
 
-                CreateWindowW(L"BUTTON", L"Next \u2192",
+                CreateWindowW(L"BUTTON", L"Next →",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
 
@@ -8929,10 +8947,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         SendMessage(combo, CB_SETCURSEL, 0, 0);
                 }
             } else if (g_macroWizardStep == 3) {
-                CreateWindowW(L"BUTTON", L"Next \u2192",
+                CreateWindowW(L"BUTTON", L"Next →",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"\u2190 Re-record",
+                CreateWindowW(L"BUTTON", L"← Re-record",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg, btnY, 100, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
                 CreateWindowW(L"BUTTON", L"Test Run",
@@ -8945,10 +8963,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 CreateWindowW(L"BUTTON", L"Run on reconnect",
                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                     mg, 80, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"\u2190 Back",
+                CreateWindowW(L"BUTTON", L"← Back",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"\u2713 Finish",
+                CreateWindowW(L"BUTTON", L"✓ Finish",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
                 Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
@@ -8975,7 +8993,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
             g.FillRectangle(&bgBrush, (INT)rc.left, (INT)rc.top, (INT)(rc.right - rc.left), (INT)(rc.bottom - rc.top));
 
             if (g_macroWizardStep == 1) {
-                g.DrawString(L"Step 1/5 \u2014 Name Your Macro", -1, &titleFont,
+                g.DrawString(L"Step 1/5 - Name Your Macro", -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 g.DrawString(L"Give your macro a name and select the target Roblox window.", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
@@ -8984,7 +9002,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 g.DrawString(L"Target Window:", -1, &smallFont,
                     Gdiplus::PointF(20.0f, 132.0f), &textBrush);
             } else if (g_macroWizardStep == 2) {
-                g.DrawString(L"Step 2/5 \u2014 Ready to Record", -1, &titleFont,
+                g.DrawString(L"Step 2/5 - Ready to Record", -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 g.DrawString(L"AntiAFK-RBX will resize your game to 800x600", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 65.0f), &textBrush);
@@ -8999,7 +9017,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 }
             } else if (g_macroWizardStep == 3) {
                 int stepCount = (int)g_wizardMacro.actions.size();
-                g.DrawString(L"Step 3/5 \u2014 Review Actions", -1, &titleFont,
+                g.DrawString(L"Step 3/5 - Review Actions", -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 wchar_t countMsg[64];
                 swprintf_s(countMsg, L"Recorded %d actions. Review below:", stepCount);
@@ -9041,12 +9059,12 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         Gdiplus::PointF(20.0f, (REAL)(listY + maxShow * 22)), &textBrush);
                 }
             } else if (g_macroWizardStep == 4) {
-                g.DrawString(L"Step 4/5 \u2014 Configure Triggers", -1, &titleFont,
+                g.DrawString(L"Step 4/5 - Configure Triggers", -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 g.DrawString(L"Configure when this macro should run:", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
             } else if (g_macroWizardStep == 5) {
-                g.DrawString(L"Step 5/5 \u2014 Done!", -1, &titleFont,
+                g.DrawString(L"Step 5/5 - Done!", -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 g.DrawString(L"Your macro is ready to use.", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
@@ -9087,14 +9105,14 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     wchar_t name[128] = { 0 };
                     GetDlgItemTextW(hwnd, 1001, name, 128);
                     if (name[0] == 0) {
-                        ShowStatusBarOverlay(L"Enter a macro name first", 2000, hwnd);
+                        ShowStatusBarOverlay(L"Enter a macro name first", 2000, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
 
                     HWND combo = GetDlgItem(hwnd, 1002);
                     int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
                     if (sel == CB_ERR) {
-                        ShowStatusBarOverlay(L"Select a target window", 2000, hwnd);
+                        ShowStatusBarOverlay(L"Select a target window", 2000, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
 
@@ -9105,10 +9123,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     DestroyWindow(GetDlgItem(hwnd, 1002));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_NEXT));
 
-                    CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                    CreateWindowW(L"BUTTON", L"▶ Record",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                    CreateWindowW(L"BUTTON", L"← Back",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
 
@@ -9129,10 +9147,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     CreateWindowW(L"BUTTON", L"Run on reconnect",
                         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                         20, 120, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                    CreateWindowW(L"BUTTON", L"← Back",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"\u2713 Finish",
+                    CreateWindowW(L"BUTTON", L"✓ Finish",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
                     Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
@@ -9156,7 +9174,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
                         20, 150, 360, 200, hwnd, (HMENU)1002, g_hInst, NULL);
 
-                    CreateWindowW(L"BUTTON", L"Next \u2192",
+                    CreateWindowW(L"BUTTON", L"Next →",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
 
@@ -9180,10 +9198,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_TEST_RUN));
 
-                    CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                    CreateWindowW(L"BUTTON", L"▶ Record",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"\u2190 Back",
+                    CreateWindowW(L"BUTTON", L"← Back",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
 
@@ -9196,10 +9214,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_FINISH));
 
-                    CreateWindowW(L"BUTTON", L"Next \u2192",
+                    CreateWindowW(L"BUTTON", L"Next →",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"\u2190 Re-record",
+                    CreateWindowW(L"BUTTON", L"← Re-record",
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 100, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
                     CreateWindowW(L"BUTTON", L"Test Run",
@@ -9228,7 +9246,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 if (!targetHwnd) {
                     auto wins = FindAllRobloxWindows(true);
                     if (wins.empty()) {
-                        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
                     targetHwnd = wins[0];
@@ -9260,7 +9278,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     PostMessage(parentWnd, WM_APP_SHOW_MACROS, 0, 0);
                     InvalidateRect(parentWnd, NULL, TRUE);
                 }
-                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr);
+                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
                 return 0;
             }
             if (id == ID_MACROS_TEST_RUN) {
@@ -9284,10 +9302,10 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
         case WM_TIMER: {
             if (wParam == 1) {
                 KillTimer(hwnd, 1);
-                HWND hBtnRecord = CreateWindowW(L"BUTTON", L"\u25B6 Record",
+                HWND hBtnRecord = CreateWindowW(L"BUTTON", L"▶ Record",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                HWND hBtnBack = CreateWindowW(L"BUTTON", L"\u2190 Back",
+                HWND hBtnBack = CreateWindowW(L"BUTTON", L"← Back",
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
                 InvalidateRect(hwnd, NULL, TRUE);
@@ -9338,7 +9356,7 @@ void MacroEngine_ShowWizard(HWND parent, int startStep) {
 
     g_macroWizardHwnd = CreateWindowEx(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-        MACRO_WIZARD_CLASS, L"AntiAFK-RBX \u2022 New Macro",
+        MACRO_WIZARD_CLASS, L"AntiAFK-RBX • New Macro",
         WS_POPUP | WS_CAPTION | WS_SYSMENU,
         x, y, w, h, parent, NULL, g_hInst, NULL);
 
@@ -9370,7 +9388,7 @@ void MacroEngine_TestRun(HWND parent, int macroIndex) {
         copy = g_macros[macroIndex];
     }
     g_macroTestRunning = true;
-    QueueStatusBarOverlay(L"Test run: " + copy.name + L"...", 3000, parent);
+    QueueStatusBarOverlay(L"Test run: " + copy.name + L"...", 3000, parent, StatusBarEventType::Macro);
 
     std::thread([copy, parent]() {
         auto wins = FindAllRobloxWindows(true);
@@ -9379,7 +9397,7 @@ void MacroEngine_TestRun(HWND parent, int macroIndex) {
         }
         g_macroTestRunning = false;
         if (parent && IsWindow(parent)) {
-            QueueStatusBarOverlay(L"Test run complete", 1500, parent);
+            QueueStatusBarOverlay(L"Test run complete", 1500, parent, StatusBarEventType::Macro);
         }
     }).detach();
 }
@@ -9464,14 +9482,14 @@ std::string GetSelfExePath() {
 void UpdateBloxstrapIntegration(bool enable) {
     std::string settingsPath = GetBloxstrapSettingsPath();
     if (settingsPath.empty()) {
-        ShowTrayNotification(L"AntiAFK-RBX \u2022 Integration Error", L"Could not find launcher installation path in registry.");
+        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find launcher installation path in registry.");
         g_bloxstrapIntegration = false;
         return;
     }
 
     std::ifstream inFile(settingsPath, std::ios::binary);
     if (!inFile.is_open()) {
-        ShowTrayNotification(L"AntiAFK-RBX \u2022 Integration Error", L"Could not find/open the launcher settings file.");
+        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find/open the launcher settings file.");
         g_bloxstrapIntegration = false;
         return;
     }
@@ -9495,7 +9513,7 @@ void UpdateBloxstrapIntegration(bool enable) {
 
         size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
         if (integrationsArrayPos == std::string::npos) {
-            ShowTrayNotification(L"AntiAFK-RBX \u2022 Integration Error", L"Could not find 'CustomIntegrations' array in the launcher settings file.");
+            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find 'CustomIntegrations' array in the launcher settings file.");
             g_bloxstrapIntegration = false;
             return;
         }
@@ -9545,7 +9563,7 @@ void UpdateBloxstrapIntegration(bool enable) {
         outFile << content;
         outFile.close();
     } else {
-        ShowTrayNotification(L"AntiAFK-RBX \u2022 Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
+        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
         g_bloxstrapIntegration = false;
     }
 }
@@ -10127,7 +10145,7 @@ static void AppendStatusLabel(HMENU hMenu, bool afk)
     const wchar_t* status = afk
         ? (g_multiSupport.load() ? L"Running (Multi)" : L"Running")
         : L"Stopped";
-    swprintf_s(statusText, L"%s \u2022 %s", status, g_Version);
+    swprintf_s(statusText, L"%s • %s", status, g_Version);
     AppendMenuLabelWithTrayStateIcon(hMenu, statusText, afk);
 }
 
@@ -10159,9 +10177,16 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_MULTI_SUPPORT:             return 0xE81E;
         case ID_TOGGLE_SIMPLE_MODE:        return 0xE71B;
         case ID_AUTO_UPDATE:               return 0xE777;
-        case ID_STATUS_BAR:                return 0xE7F4;
-        case ID_STATUS_BAR_PRIMARY_MONITOR: return 0xE7F4;
-        case ID_STATUS_BAR_POSITION_BOTTOM: return 0xE96E;
+case ID_STATUS_BAR:                return 0xE7F4;
+case ID_STATUS_BAR_PRIMARY_MONITOR: return 0xE7F4;
+case ID_STATUS_BAR_POSITION_BOTTOM: return 0xE96E;
+case ID_STATUS_BAR_CONTENT_ICON:   return 0xE7F4;
+case ID_STATUS_BAR_CONTENT_BRAND:  return 0xE8AC;
+case ID_STATUS_BAR_EVENT_SESSION:  return 0xE768;
+case ID_STATUS_BAR_EVENT_ACTION:   return 0xE765;
+case ID_STATUS_BAR_EVENT_RECONNECT: return 0xE8AF;
+case ID_STATUS_BAR_EVENT_MACRO:    return 0xE7C9;
+case ID_STATUS_BAR_EVENT_UI:       return 0xE713;
         case ID_AUTO_START_AFK:            return 0xE768;
         case ID_AUTO_RECONNECT:            return 0xE8AF;
         case ID_RECONNECT_MANUAL_CHECK:    return 0xE72C;
@@ -10547,13 +10572,13 @@ void MonitorUserActivity()
 
                 if (anyReminderPending && g_afkReminderState.load() == 0)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Reminder", L"A Roblox window has been inactive for 18 minutes. Starting AFK prevention soon.");
+                    ShowTrayNotification(L"AntiAFK-RBX • Reminder", L"A Roblox window has been inactive for 18 minutes. Starting AFK prevention soon.");
                     g_afkReminderState = 1;
                 }
 
                 if (anyAutoStartPending && g_afkReminderState.load() < 2)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Auto-Started", L"No Roblox activity detected for 19 minutes. Starting AFK prevention.");
+                    ShowTrayNotification(L"AntiAFK-RBX • Auto-Started", L"No Roblox activity detected for 19 minutes. Starting AFK prevention.");
                     g_afkStartTime = GetTickCount64();
                     g_isAfkStarted = true;
                     {
@@ -10567,7 +10592,7 @@ void MonitorUserActivity()
                     g_cv.notify_all();
                     ApplyAutoUtilsStartEffects();
 
-                    QueueStatusBarOverlay(L"Auto-started after inactivity", 2200, wins.front());
+                    QueueStatusBarOverlay(L"Auto-started after inactivity", 2200, wins.front(), StatusBarEventType::Session);
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started after inactivity.", false);
                 }
             }
@@ -10932,24 +10957,24 @@ std::wstring GetDiscordIntervalCompactLabel()
 std::wstring BuildDiscordStartedDetailsLine()
 {
     std::wstring line = GetDiscordActionCompactLabel();
-    line += L" \u2022 ";
+    line += L" • ";
     line += GetDiscordIntervalCompactLabel();
 
     if (g_autoReconnect.load())
     {
-        line += L" \u2022 **Reconnect**";
+        line += L" • **Reconnect**";
     }
     if (g_autoReset.load())
     {
-        line += L" \u2022 **Reset**";
+        line += L" • **Reset**";
     }
     if (g_doNotSleep.load())
     {
-        line += L" \u2022 **Do Not Sleep**";
+        line += L" • **Do Not Sleep**";
     }
     if (g_fpsLimit > 0)
     {
-        line += L" \u2022 **FPS Capper (CPU Limiter)**";
+        line += L" • **FPS Capper (CPU Limiter)**";
     }
 
     return line;
@@ -10979,14 +11004,14 @@ std::wstring BuildDiscordStartedInstancesLine()
     size_t count = uniquePids.size();
 
     wchar_t buffer[96];
-    swprintf_s(buffer, L"Started \u2022 Found %zu %s", count, count == 1 ? L"Window" : L"Windows");
+    swprintf_s(buffer, L"Started • Found %zu %s", count, count == 1 ? L"Window" : L"Windows");
     return buffer;
 }
 
 std::wstring BuildDiscordStartedCompactInstancesLabel()
 {
     std::wstring fullLabel = BuildDiscordStartedInstancesLine();
-    const std::wstring prefix = L"Started \u2022 Found ";
+    const std::wstring prefix = L"Started • Found ";
     if (fullLabel.rfind(prefix, 0) == 0)
     {
         std::wstring suffix = fullLabel.substr(prefix.size());
@@ -11019,15 +11044,15 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
     case DiscordWebhookEvent::Stopped:
         if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
         {
-            appendLine(L"Stopped \u2022 Manual stop");
+            appendLine(L"Stopped • Manual stop");
         }
         else if (summary.find(L"Roblox not found") != std::wstring::npos)
         {
-            appendLine(L"Stopped \u2022 Roblox not found");
+            appendLine(L"Stopped • Roblox not found");
         }
         else if (!summary.empty())
         {
-            appendLine(std::wstring(L"Stopped \u2022 ") + summary);
+            appendLine(std::wstring(L"Stopped • ") + summary);
         }
         else
         {
@@ -11038,11 +11063,11 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
     case DiscordWebhookEvent::Error:
         if (summary.find(L"Roblox not found") != std::wstring::npos)
         {
-            appendLine(L"Error \u2022 Roblox not found");
+            appendLine(L"Error • Roblox not found");
         }
         else if (!summary.empty())
         {
-            appendLine(std::wstring(L"Error \u2022 ") + summary);
+            appendLine(std::wstring(L"Error • ") + summary);
         }
         else
         {
@@ -11050,17 +11075,17 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
         }
         break;
     case DiscordWebhookEvent::AutoReconnect:
-        appendLine(L"Reconnected \u2022 Roblox");
+        appendLine(L"Reconnected • Roblox");
         break;
     case DiscordWebhookEvent::Action:
-        appendLine(std::wstring(L"Action \u2022 ") + GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel());
+        appendLine(std::wstring(L"Action • ") + GetDiscordActionCompactLabel() + L" • Next in " + GetDiscordIntervalCompactLabel());
         if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::Test:
-        appendLine(L"Test \u2022 Webhook connected");
+        appendLine(L"Test • Webhook connected");
         break;
     case DiscordWebhookEvent::AutoReset:
         appendLine(L"Reset");
@@ -11170,7 +11195,7 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
     switch (eventType)
     {
     case DiscordWebhookEvent::Started:
-        return BuildDiscordStartedCompactInstancesLabel() + L" \u2022 " + BuildDiscordStartedDetailsLine() + L"\n" + BuildDiscordTotalStatsLine();
+        return BuildDiscordStartedCompactInstancesLabel() + L" • " + BuildDiscordStartedDetailsLine() + L"\n" + BuildDiscordTotalStatsLine();
     case DiscordWebhookEvent::Stopped:
         {
             std::wstring base;
@@ -11198,10 +11223,10 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
         return summary.empty() ? L"Reconnect triggered" : summary;
     case DiscordWebhookEvent::Action:
         {
-            std::wstring line = GetDiscordActionCompactLabel() + L" \u2022 Next in " + GetDiscordIntervalCompactLabel();
+            std::wstring line = GetDiscordActionCompactLabel() + L" • Next in " + GetDiscordIntervalCompactLabel();
             if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
             {
-                line += L" \u2022 " + summary;
+                line += L" • " + summary;
             }
             return line;
         }
@@ -11224,10 +11249,10 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
                 uint64_t sinceAction = g_lastAfkActionTimestamp.load() > 0 ? (now - g_lastAfkActionTimestamp.load()) / 1000 : 0;
                 uint64_t nextSec = sinceAction < (uint64_t)g_selectedTime.load() ? (uint64_t)g_selectedTime.load() - sinceAction : 0;
                 wchar_t buf[96];
-                swprintf_s(buf, L"Running \u2022 Session: %s \u2022 Next action in %llu sec", FormatDurationShort(sessionSec).c_str(), (unsigned long long)nextSec);
+                swprintf_s(buf, L"Running • Session: %s • Next action in %llu sec", FormatDurationShort(sessionSec).c_str(), (unsigned long long)nextSec);
                 line = std::wstring(buf) + L"\n" + line;
             } else {
-                line = L"Idle \u2022 No active session\n" + line;
+                line = L"Idle • No active session\n" + line;
             }
             return line;
         }
@@ -11259,7 +11284,7 @@ std::wstring BuildDiscordPlainContentLine(DiscordWebhookEvent eventType, const s
 {
     if (eventType == DiscordWebhookEvent::Started)
     {
-        return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" \u2022 Started \u2022 " + BuildDiscordStartedCompactInstancesLabel();
+        return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" • Started • " + BuildDiscordStartedCompactInstancesLabel();
     }
 
     std::wstring content = BuildDiscordAsciiDescription(eventType, summary);
@@ -11300,7 +11325,7 @@ std::wstring BuildDiscordPlainContentLine(DiscordWebhookEvent eventType, const s
         compact.pop_back();
     }
 
-    compact = std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" \u2022 " + compact;
+    compact = std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" • " + compact;
     return compact;
 }
 
@@ -11415,7 +11440,7 @@ std::wstring FormatDurationShort(uint64_t totalSeconds)
 std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
 {
     wchar_t buffer[224];
-    swprintf_s(buffer, L"Session: %s \u2022 Actions: %llu \u2022 Reconnects: %llu \u2022 Sessions completed: %llu",
+    swprintf_s(buffer, L"Session: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
         FormatDurationShort(lastSessionSeconds).c_str(),
         (unsigned long long)g_afkActionsPerformed.load(),
         (unsigned long long)g_autoReconnectsPerformed.load(),
@@ -11426,7 +11451,7 @@ std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
 std::wstring BuildDiscordTotalStatsLine()
 {
     wchar_t buffer[224];
-    swprintf_s(buffer, L"Total time: %s \u2022 Actions: %llu \u2022 Reconnects: %llu \u2022 Sessions completed: %llu",
+    swprintf_s(buffer, L"Total time: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
         FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
         (unsigned long long)g_afkActionsPerformed.load(),
         (unsigned long long)g_autoReconnectsPerformed.load(),
@@ -11839,6 +11864,22 @@ void SaveSettings()
             DWORD statusBarPositionBottom = g_statusBarPositionBottom.load();
             RegSetValueEx(hKey, L"StatusBarPositionBottom", 0, REG_DWORD, (const BYTE*)&statusBarPositionBottom, sizeof(DWORD));
         }
+        {
+            DWORD statusBarShowIcon = g_statusBarShowIcon.load();
+            RegSetValueEx(hKey, L"StatusBarShowIcon", 0, REG_DWORD, (const BYTE*)&statusBarShowIcon, sizeof(DWORD));
+            DWORD statusBarShowBrand = g_statusBarShowBrand.load();
+            RegSetValueEx(hKey, L"StatusBarShowBrand", 0, REG_DWORD, (const BYTE*)&statusBarShowBrand, sizeof(DWORD));
+            DWORD statusBarEventSession = g_statusBarEventSession.load();
+            RegSetValueEx(hKey, L"StatusBarEventSession", 0, REG_DWORD, (const BYTE*)&statusBarEventSession, sizeof(DWORD));
+            DWORD statusBarEventAction = g_statusBarEventAction.load();
+            RegSetValueEx(hKey, L"StatusBarEventAction", 0, REG_DWORD, (const BYTE*)&statusBarEventAction, sizeof(DWORD));
+            DWORD statusBarEventReconnect = g_statusBarEventReconnect.load();
+            RegSetValueEx(hKey, L"StatusBarEventReconnect", 0, REG_DWORD, (const BYTE*)&statusBarEventReconnect, sizeof(DWORD));
+            DWORD statusBarEventMacro = g_statusBarEventMacro.load();
+            RegSetValueEx(hKey, L"StatusBarEventMacro", 0, REG_DWORD, (const BYTE*)&statusBarEventMacro, sizeof(DWORD));
+            DWORD statusBarEventUi = g_statusBarEventUi.load();
+            RegSetValueEx(hKey, L"StatusBarEventUi", 0, REG_DWORD, (const BYTE*)&statusBarEventUi, sizeof(DWORD));
+        }
         RegSetValueEx(hKey, L"FpsLimit", 0, REG_DWORD, (const BYTE*)&fpsLimit, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnlockFpsOnFocus", 0, REG_DWORD, (const BYTE*)&unlockFpsOnFocus, sizeof(DWORD));
         DWORD multiInstanceInterval = g_multiInstanceInterval.load();
@@ -11979,7 +12020,7 @@ void LoadSettings()
     HKEY hKey;
     DWORD multiSupport = 0, selectedTime = 540, selectedAction = 1, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
-    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, fpsLimit = 0, unlockFpsOnFocus = 0;
+    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, statusBarShowIcon = 1, statusBarShowBrand = 1, statusBarEventSession = 1, statusBarEventAction = 1, statusBarEventReconnect = 1, statusBarEventMacro = 1, statusBarEventUi = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
     DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
     DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
@@ -12043,6 +12084,13 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"StatusBarEnabled", NULL, NULL, (LPBYTE)&statusBarEnabled, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"StatusBarPrimaryMonitor", NULL, NULL, (LPBYTE)&statusBarPrimaryMonitor, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"StatusBarPositionBottom", NULL, NULL, (LPBYTE)&statusBarPositionBottom, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarShowIcon", NULL, NULL, (LPBYTE)&statusBarShowIcon, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarShowBrand", NULL, NULL, (LPBYTE)&statusBarShowBrand, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarEventSession", NULL, NULL, (LPBYTE)&statusBarEventSession, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarEventAction", NULL, NULL, (LPBYTE)&statusBarEventAction, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarEventReconnect", NULL, NULL, (LPBYTE)&statusBarEventReconnect, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarEventMacro", NULL, NULL, (LPBYTE)&statusBarEventMacro, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"StatusBarEventUi", NULL, NULL, (LPBYTE)&statusBarEventUi, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"FpsLimit", NULL, NULL, (LPBYTE)&fpsLimit, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"UnlockFpsOnFocus", NULL, NULL, (LPBYTE)&unlockFpsOnFocus, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"MultiInstanceInterval", NULL, NULL, (LPBYTE)&multiInstanceInterval, &dataSize); dataSize = sizeof(DWORD);
@@ -12314,6 +12362,13 @@ void LoadSettings()
     g_statusBarEnabled = (statusBarEnabled != 0);
     g_statusBarPrimaryMonitor = (statusBarPrimaryMonitor != 0);
     g_statusBarPositionBottom = (statusBarPositionBottom != 0);
+    g_statusBarShowIcon = (statusBarShowIcon != 0);
+    g_statusBarShowBrand = (statusBarShowBrand != 0);
+    g_statusBarEventSession = (statusBarEventSession != 0);
+    g_statusBarEventAction = (statusBarEventAction != 0);
+    g_statusBarEventReconnect = (statusBarEventReconnect != 0);
+    g_statusBarEventMacro = (statusBarEventMacro != 0);
+    g_statusBarEventUi = (statusBarEventUi != 0);
     g_fpsLimit = NormalizeFpsLimitValue((int)fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
     g_cpuLimitPercent = (int)cpuLimitPercent;
@@ -12413,6 +12468,15 @@ void ResetSettings()
     g_useLegacyUi = false;
     g_bloxstrapIntegration = false;
     g_statusBarEnabled = true;
+    g_statusBarPrimaryMonitor = false;
+    g_statusBarPositionBottom = false;
+    g_statusBarShowIcon = true;
+    g_statusBarShowBrand = true;
+    g_statusBarEventSession = true;
+    g_statusBarEventAction = true;
+    g_statusBarEventReconnect = true;
+    g_statusBarEventMacro = true;
+    g_statusBarEventUi = true;
     g_fpsLimit = 0;
     g_unlockFpsOnFocus = false;
     g_multiInstanceInterval = 0;
@@ -12537,6 +12601,13 @@ struct SettingsSnapshot {
     bool statusBarEnabled = true;
     bool statusBarPrimaryMonitor = false;
     bool statusBarPositionBottom = false;
+    bool statusBarShowIcon = true;
+    bool statusBarShowBrand = true;
+    bool statusBarEventSession = true;
+    bool statusBarEventAction = true;
+    bool statusBarEventReconnect = true;
+    bool statusBarEventMacro = true;
+    bool statusBarEventUi = true;
     int fpsLimit = 0;
     bool unlockFpsOnFocus = false;
     int multiInstanceInterval = 0;
@@ -12632,6 +12703,13 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.statusBarEnabled = g_statusBarEnabled.load();
     s.statusBarPrimaryMonitor = g_statusBarPrimaryMonitor.load();
     s.statusBarPositionBottom = g_statusBarPositionBottom.load();
+    s.statusBarShowIcon = g_statusBarShowIcon.load();
+    s.statusBarShowBrand = g_statusBarShowBrand.load();
+    s.statusBarEventSession = g_statusBarEventSession.load();
+    s.statusBarEventAction = g_statusBarEventAction.load();
+    s.statusBarEventReconnect = g_statusBarEventReconnect.load();
+    s.statusBarEventMacro = g_statusBarEventMacro.load();
+    s.statusBarEventUi = g_statusBarEventUi.load();
     s.fpsLimit = g_fpsLimit;
     s.unlockFpsOnFocus = g_unlockFpsOnFocus.load();
     s.cpuLimitPercent = g_cpuLimitPercent.load();
@@ -12773,6 +12851,13 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"StatusBarEnabled", s.statusBarEnabled, first);
     AppendJsonBool(ss, L"StatusBarPrimaryMonitor", s.statusBarPrimaryMonitor, first);
     AppendJsonBool(ss, L"StatusBarPositionBottom", s.statusBarPositionBottom, first);
+    AppendJsonBool(ss, L"StatusBarShowIcon", s.statusBarShowIcon, first);
+    AppendJsonBool(ss, L"StatusBarShowBrand", s.statusBarShowBrand, first);
+    AppendJsonBool(ss, L"StatusBarEventSession", s.statusBarEventSession, first);
+    AppendJsonBool(ss, L"StatusBarEventAction", s.statusBarEventAction, first);
+    AppendJsonBool(ss, L"StatusBarEventReconnect", s.statusBarEventReconnect, first);
+    AppendJsonBool(ss, L"StatusBarEventMacro", s.statusBarEventMacro, first);
+    AppendJsonBool(ss, L"StatusBarEventUi", s.statusBarEventUi, first);
     AppendJsonInt(ss, L"FpsLimit", s.fpsLimit, first);
     AppendJsonBool(ss, L"UnlockFpsOnFocus", s.unlockFpsOnFocus, first);
     AppendJsonInt(ss, L"CpuLimitPercent", s.cpuLimitPercent, first);
@@ -13189,6 +13274,13 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_statusBarEnabled = s.statusBarEnabled;
     g_statusBarPrimaryMonitor = s.statusBarPrimaryMonitor;
     g_statusBarPositionBottom = s.statusBarPositionBottom;
+    g_statusBarShowIcon = s.statusBarShowIcon;
+    g_statusBarShowBrand = s.statusBarShowBrand;
+    g_statusBarEventSession = s.statusBarEventSession;
+    g_statusBarEventAction = s.statusBarEventAction;
+    g_statusBarEventReconnect = s.statusBarEventReconnect;
+    g_statusBarEventMacro = s.statusBarEventMacro;
+    g_statusBarEventUi = s.statusBarEventUi;
     g_fpsLimit = NormalizeFpsLimitValue(s.fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
     g_unlockFpsOnFocus = s.unlockFpsOnFocus;
@@ -13270,7 +13362,7 @@ static bool ExportSettingsToFile(HWND owner)
     if (!GetSaveFileName(&ofn)) return false;
     if (!SaveTextFileUtf8(fileName, BuildSettingsJson(CaptureSettingsSnapshot()))) return false;
 
-    int exportMacros = ShowDarkMessageBox(owner, L"Also export macros?", L"AntiAFK-RBX \u2022 Export Settings", MB_YESNO);
+    int exportMacros = ShowDarkMessageBox(owner, L"Also export macros?", L"AntiAFK-RBX • Export Settings", MB_YESNO);
     if (exportMacros == IDYES) {
         wchar_t macroFile[MAX_PATH] = L"AntiAFK-RBX-macros.json";
         OPENFILENAME ofn2 = { sizeof(ofn2) };
@@ -13286,7 +13378,7 @@ static bool ExportSettingsToFile(HWND owner)
             if (attrs != INVALID_FILE_ATTRIBUTES) {
                 CopyFileW(macrosSrc.c_str(), macroFile, FALSE);
             } else {
-                ShowDarkMessageBox(owner, L"Macros file not found - nothing to export.", L"AntiAFK-RBX \u2022 Export Settings", MB_OK);
+                ShowDarkMessageBox(owner, L"Macros file not found - nothing to export.", L"AntiAFK-RBX • Export Settings", MB_OK);
             }
         }
     }
@@ -13345,6 +13437,13 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"StatusBarEnabled", s.statusBarEnabled);
     ParseJsonBool(json, L"StatusBarPrimaryMonitor", s.statusBarPrimaryMonitor);
     ParseJsonBool(json, L"StatusBarPositionBottom", s.statusBarPositionBottom);
+    ParseJsonBool(json, L"StatusBarShowIcon", s.statusBarShowIcon);
+    ParseJsonBool(json, L"StatusBarShowBrand", s.statusBarShowBrand);
+    ParseJsonBool(json, L"StatusBarEventSession", s.statusBarEventSession);
+    ParseJsonBool(json, L"StatusBarEventAction", s.statusBarEventAction);
+    ParseJsonBool(json, L"StatusBarEventReconnect", s.statusBarEventReconnect);
+    ParseJsonBool(json, L"StatusBarEventMacro", s.statusBarEventMacro);
+    ParseJsonBool(json, L"StatusBarEventUi", s.statusBarEventUi);
     ParseJsonInt(json, L"FpsLimit", s.fpsLimit);
     ParseJsonBool(json, L"UnlockFpsOnFocus", s.unlockFpsOnFocus);
     ParseJsonInt(json, L"CpuLimitPercent", s.cpuLimitPercent);
@@ -13391,7 +13490,7 @@ static bool ImportSettingsFromFile(HWND owner)
                     ShowDarkMessageBox(NULL,
                         L"The imported settings contain a Discord webhook URL.\n\n"
                         L"Do you want to keep the imported webhook URL?",
-                        L"AntiAFK-RBX \u2022 Import Settings", MB_YESNO) == IDYES
+                        L"AntiAFK-RBX • Import Settings", MB_YESNO) == IDYES
                         ? (s.discordWebhookUrl = importedUrl)
                         : (s.discordWebhookUrl = currentUrl);
                 } else {
@@ -13438,7 +13537,7 @@ static bool ImportSettingsFromFile(HWND owner)
         InvalidateRect(g_hMainUiWnd, NULL, TRUE);
     }
 
-    int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX \u2022 Import Settings", MB_YESNO);
+    int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX • Import Settings", MB_YESNO);
     if (importMacros == IDYES) {
         wchar_t macroFile[MAX_PATH] = L"";
         OPENFILENAME ofn2 = { sizeof(ofn2) };
@@ -13575,7 +13674,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
     wchar_t actionLabel[32];
         const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
-    swprintf_s(actionLabel, L"Set Action \u2022 %s", actionNames[g_selectedAction.load()]);
+    swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
     SetMenuIconPopup(g_hMenu, hActionSubmenu, 0xE7C9);
     AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
@@ -13593,7 +13692,24 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, L"├ Status Bar: Primary Monitor");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"╰ Status Bar: Position Bottom");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"├ Status Bar: Position Bottom");
+    {
+        HMENU hSbContentSubmenu = CreatePopupMenu();
+        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowIcon.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_ICON, L"App icon");
+        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowBrand.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_BRAND, L"Program name");
+        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbContentSubmenu, L"├ Status Bar: Content");
+
+        HMENU hSbEventsSubmenu = CreatePopupMenu();
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventSession.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_SESSION, L"Start && Stop");
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventAction.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_ACTION, L"Actions");
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventReconnect.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_RECONNECT, L"Auto-Reconnect");
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventMacro.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_MACRO, L"Macros");
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventUi.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_UI, L"Interface feedback");
+        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbEventsSubmenu, L"╰ Status Bar: Events");
+
+        SetMenuIconPopup(hSettingsSubmenu, hSbContentSubmenu, 0xE7F4);
+        SetMenuIconPopup(hSettingsSubmenu, hSbEventsSubmenu, 0xE916);
+    }
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start AntiAFK");
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
     if (!g_simpleMode.load()) {
@@ -13630,7 +13746,7 @@ void CreateTrayMenu(bool afk)
         {
             wchar_t reconnectMacroDelayLabel[64];
             int rmdVal = g_reconnectMacroDelaySec.load();
-            swprintf_s(reconnectMacroDelayLabel, L"\u2570 Reconnect Macro Delay \u2022 %d sec", rmdVal);
+            swprintf_s(reconnectMacroDelayLabel, L"╰ Reconnect Macro Delay • %d sec", rmdVal);
             AppendMenu(hSettingsSubmenu, MF_STRING, ID_RECONNECT_MACRO_DELAY, reconnectMacroDelayLabel);
         }
     }
@@ -13847,16 +13963,16 @@ void CreateTrayMenu(bool afk)
         swprintf_s(statText, L"Program Launches • %llu", g_programLaunches.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7E8);
         std::wstring longestAfk = FormatDurationShort(g_longestAfkSessionSeconds.load());
-        swprintf_s(statText, L"Longest Session \u2022 %s", longestAfk.c_str());
+        swprintf_s(statText, L"Longest Session • %s", longestAfk.c_str());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE823);
         uint64_t lastActionTs = g_lastAfkActionTimestamp.load();
         if (lastActionTs > 0) {
             uint64_t elapsed = (GetTickCount64() - lastActionTs) / 1000;
-            if (elapsed < 60) swprintf_s(statText, L"Last Action \u2022 %llu sec ago", elapsed);
-            else if (elapsed < 3600) swprintf_s(statText, L"Last Action \u2022 %llu min ago", elapsed / 60);
-            else swprintf_s(statText, L"Last Action \u2022 %llu h ago", elapsed / 3600);
+            if (elapsed < 60) swprintf_s(statText, L"Last Action • %llu sec ago", elapsed);
+            else if (elapsed < 3600) swprintf_s(statText, L"Last Action • %llu min ago", elapsed / 60);
+            else swprintf_s(statText, L"Last Action • %llu h ago", elapsed / 3600);
         } else {
-            wcscpy_s(statText, L"Last Action \u2022 Never");
+            wcscpy_s(statText, L"Last Action • Never");
         }
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE787);
     }
@@ -13893,7 +14009,7 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyHeartbeat.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_HEARTBEAT, L"Notify Heartbeat");
         {
             wchar_t hbLabel[64];
-            swprintf_s(hbLabel, L"Heartbeat Interval \u2022 %d min", g_discordHeartbeatIntervalMin.load());
+            swprintf_s(hbLabel, L"Heartbeat Interval • %d min", g_discordHeartbeatIntervalMin.load());
             AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_HEARTBEAT, hbLabel);
         }
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyUtilsRam.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_UTILS_RAM, L"Notify RAM Cleaner");
@@ -13926,7 +14042,7 @@ void CreateTrayMenu(bool afk)
     else if (miVal == 5000) wcscpy_s(miLabelV, L"5s");
     else if (miVal == 10000) wcscpy_s(miLabelV, L"10s");
     else swprintf_s(miLabelV, L"%d ms", miVal);
-    swprintf_s(miIntervalLabel, L"Multi-Instance Delay \u2022 %s", miLabelV);
+    swprintf_s(miIntervalLabel, L"Multi-Instance Delay • %s", miLabelV);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
     SetMenuIconPopup(g_hMenu, hMiIntervalSubmenu, 0xE916);
 
@@ -14010,7 +14126,7 @@ bool CheckForUpdates(bool showNotification = true)
                 if (showNotification) {
                     wchar_t msg[128];
                     swprintf_s(msg, L"New version available! Download on: https://github.com/Agzes/AntiAFK-RBX");
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Update Available", msg);
+                    ShowTrayNotification(L"AntiAFK-RBX • Update Available", msg);
                 }
                 if (g_hwnd) {
                     CreateTrayMenu(g_isAfkStarted.load());
@@ -14060,12 +14176,12 @@ struct CustomInputDialogData {
 };
 
 std::wstring CustomInputDialog_GetMacroRenameTitle() {
-    std::wstring title = L"AntiAFK-RBX \u2022 Rename Macro";
+    std::wstring title = L"AntiAFK-RBX • Rename Macro";
     int sel = g_selectedMacroIndex.load();
     if (sel >= 0) {
         std::lock_guard<std::mutex> lock(g_macrosMutex);
         if (sel < (int)g_macros.size()) {
-            title = L"AntiAFK-RBX \u2022 Rename Macro: " + g_macros[sel].name;
+            title = L"AntiAFK-RBX • Rename Macro: " + g_macros[sel].name;
         }
     }
     return title;
@@ -14998,38 +15114,38 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
-        std::wstring macroRenameTitlePaint = L"AntiAFK-RBX \u2022 Rename Macro";
+        std::wstring macroRenameTitlePaint = L"AntiAFK-RBX • Rename Macro";
         if (pData->type == CustomInputDialogType::MacroRename) {
             macroRenameTitlePaint = CustomInputDialog_GetMacroRenameTitle();
         }
 
-        const wchar_t* titleText = (pData->type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX \u2022 Set Custom Interval" :
-                                   (pData->type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX \u2022 Set FPS Limit" :
-                                   (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX \u2022 Set CPU Limit %" :
-                                   (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX \u2022 Set Cycle Period (ms)" :
-                                   (pData->type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX \u2022 Set Custom Search Names" :
-                                   (pData->type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX \u2022 Grid Mode Value" :
-                                   (pData->type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX \u2022 Spacing Between Windows" :
-                                   (pData->type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX \u2022 Spacing From Borders" :
-                                   (pData->type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX \u2022 Set Cycle Time" :
-                                   (pData->type == CustomInputDialogType::RamCleanLimit) ? L"AntiAFK-RBX \u2022 Set RAM Limit" :
-                                   (pData->type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX \u2022 Delay Before Action (ms)" :
-                                   (pData->type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX \u2022 Key Press Delay (ms)" :
-                                   (pData->type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX \u2022 Delay After Action (ms)" :
-                                   (pData->type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX \u2022 Change Window Geometry" :
-                                   (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
-                                   (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" :
-                                   (pData->type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX \u2022 Custom AFK Timer (Instance)" :
-                                   (pData->type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX \u2022 Enter Macro Name" :
+        const wchar_t* titleText = (pData->type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX • Set Custom Interval" :
+                                   (pData->type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX • Set FPS Limit" :
+                                   (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX • Set CPU Limit %" :
+                                   (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX • Set Cycle Period (ms)" :
+                                   (pData->type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX • Set Custom Search Names" :
+                                   (pData->type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX • Grid Mode Value" :
+                                   (pData->type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX • Spacing Between Windows" :
+                                   (pData->type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX • Spacing From Borders" :
+                                   (pData->type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX • Set Cycle Time" :
+                                   (pData->type == CustomInputDialogType::RamCleanLimit) ? L"AntiAFK-RBX • Set RAM Limit" :
+                                   (pData->type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX • Delay Before Action (ms)" :
+                                   (pData->type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX • Key Press Delay (ms)" :
+                                   (pData->type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX • Delay After Action (ms)" :
+                                   (pData->type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
+                                   (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
+                                   (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
+                                   (pData->type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX • Custom AFK Timer (Instance)" :
+                                   (pData->type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
                                    (pData->type == CustomInputDialogType::MacroRename) ? macroRenameTitlePaint.c_str() :
-                                   (pData->type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX \u2022 Set Macro Interval" :
-                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX \u2022 Action Repeat Count" :
-                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX \u2022 Reconnect Check Interval (sec)" :
-                                    (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX \u2022 Reconnect Macro Delay (sec)" :
-                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"AntiAFK-RBX \u2022 Set Webhook URL" :
-                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"AntiAFK-RBX \u2022 Heartbeat Interval (min)" :
-                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"AntiAFK-RBX \u2022 Multi-Instance Delay (ms)" :
-                                    (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX \u2022 Configure Mention Target" : L"AntiAFK-RBX \u2022 Custom Input";
+                                   (pData->type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" :
+                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX • Action Repeat Count" :
+                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX • Reconnect Check Interval (sec)" :
+                                    (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX • Reconnect Macro Delay (sec)" :
+                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"AntiAFK-RBX • Set Webhook URL" :
+                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"AntiAFK-RBX • Heartbeat Interval (min)" :
+                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"AntiAFK-RBX • Multi-Instance Delay (ms)" :
+                                    (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX • Configure Mention Target" : L"AntiAFK-RBX • Custom Input";
         Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, titleText, pData->isHoveringClose);
 
         RECT infoRect = { 0, 30, clientRect.right, 53 };
@@ -15395,33 +15511,33 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
         y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
     }
 
-    std::wstring macroRenameTitle = L"AntiAFK-RBX \u2022 Rename Macro";
+    std::wstring macroRenameTitle = L"AntiAFK-RBX • Rename Macro";
     if (type == CustomInputDialogType::MacroRename) {
         macroRenameTitle = CustomInputDialog_GetMacroRenameTitle();
     }
 
-    const wchar_t* titleStr = (type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX \u2022 Set Custom Interval" :
-                              (type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX \u2022 Set FPS Limit" :
-                              (type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX \u2022 Set Custom Search Names" :
-                              (type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX \u2022 Grid Mode Value" :
-                              (type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX \u2022 Spacing Between Windows" :
-                              (type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX \u2022 Spacing From Borders" :
-                              (type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX \u2022 Set Cycle Time" :
-                              (type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX \u2022 Configure Mention Target" :
-                              (type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX \u2022 Delay Before Action (ms)" :
-                              (type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX \u2022 Key Press Delay (ms)" :
-                              (type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX \u2022 Delay After Action (ms)" :
-                              (type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX \u2022 Action Repeat Count" :
-                              (type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX \u2022 Reconnect Check Interval (sec)" :
-                              (type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX \u2022 Reconnect Macro Delay (sec)" :
-                              (type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX \u2022 Set CPU Limit %" :
-                              (type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX \u2022 Set Cycle Period (ms)" :
-                              (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX \u2022 Change Window Geometry" :
-                              (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX \u2022 Rename Roblox Window" :
-                              (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX \u2022 Create New Preset" :
-                              (type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX \u2022 Enter Macro Name" :
+    const wchar_t* titleStr = (type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX • Set Custom Interval" :
+                              (type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX • Set FPS Limit" :
+                              (type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX • Set Custom Search Names" :
+                              (type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX • Grid Mode Value" :
+                              (type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX • Spacing Between Windows" :
+                              (type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX • Spacing From Borders" :
+                              (type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX • Set Cycle Time" :
+                              (type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX • Configure Mention Target" :
+                              (type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX • Delay Before Action (ms)" :
+                              (type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX • Key Press Delay (ms)" :
+                              (type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX • Delay After Action (ms)" :
+                              (type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX • Action Repeat Count" :
+                              (type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX • Reconnect Check Interval (sec)" :
+                              (type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX • Reconnect Macro Delay (sec)" :
+                              (type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX • Set CPU Limit %" :
+                              (type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX • Set Cycle Period (ms)" :
+                              (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
+                              (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
+                              (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
+                              (type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
                               (type == CustomInputDialogType::MacroRename) ? macroRenameTitle.c_str() :
-                              (type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX \u2022 Set Macro Interval" : L"AntiAFK-RBX \u2022 Set RAM Limit";
+                              (type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" : L"AntiAFK-RBX • Set RAM Limit";
 
     if (!pGlobalWnd) return;
 
@@ -15459,9 +15575,9 @@ static std::vector<std::wstring> g_macroOrderNames;
 
 static const wchar_t* MacroOrder_TitleText(MacroOrderListType t) {
     switch (t) {
-        case MacroOrderListType::AfkAction: return L"AntiAFK-RBX \u2022 Macro Order: AFK Action";
-        case MacroOrderListType::Reconnect: return L"AntiAFK-RBX \u2022 Macro Order: Reconnect";
-        default: return L"AntiAFK-RBX \u2022 Macro Order: Interval";
+        case MacroOrderListType::AfkAction: return L"AntiAFK-RBX • Macro Order: AFK Action";
+        case MacroOrderListType::Reconnect: return L"AntiAFK-RBX • Macro Order: Reconnect";
+        default: return L"AntiAFK-RBX • Macro Order: Interval";
     }
 }
 
@@ -16040,7 +16156,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             return 0;
         }
         if (PtInRect(&pData->helpDemoRect, pt)) {
-            ShowDarkMessageBox(hwnd, L"These are contextual help buttons placed next to settings in the main window.\n\nClick any ? to get a quick explanation of what that option does, without leaving the app.", L"AntiAFK-RBX \u2022 What are ? buttons?", MB_OK);
+            ShowDarkMessageBox(hwnd, L"These are contextual help buttons placed next to settings in the main window.\n\nClick any ? to get a quick explanation of what that option does, without leaving the app.", L"AntiAFK-RBX • What are ? buttons?", MB_OK);
             return 0;
         }
 
@@ -16111,7 +16227,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
-        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"AntiAFK-RBX \u2022 First Welcome", pData->isHoveringClose);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"AntiAFK-RBX • First Welcome", pData->isHoveringClose);
 
         {
             Region oldClip;
@@ -16323,9 +16439,9 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SolidBrush starBrush(Color(255, 255, 210, 80));
             Font warnFont(memDC, pData->hFont11);
             RectF rWarn((REAL)0, (REAL)(btnTop - 48), (REAL)clientRect.right, 22.0f);
-            g.DrawString(L"\u26A0 No official website. Download only from official source.", -1, &warnFont, rWarn, &sfCenter, &warnBrush);
+            g.DrawString(L"⚠ No official website. Download only from official source.", -1, &warnFont, rWarn, &sfCenter, &warnBrush);
             RectF rStar((REAL)0, (REAL)(btnTop - 31), (REAL)clientRect.right, 22.0f);
-            g.DrawString(L"\u2605 If you like this project, please consider starring it on GitHub.", -1, &warnFont, rStar, &sfCenter, &starBrush);
+            g.DrawString(L"★ If you like this project, please consider starring it on GitHub.", -1, &warnFont, rStar, &sfCenter, &starBrush);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
@@ -16395,7 +16511,7 @@ void ShowTutorialDialog(HWND owner)
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         registered = RegisterClass(&wc) != 0;
     }
-    HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-Tutorial", L"AntiAFK-RBX \u2022 First Welcome", WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 560, 370, owner, NULL, g_hInst, NULL);
+    HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-Tutorial", L"AntiAFK-RBX • First Welcome", WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 560, 370, owner, NULL, g_hInst, NULL);
     if (h) { ShowWindow(h, SW_SHOW); UpdateWindow(h); }
 }
 // ==========
@@ -16538,6 +16654,7 @@ struct MainUIData {
     RECT statusBarToggleRect = { 0 };
     RECT statusBarPrimaryMonitorCompactRect = { 0 };
     RECT statusBarPositionBottomCompactRect = { 0 };
+    RECT statusBarContentCompactRect = { 0 };
     RECT iCanForgetToggleRect = { 0 };
     RECT skipActiveToggleRect = { 0 };
     RECT doNotSleepToggleRect = { 0 };
@@ -16648,6 +16765,7 @@ struct MainUIData {
     bool isHoveringStatusBarToggle = false;
     bool isHoveringStatusBarPrimaryMonitorCompact = false;
     bool isHoveringStatusBarPositionBottomCompact = false;
+    bool isHoveringStatusBarContentCompact = false;
     bool isHoveringLegacyUiToggle = false;
     bool isHoveringSimpleModeToggle = false;
     bool isHoveringHotkeyToggle = false;
@@ -16801,6 +16919,37 @@ struct MainUIData {
     float gridKeepAspectRatioAnim = 0.0f;
     float gridHotkeyAnim = 0.0f;
     int gridSettingsPreviousPage = 0;
+
+    bool showingStatusBarSettings = false;
+    float statusBarSettingsViewAnim = 0.0f;
+    int statusBarSettingsViewDirection = 0;
+    int statusBarSettingsPreviousPage = 0;
+    RECT statusBarSettingsBackIconRect = { 0 };
+    RECT statusBarSettingsOkButtonRect = { 0 };
+    bool isHoveringStatusBarSettingsOkButton = false;
+    RECT sbIconToggleRect = { 0 };
+    RECT sbBrandToggleRect = { 0 };
+    RECT sbSessionToggleRect = { 0 };
+    RECT sbActionToggleRect = { 0 };
+    RECT sbReconnectToggleRect = { 0 };
+    RECT sbMacroToggleRect = { 0 };
+    RECT sbUiToggleRect = { 0 };
+    RECT statusBarSettingsHelpButtonRects[7] = {0};
+    int hoveringStatusBarSettingsHelpButton = -1;
+    bool isHoveringSbIcon = false;
+    bool isHoveringSbBrand = false;
+    bool isHoveringSbSession = false;
+    bool isHoveringSbAction = false;
+    bool isHoveringSbReconnect = false;
+    bool isHoveringSbMacro = false;
+    bool isHoveringSbUi = false;
+    float sbIconAnim = 0.0f;
+    float sbBrandAnim = 0.0f;
+    float sbSessionAnim = 0.0f;
+    float sbActionAnim = 0.0f;
+    float sbReconnectAnim = 0.0f;
+    float sbMacroAnim = 0.0f;
+    float sbUiAnim = 0.0f;
 
     bool showingActionDelays = false;
     float actionDelaysViewAnim = 0.0f;
@@ -17121,7 +17270,7 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                     int bCol = (int)(255 * std::fabs(std::sin((h + 240) * 3.14159265f / 180.0f)));
 
                     Font textFont(hdcMem, g_ssMainFont);
-                    std::wstring ssText = L"AntiAFK-RBX \u2022 Screen Saver";
+                    std::wstring ssText = L"AntiAFK-RBX • Screen Saver";
 
                     if (g_ssTextW <= 0.0f) {
                         RectF textBounds;
@@ -17333,7 +17482,7 @@ void ScreenSaver_Start(HWND owner)
             HWND h = CreateWindowEx(
                 WS_EX_TOPMOST | WS_EX_APPWINDOW | WS_EX_NOACTIVATE,
                 L"AntiAFK-RBX-ScreenSaver",
-                L"AntiAFK-RBX \u2022 Screen Saver",
+                L"AntiAFK-RBX • Screen Saver",
                 WS_POPUP | WS_VISIBLE,
                 mi.rcMonitor.left, mi.rcMonitor.top, W, H,
                 NULL, NULL, p->hInst, NULL);
@@ -17392,7 +17541,25 @@ struct StatusBarData {
     BYTE targetAlpha = 0;
     ULONGLONG lastFadeTick = 0;
     bool persistent = false;
+    StatusBarEventType eventType = StatusBarEventType::Ui;
 };
+
+bool StatusBarHasAnyContent()
+{
+    return g_statusBarShowIcon.load() || g_statusBarShowBrand.load();
+}
+
+bool StatusBarEventEnabled(StatusBarEventType eventType)
+{
+    switch (eventType) {
+    case StatusBarEventType::Session: return g_statusBarEventSession.load();
+    case StatusBarEventType::Action: return g_statusBarEventAction.load();
+    case StatusBarEventType::Reconnect: return g_statusBarEventReconnect.load();
+    case StatusBarEventType::Macro: return g_statusBarEventMacro.load();
+    case StatusBarEventType::Ui: return g_statusBarEventUi.load();
+    }
+    return true;
+}
 
 LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -17419,16 +17586,24 @@ int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY)
     HFONT brandFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     HFONT textFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
-    int brandWidth = MeasureTextWidth(hdc, brandFont, L"AntiAFK-RBX");
-    int separatorWidth = MeasureTextWidth(hdc, textFont, L"\u2022");
-    int messageWidth = MeasureTextWidth(hdc, textFont, message);
+    const bool showIcon = g_statusBarShowIcon.load();
+    const bool showBrand = g_statusBarShowBrand.load();
+
+    int width = MulDiv(12, dpiY, 96);
+    if (showIcon) {
+        width += MulDiv(10, dpiY, 96) + MulDiv(14, dpiY, 96) + MulDiv(10, dpiY, 96);
+    }
+    if (showBrand) {
+        width += MeasureTextWidth(hdc, brandFont, L"AntiAFK-RBX") + 6 + MeasureTextWidth(hdc, textFont, L"•") + 6;
+    }
+    width += MeasureTextWidth(hdc, textFont, message);
+    width += MulDiv(100, dpiY, 96);
 
     if (brandFont) DeleteObject(brandFont);
     if (textFont) DeleteObject(textFont);
     ReleaseDC(NULL, hdc);
 
-    return MulDiv(10, dpiY, 96) + MulDiv(14, dpiY, 96) + MulDiv(10, dpiY, 96)
-        + brandWidth + 6 + separatorWidth + 6 + messageWidth + MulDiv(100, dpiY, 96);
+    return width;
 }
 
 HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
@@ -17579,9 +17754,9 @@ void EnsureStatusBarWindow()
         NULL, NULL, g_hInst, NULL);
 }
 
-void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow)
+void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
         return;
     }
 
@@ -17589,15 +17764,15 @@ void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND an
         return;
     }
 
-    StatusBarPayload* payload = new StatusBarPayload{ message, durationMs, anchorWindow };
+    StatusBarPayload* payload = new StatusBarPayload{ message, durationMs, anchorWindow, eventType };
     if (!PostMessage(g_hwnd, WM_APP_SHOW_STATUS_BAR, reinterpret_cast<WPARAM>(payload), 0)) {
         delete payload;
     }
 }
 
-void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow)
+void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
         return;
     }
 
@@ -17605,15 +17780,15 @@ void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWin
         return;
     }
 
-    StatusBarPayload* payload = new StatusBarPayload{ message, 0, anchorWindow };
+    StatusBarPayload* payload = new StatusBarPayload{ message, 0, anchorWindow, eventType };
     if (!PostMessage(g_hwnd, WM_APP_SHOW_STATUS_BAR_PERSISTENT, reinterpret_cast<WPARAM>(payload), 0)) {
         delete payload;
     }
 }
 
-void QueueStatusBarMessage(const std::wstring& message)
+void QueueStatusBarMessage(const std::wstring& message, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType)) {
         return;
     }
 
@@ -17621,15 +17796,15 @@ void QueueStatusBarMessage(const std::wstring& message)
         return;
     }
 
-    StatusBarPayload* payload = new StatusBarPayload{ message, 0, NULL };
+    StatusBarPayload* payload = new StatusBarPayload{ message, 0, NULL, eventType };
     if (!PostMessage(g_hwnd, WM_APP_UPDATE_STATUS_BAR, reinterpret_cast<WPARAM>(payload), 0)) {
         delete payload;
     }
 }
 
-void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow)
+void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
         HideStatusBarOverlay(false);
         return;
     }
@@ -17646,6 +17821,7 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
 
     pData->message = message;
     pData->persistent = false;
+    pData->eventType = eventType;
     if (pData->hIcon) {
         DestroyIcon(pData->hIcon);
         pData->hIcon = NULL;
@@ -17670,9 +17846,9 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
     UpdateWindow(g_hStatusBarWnd);
 }
 
-void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow)
+void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
         HideStatusBarOverlay(false);
         return;
     }
@@ -17689,6 +17865,7 @@ void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWind
 
     pData->message = message;
     pData->persistent = true;
+    pData->eventType = eventType;
     if (pData->hIcon) {
         DestroyIcon(pData->hIcon);
         pData->hIcon = NULL;
@@ -17765,7 +17942,7 @@ void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
     SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
 
     const wchar_t* brand = L"AntiAFK-RBX";
-    const wchar_t* separator = L"\u2022";
+    const wchar_t* separator = L"•";
     const REAL brandSepGap = 6.0f;
     const REAL sepMsgGap = 6.0f;
 
@@ -17787,27 +17964,35 @@ void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
     int separatorWidthPx = MeasureTextWidth(hdc, pData->hFontText, separator);
     int messageWidthPx = MeasureTextWidth(hdc, pData->hFontText, pData->message);
 
-    const REAL fixedTextLeft = (REAL)(iconLeftPx + iconSizePx + iconGapPx);
-    REAL availableTextWidth = (std::max)(0.0f, width - fixedTextLeft - (REAL)horizontalPaddingPx);
-    REAL textBlockWidth = (REAL)brandWidthPx + brandSepGap + (REAL)separatorWidthPx + sepMsgGap + (REAL)messageWidthPx;
-    REAL x = fixedTextLeft;
+    const bool showIcon = g_statusBarShowIcon.load();
+    const bool showBrand = g_statusBarShowBrand.load();
+
+    REAL contentLeft = (REAL)horizontalPaddingPx;
+    if (showIcon) {
+        contentLeft = (REAL)(iconLeftPx + iconSizePx + iconGapPx);
+    }
+    REAL availableTextWidth = (std::max)(0.0f, width - contentLeft - (REAL)horizontalPaddingPx);
+    REAL textBlockWidth = 0.0f;
+    if (showBrand) textBlockWidth += (REAL)brandWidthPx + brandSepGap + (REAL)separatorWidthPx + sepMsgGap;
+    textBlockWidth += (REAL)messageWidthPx;
+    REAL x = contentLeft;
     if (textBlockWidth < availableTextWidth) {
         x += (availableTextWidth - textBlockWidth) / 2.0f;
     }
 
-    if (pData->hIcon) {
+    if (showIcon && pData->hIcon) {
         DrawIconEx(hdc, iconLeftPx, (int)((height - (REAL)iconSizePx) / 2.0f), pData->hIcon, iconSizePx, iconSizePx, 0, NULL, DI_NORMAL);
     }
 
-    RectF brandRect(x, y, (REAL)brandWidthPx + 8.0f, height);
-    g.DrawString(brand, -1, &brandFont, brandRect, &sfFixed, &brandBrush);
+    if (showBrand) {
+        RectF brandRect(x, y, (REAL)brandWidthPx + 8.0f, height);
+        g.DrawString(brand, -1, &brandFont, brandRect, &sfFixed, &brandBrush);
+        x += (REAL)brandWidthPx + brandSepGap;
 
-    x += (REAL)brandWidthPx + brandSepGap;
-
-    RectF separatorRect(x, y, (REAL)separatorWidthPx, height);
-    g.DrawString(separator, -1, &textFont, separatorRect, &sfFixed, &textBrush);
-
-    x += (REAL)separatorWidthPx + sepMsgGap;
+        RectF separatorRect(x, y, (REAL)separatorWidthPx, height);
+        g.DrawString(separator, -1, &textFont, separatorRect, &sfFixed, &textBrush);
+        x += (REAL)separatorWidthPx + sepMsgGap;
+    }
 
     RectF statusRect(x, y, width - x - (REAL)horizontalPaddingPx, height);
     g.DrawString(pData->message.c_str(), -1, &textFont, statusRect, &sfStatus, &textBrush);
@@ -19216,7 +19401,7 @@ title = L"CPU Limit %";
     if (pData->showingMacros || pData->macrosViewAnim > 0.0f) {
         if (PtInRect(&pData->macrosBackIconRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress \u2022 press Ctrl+Shift+R to stop", 1500, hwnd);
+                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (pData->macrosViewMode > 0) {
@@ -19237,7 +19422,7 @@ title = L"CPU Limit %";
         }
         if (PtInRect(&pData->macrosOkButtonRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress \u2022 press Ctrl+Shift+R to stop", 1500, hwnd);
+                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (g_mainUiOpenedForMacros.load()) {
@@ -19264,7 +19449,7 @@ title = L"CPU Limit %";
                     std::wstring cmd = L"/select,\"" + macroPath + L"\"";
                     ShellExecuteW(NULL, L"open", L"explorer.exe", cmd.c_str(), NULL, SW_SHOWNORMAL);
                 } else {
-                    QueueStatusBarOverlay(L"Macros file not found - it will be created on first save", 2500, hwnd);
+                    QueueStatusBarOverlay(L"Macros file not found - it will be created on first save", 2500, hwnd, StatusBarEventType::Macro);
                     std::wstring dir = macroPath.substr(0, macroPath.find_last_of(L'\\'));
                     ShellExecuteW(NULL, L"open", dir.c_str(), NULL, NULL, SW_SHOWNORMAL);
                 }
@@ -19317,20 +19502,20 @@ title = L"CPU Limit %";
                             }
                         }
                         if (testCopy.name.empty()) {
-                            QueueStatusBarOverlay(L"Macro not found", 2000, hwnd);
+                            QueueStatusBarOverlay(L"Macro not found", 2000, hwnd, StatusBarEventType::Macro);
                             return;
                         }
                         g_macroTestRunning = true;
-                        QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd);
+                        QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd, StatusBarEventType::Macro);
                         std::thread([testCopy, targetHwnd, hwnd]() {
                             MacroEngine_ExecuteMacro(testCopy, targetHwnd, true);
                             g_macroTestRunning = false;
                             if (hwnd && IsWindow(hwnd)) {
-                                QueueStatusBarOverlay(L"Test run complete", 1500, hwnd);
+                                QueueStatusBarOverlay(L"Test run complete", 1500, hwnd, StatusBarEventType::Macro);
                             }
                         }).detach();
                     } else {
-                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                     }
                 }
                 return;
@@ -19356,7 +19541,7 @@ title = L"CPU Limit %";
                         pData->macrosViewMode = 2;
                         InvalidateRect(hwnd, NULL, FALSE);
                     } else {
-                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                     }
                 }
                 return;
@@ -19433,14 +19618,14 @@ title = L"CPU Limit %";
                 }
                 if (needExport) {
                     MacroEngine_ExportMacroToFile(hwnd, itemIdx);
-                    QueueStatusBarOverlay(L"Macro exported", 1500, hwnd);
+                    QueueStatusBarOverlay(L"Macro exported", 1500, hwnd, StatusBarEventType::Macro);
                 }
                 if (needSave) {
                     MacroEngine_SaveMacros();
                 }
                 if (deleted) {
                     MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd);
+                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
@@ -19471,7 +19656,7 @@ title = L"CPU Limit %";
             }
             if (PtInRect(&pData->macrosBtnRectNext, pt)) {
                 if (pData->macrosWizardName.empty()) {
-                    QueueStatusBarOverlay(L"Enter a macro name", 1500, hwnd);
+                    QueueStatusBarOverlay(L"Enter a macro name", 1500, hwnd, StatusBarEventType::Macro);
                 } else {
                     g_wizardMacro.name = pData->macrosWizardName;
                     g_macroWizardStep = 2;
@@ -19502,7 +19687,7 @@ title = L"CPU Limit %";
                     SetTimer(hwnd, 1003, 250, NULL);
                     MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name);
                 } else {
-                    QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd);
+                    QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                 }
                 return;
             }
@@ -19555,7 +19740,7 @@ title = L"CPU Limit %";
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
                     for (auto& m : g_macros) {
                         if (m.name == pData->macrosWizardName) {
-                            QueueStatusBarOverlay(L"Macro name already exists", 2000, hwnd);
+                            QueueStatusBarOverlay(L"Macro name already exists", 2000, hwnd, StatusBarEventType::Macro);
                             InvalidateRect(hwnd, NULL, FALSE);
                             return;
                         }
@@ -19568,7 +19753,7 @@ title = L"CPU Limit %";
                 pData->macrosViewMode = 0;
                 g_macroWizardActive = false;
                 InvalidateRect(hwnd, NULL, FALSE);
-                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, hwnd);
+                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (PtInRect(&pData->macrosBtnRectBack, pt)) {
@@ -19733,6 +19918,68 @@ title = L"CPU Limit %";
         return;
     }
 
+    if (pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f) {
+        if (PtInRect(&pData->statusBarSettingsBackIconRect, pt)) {
+            pData->statusBarSettingsViewDirection = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        if (PtInRect(&pData->statusBarSettingsOkButtonRect, pt)) {
+            pData->statusBarSettingsViewDirection = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+
+        for (int i = 0; i < 7; ++i) {
+            if (pData->statusBarSettingsHelpButtonRects[i].left != 0 && PtInRect(&pData->statusBarSettingsHelpButtonRects[i], pt)) {
+                const wchar_t* title = L"Help";
+                const wchar_t* text = L"";
+                if (i == 0) {
+                    title = L"App icon";
+                    text = L"Shows the AntiAFK-RBX logo on the left side of the Status Bar overlay.\n\nTurn off for a more minimal look.";
+                } else if (i == 1) {
+                    title = L"Program name";
+                    text = L"Shows the AntiAFK-RBX name inside the Status Bar overlay.\n\nTurn it off if you want the overlay to show only the event text (useful for screen recordings and streams).";
+                } else if (i == 2) {
+                    title = L"Events: Start & Stop";
+                    text = L"Session lifecycle messages:\n\n- AntiAFK started / stopped manually\n- Auto-started when Roblox opens or after inactivity\n- Auto-stopped when Roblox closes or window is not found";
+                } else if (i == 3) {
+                    title = L"Events: Actions";
+                    text = L"Messages around each anti-AFK action cycle:\n\n- Waiting countdown while User-Safe mode holds the action\n- Performing anti-AFK action\n- Action cancelled\n\nTurn off if you only care about session events.";
+                } else if (i == 4) {
+                    title = L"Events: Auto-Reconnect";
+                    text = L"Shown when Auto Reconnect detects a kick/disconnect dialog and presses the Reconnect button, and when a manual reconnect check runs.";
+                } else if (i == 5) {
+                    title = L"Events: Macros";
+                    text = L"Everything macro-related: recording progress, macro saved/deleted/exported/imported, test runs and wizard validation messages.";
+                } else if (i == 6) {
+                    title = L"Events: Interface feedback";
+                    text = L"Reactions to your button clicks and setting changes: Roblox window found/hidden/shown/muted, FPS capped, hotkey recorded, settings imported/exported, webhook toggles and similar messages.";
+                }
+                ShowDarkMessageBox(hwnd, text, title, MB_OK);
+                return;
+            }
+        }
+
+        RECT sbToggleHitbox;
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbIconToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_CONTENT_ICON, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbBrandToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_CONTENT_BRAND, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbSessionToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_EVENT_SESSION, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbActionToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_EVENT_ACTION, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbReconnectToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_EVENT_RECONNECT, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbMacroToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_EVENT_MACRO, 0); return; }
+        MainUI_Paint_DrawToggleGetHitbox(pData->sbUiToggleRect, &sbToggleHitbox);
+        if (PtInRect(&sbToggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_EVENT_UI, 0); return; }
+
+        return;
+    }
+
     for (int i = 0; i < pData->navItems.size(); ++i) {
         if (PtInRect(&pData->navItems[i].rect, pt)) {
             pData->isDiscordWebhookInputFocused = false;
@@ -19794,7 +20041,7 @@ title = L"CPU Limit %";
         if (webhookEnabled && PtInRect(&pData->discordWebhookPasteRect, pt)) {
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(hwnd, clipboardText)) {
-                ShowDarkMessageBox(hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 return;
             }
 
@@ -19822,7 +20069,7 @@ title = L"CPU Limit %";
         if (webhookEnabled && PtInRect(&pData->discordWebhookTestRect, pt)) {
             std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
             if (!IsDiscordWebhookUrl(webhookUrl)) {
-                ShowDarkMessageBox(hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 return;
             }
 
@@ -19838,9 +20085,9 @@ title = L"CPU Limit %";
             if (sent) {
                 wchar_t successMessage[96];
                 swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
-                ShowDarkMessageBox(hwnd, successMessage, L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, successMessage, L"AntiAFK-RBX • Discord Webhook", MB_OK);
             } else {
-                ShowDarkMessageBox(hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
             }
             return;
         }
@@ -19919,7 +20166,7 @@ title = L"CPU Limit %";
                 if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
                 if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
             } else if (pData->currentPage == 3) { // Advanced
-                if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures."; }
+                if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
                 if (i == 1) { title = L"Multi-Instance Delay"; text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC."; }
                 if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
                 if (i == 3) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions.\n- Disabled: turns off memory cleaning.\n\nUse 'Set...' to configure thresholds and intervals."; }
@@ -20066,6 +20313,20 @@ title = L"CPU Limit %";
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR, 0); return; }
         if (PtInRect(&pData->statusBarPrimaryMonitorCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_PRIMARY_MONITOR, 0); return; }
         if (PtInRect(&pData->statusBarPositionBottomCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_STATUS_BAR_POSITION_BOTTOM, 0); return; }
+        if (PtInRect(&pData->statusBarContentCompactRect, pt)) {
+            pData->statusBarSettingsPreviousPage = pData->currentPage;
+            pData->statusBarSettingsViewDirection = 1;
+            pData->statusBarSettingsViewAnim = 0.0f;
+            pData->sbIconAnim = g_statusBarShowIcon.load() ? 1.0f : 0.0f;
+            pData->sbBrandAnim = g_statusBarShowBrand.load() ? 1.0f : 0.0f;
+            pData->sbSessionAnim = g_statusBarEventSession.load() ? 1.0f : 0.0f;
+            pData->sbActionAnim = g_statusBarEventAction.load() ? 1.0f : 0.0f;
+            pData->sbReconnectAnim = g_statusBarEventReconnect.load() ? 1.0f : 0.0f;
+            pData->sbMacroAnim = g_statusBarEventMacro.load() ? 1.0f : 0.0f;
+            pData->sbUiAnim = g_statusBarEventUi.load() ? 1.0f : 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
         MainUI_Paint_DrawToggleGetHitbox(pData->customProcessSearchToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_TOGGLE, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
@@ -20538,6 +20799,40 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         wasShowingGrid = pData->showingGridSettings;
     }
 
+    bool wasShowingStatusBarSettings = pData->showingStatusBarSettings;
+    float statusBarSettingsAnim = pData->statusBarSettingsViewAnim;
+
+    if (wasShowingStatusBarSettings || pData->statusBarSettingsViewDirection != 0) {
+        if (pData->statusBarSettingsViewDirection == 1) {
+            pData->statusBarSettingsViewAnim += (1.0f - pData->statusBarSettingsViewAnim) * animSpeed;
+            if (pData->statusBarSettingsViewAnim > 0.995f) {
+                pData->statusBarSettingsViewAnim = 1.0f;
+                pData->statusBarSettingsViewDirection = 0;
+                pData->showingStatusBarSettings = true;
+            }
+            needsRedraw = true;
+        } else if (pData->statusBarSettingsViewDirection == -1) {
+            pData->statusBarSettingsViewAnim += (0.0f - pData->statusBarSettingsViewAnim) * animSpeed;
+            if (pData->statusBarSettingsViewAnim < 0.005f) {
+                pData->statusBarSettingsViewAnim = 0.0f;
+                pData->statusBarSettingsViewDirection = 0;
+                pData->showingStatusBarSettings = false;
+            }
+            needsRedraw = true;
+        }
+
+        animateToggle(pData->sbIconAnim, g_statusBarShowIcon.load());
+        animateToggle(pData->sbBrandAnim, g_statusBarShowBrand.load());
+        animateToggle(pData->sbSessionAnim, g_statusBarEventSession.load());
+        animateToggle(pData->sbActionAnim, g_statusBarEventAction.load());
+        animateToggle(pData->sbReconnectAnim, g_statusBarEventReconnect.load());
+        animateToggle(pData->sbMacroAnim, g_statusBarEventMacro.load());
+        animateToggle(pData->sbUiAnim, g_statusBarEventUi.load());
+
+        statusBarSettingsAnim = pData->statusBarSettingsViewAnim;
+        wasShowingStatusBarSettings = pData->showingStatusBarSettings;
+    }
+
     bool wasShowingActionDelays = pData->showingActionDelays;
     float actionDelaysAnim = pData->actionDelaysViewAnim;
 
@@ -20698,6 +20993,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             disclaimerContext = 100;
         } else if (pData->gridSettingsViewDirection != 0 || pData->showingGridSettings) {
             disclaimerContext = 101;
+        } else if (pData->statusBarSettingsViewDirection != 0 || pData->showingStatusBarSettings) {
+            disclaimerContext = 106;
         } else if (pData->fpsCapperSettingsViewDirection != 0 || pData->showingFpsCapperSettings) {
             disclaimerContext = 102;
         } else if (pData->alphaInfoViewDirection != 0 || pData->showingAlphaInfo) {
@@ -20732,12 +21029,13 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     }
 
     bool renderGridPrimary = wasShowingGrid || gridAnim > 0.0f;
+    bool renderStatusBarSettingsPrimary = wasShowingStatusBarSettings || statusBarSettingsAnim > 0.0f;
     bool renderActionDelaysPrimary = wasShowingActionDelays || actionDelaysAnim > 0.0f;
     bool renderFpsCapperSettingsPrimary = wasShowingFpsCapperSettings || fpsCapperSettingsAnim > 0.0f;
     bool renderAlphaInfoPrimary = wasShowingAlphaInfo || alphaInfoAnim > 0.0f;
     bool renderTimingsPrimary = wasShowingTimings || timingsAnim > 0.0f;
     bool renderMacrosPrimary = (pData->showingMacros || pData->macrosViewAnim > 0.0f);
-    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim), macrosAnim)));
+    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->statusBarSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim), macrosAnim)));
     bool renderMainPrimary = overlayAlpha < 0.5f;
 
     pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
@@ -20749,13 +21047,14 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     g.FillRectangle(&mainBgBrush, (REAL)clientRect.left, (REAL)clientRect.top, (REAL)(clientRect.right - clientRect.left), (REAL)(clientRect.bottom - clientRect.top));
 
     pData->gridBackIconRect = pData->iconButtonRect;
+    pData->statusBarSettingsBackIconRect = pData->iconButtonRect;
     pData->actionDelaysBackIconRect = pData->iconButtonRect;
     pData->fpsCapperSettingsBackIconRect = pData->iconButtonRect;
     pData->alphaInfoBackIconRect = pData->iconButtonRect;
     pData->timingsBackIconRect = pData->iconButtonRect;
     pData->macrosBackIconRect = pData->iconButtonRect;
 
-    float activeBackAnim = max(max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+    float activeBackAnim = max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
     bool isHoveringActiveBack = pData->isHoveringBackIcon || pData->isHoveringActionDelaysBackIcon || pData->isHoveringFpsCapperSettingsBackIcon || pData->isHoveringAlphaInfoBackIcon || pData->isHoveringTimingsBackIcon || pData->isHoveringMacrosBackIcon;
 
     if (activeBackAnim > 0.0f) {
@@ -20835,39 +21134,43 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         if (gridAnim > 0.0f) {
             SolidBrush textBrushGrid(Color((BYTE)(255 * gridAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX \u2022 Grid Settings", -1, &gdiFont, titleRect, &sf, &textBrushGrid);
+            g.DrawString(L"AntiAFK-RBX • Grid Settings", -1, &gdiFont, titleRect, &sf, &textBrushGrid);
+        }
+        if (statusBarSettingsAnim > 0.0f) {
+            SolidBrush textBrushSb(Color((BYTE)(255 * statusBarSettingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            g.DrawString(L"AntiAFK-RBX • Status Bar Settings", -1, &gdiFont, titleRect, &sf, &textBrushSb);
         }
         if (actionDelaysAnim > 0.0f) {
             SolidBrush textBrushDelays(Color((BYTE)(255 * actionDelaysAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX \u2022 Action Delays & Repeats", -1, &gdiFont, titleRect, &sf, &textBrushDelays);
+            g.DrawString(L"AntiAFK-RBX • Action Delays & Repeats", -1, &gdiFont, titleRect, &sf, &textBrushDelays);
         }
         if (fpsCapperSettingsAnim > 0.0f) {
             SolidBrush textBrushFps(Color((BYTE)(255 * fpsCapperSettingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX \u2022 FPS Capper (CPU Limiter)", -1, &gdiFont, titleRect, &sf, &textBrushFps);
+            g.DrawString(L"AntiAFK-RBX • FPS Capper (CPU Limiter)", -1, &gdiFont, titleRect, &sf, &textBrushFps);
         }
         if (alphaInfoAnim > 0.0f) {
             SolidBrush textBrushAlpha(Color((BYTE)(255 * alphaInfoAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             wchar_t aboutTitle[64];
-            swprintf_s(aboutTitle, L"AntiAFK-RBX \u2022 About \u00B7 %ls", GetReleaseChannelName());
+            swprintf_s(aboutTitle, L"AntiAFK-RBX • About · %ls", GetReleaseChannelName());
             g.DrawString(aboutTitle, -1, &gdiFont, titleRect, &sf, &textBrushAlpha);
         }
         if (timingsAnim > 0.0f) {
             SolidBrush textBrushTimings(Color((BYTE)(255 * timingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX \u2022 Timings", -1, &gdiFont, titleRect, &sf, &textBrushTimings);
+            g.DrawString(L"AntiAFK-RBX • Timings", -1, &gdiFont, titleRect, &sf, &textBrushTimings);
         }
         float macrosAnim = pData->macrosViewAnim;
         if (macrosAnim > 0.0f) {
             SolidBrush textBrushMacros(Color((BYTE)(255 * macrosAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            const wchar_t* titleText = L"AntiAFK-RBX \u2022 Macros";
-            if (pData->macrosViewMode == 1) titleText = L"AntiAFK-RBX \u2022 New Macro: Name";
-            else if (pData->macrosViewMode == 2) titleText = g_macroReRecording ? L"AntiAFK-RBX \u2022 Re-record Macro" : L"AntiAFK-RBX \u2022 New Macro: Record";
-            else if (pData->macrosViewMode == 3) titleText = L"AntiAFK-RBX \u2022 New Macro: Review";
-            else if (pData->macrosViewMode == 4) titleText = L"AntiAFK-RBX \u2022 New Macro: Triggers";
-            else if (pData->macrosViewMode == 5) titleText = L"AntiAFK-RBX \u2022 Recording...";
+            const wchar_t* titleText = L"AntiAFK-RBX • Macros";
+            if (pData->macrosViewMode == 1) titleText = L"AntiAFK-RBX • New Macro: Name";
+            else if (pData->macrosViewMode == 2) titleText = g_macroReRecording ? L"AntiAFK-RBX • Re-record Macro" : L"AntiAFK-RBX • New Macro: Record";
+            else if (pData->macrosViewMode == 3) titleText = L"AntiAFK-RBX • New Macro: Review";
+            else if (pData->macrosViewMode == 4) titleText = L"AntiAFK-RBX • New Macro: Triggers";
+            else if (pData->macrosViewMode == 5) titleText = L"AntiAFK-RBX • Recording...";
             g.DrawString(titleText, -1, &gdiFont, titleRect, &sf, &textBrushMacros);
         }
         float badgeAnim = pData->badgeRevealAnim;
-        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim);
+        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim);
         if (mainTitleFade > 0.0f) {
             SolidBrush textBrushNormal(Color((BYTE)(255 * mainTitleFade), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX", -1, &gdiFont, titleRect, &sf, &textBrushNormal);
@@ -20919,12 +21222,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     BYTE g_normal = (BYTE)(g_state_normal * (1.0f - progress) + GetGValue(errorColor) * progress);
     BYTE b_normal = (BYTE)(b_state_normal * (1.0f - progress) + GetBValue(errorColor) * progress);
 
-    float overlayAnim = max(max(max(max(max(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+    float overlayAnim = max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
 
     bool isContinueBtn = pData->alphaInfoAutoShown && alphaInfoAnim > 0.0f && alphaInfoAnim >= overlayAnim * 0.99f;
     COLORREF startColor_back = isContinueBtn ? RGB(0, 100, 180) : RGB(80, 80, 80);
     COLORREF startHoverColor_back = isContinueBtn ? RGB(0, 130, 210) : RGB(100, 100, 100);
-    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton || pData->isHoveringMacrosOkButton;
+    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringStatusBarSettingsOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton || pData->isHoveringMacrosOkButton;
     COLORREF currentBackColor = isOverlayOkHovered ? startHoverColor_back : startColor_back;
     BYTE r_back = GetRValue(currentBackColor);
     BYTE g_back = GetGValue(currentBackColor);
@@ -21243,6 +21546,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
         pData->statusBarPrimaryMonitorCompactRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
         pData->statusBarPositionBottomCompactRect = { pData->statusBarPrimaryMonitorCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPrimaryMonitorCompactRect.left - inlineGap, controlBottom };
+        pData->statusBarContentCompactRect = { pData->statusBarPositionBottomCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPositionBottomCompactRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -21784,6 +22088,107 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             g.DrawImage(&delaysBmp, Rect(0, 0, delaysW, delaysH), 0, 0, delaysW, delaysH, UnitPixel, &ia);
         } else {
             drawFpsCapperContent(g, false);
+        }
+    }
+
+    if (renderStatusBarSettingsPrimary) {
+        const int sb_margin = 20;
+        const int sb_rowH = 32;
+        const int sb_vGap = 10;
+        const int sb_content_y = 31;
+        int sb_y = sb_content_y;
+        int sb_ctrlEndX = clientRect.right - 20;
+        const int sb_help_btn_size = 24;
+
+        std::vector<RECT> sbRowRects;
+        auto layoutSbRow = [&](RECT& toggleRect, RECT& helpRect) {
+            sbRowRects.push_back({ 0, sb_y, clientRect.right, sb_y + sb_rowH + sb_vGap });
+            toggleRect = { sb_margin, sb_y, sb_ctrlEndX - sb_help_btn_size, sb_y + sb_rowH };
+            helpRect = { sb_ctrlEndX - sb_help_btn_size, sb_y + (sb_rowH - sb_help_btn_size) / 2 + 4, sb_ctrlEndX, sb_y + (sb_rowH - sb_help_btn_size) / 2 + sb_help_btn_size + 4 };
+            sb_y += sb_rowH + sb_vGap;
+        };
+        layoutSbRow(pData->sbIconToggleRect, pData->statusBarSettingsHelpButtonRects[0]);
+        layoutSbRow(pData->sbBrandToggleRect, pData->statusBarSettingsHelpButtonRects[1]);
+        layoutSbRow(pData->sbSessionToggleRect, pData->statusBarSettingsHelpButtonRects[2]);
+        layoutSbRow(pData->sbActionToggleRect, pData->statusBarSettingsHelpButtonRects[3]);
+        layoutSbRow(pData->sbReconnectToggleRect, pData->statusBarSettingsHelpButtonRects[4]);
+        layoutSbRow(pData->sbMacroToggleRect, pData->statusBarSettingsHelpButtonRects[5]);
+        layoutSbRow(pData->sbUiToggleRect, pData->statusBarSettingsHelpButtonRects[6]);
+
+        pData->statusBarSettingsOkButtonRect = pData->startButtonRect;
+        pData->statusBarSettingsBackIconRect = pData->iconButtonRect;
+
+        float sbAnimVal = pData->statusBarSettingsViewAnim;
+
+        auto drawSbContent = [&](Graphics& sbg) {
+            {
+                PixelOffsetMode oldOffset = sbg.GetPixelOffsetMode();
+                SmoothingMode oldSmooth = sbg.GetSmoothingMode();
+                sbg.SetPixelOffsetMode(PixelOffsetModeNone);
+                sbg.SetSmoothingMode(SmoothingModeNone);
+                SolidBrush sepLineBrush(Color(180, 56, 56, 56));
+                sbg.FillRectangle(&sepLineBrush, 0.0f, 30.0f, (REAL)clientRect.right, 1.0f);
+                sbg.SetPixelOffsetMode(oldOffset);
+                sbg.SetSmoothingMode(oldSmooth);
+            }
+
+            sbg.SetSmoothingMode(SmoothingModeNone);
+            sbg.SetPixelOffsetMode(PixelOffsetModeHalf);
+            int sbRowCount = (int)sbRowRects.size();
+            for (int i = 0; i < sbRowCount; i++) {
+                RECT rr = sbRowRects[i];
+                Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+                SolidBrush rowBrush(rowBgColor);
+                sbg.FillRectangle(&rowBrush, 0.0f, (REAL)rr.top, (REAL)(clientRect.right), (REAL)(rr.bottom - rr.top));
+                SolidBrush sepBrush(Color(180, 56, 56, 56));
+                {
+                    PixelOffsetMode oldOffset = sbg.GetPixelOffsetMode();
+                    SmoothingMode oldSmooth = sbg.GetSmoothingMode();
+                    sbg.SetPixelOffsetMode(PixelOffsetModeNone);
+                    sbg.SetSmoothingMode(SmoothingModeNone);
+                    sbg.FillRectangle(&sepBrush, 0.0f, (REAL)(rr.bottom - 1), (REAL)(clientRect.right), 1.0f);
+                    sbg.SetPixelOffsetMode(oldOffset);
+                    sbg.SetSmoothingMode(oldSmooth);
+                }
+            }
+
+            MainUI_Paint_DrawToggle(hdc, pData->sbIconToggleRect, pData->hFontText, L"App icon", g_statusBarShowIcon.load(), pData->isHoveringSbIcon, pData->sbIconAnim, false, L"\uE7F4", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbBrandToggleRect, pData->hFontText, L"Program name", g_statusBarShowBrand.load(), pData->isHoveringSbBrand, pData->sbBrandAnim, false, L"\uE8AC", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbSessionToggleRect, pData->hFontText, L"Events: Start & Stop", g_statusBarEventSession.load(), pData->isHoveringSbSession, pData->sbSessionAnim, false, L"\uE768", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbActionToggleRect, pData->hFontText, L"Events: Actions", g_statusBarEventAction.load(), pData->isHoveringSbAction, pData->sbActionAnim, false, L"\uE765", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbReconnectToggleRect, pData->hFontText, L"Events: Auto-Reconnect", g_statusBarEventReconnect.load(), pData->isHoveringSbReconnect, pData->sbReconnectAnim, false, L"\uE8AF", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbMacroToggleRect, pData->hFontText, L"Events: Macros", g_statusBarEventMacro.load(), pData->isHoveringSbMacro, pData->sbMacroAnim, false, L"\uE7C9", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbUiToggleRect, pData->hFontText, L"Events: Interface feedback", g_statusBarEventUi.load(), pData->isHoveringSbUi, pData->sbUiAnim, false, L"\uE713", true, &sbg);
+
+            for (int i = 0; i < 7; ++i) {
+                if (pData->statusBarSettingsHelpButtonRects[i].left != 0) {
+                    MainUI_Paint_DrawHelpButton(hdc, pData->statusBarSettingsHelpButtonRects[i], pData->hFontText, pData->hoveringStatusBarSettingsHelpButton == i, false, &sbg);
+                }
+            }
+        };
+
+        if (sbAnimVal < 1.0f) {
+            Bitmap sbBmp(clientRect.right, clientRect.bottom);
+            Graphics sbG(&sbBmp);
+            sbG.SetSmoothingMode(g.GetSmoothingMode());
+            sbG.SetPixelOffsetMode(g.GetPixelOffsetMode());
+            sbG.SetTextRenderingHint(g.GetTextRenderingHint());
+            sbG.Clear(Color(0, 0, 0, 0));
+
+            drawSbContent(sbG);
+
+            ColorMatrix cm = {
+                1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, sbAnimVal, 0.0f,
+                0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+            };
+            ImageAttributes ia;
+            ia.SetColorMatrix(&cm, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
+            g.DrawImage(&sbBmp, Rect(0, 0, clientRect.right, clientRect.bottom), 0, 0, clientRect.right, clientRect.bottom, UnitPixel, &ia);
+        } else {
+            drawSbContent(g);
         }
     }
 
@@ -22353,7 +22758,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             bool mutexOk = IsMultiInstanceMutexValid();
             bool hasError = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
             bool ignored = g_mutexIgnored && !mutexOk;
-            const wchar_t* statusText = hasError ? L"Mutex registration failed \u2022 Click to retry" : (ignored ? L"Mutex ignored \u2022 Click to reset" : (mutexOk ? L"Mutex active \u2022 Multi-Instance active" : L"Mutex invalid"));
+            const wchar_t* statusText = hasError ? L"Mutex registration failed • Click to retry" : (ignored ? L"Mutex ignored • Click to reset" : (mutexOk ? L"Mutex active • Multi-Instance active" : L"Mutex invalid"));
             MainUI_Paint_DrawHoverTooltip(hdc, pData->mutexStatusRect, pData->hFontSmall, statusText, false);
         }
         if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, L"Configure custom action delays & repeats", false);
@@ -22561,6 +22966,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
+        MainUI_Paint_DrawCompactButton(hdc, pData->statusBarContentCompactRect, pData->hFontText, L"\uE713", pData->isHoveringStatusBarContentCompact, L"\uE713", false);
 
         const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
         int miIntervalIndex = 0;
@@ -22670,6 +23076,9 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
         if (pData->isHoveringStatusBarPositionBottomCompact) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontSmall, g_statusBarPositionBottom.load() ? L"Status Bar at bottom" : L"Status Bar at top", false);
+        }
+        if (pData->isHoveringStatusBarContentCompact) {
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarContentCompactRect, pData->hFontSmall, L"Status Bar settings - content and events", false);
         }
         if (g_simpleMode.load()) {
             const wchar_t* smAdvMsg = L"Simple Mode is on - disable it to use this setting";
@@ -23257,7 +23666,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 int yStart = contentY;
                 contentY += drawWrapped(&fontSection, L"Known Issues", contentX, contentY, contentW, Color(255, 255, 190, 90)) + 3;
                 contentY += drawBody(L"Information about known issues and planned fixes can be found on the Releases page.", contentY, 10) + 13;
-                contentY += drawLink(L"View known issues on Releases \u2192", contentY, 10, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 120, 185, 250));
+                contentY += drawLink(L"View known issues on Releases →", contentY, 10, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 120, 185, 250));
                 if (!measureOnly) {
                     PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
                     SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
@@ -23277,7 +23686,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
             {
                 int yStart = contentY;
-                const wchar_t* headerText = L"What\u2019s New in v.4.0.0 \u2192";
+                const wchar_t* headerText = L"What’s New in v.4.0.0 →";
                 RectF headerBounds;
                 gTarget.MeasureString(headerText, -1, &fontSection, SizeF((REAL)contentW, 9999.0f), &sfTypo, &headerBounds);
                 int headerH = (int)(headerBounds.Height + 4.0f);
@@ -23591,17 +24000,17 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             const wchar_t* statusText = afkStarted ? L"Running" : L"Stopped";
             Color statusTextColor = afkStarted ? Color(255, 80, 200, 80) : Color(255, 200, 80, 80);
             drawTValueBox(0, statusText, false, statusTextColor);
-            swprintf_s(tbuf, L"%s", afkStarted ? formatHMS(nextActionSec).c_str() : L"\u2014");
+            swprintf_s(tbuf, L"%s", afkStarted ? formatHMS(nextActionSec).c_str() : L"—");
             drawTValueBox(1, tbuf, afkStarted);
-            drawTValueBox(2, (afkStarted && sinceActionSec >= 0) ? formatHMS(sinceActionSec).c_str() : (afkStarted ? L"now" : L"\u2014"), false);
-            drawTValueBox(3, afkStarted ? formatHMS(sessionSec).c_str() : L"\u2014", false);
+            drawTValueBox(2, (afkStarted && sinceActionSec >= 0) ? formatHMS(sinceActionSec).c_str() : (afkStarted ? L"now" : L"—"), false);
+            drawTValueBox(3, afkStarted ? formatHMS(sessionSec).c_str() : L"—", false);
             swprintf_s(tbuf, L"%llu", (unsigned long long)actions);
             drawTValueBox(4, tbuf, false);
             swprintf_s(tbuf, L"%llu", (unsigned long long)reconnects);
             drawTValueBox(5, tbuf, false);
 
-            std::wstring intervalMacroStatus = L"\u2014";
-            std::wstring nextMacroName = L"\u2014";
+            std::wstring intervalMacroStatus = L"—";
+            std::wstring nextMacroName = L"—";
             {
                 std::lock_guard<std::mutex> lock(g_macrosMutex);
                 ULONGLONG minRemMs = (ULONGLONG)-1;
@@ -23839,6 +24248,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         auto getDisclaimerText = [&](int ctx) -> const wchar_t* {
             if (ctx >= 100) {
                 if (ctx == 101) return L"Arrange Roblox windows";
+                if (ctx == 106) return L"Choose what the Status Bar shows";
                 if (ctx == 102) return L"Configure FPS Capper (CPU Limiter) settings";
                 if (ctx == 104) return L"Live session timings";
                 if (ctx == 105) return L"Create and manage custom macros";
@@ -23852,7 +24262,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                     int relType = (currentVersion / 100) % 10;
                     if (relType != STABLE && relType != 0) {
                         static wchar_t buildInfo[96];
-                        swprintf_s(buildInfo, L"Pre-release build \u2022 %s", g_Version);
+                        swprintf_s(buildInfo, L"Pre-release build • %s", g_Version);
                         return buildInfo;
                     }
                     return L"Closing this window minimizes it to the system tray.";
@@ -24502,7 +24912,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                         RectF textR((REAL)(panelX + 24), (REAL)y, (REAL)(panelW - 28), (REAL)20);
                         gTarget.DrawString(text, -1, &smallFont, textR, &sfLeft, &textColor);
                     };
-                    drawStep(L"1", L"Roblox window will be focused and resized to 800\u2009\u00D7\u2009600", cy);
+                    drawStep(L"1", L"Roblox window will be focused and resized to 800 x 600", cy);
                     cy += 22;
                     drawStep(L"2", L"Recording starts: clicks, keys and mouse movement", cy);
                     cy += 22;
@@ -24663,7 +25073,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                     cy += 22;
                     drawStep(L"2", L"Press Ctrl+Shift+R to stop recording", cy);
                     cy += 22;
-                    drawStep(L"3", L"Roblox window resized to 800\u2009\u00D7\u2009600", cy);
+                    drawStep(L"3", L"Roblox window resized to 800 x 600", cy);
                     cy += 18;
 
                     mcy = cy + 36;
@@ -24672,7 +25082,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                         int btnY = mH - 65 - btnH;
                         DWORD elapsed = (g_recordingStartTime > 0) ? (DWORD)((MacroEngine_NowMs() - g_recordingStartTime) / 1000) : 0;
                         wchar_t stats[128];
-                        swprintf_s(stats, L"%d clicks \u2022 %d keys \u2022 %d wheel \u2022 %ds", g_recordingClickCount, g_recordingKeyCount, g_recordingWheelCount, elapsed);
+                        swprintf_s(stats, L"%d clicks • %d keys • %d wheel • %ds", g_recordingClickCount, g_recordingKeyCount, g_recordingWheelCount, elapsed);
                         RectF statsRect((REAL)0, (REAL)(btnY - 28), (REAL)mW, 24.0f);
                         gTarget.DrawString(stats, -1, &smallFont, statsRect, &sfCenter, &accentColor);
                     }
@@ -24759,12 +25169,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             int selIdx = pData->macrosHoveringItem;
             if (pData->macrosHoverCooldown && pData->macrosTriggerRectCd.left != 0) {
                 int pos = runPosOf(selIdx, 0);
-                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" \u2022 Run on each AFK action") : L"Run on each AFK action";
+                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" • Run on each AFK action") : L"Run on each AFK action";
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectCd, pData->hFontSmall, tip.c_str(), false);
             }
             if (pData->macrosHoverReconnect && pData->macrosTriggerRectRc.left != 0) {
                 int pos = runPosOf(selIdx, 1);
-                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" \u2022 Run on reconnect") : L"Run on reconnect";
+                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" • Run on reconnect") : L"Run on reconnect";
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectRc, pData->hFontSmall, tip.c_str(), false);
             }
             if (pData->macrosHoverInterval && pData->macrosTriggerRectInt.left != 0) {
@@ -24777,7 +25187,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                     }
                 }
                 int pos = runPosOf(selIdx, 2);
-                if (pos > 0) tip = L"Playback order: " + std::to_wstring(pos) + L" \u2022 " + tip;
+                if (pos > 0) tip = L"Playback order: " + std::to_wstring(pos) + L" • " + tip;
                 if (sec > 0) tip += L" (" + std::to_wstring(sec) + L"s)";
                 else tip += L" (Not set - Click to set time)";
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectInt, pData->hFontSmall, tip.c_str(), false);
@@ -24955,7 +25365,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             }
             if (!confirmMsg.empty()) {
                 EnableWindow(hwnd, FALSE);
-                int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), L"AntiAFK-RBX \u2022 Delete Macro", MB_YESNO | MB_DEFBUTTON2);
+                int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), L"AntiAFK-RBX • Delete Macro", MB_YESNO | MB_DEFBUTTON2);
                 EnableWindow(hwnd, TRUE);
                 SetForegroundWindow(hwnd);
                 if (delResult == IDYES) {
@@ -24969,7 +25379,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                     }
                     pData->macrosSelectedIndex = -1;
                     MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd);
+                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -25218,6 +25628,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
             pData->statusBarPrimaryMonitorCompactRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
             pData->statusBarPositionBottomCompactRect = { pData->statusBarPrimaryMonitorCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPrimaryMonitorCompactRect.left - inlineGap, controlBottom };
+            pData->statusBarContentCompactRect = { pData->statusBarPositionBottomCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPositionBottomCompactRect.left - inlineGap, controlBottom };
             y += rowH + vGap;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -25473,6 +25884,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         bool anyDisabledHover = false;
         bool overlayActive = pData->showingActionDelays || pData->actionDelaysViewAnim > 0.0f ||
                              pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f ||
+                             pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f ||
                              pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f ||
                              pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f ||
                              pData->showingTimings || pData->timingsViewAnim > 0.0f ||
@@ -25660,6 +26072,42 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (newHoveringGridHelpButton != -1);
         }
 
+        if (pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f) {
+            anyHover |= checkHover(pData->isHoveringBackIcon, pData->statusBarSettingsBackIconRect);
+            anyHover |= checkHover(pData->isHoveringStatusBarSettingsOkButton, pData->statusBarSettingsOkButtonRect);
+            {
+                RECT sbToggleHitbox;
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbIconToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbIcon, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbBrandToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbBrand, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbSessionToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbSession, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbActionToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbAction, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbReconnectToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbReconnect, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbMacroToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbMacro, sbToggleHitbox);
+                MainUI_Paint_DrawToggleGetHitbox(pData->sbUiToggleRect, &sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbUi, sbToggleHitbox);
+            }
+
+            int newHoveringSbHelpButton = -1;
+            for (int i = 0; i < 7; ++i) {
+                if (pData->statusBarSettingsHelpButtonRects[i].left != 0 && PtInRect(&pData->statusBarSettingsHelpButtonRects[i], pt)) {
+                    newHoveringSbHelpButton = i;
+                    break;
+                }
+            }
+            if (newHoveringSbHelpButton != pData->hoveringStatusBarSettingsHelpButton) {
+                pData->hoveringStatusBarSettingsHelpButton = newHoveringSbHelpButton;
+                InvalidateRect(hwnd, NULL, FALSE);
+                anyHover = true;
+            }
+            anyHover |= (newHoveringSbHelpButton != -1);
+        }
+
         anyHover |= checkHover(pData->isHoveringClose, pData->closeButtonRect);
         anyHover |= checkHover(pData->isHoveringDisclaimerShowMore, pData->disclaimerShowMoreRect);
 
@@ -25730,6 +26178,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringStatusBarToggle, pData->statusBarToggleRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringStatusBarPositionBottomCompact, pData->statusBarPositionBottomCompactRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringStatusBarContentCompact, pData->statusBarContentCompactRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringHotkeyToggle, pData->hotkeyToggleRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringHotkeyBind, pData->hotkeyChangeBtnRect));
             anyHover |= (pData->currentPage == 3 && checkToggleHover(pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchToggleRect));
@@ -25931,6 +26380,16 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringStatusBarToggle = false;
         pData->isHoveringStatusBarPrimaryMonitorCompact = false;
         pData->isHoveringStatusBarPositionBottomCompact = false;
+        pData->isHoveringStatusBarContentCompact = false;
+        pData->isHoveringSbIcon = false;
+        pData->isHoveringSbBrand = false;
+        pData->isHoveringSbSession = false;
+        pData->isHoveringSbAction = false;
+        pData->isHoveringSbReconnect = false;
+        pData->isHoveringSbMacro = false;
+        pData->isHoveringSbUi = false;
+        pData->isHoveringStatusBarSettingsOkButton = false;
+        pData->hoveringStatusBarSettingsHelpButton = -1;
         pData->isHoveringHotkeyToggle = false;
         pData->isHoveringHotkeyBind = false;
         pData->isHoveringSimpleModeToggle = false;
@@ -26909,14 +27368,14 @@ void main_thread(bool arg_tray)
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
-                    QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user);
-                    CreateTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX \u2022 Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue;
+                    QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user, StatusBarEventType::Session);
+                    CreateTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue;
                 }
                 else
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Roblox not found.", false);
-                    QueueStatusBarOverlay(L"Roblox window not found", 2200, user);
+                    QueueStatusBarOverlay(L"Roblox window not found", 2200, user, StatusBarEventType::Session);
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
                     ResetIcanForgetCounter();
@@ -26924,7 +27383,7 @@ void main_thread(bool arg_tray)
                     ApplyAutoUtilsStopEffects();
                     CreateTrayMenu(false);
                     UpdateTrayIcon();
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Auto-Stopped", L"Roblox window not found. AntiAFK is now off.");
+                    ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. AntiAFK is now off.");
                     continue;
                 }
             }
@@ -26964,15 +27423,15 @@ void main_thread(bool arg_tray)
 
                         int remaining = (int)(MAX_WAIT_TIME - elapsedSeconds);
                         wchar_t waitMsg[128];
-                        swprintf_s(waitMsg, L"Waiting 3s inactivity \u2022 force in %ds", remaining);
+                        swprintf_s(waitMsg, L"Waiting 3s inactivity • force in %ds", remaining);
                         if (!shownStatus)
                         {
-                            QueueStatusBarOverlayPersistent(waitMsg, wins.front());
+                            QueueStatusBarOverlayPersistent(waitMsg, wins.front(), StatusBarEventType::Action);
                             shownStatus = true;
                         }
                         else
                         {
-                            QueueStatusBarMessage(waitMsg);
+                            QueueStatusBarMessage(waitMsg, StatusBarEventType::Action);
                         }
 
                         g_cv.wait_for(lock, std::chrono::milliseconds(userSafeCheckInterval), [] { return !g_userActive.load() || g_stopThread.load() || !g_isAfkStarted.load(); });
@@ -26983,7 +27442,7 @@ void main_thread(bool arg_tray)
                 FpsCapperPauseGuard fpsCapperGuard;
 
                 QueueStatusBarOverlay(L"Performing anti-AFK action",
-                                      STATUS_BAR_ACTION_PENDING_DURATION, wins.front());
+                                      STATUS_BAR_ACTION_PENDING_DURATION, wins.front(), StatusBarEventType::Action);
 
                 DWORD statusBarLeadWaited = 0;
                 while (statusBarLeadWaited < STATUS_BAR_PRE_ACTION_DELAY)
@@ -27170,7 +27629,7 @@ void main_thread(bool arg_tray)
                 }
 
                 if (!cancelPendingAction && anyActionPerformed) {
-                    QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front());
+                    QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front(), StatusBarEventType::Action);
                     g_afkActionsPerformed++;
                     g_lastAfkActionTimestamp = GetTickCount64();
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Action, L"Cycle completed.", false);
@@ -27179,7 +27638,7 @@ void main_thread(bool arg_tray)
                     }
                 } else {
                     HideStatusBarOverlay(false);
-                    QueueStatusBarOverlay(L"AntiAFK action cancelled", 1800, wins.front());
+                    QueueStatusBarOverlay(L"AntiAFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
                 }
             }
             g_updateInterval = false;
@@ -27363,7 +27822,7 @@ void main_thread(bool arg_tray)
                             CreateTrayMenu(true);
                             UpdateTrayIcon();
                             ActivateAutoUtilsOnAfkStart();
-                            QueueStatusBarOverlay(L"AntiAFK auto-started", 2000, wins.front());
+                            QueueStatusBarOverlay(L"AntiAFK auto-started", 2000, wins.front(), StatusBarEventType::Session);
                             QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started automatically.", false);
                             ApplyAutoUtilsStartEffects();
                         }
@@ -27557,7 +28016,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         break;
     case WM_APP + 12:
         {
-            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all statistics?\nThis action cannot be undone.", L"AntiAFK-RBX \u2022 Reset Statistics", MB_YESNO | MB_DEFBUTTON2);
+            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all statistics?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Statistics", MB_YESNO | MB_DEFBUTTON2);
             if (result == IDYES) {
                 ResetStatisticsCounters();
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -27627,7 +28086,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
             }
             if (!skip) {
-                ShowStatusBarOverlay(payload->text, payload->durationMs, payload->anchorWindow);
+                ShowStatusBarOverlay(payload->text, payload->durationMs, payload->anchorWindow, payload->eventType);
             }
             delete payload;
         }
@@ -27647,7 +28106,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
             }
             if (!skip) {
-                ShowStatusBarOverlayPersistent(payload->text, payload->anchorWindow);
+                ShowStatusBarOverlayPersistent(payload->text, payload->anchorWindow, payload->eventType);
             }
             delete payload;
         }
@@ -27736,7 +28195,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (!g_isAfkStarted.load() && g_selectedAction.load() == 4 && MacroEngine_GetCooldownMacros().empty() && !MacroEngine_AllWindowsHaveInstanceMacros()) {
                     HWND owner = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd;
                     EnableWindow(owner, FALSE);
-                    int res = ShowDarkMessageBox(owner, L"'Macros Only' is selected, but no AFK action macros are enabled.\n\nWithout AFK action macros AntiAFK will NOT work correctly - nothing will be performed.\n\nStart anyway?\n\nTip: change the action to something else, or add at least 1 macro with the AFK action trigger.", L"AntiAFK-RBX \u2022 Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                    int res = ShowDarkMessageBox(owner, L"'Macros Only' is selected, but no AFK action macros are enabled.\n\nWithout AFK action macros AntiAFK will NOT work correctly - nothing will be performed.\n\nStart anyway?\n\nTip: change the action to something else, or add at least 1 macro with the AFK action trigger.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
                     EnableWindow(owner, TRUE);
                     SetForegroundWindow(owner);
                     if (res != IDYES) {
@@ -27778,12 +28237,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 g_cv.notify_all();
                 ApplyAutoUtilsStartEffects();
 
-                ShowStatusBarOverlay(L"AntiAFK started", 1800, wins.front());
+                ShowStatusBarOverlay(L"AntiAFK started", 1800, wins.front(), StatusBarEventType::Session);
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started manually.", false);
              }
              else
              {
-                 ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                 ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                  ShowStatusBarOverlay(L"Roblox window not found", 2200, GetForegroundWindow());
                  QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Start failed: Roblox not found.", false);
                  if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -27823,7 +28282,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ApplyAutoUtilsStopEffects();
             CreateTrayMenu(false);
             UpdateTrayIcon();
-            ShowStatusBarOverlay(L"AntiAFK stopped", 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front());
+            ShowStatusBarOverlay(L"AntiAFK stopped", 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front(), StatusBarEventType::Session);
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
                 if (pData) {
@@ -27844,7 +28303,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -27859,7 +28318,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -27905,7 +28364,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -27961,7 +28420,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 DestroyWindow(g_hMainUiWnd);
             }
                             if (g_useLegacyUi.load()) {
-                                ShowTrayNotification(L"AntiAFK-RBX \u2022 UI Mode Changed", L"Switched to Legacy (Tray) mode.");
+                                ShowTrayNotification(L"AntiAFK-RBX • UI Mode Changed", L"Switched to Legacy (Tray) mode.");
                             }
             break;
         case ID_TOGGLE_SIMPLE_MODE:
@@ -27971,7 +28430,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
-            ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled \u2014 advanced options hidden" : L"Simple Mode disabled \u2014 showing all options", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled, advanced options hidden" : L"Simple Mode disabled, showing all options", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_TOGGLE_HOTKEY:
         {
@@ -28060,6 +28519,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_STATUS_BAR_PRIMARY_MONITOR:
             g_statusBarPrimaryMonitor = !g_statusBarPrimaryMonitor.load();
             SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
@@ -28074,6 +28534,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_STATUS_BAR_POSITION_BOTTOM:
             g_statusBarPositionBottom = !g_statusBarPositionBottom.load();
             SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
@@ -28085,6 +28546,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
             }
             break;
+        case ID_STATUS_BAR_CONTENT_ICON:
+        case ID_STATUS_BAR_CONTENT_BRAND:
+        case ID_STATUS_BAR_EVENT_SESSION:
+        case ID_STATUS_BAR_EVENT_ACTION:
+        case ID_STATUS_BAR_EVENT_RECONNECT:
+        case ID_STATUS_BAR_EVENT_MACRO:
+        case ID_STATUS_BAR_EVENT_UI:
+        {
+            switch (LOWORD(wParam)) {
+            case ID_STATUS_BAR_CONTENT_ICON: g_statusBarShowIcon = !g_statusBarShowIcon.load(); break;
+            case ID_STATUS_BAR_CONTENT_BRAND: g_statusBarShowBrand = !g_statusBarShowBrand.load(); break;
+            case ID_STATUS_BAR_EVENT_SESSION: g_statusBarEventSession = !g_statusBarEventSession.load(); break;
+            case ID_STATUS_BAR_EVENT_ACTION: g_statusBarEventAction = !g_statusBarEventAction.load(); break;
+            case ID_STATUS_BAR_EVENT_RECONNECT: g_statusBarEventReconnect = !g_statusBarEventReconnect.load(); break;
+            case ID_STATUS_BAR_EVENT_MACRO: g_statusBarEventMacro = !g_statusBarEventMacro.load(); break;
+            case ID_STATUS_BAR_EVENT_UI: g_statusBarEventUi = !g_statusBarEventUi.load(); break;
+            }
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
+                StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
+                bool visible = IsWindowVisible(g_hStatusBarWnd) != FALSE;
+                bool stillAllowed = sbData && StatusBarHasAnyContent() && g_statusBarEnabled.load() && StatusBarEventEnabled(sbData->eventType);
+                if (visible) {
+                    if (stillAllowed && sbData) {
+                        sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                        UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
+                        InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
+                    } else {
+                        HideStatusBarOverlay(true);
+                    }
+                }
+            }
+            break;
+        }
         case ID_USER_SAFE_OFF:
         case ID_USER_SAFE_LEGACY:
         case ID_USER_SAFE_BETA:
@@ -28131,7 +28630,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_autoReconnect.load() && g_autoOpacity.load()) {
-                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict \u2014 disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         case ID_RECONNECT_INTERVAL_OFF:
@@ -28181,7 +28680,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     PerformReconnectCheckOnAllWindows(true);
                 }).detach();
             }
-            QueueStatusBarOverlay(L"Manual reconnect check...", 2000);
+            QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
             break;
         case ID_AUTO_RESET:
             g_autoReset = !g_autoReset.load();
@@ -28208,7 +28707,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_autoOpacity.load() && g_autoReconnect.load()) {
-                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict \u2014 disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         case ID_AUTO_GRID:
@@ -28348,7 +28847,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 int result = ShowDarkMessageBox(hwnd,
                     L"Warning: Custom Process Search redirects Anti-AFK clicks, key simulations, FPS cap, and auto-mute actions to your custom-defined processes and windows instead of Roblox.\n\nAre you sure you want to enable this?",
-                    L"AntiAFK-RBX \u2022 Enable Custom Process Search",
+                    L"AntiAFK-RBX • Enable Custom Process Search",
                     MB_YESNO | MB_DEFBUTTON2);
                 if (result != IDYES)
                 {
@@ -28408,7 +28907,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int result = ShowDarkMessageBox(
                 g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
                 L"Close all detected Roblox clients?\n\nAntiAFK-RBX will first ask windows to close, then force-close any remaining Roblox processes.",
-                L"AntiAFK-RBX \u2022 Close All Roblox",
+                L"AntiAFK-RBX • Close All Roblox",
                 MB_YESNO | MB_DEFBUTTON2);
 
             if (result == IDYES)
@@ -28429,7 +28928,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ShowStatusBarOverlay(L"Reset sent to all Roblox windows", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Manual reset sent to all Roblox windows.", false);
             } else {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             break;
@@ -28437,7 +28936,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_UTILS_TEST_ACTION: case ID_TEST_ACTION:
         {
             if (!g_isAfkStarted.load()) {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Info", L"Start Anti-AFK first to test the action.");
+                ShowTrayNotification(L"AntiAFK-RBX • Info", L"Start Anti-AFK first to test the action.");
                 ShowStatusBarOverlay(L"Start AFK first to test", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
                 g_randomCyclePick = -1;
@@ -28445,7 +28944,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     g_lastAfkActionTimestamp = GetTickCount64();
                     ShowStatusBarOverlay(L"Test AntiAFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 } else {
-                    ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox window not found!");
+                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                     ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 }
             }
@@ -28455,7 +28954,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             auto pids = FindAllRobloxProcessIds();
             if (pids.empty()) {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Roblox process not found!");
+                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox process not found!");
                 ShowStatusBarOverlay(L"Roblox process not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 break;
             }
@@ -28495,7 +28994,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int result = ShowDarkMessageBox(
                 g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
                 L"Are you sure you want to reset all statistics?\nThis action cannot be undone.",
-                L"AntiAFK-RBX \u2022 Reset Statistics",
+                L"AntiAFK-RBX • Reset Statistics",
                 MB_YESNO | MB_DEFBUTTON2);
 
             if (result == IDYES)
@@ -28612,7 +29111,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, clipboardText))
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 ShowStatusBarOverlay(L"Clipboard text not available", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
@@ -28717,7 +29216,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     (unsigned long long)g_autoReconnectsPerformed.load(),
                     (unsigned long long)g_afkSessionsCompleted.load());
             }
-            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, timingsBuf, L"AntiAFK-RBX \u2022 Current Timings", MB_OK);
+            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, timingsBuf, L"AntiAFK-RBX • Current Timings", MB_OK);
             break;
         }
         case ID_RETRY_MULTI_INSTANCE:
@@ -28725,7 +29224,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             MutexCreateResult result = EnableMultiInstanceSupport();
             if (result == MUTEX_CREATED || result == MUTEX_ALREADY_EXISTS) {
                 ClearMutexBanner();
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Multi-Instance", L"Multi-Instance mutex acquired. Bypass is active.");
+                ShowTrayNotification(L"AntiAFK-RBX • Multi-Instance", L"Multi-Instance mutex acquired. Bypass is active.");
             } else {
                 ShowMutexErrorDialog(hwnd);
             }
@@ -28738,7 +29237,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
             if (!IsDiscordWebhookUrl(webhookUrl))
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 ShowStatusBarOverlay(L"Webhook URL is invalid", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
@@ -28756,12 +29255,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 wchar_t successMessage[96];
                 swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, successMessage, L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, successMessage, L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 ShowStatusBarOverlay(L"Test webhook sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             else
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX \u2022 Discord Webhook", MB_OK);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 ShowStatusBarOverlay(L"Test webhook failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             CreateTrayMenu(g_isAfkStarted.load());
@@ -29068,7 +29567,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_RESET_SETTINGS:
         {
-            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all settings to their defaults?\nThis action cannot be undone.", L"AntiAFK-RBX \u2022 Reset Settings", MB_YESNO | MB_DEFBUTTON2);
+            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all settings to their defaults?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Settings", MB_YESNO | MB_DEFBUTTON2);
             if (result == IDYES)
             {
                 ResetSettings();
@@ -29092,7 +29591,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ShowStatusBarOverlay(L"Settings imported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             else {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Import Failed", L"Could not load settings from the selected file.");
+                ShowTrayNotification(L"AntiAFK-RBX • Import Failed", L"Could not load settings from the selected file.");
                 ShowStatusBarOverlay(L"Settings import failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
@@ -29103,7 +29602,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ShowStatusBarOverlay(L"Settings exported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             else {
-                ShowTrayNotification(L"AntiAFK-RBX \u2022 Export Failed", L"Could not save settings to the selected file.");
+                ShowTrayNotification(L"AntiAFK-RBX • Export Failed", L"Could not save settings to the selected file.");
                 ShowStatusBarOverlay(L"Settings export failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
@@ -29163,7 +29662,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_ACTION_RANDOM:
         case ID_MACROS_SELECT:
             if (LOWORD(wParam) == ID_MACROS_SELECT && g_selectedAction.load() != 4) {
-                int confirm = ShowDarkMessageBox(hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX \u2022 Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                int confirm = ShowDarkMessageBox(hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
                 if (confirm != IDYES) {
                     break;
                 }
@@ -29804,10 +30303,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
 
     if (arg_resetSettingsAndExit) {
-        int result = ShowDarkMessageBox(NULL, L"Are you sure you want to reset all settings to their defaults via command line?\nThis action cannot be undone.", L"AntiAFK-RBX \u2022 Reset Settings", MB_YESNO | MB_DEFBUTTON2);
+        int result = ShowDarkMessageBox(NULL, L"Are you sure you want to reset all settings to their defaults via command line?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Settings", MB_YESNO | MB_DEFBUTTON2);
         if (result == IDYES) {
             ResetSettings();
-            ShowDarkMessageBox(NULL, L"All settings have been restored to their defaults.", L"AntiAFK-RBX \u2022 Settings Reset", MB_OK);
+            ShowDarkMessageBox(NULL, L"All settings have been restored to their defaults.", L"AntiAFK-RBX • Settings Reset", MB_OK);
         }
         GdiplusShutdown(gdiplusToken);
         return 0;
@@ -29816,7 +30315,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     if (arg_checkUpdatesAndExit) {
         SaveSettings();
         CheckForUpdates(false);
-        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Error to check updates." : L"You are using the latest version."), L"AntiAFK-RBX \u2022 Update Check", MB_OK);
+        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Error to check updates." : L"You are using the latest version."), L"AntiAFK-RBX • Update Check", MB_OK);
         GdiplusShutdown(gdiplusToken);
         return 0;
     }
@@ -29840,7 +30339,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
 
     if (g_useLegacyUi.load() && !arg_tray && !arg_noSplash && g_firstWelcomeShown.load()) {
-        ShowTrayNotification(L"AntiAFK-RBX \u2022 Legacy Mode", L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure.");
+        ShowTrayNotification(L"AntiAFK-RBX • Legacy Mode", L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure.");
     }
 
     if (g_multiSupport.load())
@@ -29865,7 +30364,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         }
         if (!IsMultiInstanceMutexValid())
         {
-            ShowTrayNotification(L"AntiAFK-RBX \u2022 Error", L"Failed to create Multi-Instance mutex!");
+            ShowTrayNotification(L"AntiAFK-RBX • Error", L"Failed to create Multi-Instance mutex!");
             ShowStatusBarOverlay(L"Mutex creation failed. Close all Roblox windows and retry.", 5000, g_hwnd);
             ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
         }
