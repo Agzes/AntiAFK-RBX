@@ -330,6 +330,9 @@ constexpr UINT WM_APP_UPDATE_STATUS_BAR = WM_APP + 22;
 constexpr UINT WM_APP_SHOW_MACROS = WM_APP + 23;
 constexpr UINT WM_APP_CLOSE_MACROS = WM_APP + 24;
 constexpr UINT WM_APP_SHOW_GRID = WM_APP + 25;
+constexpr UINT WM_APP_HIDE_STATUS_BAR = WM_APP + 26;
+constexpr UINT WM_APP_MAINUI_STATE_ANIM = WM_APP + 27;
+constexpr UINT WM_APP_REFRESH_TRAY_MENU = WM_APP + 28;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
 constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
 constexpr UINT STATUS_BAR_POSITION_TIMER = 3;
@@ -1115,6 +1118,7 @@ bool StatusBarEventEnabled(StatusBarEventType eventType);
 void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL, StatusBarEventType eventType = StatusBarEventType::Ui);
 void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType = StatusBarEventType::Ui);
 void QueueStatusBarMessage(const std::wstring& message, StatusBarEventType eventType = StatusBarEventType::Ui);
+void QueueStatusBarHide(bool animate = false);
 void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs = STATUS_BAR_DEFAULT_DURATION, HWND anchorWindow = NULL, StatusBarEventType eventType = StatusBarEventType::Ui);
 void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType = StatusBarEventType::Ui);
 void HideStatusBarOverlay(bool animate = false);
@@ -1132,6 +1136,7 @@ void DisableMultiInstanceSupport();
 void ShowMutexBanner(const std::wstring& message, const std::wstring& description, bool isSuccess = false);
 void ClearMutexBanner();
 void CreateTrayMenu(bool afk);
+void QueueRefreshTrayMenu(bool afk);
 AnnouncementInfo GetAnnouncementCopy();
 void ReconnectMonitorThread();
 void StartReconnectMonitor();
@@ -6617,7 +6622,7 @@ void ShowMutexBanner(const std::wstring& message, const std::wstring& descriptio
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
         InvalidateRect(g_hMainUiWnd, NULL, FALSE);
     if (g_hwnd && IsWindow(g_hwnd))
-        CreateTrayMenu(g_isAfkStarted.load());
+        QueueRefreshTrayMenu(g_isAfkStarted.load());
 }
 void ClearMutexBanner()
 {
@@ -6627,7 +6632,7 @@ void ClearMutexBanner()
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
         InvalidateRect(g_hMainUiWnd, NULL, FALSE);
     if (g_hwnd && IsWindow(g_hwnd))
-        CreateTrayMenu(g_isAfkStarted.load());
+        QueueRefreshTrayMenu(g_isAfkStarted.load());
 }
 // ==========
 
@@ -10585,7 +10590,7 @@ void MonitorUserActivity()
                         std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
                         g_manuallyStoppedPids.clear();
                     }
-                    CreateTrayMenu(true);
+                    QueueRefreshTrayMenu(true);
                     UpdateTrayIcon();
                     g_afkReminderState = 2;
                     ActivateAutoUtilsOnAfkStart();
@@ -13571,6 +13576,12 @@ static bool ImportSettingsFromFile(HWND owner)
 // ==========
 
 // Tray menu
+void QueueRefreshTrayMenu(bool afk)
+{
+    if (g_hwnd && IsWindow(g_hwnd))
+        PostMessage(g_hwnd, WM_APP_REFRESH_TRAY_MENU, afk ? 1 : 0, 0);
+}
+
 void CreateTrayMenu(bool afk)
 {
     if (g_hMenu)
@@ -17515,9 +17526,6 @@ void ScreenSaver_Start(HWND owner)
                 SendMessage(h, WM_CLOSE, 0, 0);
             }
         }
-        if (g_ssMainFont) { DeleteObject(g_ssMainFont); g_ssMainFont = NULL; }
-        if (g_ssHintFont) { DeleteObject(g_ssHintFont); g_ssHintFont = NULL; }
-        if (g_ssHintSmallFont) { DeleteObject(g_ssHintSmallFont); g_ssHintSmallFont = NULL; }
         if (g_ssKeyboardHook) { UnhookWindowsHookEx(g_ssKeyboardHook); g_ssKeyboardHook = NULL; }
         if (g_hwnd && IsWindow(g_hwnd)) { PostMessage(g_hwnd, WM_APP + 50, 0, 0); }
         g_screenSaverActive.store(false);
@@ -17811,6 +17819,15 @@ void QueueStatusBarMessage(const std::wstring& message, StatusBarEventType event
     if (!PostMessage(g_hwnd, WM_APP_UPDATE_STATUS_BAR, reinterpret_cast<WPARAM>(payload), 0)) {
         delete payload;
     }
+}
+
+void QueueStatusBarHide(bool animate)
+{
+    if (!g_hwnd || !IsWindow(g_hwnd)) {
+        return;
+    }
+
+    PostMessage(g_hwnd, WM_APP_HIDE_STATUS_BAR, animate ? 1 : 0, 0);
 }
 
 void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow, StatusBarEventType eventType)
@@ -25363,6 +25380,15 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         return 0;
 
+    case WM_APP_MAINUI_STATE_ANIM:
+        if (pData) {
+            pData->previousAfkStartedState = wParam != 0;
+            pData->stateChangeProgress = 0.0f;
+            pData->stateChangeDirection = 1;
+            InvalidateRect(hwnd, &pData->startButtonRect, FALSE);
+        }
+        return 0;
+
     case WM_APP + 60:
         if (pData && pData->deleteMacroIndex >= 0) {
             int delIdx = pData->deleteMacroIndex;
@@ -27305,7 +27331,7 @@ void main_thread(bool arg_tray)
             UpdateSplashStatus(L"Auto-starting Anti-AFK...");
             g_afkStartTime = GetTickCount64();
             g_isAfkStarted = true;
-            CreateTrayMenu(true);
+            QueueRefreshTrayMenu(true);
             UpdateTrayIcon();
             ActivateAutoUtilsOnAfkStart();
             QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started on launch.", false);
@@ -27380,7 +27406,7 @@ void main_thread(bool arg_tray)
                     ApplyAutoUtilsStopEffects();
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
                     QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user, StatusBarEventType::Session);
-                    CreateTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue;
+                    QueueRefreshTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. AntiAFK is now off."); continue;
                 }
                 else
                 {
@@ -27392,7 +27418,7 @@ void main_thread(bool arg_tray)
                     ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
-                    CreateTrayMenu(false);
+                    QueueRefreshTrayMenu(false);
                     UpdateTrayIcon();
                     ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. AntiAFK is now off.");
                     continue;
@@ -27427,7 +27453,7 @@ void main_thread(bool arg_tray)
 
                         if (g_stopThread.load() || !g_isAfkStarted.load())
                         {
-                            HideStatusBarOverlay(false);
+                            QueueStatusBarHide(false);
                             cancelPendingAction = true;
                             break;
                         }
@@ -27447,7 +27473,7 @@ void main_thread(bool arg_tray)
 
                         g_cv.wait_for(lock, std::chrono::milliseconds(userSafeCheckInterval), [] { return !g_userActive.load() || g_stopThread.load() || !g_isAfkStarted.load(); });
                     }
-                    if (!cancelPendingAction) HideStatusBarOverlay(false);
+                    if (!cancelPendingAction) QueueStatusBarHide(false);
                 }
 
                 FpsCapperPauseGuard fpsCapperGuard;
@@ -27459,7 +27485,7 @@ void main_thread(bool arg_tray)
                 while (statusBarLeadWaited < STATUS_BAR_PRE_ACTION_DELAY)
                 {
                     if (g_stopThread.load()) {
-                        HideStatusBarOverlay(false);
+                        QueueStatusBarHide(false);
                         return;
                     }
                     if (!g_isAfkStarted.load()) {
@@ -27473,7 +27499,7 @@ void main_thread(bool arg_tray)
                 }
 
                 if (cancelPendingAction) {
-                    HideStatusBarOverlay(false);
+                    QueueStatusBarHide(false);
                     continue;
                 }
 
@@ -27648,7 +27674,7 @@ void main_thread(bool arg_tray)
                         QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered.", false);
                     }
                 } else {
-                    HideStatusBarOverlay(false);
+                    QueueStatusBarHide(false);
                     QueueStatusBarOverlay(L"AntiAFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
                 }
             }
@@ -27830,7 +27856,7 @@ void main_thread(bool arg_tray)
                         if (!g_isAfkStarted.load()) {
                             g_isAfkStarted = true;
                             g_afkStartTime = GetTickCount64();
-                            CreateTrayMenu(true);
+                            QueueRefreshTrayMenu(true);
                             UpdateTrayIcon();
                             ActivateAutoUtilsOnAfkStart();
                             QueueStatusBarOverlay(L"AntiAFK auto-started", 2000, wins.front(), StatusBarEventType::Session);
@@ -27838,13 +27864,7 @@ void main_thread(bool arg_tray)
                             ApplyAutoUtilsStartEffects();
                         }
                         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                            MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
-                            if (pData) {
-                                pData->previousAfkStartedState = false;
-                                pData->stateChangeProgress = 0.0f;
-                                pData->stateChangeDirection = 1;
-                                InvalidateRect(g_hMainUiWnd, &pData->startButtonRect, FALSE);
-                            }
+                            PostMessage(g_hMainUiWnd, WM_APP_MAINUI_STATE_ANIM, 0, 0);
                             InvalidateRect(g_hMainUiWnd, NULL, FALSE);
                          }
 
@@ -28043,6 +28063,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     case WM_APP + 50:
         while (ShowCursor(TRUE) < 0);
+        if (g_ssMainFont) { DeleteObject(g_ssMainFont); g_ssMainFont = NULL; }
+        if (g_ssHintFont) { DeleteObject(g_ssHintFont); g_ssHintFont = NULL; }
+        if (g_ssHintSmallFont) { DeleteObject(g_ssHintSmallFont); g_ssHintSmallFont = NULL; }
         return 0;
     case WM_APP + 51:
         ShowMainUIDialog(hwnd);
@@ -28132,6 +28155,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         return 0;
     }
+    case WM_APP_HIDE_STATUS_BAR:
+        HideStatusBarOverlay(wParam != 0);
+        return 0;
+    case WM_APP_REFRESH_TRAY_MENU:
+        CreateTrayMenu(wParam != 0);
+        return 0;
     case WM_USER + 1:
         if (lParam == WM_RBUTTONDOWN)
         {
