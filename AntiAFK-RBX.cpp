@@ -2161,7 +2161,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_APP + 3:
         if (pData) {
             pData->updateCheckState = static_cast<int>(wParam);
-            pData->updateButtonText = (wParam == 2) ? L"Update Found!" : ((wParam == 4) ? L"Error to check" : L"You are up to date!");
+            pData->updateButtonText = (wParam == 2) ? L"Update Found!" : ((wParam == 4) ? L"Failed to check" : L"You are up to date!");
             About_StartAnimTimer(hwnd, pData);
             InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
         }
@@ -12740,16 +12740,16 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, L"Auto Opacity (70%)");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox*");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid settings...");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance manager");
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid Settings...");
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance Manager");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I can forget (smart auto-start)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip active");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I Can Forget (Smart Auto-Start)");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip Active");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"AutoMute Roblox");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on focus");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on Focus");
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_fpsLimit > 0 ? 0 : MF_GRAYED) | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS when focus");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, L"Do not sleep");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_fpsLimit > 0 ? 0 : MF_GRAYED) | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS on Focus");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, L"Do Not Sleep");
 
     HMENU hUserSafeSubmenu = CreatePopupMenu();
     AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
@@ -13109,7 +13109,7 @@ bool CheckForUpdates(bool showNotification = true)
                 g_updateServerVersion = serverVersion;
                 if (showNotification) {
                     wchar_t msg[128];
-                    swprintf_s(msg, L"New version available! Download on: https://github.com/Agzes/AntiAFK-RBX");
+                    swprintf_s(msg, L"New version available! Download at: https://github.com/Agzes/AntiAFK-RBX");
                     ShowTrayNotification(L"AntiAFK-RBX • Update Available", msg);
                 }
                 if (g_hwnd) {
@@ -14110,7 +14110,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
             bannerText = L"Enter limiter cycle duration in milliseconds (10 to 200).";
         } else if (pData->type == CustomInputDialogType::DiscordMentionTarget) {
-            bannerText = L"Uses case: <@USER_ID> / <@&ROLE_ID> / @everyone";
+            bannerText = L"Usage examples: <@USER_ID> / <@&ROLE_ID> / @everyone";
         } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
             bannerText = L"Enter geometry: X (left), Y (top), Width, Height in pixels.";
         } else if (pData->type == CustomInputDialogType::InstanceTitle) {
@@ -15188,7 +15188,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             int y_desc = 92;
             RectF rSub((REAL)margin + 1.0f, (REAL)y_desc, (REAL)colW, 22.0f);
             g.DrawString(
-                L"Best utility and antiafk for Roblox.",
+                L"Best utility and AntiAFK for Roblox.",
                 -1, &font11, rSub, &typographicWrap, &textBrush);
 
             int y_launch_title = 146;
@@ -15208,7 +15208,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             sfCenter.SetAlignment(StringAlignmentCenter);
 
             RectF rTrayTitle((REAL)rightColX, (REAL)(y_welcome - 6), (REAL)colW, 22.0f);
-            g.DrawString(L"tray icons:", -1, &font11, rTrayTitle, &sfCenter, &whiteBrush);
+            g.DrawString(L"Tray Icons:", -1, &font11, rTrayTitle, &sfCenter, &whiteBrush);
 
             int iconsY = 64;
             int iconSize = 26;
@@ -17932,7 +17932,7 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
                     title = L"Action Preset";
                     text = L"Select a speed profile for performing AFK actions:\n\n"
                            L" Default: 55ms pre/post delays, 25ms key press, 3 repeat counts. Balanced for most use cases.\n"
-                           L" Safe: 100ms pre/post delays, 50ms key press, 5 repeat counts. Use if you have a lot of Roblox instance open or if you have a slow computer.\n"
+                           L" Safe: 100ms pre/post delays, 50ms key press, 5 repeat counts. Use if you have a lot of Roblox instances open or if you have a slow computer.\n"
                            L" Custom: Allows you to manually define custom millisecond values. Use it if you know what you're doing and don't forget to test.";
                 } else if (i == 1) {
                     title = L"Delay Before Action";
@@ -18708,7 +18708,7 @@ title = L"CPU Limit %";
                     text = L"Everything macro-related: recording progress, macro saved/deleted/exported/imported, test runs and wizard validation messages.";
                 } else if (i == 6) {
                     title = L"Events: Interface feedback";
-                    text = L"Reactions to your button clicks and setting changes: Roblox window found/hidden/shown/muted, FPS capped, hotkey recorded, settings imported/exported, webhook toggles and similar messages.";
+                    text = L"Reactions to your button clicks and setting changes: Roblox window found/hidden/shown/muted, FPS capped, hotkey recorded, settings imported/exported, webhook toggled and similar messages.";
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -18893,17 +18893,17 @@ title = L"CPU Limit %";
             const wchar_t* title = L"Help";
             const wchar_t* text = L"No help text available for this setting.";
             if (pData->currentPage == 0) { // General
-                if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
+                if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so the interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
                 if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
                 if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
                 if (i == 3) { title = L"Macros"; text = L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Custom Macro*' in the Action menu."; }
-                if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance AntiAFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for muti-instance setups."; }
+                if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance AntiAFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for multi-instance setups."; }
                 if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
-                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farm and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
+                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farming and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
             } else if (pData->currentPage == 1) { // Auto+Utils
                 if (i == 0) { title = L"Auto-Start AntiAFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."; }
                 if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
-                if (i == 2) { title = L"Reset in all"; text = L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/ . Use only in games where respawning is harmless (obby, simulator, etc.)."; }
+                if (i == 2) { title = L"Reset in all"; text = L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/. Use only in games where respawning is harmless (obby, simulator, etc.)."; }
                 if (i == 3) { title = L"Hide/Show Roblox"; text = L"Hides Roblox windows (not minimizes) when Anti-AFK starts, so they run in the background without stealing focus or cluttering the taskbar.\n\nShow them again from the tray menu or the Show Roblox button. Windows are not closed - they keep running."; }
                 if (i == 4) { title = L"Enable Opacity"; text = L"Applies 70% opacity to all current and future Roblox windows during the Anti-AFK session.\n\nVisual reminder that AntiAFK-RBX is in control. New Roblox windows opened later automatically match, so you don't have to toggle it manually each time.\n\nWarning: when combined with Auto-Reconnect, the kick-dialog screen-grabber may mis-read the dark transparent window as the kick dialog and skip the reconnect. If Reconnect stops working reliably, disable Opacity first."; }
                 if (i == 5) { title = L"Grid Roblox*"; text = L"Experimental: auto-arranges Roblox windows in a grid layout whenever the set of detected windows changes (a window opens, closes, or moves).\n\nEspecially helpful for multi-instance setups. Click the gear icon to choose columns, screen, padding, and which monitor to use."; }
@@ -18913,9 +18913,9 @@ title = L"CPU Limit %";
             } else if (pData->currentPage == 2) { // Misc
                 if (i == 0) { title = L"Update/Announcement Checker"; text = L"Checks for AntiAFK-RBX updates and announcements on startup.\n\nManual check is still available from About window. Disable only if you're on a restricted/offline setup - disabling means you won't get critical bug-fix or security notices."; }
                 if (i == 1) { title = L"Close All Roblox"; text = L"Closes every running Roblox window at once.\n\nSends a normal close request first, then force-terminates any that ignore it."; }
-                if (i == 2) { title = L"Do not sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."; }
-                if (i == 3) { title = L"I can forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start AntiAFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."; }
-                if (i == 4) { title = L"Skip active"; text = L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
+                if (i == 2) { title = L"Do Not Sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."; }
+                if (i == 3) { title = L"I Can Forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start AntiAFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."; }
+                if (i == 4) { title = L"Skip Active"; text = L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
                 if (i == 5) { title = L"Fish/Void/Bloxstrap Integration"; text = L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."; }
                 if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
                 if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
@@ -18926,7 +18926,7 @@ title = L"CPU Limit %";
                 if (i == 3) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions.\n- Disabled: turns off memory cleaning.\n\nUse 'Set...' to configure thresholds and intervals."; }
                 if (i == 4) { title = L"Reconnect Interval"; text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus."; }
                 if (i == 5) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
-                if (i == 6) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :) ."; }
+                if (i == 6) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
                 if (i == 7) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
             } else if (pData->currentPage == 5) { // Discord
                 if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."; }
@@ -21341,7 +21341,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             sfUpdateBannerText.SetAlignment(StringAlignmentNear);
             sfUpdateBannerText.SetLineAlignment(checkFailed ? StringAlignmentCenter : StringAlignmentFar);
             sfUpdateBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
-            g.DrawString(checkFailed ? L"Error to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
+            g.DrawString(checkFailed ? L"Failed to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
 
             if (!checkFailed) {
                 Font updateBannerDescFont(hdc, pData->hFontSmall);
@@ -29079,7 +29079,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     if (arg_checkUpdatesAndExit) {
         SaveSettings();
         CheckForUpdates(false);
-        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Error to check updates." : L"You are using the latest version."), L"AntiAFK-RBX • Update Check", MB_OK);
+        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Failed to check for updates." : L"You are using the latest version."), L"AntiAFK-RBX • Update Check", MB_OK);
         GdiplusShutdown(gdiplusToken);
         return 0;
     }
