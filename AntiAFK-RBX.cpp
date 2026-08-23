@@ -2804,7 +2804,7 @@ int ShowMutexErrorDialog(HWND owner)
     if (owner) EnableWindow(owner, FALSE);
 
     MSG m;
-    while (IsWindow(h) && GetMessage(&m, NULL, 0, 0)) {
+    while (IsWindow(h) && GetMessage(&m, NULL, 0, 0) > 0) {
         TranslateMessage(&m); DispatchMessage(&m);
     }
     if (owner) { EnableWindow(owner, TRUE); EnableAcrylic(owner); SetForegroundWindow(owner); }
@@ -3485,7 +3485,7 @@ void ShowGridSettingsDialog(HWND owner)
         ShowWindow(h, SW_SHOW);
         UpdateWindow(h);
         MSG msg;
-        while (IsWindow(h) && GetMessage(&msg, NULL, 0, 0)) {
+        while (IsWindow(h) && GetMessage(&msg, NULL, 0, 0) > 0) {
             if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
                 PostMessage(h, WM_CLOSE, 0, 0);
             }
@@ -15026,6 +15026,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                             int fi = pData->focusedInput;
                             size_t currentLen = wcslen(pData->inputText[fi]);
                             size_t maxLen = (pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename) ? 63 :
+                                            (pData->type == CustomInputDialogType::DiscordMentionTarget) ? 127 :
                                             (pData->type == CustomInputDialogType::InstanceGeometry) ? 15 : 511;
                             while (*pText && currentLen < maxLen)
                             {
@@ -17705,7 +17706,7 @@ void UpdateStatusBarWindowRegion(HWND hwnd)
     if (wndDC) ReleaseDC(hwnd, wndDC);
     int radius = (std::min)(MulDiv(10, dpiY, 96), height / 2);
     HRGN region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
-    SetWindowRgn(hwnd, region, TRUE);
+    if (region) SetWindowRgn(hwnd, region, TRUE);
 }
 
 void UpdateStatusBarPlacement(HWND hwnd, StatusBarData* pData)
@@ -27260,8 +27261,8 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
         UpdateWindow(hDialog);
         if (owner)
             EnableWindow(owner, FALSE);
-        MSG msg;
-        while (IsWindow(hDialog) && GetMessage(&msg, NULL, 0, 0))
+    MSG msg;
+    while (IsWindow(hDialog) && GetMessage(&msg, NULL, 0, 0) > 0)
         {
             if (!IsDialogMessage(hDialog, &msg))
             {
