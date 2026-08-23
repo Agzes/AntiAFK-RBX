@@ -6857,7 +6857,6 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 {
     if (g_stopThread.load() || !g_isAfkStarted.load()) return false;
     if (IsRobloxWindowClosedToTray(hRobloxWnd)) return false;
-    if (IsRobloxWindowSelfHidden(hRobloxWnd)) return false;
     if (!IsWindow(hRobloxWnd)) {
         return false;
     }
@@ -6870,7 +6869,14 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     int windowHeight = clientRect.bottom - clientRect.top;
     if (windowWidth < 30 || windowHeight < 30) return false;
 
-    bool windowWasHidden = !IsWindowVisible(hRobloxWnd) || IsIconic(hRobloxWnd);
+    bool windowWasIconic = IsIconic(hRobloxWnd) != FALSE;
+    bool windowWasInvisible = !IsWindowVisible(hRobloxWnd);
+    bool windowWasHidden = windowWasIconic || windowWasInvisible;
+
+    auto restorePreviousWindowState = [hRobloxWnd, windowWasIconic, windowWasInvisible]() {
+        if (windowWasIconic) ShowWindow(hRobloxWnd, SW_MINIMIZE);
+        else if (windowWasInvisible) HideRobloxWindowTracked(hRobloxWnd);
+    };
 
     if (windowWasHidden) {
         ShowWindow(hRobloxWnd, SW_RESTORE);
@@ -6878,13 +6884,13 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     }
 
     if (!KickDialogDetected(hRobloxWnd)) {
-        if (windowWasHidden) HideRobloxWindowTracked(hRobloxWnd);
+        if (windowWasHidden) restorePreviousWindowState();
         return false;
     }
 
     RECT rc2;
     if (!GetClientRect(hRobloxWnd, &rc2)) {
-        if (windowWasHidden) HideRobloxWindowTracked(hRobloxWnd);
+        if (windowWasHidden) restorePreviousWindowState();
         return false;
     }
     int ww = rc2.right - rc2.left;
@@ -6918,7 +6924,7 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     SetCursorPos(oldCursorPos.x, oldCursorPos.y);
 
     if (windowWasHidden) {
-        HideRobloxWindowTracked(hRobloxWnd);
+        restorePreviousWindowState();
     }
 
     return true;
