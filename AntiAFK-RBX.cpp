@@ -10816,6 +10816,11 @@ static int NormalizeRestoreMethod(int value)
     return ClampInt(value, 0, 3);
 }
 
+static int NormalizeGridMode(int value)
+{
+    return ClampInt(value, 0, 5);
+}
+
 static int NormalizeFpsLimitValue(int value)
 {
     return ClampInt(value, 0, 60);
@@ -11989,9 +11994,7 @@ void SaveSettings()
                     }
                     return s;
                 };
-                wchar_t buf[1024];
-                int written = swprintf_s(buf, L"%s|%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d|%s|%s|%s",
-                    pr.name.c_str(),
+                const int presetFields[23] = {
                     pr.overrideAntiAfk, pr.enableAntiAfk,
                     pr.overrideMute, pr.enableMute,
                     pr.overrideOpacity, pr.enableOpacity, pr.opacityValue,
@@ -12001,14 +12004,22 @@ void SaveSettings()
                     pr.overrideReset, pr.enableReset,
                     pr.overrideTimer, pr.enableTimer, pr.timerSeconds,
                     pr.overrideMacro, pr.enableMacro,
-                    pr.enableReconnectMacro, pr.enableIntervalMacro,
-                    joinNames(pr.macroNames).c_str(),
-                    joinNames(pr.reconnectMacroNames).c_str(),
-                    joinNames(pr.intervalMacroNames).c_str());
-                if (written > 0) {
-                    RegSetValueExW(hKey, keyName.c_str(), 0, REG_SZ,
-                        (const BYTE*)buf, (DWORD)((wcslen(buf) + 1) * sizeof(wchar_t)));
+                    pr.enableReconnectMacro, pr.enableIntervalMacro
+                };
+                std::wstring buf = pr.name;
+                for (size_t fi = 0; fi < 23; ++fi) {
+                    if (fi == 0) buf += L'|';
+                    else buf += L',';
+                    buf += std::to_wstring(presetFields[fi]);
                 }
+                buf += L'|';
+                buf += joinNames(pr.macroNames);
+                buf += L'|';
+                buf += joinNames(pr.reconnectMacroNames);
+                buf += L'|';
+                buf += joinNames(pr.intervalMacroNames);
+                RegSetValueExW(hKey, keyName.c_str(), 0, REG_SZ,
+                    (const BYTE*)buf.c_str(), (DWORD)((buf.size() + 1) * sizeof(wchar_t)));
             }
         }
 
@@ -12061,7 +12072,7 @@ void LoadSettings()
         RegQueryValueEx(hKey, L"GridFixedRows", NULL, NULL, (LPBYTE)&gridFixedRows, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"GridSpacingBetween", NULL, NULL, (LPBYTE)&gridSpacingBetween, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"GridSpacingBorders", NULL, NULL, (LPBYTE)&gridSpacingBorders, &dataSize); dataSize = sizeof(DWORD);
-        g_gridMode = gridMode;
+        g_gridMode = NormalizeGridMode((int)gridMode);
         g_gridFixedWinW = gridFixedWinW;
         g_gridFixedWinH = gridFixedWinH;
         g_gridFixedCols = gridFixedCols;
@@ -13251,7 +13262,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_gridForceSmall = s.gridForceSmall;
     g_gridAllMonitors = s.gridAllMonitors;
     g_gridKeepAspectRatio = s.gridKeepAspectRatio;
-    g_gridMode = s.gridMode;
+    g_gridMode = NormalizeGridMode(s.gridMode);
     g_gridFixedWinW = s.gridFixedWinW;
     g_gridFixedWinH = s.gridFixedWinH;
     g_gridFixedCols = s.gridFixedCols;
