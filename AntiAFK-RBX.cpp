@@ -9549,7 +9549,11 @@ void UpdateBloxstrapIntegration(bool enable) {
             return;
         }
         size_t start = content.rfind('{', integrationPos);
-        size_t end = content.find('}', integrationPos) + 1;
+        size_t findEnd = content.find('}', integrationPos);
+        if (start == std::string::npos || findEnd == std::string::npos) {
+            return;
+        }
+        size_t end = findEnd + 1;
         size_t comma_before = content.rfind(',', start);
         if (comma_before != std::string::npos && content.substr(comma_before + 1, start - (comma_before + 1)).find_first_not_of(" \r\n\t") == std::string::npos) {
             content.erase(comma_before, end - comma_before);
