@@ -1,6 +1,6 @@
 <div align="center">
 
-`⚠️ • this is old version of readme` \
+`⚠️ • this is an old version of the readme` \
 [`🖼️ • see new`](https://github.com/Agzes/AntiAFK-RBX)
 
 <br><br>

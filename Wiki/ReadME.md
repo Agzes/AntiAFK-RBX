@@ -1,7 +1,7 @@
 
 
 <div align="center">
-<kbd><h1 align="center" text=70> &nbsp; AntiAFK-RBX |  Wiki  &nbsp;  </h1>
+<kbd><h1 align="center"> &nbsp; AntiAFK-RBX |  Wiki  &nbsp;  </h1>
 
 &nbsp;  https://github.com/Agzes/AntiAFK-RBX/wiki/ &nbsp; 
 

@@ -2,7 +2,7 @@
 <- Back to Wiki</kbd></a>
 
 <div align="center">
-<kbd><h1 align="center" text=70> &nbsp; AntiAFK-RBX | ALT Wiki > Errors With Run | 23.06.25 &nbsp;  </h1></kbd>
+<kbd><h1 align="center"> &nbsp; AntiAFK-RBX | ALT Wiki > Errors With Run | 23.06.25 &nbsp;  </h1></kbd>
 </div>
 
 <br><br>

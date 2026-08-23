@@ -16,7 +16,7 @@ Supported fields:
     "notify": false,
     "icon": "\uE76E",
     "iconColor": "#ffffff",
-    "title": "Tittle",
+    "title": "Title",
     "description": "Optional details"
 }
 ```
