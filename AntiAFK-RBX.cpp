@@ -14753,7 +14753,8 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                     }
                 }
                 wchar_t tbuf[32];
-                swprintf_s(tbuf, sec > 0 ? L"%ds" : L"not set", sec);
+                if (sec > 0) swprintf_s(tbuf, L"%ds", sec);
+                else wcscpy_s(tbuf, L"not set");
                 Gdiplus::SolidBrush timeBrush(sec > 0 ? Gdiplus::Color(255, 0, 180, 255) : Gdiplus::Color(200, 120, 120, 120));
                 Gdiplus::RectF timeR((REAL)(rowRc.right - 100), (REAL)rowRc.top, 68.0f, (REAL)(rowRc.bottom - rowRc.top));
                 g.DrawString(tbuf, -1, &rowFont, timeR, &sfR, &timeBrush);
@@ -19904,7 +19905,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         if (alphaInfoAnim > 0.0f) {
             SolidBrush textBrushAlpha(Color((BYTE)(255 * alphaInfoAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             wchar_t aboutTitle[64];
-            swprintf_s(aboutTitle, L"AntiAFK-RBX • About · %ls", GetReleaseChannelName());
+            swprintf_s(aboutTitle, L"AntiAFK-RBX • About • %ls", GetReleaseChannelName());
             g.DrawString(aboutTitle, -1, &gdiFont, titleRect, &sf, &textBrushAlpha);
         }
         if (timingsAnim > 0.0f) {
