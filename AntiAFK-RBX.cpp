@@ -27831,10 +27831,9 @@ void main_thread(bool arg_tray)
                         bool anyOldProcessExists = false;
                         std::vector<DWORD> stillRunningPids;
                         for (DWORD pid : g_manuallyStoppedPids) {
-                            HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+                            HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pid);
                             if (hProcess) {
-                                DWORD exitCode;
-                                if (GetExitCodeProcess(hProcess, &exitCode) && exitCode == STILL_ACTIVE) {
+                                if (WaitForSingleObject(hProcess, 0) == WAIT_TIMEOUT) {
                                     anyOldProcessExists = true;
                                     stillRunningPids.push_back(pid);
                                 }
