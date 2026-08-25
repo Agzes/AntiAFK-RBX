@@ -6606,6 +6606,8 @@ static std::string MacroEngine_MacroToJson(const Macro& m) {
         json += "      \"tolerance\": " + std::to_string(a.tolerance) + ",\n";
         json += "      \"vkCode\": " + std::to_string(a.vkCode) + ",\n";
         json += "      \"modifiers\": " + std::to_string(a.modifiers) + ",\n";
+        json += "      \"mouseButton\": " + std::to_string(a.mouseButton) + ",\n";
+        json += "      \"wheelDelta\": " + std::to_string(a.wheelDelta) + ",\n";
         json += "      \"mouseDown\": " + std::string(a.mouseDown ? "true" : "false") + ",\n";
         json += "      \"mouseUp\": " + std::string(a.mouseUp ? "true" : "false") + ",\n";
         json += "      \"relative\": " + std::string(a.relative ? "true" : "false");
@@ -6738,10 +6740,11 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
                 a.x = (uint16_t)findIntIn(block, "x");
                 a.y = (uint16_t)findIntIn(block, "y");
                 a.delayBeforeMs = (uint16_t)findIntIn(block, "delayMs");
-                a.tolerance = (uint16_t)findIntIn(block, "tolerance");
+                a.tolerance = (uint8_t)findIntIn(block, "tolerance");
                 a.vkCode = (BYTE)findIntIn(block, "vkCode");
                 a.modifiers = (BYTE)findIntIn(block, "modifiers");
                 a.mouseButton = (BYTE)findIntIn(block, "mouseButton");
+                a.wheelDelta = (int16_t)findIntIn(block, "wheelDelta");
                 a.mouseDown = findBoolIn(block, "mouseDown");
                 a.mouseUp = findBoolIn(block, "mouseUp");
                 a.relative = findBoolIn(block, "relative");
@@ -29345,4 +29348,3 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     return 0;
 }
 // ==========
-#pragma warning(pop)
