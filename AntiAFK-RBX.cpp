@@ -6010,7 +6010,11 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 }
 
 static void MacroEngine_RunPendingReconnectMacros() {
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
+    if (g_stopThread.load() || !g_isAfkStarted.load()) {
+        std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
+        g_reconnectMacroPending.clear();
+        return;
+    }
     ULONGLONG now = GetTickCount64();
     ULONGLONG delayMs = (ULONGLONG)(std::max)(0, g_reconnectMacroDelaySec.load()) * 1000;
     std::vector<HWND> due;
