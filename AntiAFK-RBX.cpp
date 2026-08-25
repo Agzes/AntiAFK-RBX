@@ -10996,6 +10996,10 @@ void SaveSettings()
                 RegSetValueExW(hKey, keyName.c_str(), 0, REG_SZ,
                     (const BYTE*)buf.c_str(), (DWORD)((buf.size() + 1) * sizeof(wchar_t)));
             }
+            for (DWORD i = presetCount; i < 32; ++i) {
+                std::wstring staleName = L"InstancePreset" + std::to_wstring(i);
+                if (RegDeleteValueW(hKey, staleName.c_str()) != ERROR_SUCCESS) break;
+            }
         }
 
         RegCloseKey(hKey);
@@ -11357,8 +11361,8 @@ void LoadSettings()
     g_statusBarEventUi = (statusBarEventUi != 0);
     g_fpsLimit = NormalizeFpsLimitValue((int)fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
-    g_cpuLimitPercent = (int)cpuLimitPercent;
-    g_cpuLimitPeriod = (int)cpuLimitPeriod;
+    g_cpuLimitPercent = ClampInt((int)cpuLimitPercent, 1, 99);
+    g_cpuLimitPeriod = ClampInt((int)cpuLimitPeriod, 10, 200);
     g_cpuLimitMode = (cpuLimitMode != 0);
     g_unlockFpsOnFocus = (unlockFpsOnFocus != 0);
     g_multiInstanceInterval = NormalizeMultiInstanceIntervalValue((int)multiInstanceInterval);
@@ -11366,8 +11370,8 @@ void LoadSettings()
     g_ramCleanerAutoStart = (ramCleanerEnabled != 0);
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = (int)ramCleanerMode;
-    g_ramCleanerInterval = (int)ramCleanerInterval;
-    g_ramCleanerLimit = (int)ramCleanerLimit;
+    g_ramCleanerInterval = ClampInt((int)ramCleanerInterval, 1, 86400);
+    g_ramCleanerLimit = ClampInt((int)ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = (afkReminder != 0);
     g_skipActiveEnabled = (skipActive != 0);
     g_doNotSleep = (doNotSleep != 0);
@@ -12300,16 +12304,16 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_fpsLimit = NormalizeFpsLimitValue(s.fpsLimit);
     if (g_fpsLimit > 0) g_fpsLastActiveLimit = g_fpsLimit.load();
     g_unlockFpsOnFocus = s.unlockFpsOnFocus;
-    g_cpuLimitPercent = s.cpuLimitPercent;
-    g_cpuLimitPeriod = s.cpuLimitPeriod;
+    g_cpuLimitPercent = ClampInt(s.cpuLimitPercent, 1, 99);
+    g_cpuLimitPeriod = ClampInt(s.cpuLimitPeriod, 10, 200);
     g_cpuLimitMode = s.cpuLimitMode;
     g_multiInstanceInterval = NormalizeMultiInstanceIntervalValue(s.multiInstanceInterval);
     g_windowOpacity = s.windowOpacity;
     g_ramCleanerAutoStart = s.ramCleanerEnabled;
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = s.ramCleanerMode;
-    g_ramCleanerInterval = s.ramCleanerInterval;
-    g_ramCleanerLimit = s.ramCleanerLimit;
+    g_ramCleanerInterval = ClampInt(s.ramCleanerInterval, 1, 86400);
+    g_ramCleanerLimit = ClampInt(s.ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = s.afkReminder;
     g_skipActiveEnabled = s.skipActive;
     g_doNotSleep = s.doNotSleep;
