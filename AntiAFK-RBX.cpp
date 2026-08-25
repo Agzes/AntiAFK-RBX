@@ -304,6 +304,7 @@ constexpr UINT WM_APP_SHOW_GRID = WM_APP + 25;
 constexpr UINT WM_APP_HIDE_STATUS_BAR = WM_APP + 26;
 constexpr UINT WM_APP_MAINUI_STATE_ANIM = WM_APP + 27;
 constexpr UINT WM_APP_REFRESH_TRAY_MENU = WM_APP + 28;
+constexpr UINT WM_APP_WEBHOOK_TEST_RESULT = WM_APP + 29;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
 constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
 constexpr UINT STATUS_BAR_POSITION_TIMER = 3;
@@ -10806,6 +10807,31 @@ bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEve
     return success;
 }
 
+static void QueueWebhookTestAsync(const std::wstring& webhookUrl, const std::wstring& sourceNote)
+{
+    std::thread([webhookUrl, sourceNote]() {
+        std::wstring errorText;
+        DWORD statusCode = 0;
+        bool sent = SendDiscordWebhookRequest(
+            webhookUrl,
+            DiscordWebhookEvent::Test,
+            L"Manual test message from " + sourceNote + L".",
+            &errorText,
+            &statusCode);
+        wchar_t body[256];
+        if (sent) {
+            swprintf_s(body, L"Test message sent successfully (HTTP %lu).", statusCode);
+        } else {
+            swprintf_s(body, L"%s", errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str());
+        }
+        std::wstring* payload = new std::wstring(body);
+        HWND target = (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) ? g_hMainUiWnd : g_hwnd;
+        if (!target || !IsWindow(target) || !PostMessage(target, WM_APP_WEBHOOK_TEST_RESULT, reinterpret_cast<WPARAM>(payload), 0)) {
+            delete payload;
+        }
+    }).detach();
+}
+
 void WebhookWorkerThread()
 {
     std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
@@ -19167,22 +19193,8 @@ title = L"CPU Limit %";
                 return;
             }
 
-            std::wstring errorText;
-            DWORD statusCode = 0;
-            bool sent = SendDiscordWebhookRequest(
-                webhookUrl,
-                DiscordWebhookEvent::Test,
-                L"Manual test message from the Discord tab.",
-                &errorText,
-                &statusCode);
-
-            if (sent) {
-                wchar_t successMessage[96];
-                swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
-                ShowDarkMessageBox(hwnd, successMessage, L"AntiAFK-RBX • Discord Webhook", MB_OK);
-            } else {
-                ShowDarkMessageBox(hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
-            }
+            QueueStatusBarOverlay(L"Sending test webhook...", 2500, hwnd, StatusBarEventType::Ui);
+            QueueWebhookTestAsync(webhookUrl, L"the Discord tab");
             return;
         }
 
@@ -27298,6 +27310,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_APP_REFRESH_TRAY_MENU:
         CreateTrayMenu(wParam != 0);
         return 0;
+    case WM_APP_WEBHOOK_TEST_RESULT:
+    {
+        std::wstring* msg = reinterpret_cast<std::wstring*>(wParam);
+        if (msg) {
+            ShowDarkMessageBox(hwnd, msg->c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
+            delete msg;
+        }
+        return 0;
+    }
     case WM_USER + 1:
         if (lParam == WM_RBUTTONDOWN)
         {
@@ -28417,28 +28438,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 break;
             }
 
-            std::wstring errorText;
-            DWORD statusCode = 0;
-            bool sent = SendDiscordWebhookRequest(
-                webhookUrl,
-                DiscordWebhookEvent::Test,
-                L"Manual test message from the Legacy UI.",
-                &errorText,
-                &statusCode);
-
-            if (sent)
-            {
-                wchar_t successMessage[96];
-                swprintf_s(successMessage, L"Test message sent successfully (HTTP %lu).", statusCode);
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, successMessage, L"AntiAFK-RBX • Discord Webhook", MB_OK);
-                ShowStatusBarOverlay(L"Test webhook sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
-            }
-            else
-            {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
-                ShowStatusBarOverlay(L"Test webhook failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
-            }
-            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(L"Sending test webhook...", 2500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            QueueWebhookTestAsync(webhookUrl, L"the Legacy UI");
             break;
         }
         case ID_FPS_CAP_3:
