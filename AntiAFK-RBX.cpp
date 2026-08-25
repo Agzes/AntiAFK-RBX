@@ -5555,10 +5555,17 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
     HWND previousWindow = GetForegroundWindow();
     bool wasFpsCapperPaused = PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, false);
     bool anyFocused = false;
+    size_t winIndex = 0;
+    size_t validWindowCount = 0;
+    for (HWND w : wins) {
+        if (IsWindow(w)) ++validWindowCount;
+    }
 
     for (HWND w : wins)
     {
         if (!IsWindow(w)) continue;
+        ++winIndex;
+        const bool isLastWindow = (winIndex == validWindowCount);
 
         bool wasVisible = IsWindowVisible(w) != FALSE;
         bool wasMinimized = IsIconic(w);
@@ -5600,6 +5607,14 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
         }
         else if (wasMinimized) {
             ShowWindow(w, SW_MINIMIZE);
+        }
+
+        if (g_multiInstanceInterval.load() > 0 && !isLastWindow) {
+            DWORD mi = g_multiInstanceInterval.load();
+            for (DWORD waitedMs = 0; waitedMs < mi; waitedMs += 50) {
+                if (g_stopThread.load()) break;
+                Sleep((std::min)(static_cast<DWORD>(50), mi - waitedMs));
+            }
         }
     }
 
@@ -28663,6 +28678,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
         break;
+    case WM_QUERYENDSESSION:
+        return TRUE;
+    case WM_ENDSESSION:
+        if (wParam) {
+            SaveSettings();
+        }
+        return 0;
     case WM_DESTROY:
         UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
         UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
