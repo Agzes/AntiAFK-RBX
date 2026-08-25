@@ -25040,6 +25040,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringActionDelaysBackIcon = false;
         pData->isHoveringActionDelaysSettingsCompact = false;
         pData->isHoveringActionDelaysOkButton = false;
+        pData->hoveringActionDelaysHelpButton = -1;
         pData->isHoveringPresetDropdown = false;
         pData->isHoveringPreActionDelayDropdown = false;
         pData->isHoveringKeyPressDelayDropdown = false;
@@ -25049,6 +25050,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringGridOkButton = false;
         pData->isHoveringGridForceSmall = false;
         pData->isHoveringGridAllMonitors = false;
+        pData->isHoveringGridKeepAspectRatio = false;
         pData->isHoveringGridModeDropdown = false;
         pData->isHoveringGridModeValue = false;
         pData->isHoveringGridSpacingBetween = false;
@@ -25069,6 +25071,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->isHoveringAlphaInfoReleasesLink = false;
         pData->isHoveringAlphaInfoWhatsNewLink = false;
         pData->isHoveringTimingsBackIcon = false;
+        pData->isHoveringTimingsOkButton = false;
+        pData->isHoveringTimingsToggle = false;
         pData->isHoveringMacrosBackIcon = false;
         pData->isHoveringMacrosOkButton = false;
         pData->macrosHoverNew = false;
