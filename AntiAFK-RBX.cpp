@@ -11412,6 +11412,14 @@ void ResetSettings()
     g_autoStartAfk = false;
     g_autoReconnect = true;
     g_reconnectCheckInterval = 0;
+    g_reconnectMacroDelaySec = 60;
+    {
+        std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
+        g_reconnectMacroPending.clear();
+    }
+    if (g_reconnectMonitorRunning.load()) {
+        StopReconnectMonitor();
+    }
     {
         std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
         g_reconnectCooldownMap.clear();
@@ -11458,7 +11466,11 @@ void ResetSettings()
     g_statusBarEventMacro = true;
     g_statusBarEventUi = true;
     g_fpsLimit = 0;
+    g_fpsLastActiveLimit = 0;
     g_unlockFpsOnFocus = false;
+    g_cpuLimitPercent = 90;
+    g_cpuLimitPeriod = 100;
+    g_cpuLimitMode = false;
     g_multiInstanceInterval = 0;
     g_windowOpacity = false;
     g_ramCleanerEnabled = false;
@@ -11473,6 +11485,7 @@ void ResetSettings()
     g_autoMute = false;
     g_unmuteOnFocus = false;
     g_simpleMode = false;
+    g_ssAlwaysShowExitUI = false;
     g_hotkeyEnabled = true;
     g_hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
     g_hotkeyVk = VK_F1;
@@ -11499,6 +11512,7 @@ void ResetSettings()
     g_discordUseDefaultName = false;
     g_discordUseDefaultAvatar = false;
     g_discordUseTimestamp = true;
+    g_lastHeartbeatSend = 0;
     g_useCustomProcessSearch = false;
     g_excludeBuiltinNames = false;
     {
@@ -11510,6 +11524,7 @@ void ResetSettings()
     g_keyPressDelay = 25;
     g_postActionDelay = 55;
     g_actionRepeatCount = 3;
+    g_intervalMacroEnabled = false;
 
     {
         std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
@@ -11539,6 +11554,21 @@ void ResetSettings()
 
     g_isRamCleanerRunning = false;
     if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+
+    if (g_hwnd && IsWindow(g_hwnd)) {
+        if (g_hotkeyEnabled.load()) {
+            UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
+            RegisterHotKey(g_hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+        } else {
+            UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
+        }
+        if (g_hotkeyGridEnabled.load()) {
+            UnregisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID);
+            RegisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+        } else {
+            UnregisterHotKey(g_hwnd, HOTKEY_GRID_SNAP_ID);
+        }
+    }
 
     RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
 }
