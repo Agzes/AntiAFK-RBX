@@ -18090,9 +18090,13 @@ title = L"CPU Limit %";
             }
         }
 
-        if (PtInRect(&pData->fpsCapperUnlockFocusToggleRect, pt)) {
-            PostMessage(g_hwnd, WM_COMMAND, ID_UNLOCK_FPS_ON_FOCUS, 0);
-            return;
+        {
+            RECT unlockFocusHitbox;
+            MainUI_Paint_DrawToggleGetHitbox(pData->fpsCapperUnlockFocusToggleRect, &unlockFocusHitbox);
+            if (PtInRect(&unlockFocusHitbox, pt)) {
+                PostMessage(g_hwnd, WM_COMMAND, ID_UNLOCK_FPS_ON_FOCUS, 0);
+                return;
+            }
         }
 
         return;
@@ -24843,21 +24847,13 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= checkHover(pData->isHoveringBackIcon, pData->statusBarSettingsBackIconRect);
             anyHover |= checkHover(pData->isHoveringStatusBarSettingsOkButton, pData->statusBarSettingsOkButtonRect);
             {
-                RECT sbToggleHitbox;
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbIconToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbIcon, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbBrandToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbBrand, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbSessionToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbSession, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbActionToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbAction, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbReconnectToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbReconnect, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbMacroToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbMacro, sbToggleHitbox);
-                MainUI_Paint_DrawToggleGetHitbox(pData->sbUiToggleRect, &sbToggleHitbox);
-                anyHover |= checkToggleHover(pData->isHoveringSbUi, sbToggleHitbox);
+                anyHover |= checkToggleHover(pData->isHoveringSbIcon, pData->sbIconToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbBrand, pData->sbBrandToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbSession, pData->sbSessionToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbAction, pData->sbActionToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbReconnect, pData->sbReconnectToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbMacro, pData->sbMacroToggleRect);
+                anyHover |= checkToggleHover(pData->isHoveringSbUi, pData->sbUiToggleRect);
             }
 
             int newHoveringSbHelpButton = -1;
