@@ -26429,6 +26429,7 @@ void main_thread(bool arg_tray)
                             cancelPendingAction = true;
                         } else {
                             AutoReset_Action(w);
+                            QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Auto reset sent.", false);
                         }
                     }
                     if (cancelPendingAction) {
