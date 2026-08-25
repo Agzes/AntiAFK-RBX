@@ -6901,6 +6901,14 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
             }
         }
     }
+    {
+        std::lock_guard<std::mutex> lockM(g_macrosMutex);
+        std::stable_sort(intervalMacros.begin(), intervalMacros.end(), [](const Macro& a, const Macro& b) {
+            int oa = a.triggerOrderInterval ? a.triggerOrderInterval : 2147483647;
+            int ob = b.triggerOrderInterval ? b.triggerOrderInterval : 2147483647;
+            return oa < ob;
+        });
+    }
     for (const auto& m : intervalMacros) {
         if (g_stopThread.load()) break;
         bool shouldRun = false;
@@ -26512,6 +26520,14 @@ void main_thread(bool arg_tray)
                                     if (m.triggerOnInterval && m.intervalSec > 0) intervalMacros.push_back(m);
                                 }
                             }
+                        }
+                        {
+                            std::lock_guard<std::mutex> lockM(g_macrosMutex);
+                            std::stable_sort(intervalMacros.begin(), intervalMacros.end(), [](const Macro& a, const Macro& b) {
+                                int oa = a.triggerOrderInterval ? a.triggerOrderInterval : 2147483647;
+                                int ob = b.triggerOrderInterval ? b.triggerOrderInterval : 2147483647;
+                                return oa < ob;
+                            });
                         }
                             for (const auto& m : intervalMacros) {
                                 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
