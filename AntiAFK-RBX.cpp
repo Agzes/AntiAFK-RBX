@@ -16304,6 +16304,7 @@ void ScreenSaver_Start(HWND owner)
 {
     if (g_screenSaverActive.load()) return;
     g_screenSaverActive.store(true);
+    CreateTrayMenu(g_isAfkStarted.load());
     g_screenSaverStopRequested.store(false);
     g_ssShowExitUI = true;
     g_ssStartupFrames = 180;
@@ -16392,6 +16393,7 @@ void ScreenSaver_Start(HWND owner)
         }
         if (g_ssKeyboardHook) { UnhookWindowsHookEx(g_ssKeyboardHook); g_ssKeyboardHook = NULL; }
         if (g_hwnd && IsWindow(g_hwnd)) { PostMessage(g_hwnd, WM_APP + 50, 0, 0); }
+        QueueRefreshTrayMenu(g_isAfkStarted.load());
         g_screenSaverActive.store(false);
     }).detach();
 }
@@ -27445,11 +27447,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_RECONNECT_MANUAL_CHECK:
             if (g_autoReconnect.load()) {
+                QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
                 std::thread([]() {
                     PerformReconnectCheckOnAllWindows(true);
                 }).detach();
             }
-            QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
             break;
         case ID_AUTO_RESET:
             g_autoReset = !g_autoReset.load();
@@ -27635,6 +27637,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
+            CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_CUSTOM_PROCESS_SEARCH_SETTINGS:
             ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::ProcessNames);
@@ -27668,6 +27671,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             ShowStatusBarOverlay(enableOpacity ? L"Session opacity enabled" : L"Session opacity disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            CreateTrayMenu(g_isAfkStarted.load());
             break;
         }
         case ID_UTILS_CLOSE_ALL:
@@ -27737,6 +27741,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             ShowStatusBarOverlay(shouldMute ? L"Roblox muted" : L"Roblox unmuted", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            CreateTrayMenu(g_isAfkStarted.load());
             break;
         }
         case ID_UTILS_TOGGLE_FPS:
@@ -27755,6 +27760,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             } else {
                 ShowStatusBarOverlay(L"Session FPS Capper (CPU Limiter) override disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
+            CreateTrayMenu(g_isAfkStarted.load());
             break;
         }
         case ID_RESET_STATS:
