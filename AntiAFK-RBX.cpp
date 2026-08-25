@@ -26346,6 +26346,27 @@ static void InterruptibleSleepMs(DWORD ms) {
 }
 
 // Main thread
+static void FlushSessionStatsToRegistry()
+{
+    HKEY hKey;
+    if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS) return;
+    uint64_t totalAfkTime = g_totalAfkTimeSeconds.load();
+    uint64_t afkActions = g_afkActionsPerformed.load();
+    uint64_t autoReconnects = g_autoReconnectsPerformed.load();
+    uint64_t longestAfkSession = g_longestAfkSessionSeconds.load();
+    uint64_t discordWebhooksSent = g_discordWebhooksSent.load();
+    uint64_t programLaunches = g_programLaunches.load();
+    uint64_t afkSessionsCompleted = g_afkSessionsCompleted.load();
+    RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&totalAfkTime, sizeof(totalAfkTime));
+    RegSetValueEx(hKey, L"AfkActions", 0, REG_QWORD, (const BYTE*)&afkActions, sizeof(afkActions));
+    RegSetValueEx(hKey, L"AutoReconnects", 0, REG_QWORD, (const BYTE*)&autoReconnects, sizeof(autoReconnects));
+    RegSetValueEx(hKey, L"LongestAfkSession", 0, REG_QWORD, (const BYTE*)&longestAfkSession, sizeof(longestAfkSession));
+    RegSetValueEx(hKey, L"DiscordWebhooksSent", 0, REG_QWORD, (const BYTE*)&discordWebhooksSent, sizeof(discordWebhooksSent));
+    RegSetValueEx(hKey, L"ProgramLaunches", 0, REG_QWORD, (const BYTE*)&programLaunches, sizeof(programLaunches));
+    RegSetValueEx(hKey, L"AfkSessionsCompleted", 0, REG_QWORD, (const BYTE*)&afkSessionsCompleted, sizeof(afkSessionsCompleted));
+    RegCloseKey(hKey);
+}
+
 void main_thread(bool arg_tray)
 {
     if (g_autoUpdate.load())
@@ -26838,6 +26859,15 @@ void main_thread(bool arg_tray)
                     } else if (!fgIsRoblox && previousActivePid > 0) {
                         MuteProcessByPid(previousActivePid, true);
                         previousActivePid = 0;
+                    }
+                }
+
+                {
+                    static uint64_t s_lastStatsFlush = 0;
+                    uint64_t flushNow = GetTickCount64();
+                    if (flushNow - s_lastStatsFlush >= 60000) {
+                        s_lastStatsFlush = flushNow;
+                        FlushSessionStatsToRegistry();
                     }
                 }
 
