@@ -9711,7 +9711,26 @@ std::wstring GetDiscordMentionTargetCopy()
 void SetDiscordMentionTarget(const std::wstring& value)
 {
     std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
-    g_discordMentionTarget = value;
+
+    std::wstring text = value;
+    size_t start = text.find_first_not_of(L" \t\r\n");
+    size_t end = text.find_last_not_of(L" \t\r\n");
+    if (start == std::wstring::npos) text = L"@everyone";
+    else text = text.substr(start, end - start + 1);
+    if (text.empty()) {
+        text = L"@everyone";
+    } else {
+        bool isNumeric = true;
+        for (wchar_t c : text) if (!iswdigit(c)) { isNumeric = false; break; }
+        if (isNumeric) text = L"<@" + text + L">";
+        else if (text[0] == L'&') {
+            bool restNumeric = true;
+            for (size_t k = 1; k < text.size(); ++k) if (!iswdigit(text[k])) { restNumeric = false; break; }
+            if (restNumeric && text.size() > 1) text = L"<@&" + text.substr(1) + L">";
+        }
+    }
+
+    g_discordMentionTarget = text;
 }
 
 bool IsDiscordWebhookUrl(const std::wstring& url)
