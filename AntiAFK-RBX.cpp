@@ -5002,6 +5002,9 @@ void GridSnapRobloxWindows()
         if (!isGridCandidate(w)) {
             continue;
         }
+        if (IsRobloxWindowClosedToTray(w)) {
+            continue;
+        }
 
         if (IsIconic(w)) {
             ShowWindow(w, SW_RESTORE);
@@ -5404,7 +5407,9 @@ std::vector<UINT_PTR> BuildRobloxWindowSignature(const std::vector<HWND>& wins)
     signature.reserve(wins.size());
     for (HWND w : wins)
     {
-        signature.push_back(reinterpret_cast<UINT_PTR>(w));
+        DWORD pid = 0;
+        GetWindowThreadProcessId(w, &pid);
+        signature.push_back(reinterpret_cast<UINT_PTR>(w) ^ (static_cast<UINT_PTR>(pid) << 16));
     }
     std::sort(signature.begin(), signature.end());
     return signature;
