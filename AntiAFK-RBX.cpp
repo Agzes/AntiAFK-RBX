@@ -11696,6 +11696,43 @@ void ResetSettings()
     RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
 }
 
+static std::wstring SerializeInstancePreset(const RobloxInstancePreset& pr)
+{
+    auto joinNames = [](const std::vector<std::wstring>& names) {
+        std::wstring s;
+        for (size_t mi = 0; mi < names.size(); mi++) {
+            if (mi > 0) s += L", ";
+            s += names[mi];
+        }
+        return s;
+    };
+    const int presetFields[23] = {
+        pr.overrideAntiAfk, pr.enableAntiAfk,
+        pr.overrideMute, pr.enableMute,
+        pr.overrideOpacity, pr.enableOpacity, pr.opacityValue,
+        pr.overrideHide, pr.enableHide,
+        pr.overrideFpsLimit, pr.enableFpsLimit, pr.fpsLimitValue,
+        pr.overrideReconnect, pr.enableReconnect,
+        pr.overrideReset, pr.enableReset,
+        pr.overrideTimer, pr.enableTimer, pr.timerSeconds,
+        pr.overrideMacro, pr.enableMacro,
+        pr.enableReconnectMacro, pr.enableIntervalMacro
+    };
+    std::wstring buf = pr.name;
+    for (size_t fi = 0; fi < 23; ++fi) {
+        if (fi == 0) buf += L'|';
+        else buf += L',';
+        buf += std::to_wstring(presetFields[fi]);
+    }
+    buf += L'|';
+    buf += joinNames(pr.macroNames);
+    buf += L'|';
+    buf += joinNames(pr.reconnectMacroNames);
+    buf += L'|';
+    buf += joinNames(pr.intervalMacroNames);
+    return buf;
+}
+
 struct SettingsSnapshot {
     bool multiSupport = false;
     int selectedTime = 540;
@@ -11794,6 +11831,7 @@ struct SettingsSnapshot {
     int postActionDelay = 55;
     int actionRepeatCount = 3;
     bool ssAlwaysShowExitUI = false;
+    std::wstring instancePresetsBlob;
 };
 
 SettingsSnapshot CaptureSettingsSnapshot()
@@ -11935,6 +11973,13 @@ static void AppendJsonInt(std::wstringstream& ss, const wchar_t* key, int value,
     ss << L"  \"" << key << L"\": " << value;
 }
 
+static void AppendJsonString(std::wstringstream& ss, const wchar_t* key, const std::wstring& value, bool& first)
+{
+    ss << (first ? L"" : L",\r\n");
+    first = false;
+    ss << L"  \"" << key << L"\": \"" << value << L"\"";
+}
+
 static void AppendJsonUInt64(std::wstringstream& ss, const wchar_t* key, uint64_t value, bool& first)
 {
     ss << (first ? L"" : L",\r\n");
@@ -12047,6 +12092,21 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonInt(ss, L"PostActionDelay", s.postActionDelay, first);
     AppendJsonInt(ss, L"ActionRepeatCount", s.actionRepeatCount, first);
     AppendJsonBool(ss, L"SsAlwaysShowText", s.ssAlwaysShowExitUI, first);
+    {
+        std::wstring blob;
+        {
+            std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
+            for (size_t i = 0; i < g_instancePresets.size(); ++i) {
+                if (i > 0) blob += L'\n';
+                blob += SerializeInstancePreset(g_instancePresets[i]);
+            }
+        }
+        if (!blob.empty()) {
+            std::string utf8 = MacroEngine_WideToUtf8(blob);
+            std::vector<uint32_t> bytes(utf8.begin(), utf8.end());
+            AppendJsonString(ss, L"InstancePresetsData", MacroEngine_Utf8ToWide(MacroEngine_Base64Encode(bytes)), first);
+        }
+    }
     ss << L"\r\n}\r\n";
     return ss.str();
 }
@@ -12480,6 +12540,77 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_actionRepeatCount = s.actionRepeatCount;
     if (g_actionRepeatCount.load() < 1 || g_actionRepeatCount.load() > 100) g_actionRepeatCount = 3;
     g_ssAlwaysShowExitUI = s.ssAlwaysShowExitUI;
+
+    if (!s.instancePresetsBlob.empty()) {
+        std::vector<RobloxInstancePreset> imported;
+        std::wstringstream lines(s.instancePresetsBlob);
+        std::wstring line;
+        while (std::getline(lines, line)) {
+            if (line.empty()) continue;
+            size_t p1 = line.find(L'|');
+            if (p1 == std::wstring::npos) continue;
+            size_t p2 = line.find(L'|', p1 + 1);
+            if (p2 == std::wstring::npos) continue;
+            RobloxInstancePreset pr;
+            pr.name = line.substr(0, p1);
+            std::wstring intsPart = line.substr(p1 + 1, p2 - p1 - 1);
+            int vals[23] = { 0 };
+            int nParsed = 0;
+            const wchar_t* p = intsPart.c_str();
+            while (nParsed < 23 && *p) {
+                while (*p == L',' || *p == L' ') ++p;
+                if (!*p) break;
+                int v = 0;
+                while (*p >= L'0' && *p <= L'9') { v = v * 10 + (*p - L'0'); ++p; }
+                vals[nParsed++] = v;
+                if (*p == L',') ++p;
+            }
+            if (nParsed < 23) continue;
+
+            auto splitNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
+                out.clear();
+                size_t pos = 0;
+                while (pos < raw.size()) {
+                    size_t comma = raw.find(L',', pos);
+                    std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
+                    size_t sIdx = n.find_first_not_of(L' ');
+                    size_t eIdx = n.find_last_not_of(L' ');
+                    if (sIdx != std::wstring::npos) n = n.substr(sIdx, eIdx - sIdx + 1);
+                    if (!n.empty()) out.push_back(n);
+                    if (comma == std::wstring::npos) break;
+                    pos = comma + 1;
+                }
+            };
+            std::vector<std::wstring> sections;
+            {
+                size_t pos2 = p2 + 1;
+                while (sections.size() < 3) {
+                    size_t bar = line.find(L'|', pos2);
+                    sections.push_back((bar == std::wstring::npos) ? line.substr(pos2) : line.substr(pos2, bar - pos2));
+                    if (bar == std::wstring::npos) break;
+                    pos2 = bar + 1;
+                }
+            }
+            pr.overrideAntiAfk = vals[0] != 0;  pr.enableAntiAfk = vals[1] != 0;
+            pr.overrideMute = vals[2] != 0;     pr.enableMute = vals[3] != 0;
+            pr.overrideOpacity = vals[4] != 0;  pr.enableOpacity = vals[5] != 0;  pr.opacityValue = vals[6];
+            pr.overrideHide = vals[7] != 0;     pr.enableHide = vals[8] != 0;
+            pr.overrideFpsLimit = vals[9] != 0; pr.enableFpsLimit = vals[10] != 0; pr.fpsLimitValue = vals[11];
+            pr.overrideReconnect = vals[12] != 0; pr.enableReconnect = vals[13] != 0;
+            pr.overrideReset = vals[14] != 0;   pr.enableReset = vals[15] != 0;
+            pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
+            pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
+            pr.enableReconnectMacro = vals[21] != 0; pr.enableIntervalMacro = vals[22] != 0;
+            if (!sections.empty()) splitNames(sections[0], pr.macroNames);
+            if (sections.size() > 1) splitNames(sections[1], pr.reconnectMacroNames);
+            if (sections.size() > 2) splitNames(sections[2], pr.intervalMacroNames);
+            imported.push_back(pr);
+        }
+        if (!imported.empty()) {
+            std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
+            g_instancePresets = std::move(imported);
+        }
+    }
 }
 
 static bool ExportSettingsToFile(HWND owner)
@@ -12652,6 +12783,16 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonInt(json, L"PostActionDelay", s.postActionDelay);
     ParseJsonInt(json, L"ActionRepeatCount", s.actionRepeatCount);
     ParseJsonBool(json, L"SsAlwaysShowText", s.ssAlwaysShowExitUI);
+    {
+        std::wstring presetsB64;
+        if (ParseJsonString(json, L"InstancePresetsData", presetsB64) && !presetsB64.empty()) {
+            std::vector<uint32_t> bytes = MacroEngine_Base64Decode(MacroEngine_WideToUtf8(presetsB64));
+            std::string utf8;
+            utf8.reserve(bytes.size());
+            for (uint32_t b : bytes) utf8.push_back((char)b);
+            s.instancePresetsBlob = MacroEngine_Utf8ToWide(utf8);
+        }
+    }
     ApplySettingsSnapshot(s);
     SaveSettings();
     if (g_hotkeyEnabled.load()) {
