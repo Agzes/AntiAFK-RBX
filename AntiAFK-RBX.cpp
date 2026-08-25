@@ -24425,7 +24425,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             }
         } else if (wParam == 1002) {
             KillTimer(hwnd, 1002);
-            if (pData && !pData->showingAlphaInfo && pData->alphaInfoViewDirection == 0) {
+            bool anyInlineViewOpen = pData && (pData->showingGridSettings || pData->showingFpsCapperSettings || pData->showingMacros || pData->showingStatusBarSettings);
+            if (pData && !anyInlineViewOpen && !pData->showingAlphaInfo && pData->alphaInfoViewDirection == 0) {
                 pData->alphaInfoPreviousPage = pData->currentPage;
                 pData->alphaInfoViewDirection = 1;
                 pData->alphaInfoViewAnim = 0.0f;
