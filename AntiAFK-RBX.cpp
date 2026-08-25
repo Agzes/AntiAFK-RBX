@@ -7522,7 +7522,10 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
             g_recordingKeysDown.erase(VK_RCONTROL);
             g_recordingKeysDown.erase(VK_LSHIFT);
             g_recordingKeysDown.erase(VK_RSHIFT);
-            MacroEngine_StopRecording();
+            if (!g_recordingStopPending) {
+                g_recordingStopPending = true;
+                std::thread([]() { MacroEngine_StopRecording(); }).detach();
+            }
             return 1;
         }
 
@@ -7910,9 +7913,9 @@ static void MacroEngine_CancelRecording() {
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
-static void MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macroName) {
-    if (g_isRecording) return;
-    if (!targetHwnd || !IsWindow(targetHwnd)) return;
+static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macroName) {
+    if (g_isRecording) return false;
+    if (!targetHwnd || !IsWindow(targetHwnd)) return false;
 
     RECT restoreRect;
     GetWindowRect(targetHwnd, &restoreRect);
@@ -7962,6 +7965,18 @@ static void MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     g_recordingMouseHook = SetWindowsHookEx(WH_MOUSE_LL, MacroEngine_LLMouseProc, GetModuleHandle(NULL), 0);
     g_recordingKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, MacroEngine_LLKeyboardProc, GetModuleHandle(NULL), 0);
 
+    if (!g_recordingMouseHook || !g_recordingKeyboardHook) {
+        if (g_recordingMouseHook) { UnhookWindowsHookEx(g_recordingMouseHook); g_recordingMouseHook = NULL; }
+        if (g_recordingKeyboardHook) { UnhookWindowsHookEx(g_recordingKeyboardHook); g_recordingKeyboardHook = NULL; }
+        SetWindowPos(targetHwnd, NULL, restoreRect.left, restoreRect.top,
+                     restoreRect.right - restoreRect.left,
+                     restoreRect.bottom - restoreRect.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        g_isRecording = false;
+        g_recordingStopPending = false;
+        return false;
+    }
+
     if (g_recordingDeltaThread.joinable()) {
         g_recordingDeltaThread.join();
     }
@@ -7989,7 +8004,9 @@ static void MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     ShowStatusBarOverlayPersistent(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop", targetHwnd, StatusBarEventType::Macro);
 
     CreateTrayMenu(g_isAfkStarted.load());
+    return true;
 }
+
 
 static const wchar_t MACRO_WIZARD_CLASS[] = L"AntiAFK-RBX-MacroWizard";
 
@@ -18583,7 +18600,12 @@ title = L"CPU Limit %";
                     pData->macrosViewMode = 5;
                     InvalidateRect(hwnd, NULL, FALSE);
                     SetTimer(hwnd, 1003, 250, NULL);
-                    MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name);
+                    if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
+                        pData->macrosViewMode = 1;
+                        KillTimer(hwnd, 1003);
+                        InvalidateRect(hwnd, NULL, FALSE);
+                        QueueStatusBarOverlay(L"Could not start recording", 2000, hwnd, StatusBarEventType::Macro);
+                    }
                 } else {
                     QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                 }
