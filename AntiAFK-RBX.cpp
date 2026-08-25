@@ -7117,11 +7117,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                     int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
                     int sx = hwWr.left + borderX + a.x;
                     int sy = hwWr.top + borderY + a.y;
-                    int screenW = GetSystemMetrics(SM_CXSCREEN);
-                    int screenH = GetSystemMetrics(SM_CYSCREEN);
-                    long absX = (long)sx * 65535 / (screenW > 0 ? screenW : 1);
-                    long absY = (long)sy * 65535 / (screenH > 0 ? screenH : 1);
-                    mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, absX, absY, 0, 0);
+                    SetCursorPos(sx, sy);
                     switch (a.mouseButton) {
                         case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
                         case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); break;
@@ -7204,11 +7200,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                             } else {
                                 int sx = hwWr.left + borderX + pt.first;
                                 int sy = hwWr.top + borderY + pt.second;
-                                int screenW = GetSystemMetrics(SM_CXSCREEN);
-                                int screenH = GetSystemMetrics(SM_CYSCREEN);
-                                long absX = (long)sx * 65535 / (screenW > 0 ? screenW : 1);
-                                long absY = (long)sy * 65535 / (screenH > 0 ? screenH : 1);
-                                mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, absX, absY, 0, 0);
+                                SetCursorPos(sx, sy);
                             }
                         }
                         if (a.mouseUp && MacroEngine_IsMouseButtonDown(a.mouseButton)) {
