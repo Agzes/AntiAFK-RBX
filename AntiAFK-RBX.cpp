@@ -1008,6 +1008,7 @@ enum class DiscordWebhookEvent
 std::queue<std::pair<DiscordWebhookEvent, std::wstring>> g_webhookQueue;
 std::condition_variable g_webhookCv;
 std::atomic<bool> g_webhookThreadRunning(false);
+std::atomic<bool> g_webhookBusy(false);
 std::thread g_webhookThread;
 std::wstring BuildDiscordTotalStatsLine();
 std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds);
@@ -10820,7 +10821,9 @@ void WebhookWorkerThread()
         }
         webhookUrl = GetDiscordWebhookUrlCopy();
         if (IsDiscordWebhookUrl(webhookUrl)) {
+            g_webhookBusy = true;
             SendDiscordWebhookRequest(webhookUrl, item.first, item.second, nullptr, nullptr);
+            g_webhookBusy = false;
         }
     }
 }
@@ -29670,7 +29673,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     g_webhookThreadRunning = false;
     g_webhookCv.notify_all();
-    if (g_webhookThread.joinable()) g_webhookThread.detach();
+    if (g_webhookThread.joinable()) {
+        for (int i = 0; i < 30 && g_webhookBusy.load(); ++i) {
+            Sleep(100);
+        }
+        g_webhookThread.join();
+    }
 
     if (g_reconnectMonitorRunning.load()) {
         g_reconnectMonitorRunning = false;
