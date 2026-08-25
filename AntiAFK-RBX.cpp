@@ -198,6 +198,7 @@ using namespace std::chrono_literals;
 #define ID_CPU_LIMIT_PERCENT_CUSTOM 508
 #define ID_CPU_LIMIT_PERIOD_CUSTOM 509
 #define ID_CPU_LIMIT_MODE_TOGGLE 510
+#define ID_FPS_PRESETS_MODE 511
 
 #define ID_MI_INTERVAL_0 702
 #define ID_MI_INTERVAL_1 703
@@ -12910,7 +12911,7 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLimit > 0 ? MF_CHECKED : 0), ID_FPS_CAP_TOGGLE, L"Enabled");
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_CPU_LIMIT_MODE_TOGGLE, L"FPS Capper (CPU Limiter) % Mode (BES-style)");
-    AppendMenu(hFpsCapperSubmenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_FPS_CAP_CUSTOM, L"FPS Presets Mode");
+    AppendMenu(hFpsCapperSubmenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_FPS_PRESETS_MODE, L"FPS Presets Mode");
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
 
     if (g_cpuLimitMode.load()) {
@@ -28275,6 +28276,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::CpuLimitPercent);
             } else {
                 ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::FpsLimit);
+            }
+            break;
+        }
+        case ID_FPS_PRESETS_MODE:
+        {
+            if (g_cpuLimitMode.load()) {
+                g_cpuLimitMode = false;
+                RestartFpsCapperForEffectiveLimit();
+                SaveSettings();
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                }
             }
             break;
         }
