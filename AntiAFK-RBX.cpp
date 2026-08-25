@@ -6809,8 +6809,9 @@ std::vector<Macro> MacroEngine_GetCooldownMacros() {
         }
     }
     std::stable_sort(result.begin(), result.end(), [](const Macro& a, const Macro& b) {
-        if (a.triggerOrderCooldown == 0 || b.triggerOrderCooldown == 0) return false;
-        return a.triggerOrderCooldown < b.triggerOrderCooldown;
+        int oa = a.triggerOrderCooldown ? a.triggerOrderCooldown : 2147483647;
+        int ob = b.triggerOrderCooldown ? b.triggerOrderCooldown : 2147483647;
+        return oa < ob;
     });
     return result;
 }
@@ -6824,8 +6825,9 @@ std::vector<Macro> MacroEngine_GetReconnectMacros() {
         }
     }
     std::stable_sort(result.begin(), result.end(), [](const Macro& a, const Macro& b) {
-        if (a.triggerOrderReconnect == 0 || b.triggerOrderReconnect == 0) return false;
-        return a.triggerOrderReconnect < b.triggerOrderReconnect;
+        int oa = a.triggerOrderReconnect ? a.triggerOrderReconnect : 2147483647;
+        int ob = b.triggerOrderReconnect ? b.triggerOrderReconnect : 2147483647;
+        return oa < ob;
     });
     return result;
 }
@@ -23275,7 +23277,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                     }
                     std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
                         int oa = g_macros[a].*orderField, ob = g_macros[b].*orderField;
-                        if (oa == 0 || ob == 0) return false;
+                        if (oa == 0) oa = 2147483647;
+                        if (ob == 0) ob = 2147483647;
                         return oa < ob;
                     });
                     for (size_t k = 0; k < order.size(); k++) outPos[order[k]] = (int)k + 1;
@@ -23912,7 +23915,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                     int ob = (which == 0) ? g_macros[b].triggerOrderCooldown
                           : (which == 1) ? g_macros[b].triggerOrderReconnect
                                          : g_macros[b].triggerOrderInterval;
-                    if (oa == 0 || ob == 0) return false;
+                    if (oa == 0) oa = 2147483647;
+                    if (ob == 0) ob = 2147483647;
                     return oa < ob;
                 });
                 for (size_t k = 0; k < order.size(); k++) {
