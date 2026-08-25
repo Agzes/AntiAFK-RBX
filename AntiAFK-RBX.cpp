@@ -5675,15 +5675,15 @@ MutexCreateResult EnableMultiInstanceSupport()
     if (GetLastError() == ERROR_ALREADY_EXISTS)
     {
         DWORD waitResult = WaitForSingleObject(g_hMultiInstanceMutex, 0);
-        if (waitResult != WAIT_OBJECT_0)
+        if (waitResult == WAIT_OBJECT_0 || waitResult == WAIT_ABANDONED)
         {
-            bool robloxRunning = !FindAllRobloxProcessIds().empty();
-            if (robloxRunning)
-                return MUTEX_CREATED;
-            g_multiInstanceMutexOwnedByOther = true;
-            return MUTEX_ALREADY_EXISTS;
+            return MUTEX_CREATED;
         }
-        return MUTEX_CREATED;
+        bool robloxRunning = !FindAllRobloxProcessIds().empty();
+        if (robloxRunning)
+            return MUTEX_CREATED;
+        g_multiInstanceMutexOwnedByOther = true;
+        return MUTEX_ALREADY_EXISTS;
     }
     return MUTEX_CREATED;
 }
