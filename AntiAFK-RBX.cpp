@@ -10422,6 +10422,7 @@ uint64_t FinalizeAfkSession()
     g_totalAfkTimeSeconds += sessionSeconds;
     g_afkSessionsCompleted++;
     g_lastSessionDurationSeconds = sessionSeconds;
+    g_lastHeartbeatSend = 0;
 
     uint64_t longestSession = g_longestAfkSessionSeconds.load();
     while (sessionSeconds > longestSession && !g_longestAfkSessionSeconds.compare_exchange_weak(longestSession, sessionSeconds))
