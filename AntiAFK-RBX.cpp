@@ -6966,11 +6966,19 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
 void IntervalMacroThread() {
     g_intervalMacroThreadRunning = true;
     const int myGen = g_intervalMacroGen.load();
+    uint64_t lastSweep = 0;
     while (g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen) {
         ULONGLONG now = GetTickCount64();
         auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
             MacroEngine_CheckIntervalMacros(w, now);
+        }
+        {
+            std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+            for (auto it = g_lastIntervalMacroRun.begin(); it != g_lastIntervalMacroRun.end(); ) {
+                if (!IsWindow(it->first.first)) it = g_lastIntervalMacroRun.erase(it);
+                else ++it;
+            }
         }
         Sleep(250);
     }
@@ -13920,6 +13928,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 int y = _wtoi(pData->inputText[1]);
                 int w = _wtoi(pData->inputText[2]);
                 int h = _wtoi(pData->inputText[3]);
+                if (w < 100) w = 100;
+                if (h < 100) h = 100;
                 if (w > 0 && h > 0) {
                     for (HWND hw : g_geometryTargetWindows) {
                         if (hw && IsWindow(hw)) {
