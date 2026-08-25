@@ -9627,6 +9627,15 @@ void MonitorUserActivity()
             }
         }
 
+        {
+            static uint64_t s_lastInstancePruneTick = 0;
+            uint64_t pruneNow = GetTickCount64();
+            if (pruneNow - s_lastInstancePruneTick >= 30000) {
+                s_lastInstancePruneTick = pruneNow;
+                PruneClosedInstanceSettings();
+            }
+        }
+
         Sleep(100);
     }
 }
@@ -26393,6 +26402,7 @@ void main_thread(bool arg_tray)
                     bool hasCustomMacro = GetWindowInstanceSetting_Macro(w, customMacroNames);
                     bool perInstanceAction = hasCustomMacro && !customMacroNames.empty();
 
+                    PruneClosedInstanceSettings();
                     g_randomCyclePick = -1;
                     if (!(g_selectedAction.load() == 4 && perInstanceAction)) {
                         int actionRepeats = (g_selectedAction.load() == 4) ? 1 : g_actionRepeatCount.load();
