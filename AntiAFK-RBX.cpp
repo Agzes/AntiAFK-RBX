@@ -25784,12 +25784,13 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             FillRect(prevDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
             SetBkMode(prevDC, TRANSPARENT);
 
-            int savedPage = pData->currentPage;
-            pData->currentPage = pData->prevPage;
-            pData->isOffscreenRender = true;
-            MainUI_Paint_DrawContent(prevDC, clientRect, pData);
-            pData->isOffscreenRender = false;
-            pData->currentPage = savedPage;
+            static MainUIData* prevScratch = nullptr;
+            if (!prevScratch) prevScratch = new MainUIData();
+            *prevScratch = *pData;
+            prevScratch->currentPage = pData->prevPage;
+            prevScratch->isOffscreenRender = true;
+            MainUI_Paint_DrawContent(prevDC, clientRect, prevScratch);
+            prevScratch->isOffscreenRender = false;
 
             const int contentTop = 61;
             const int startBtnH = 40;
