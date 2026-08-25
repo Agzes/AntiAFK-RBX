@@ -15395,6 +15395,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         break;
     }
     case WM_CLOSE:
+        g_firstWelcomeShown = true;
+        SaveSettings();
         DestroyWindow(hwnd);
         return 0;
     case WM_NCDESTROY:
@@ -15417,7 +15419,6 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                 EnableWindow(owner, TRUE);
                 EnableAcrylic(owner);
             }
-            g_hCustomIntervalWnd = NULL;
         }
         return 0;
     }
@@ -24788,8 +24789,10 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             anyHover |= checkHover(pData->isHoveringMacrosOkButton, pData->macrosOkButtonRect);
             if (pData->macrosViewMode == 0) {
                 anyHover |= checkHover(pData->macrosHoverNew, pData->macrosBtnRectNew);
-                anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectTest);
-                anyHover |= checkHover(pData->macrosHoverEdit, pData->macrosBtnRectEdit);
+                if (pData->macrosSelectedIndex >= 0) {
+                    anyHover |= checkHover(pData->macrosHoverRecord, pData->macrosBtnRectTest);
+                    anyHover |= checkHover(pData->macrosHoverEdit, pData->macrosBtnRectEdit);
+                }
                 anyHover |= checkHover(pData->macrosHoverTest, pData->macrosBtnRectTestWin);
                 anyHover |= checkHover(pData->macrosHoverFinish, pData->macrosBtnRectFocus);
             } else if (pData->macrosViewMode == 1) {
@@ -25237,6 +25240,9 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         if (PtInRect(&pData->closeButtonRect, pt)) {
             PostMessage(hwnd, WM_CLOSE, 0, 0);
+            return 0;
+        }
+        if (pData->startupOverlayVisible) {
             return 0;
         }
         MainUI_HandleClick(hwnd, pt, pData);
@@ -26010,6 +26016,8 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
     UINT btnType = type & 0x0F;
     if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL)
         result = IDCANCEL;
+    else if (btnType == MB_YESNO)
+        result = IDNO;
     else
         result = IDOK;
 
