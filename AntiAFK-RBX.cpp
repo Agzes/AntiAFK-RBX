@@ -7835,12 +7835,19 @@ void MacroEngine_StopRecording() {
 
     if (g_macroReRecording) {
         g_macroReRecording = false;
+        bool replaced = false;
         {
             std::lock_guard<std::mutex> lock(g_macrosMutex);
-            int sel = g_selectedMacroIndex.load();
-            if (sel >= 0 && sel < (int)g_macros.size()) {
-                g_macros[sel] = g_wizardMacro;
+            for (auto& existing : g_macros) {
+                if (_wcsicmp(existing.name.c_str(), g_wizardMacro.name.c_str()) == 0) {
+                    existing = g_wizardMacro;
+                    replaced = true;
+                    break;
+                }
             }
+        }
+        if (!replaced) {
+            QueueStatusBarOverlay(L"Original macro was deleted - recording discarded", 2500, nullptr, StatusBarEventType::Macro);
         }
         MacroEngine_SaveMacros();
         g_macroWizardActive = false;
