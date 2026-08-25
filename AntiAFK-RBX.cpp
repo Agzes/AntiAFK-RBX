@@ -26687,6 +26687,11 @@ void main_thread(bool arg_tray)
                     bool perInstanceAction = hasCustomMacro && !customMacroNames.empty();
 
                     PruneClosedInstanceSettings();
+                    if (ShouldMuteRobloxNow()) {
+                        DWORD wPid = 0;
+                        GetWindowThreadProcessId(w, &wPid);
+                        if (wPid > 0) MuteProcessByPid(wPid, true);
+                    }
                     g_randomCyclePick = -1;
                     if (!(g_selectedAction.load() == 4 && perInstanceAction)) {
                         int actionRepeats = (g_selectedAction.load() == 4) ? 1 : g_actionRepeatCount.load();
