@@ -14884,6 +14884,10 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
             return 0;
         }
         if (PtInRect(&pData->okButtonRect, pt)) {
+            if (g_macroOrderNames.empty()) {
+                QueueStatusBarOverlay(L"No macros available for this order", 2000, hwnd, StatusBarEventType::Macro);
+                return 0;
+            }
             {
                 std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
                 for (HWND tWnd : g_macroOrderTargets) {
@@ -14976,6 +14980,10 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
             return 0;
         }
         if (PtInRect(&pData->okButtonRect, pt)) {
+            if (g_macroOrderNames.empty()) {
+                QueueStatusBarOverlay(L"No macros available for this order", 2000, hwnd, StatusBarEventType::Macro);
+                return 0;
+            }
             {
                 std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
                 for (HWND tWnd : g_macroOrderTargets) {
