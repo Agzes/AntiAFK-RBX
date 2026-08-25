@@ -6277,6 +6277,8 @@ bool MacroEngine_LoadMacros() {
     std::lock_guard<std::mutex> lock(g_macrosMutex);
     g_macros.clear();
 
+    bool parseFailed = (content.size() > 64 && content.find("\"macros\"") != std::string::npos);
+
     auto safeStoi = [](const std::string& str, int defaultValue = 0) -> int {
         if (str.empty()) return defaultValue;
         try {
@@ -6485,6 +6487,15 @@ bool MacroEngine_LoadMacros() {
         maxOrder = (std::max)(maxOrder, (std::max)((std::max)(m.triggerOrderCooldown, m.triggerOrderReconnect), m.triggerOrderInterval));
     }
     g_macroTriggerOrderCounter = maxOrder + 1;
+    if (parseFailed && g_macros.empty()) {
+        std::wstring badPath = MacroEngine_GetMacrosPath() + L".bad";
+        HANDLE hBad = CreateFileW(badPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hBad != INVALID_HANDLE_VALUE) {
+            DWORD written = 0;
+            WriteFile(hBad, content.c_str(), (DWORD)content.size(), &written, NULL);
+            CloseHandle(hBad);
+        }
+    }
     return true;
 }
 
@@ -6554,11 +6565,21 @@ bool MacroEngine_SaveMacros() {
     json += "  ]\n}\n";
 
     std::wstring path = MacroEngine_GetMacrosPath();
-    HANDLE hFile = CreateFileW(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    std::wstring tmpPath = path + L".tmp";
+    HANDLE hFile = CreateFileW(tmpPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) return false;
-    DWORD written;
-    WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
+    DWORD written = 0;
+    BOOL writeOk = WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
+    FlushFileBuffers(hFile);
     CloseHandle(hFile);
+    if (!writeOk || written != (DWORD)json.size()) {
+        DeleteFileW(tmpPath.c_str());
+        return false;
+    }
+    if (!MoveFileExW(tmpPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileW(tmpPath.c_str());
+        return false;
+    }
     return true;
 }
 
