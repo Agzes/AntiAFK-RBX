@@ -19411,7 +19411,7 @@ title = L"CPU Limit %";
         MainUI_Paint_DrawToggleGetHitbox(pData->customProcessSearchToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_TOGGLE, 0); return; }
         MainUI_Paint_DrawToggleGetHitbox(pData->hotkeyToggleRect, &toggleHitbox);
-        if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_HOTKEY, 0); return; }
+        if (PtInRect(&toggleHitbox, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_HOTKEY, 0); return; }
         if (PtInRect(&pData->customProcessSearchSettingsRect, pt)) { if (smRedirectAdv()) return; PostMessage(g_hwnd, WM_COMMAND, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, 0); return; }
         if (PtInRect(&pData->customProcessSearchExcludeRect, pt)) {
             if (smRedirectAdv()) return;
@@ -19621,7 +19621,22 @@ title = L"CPU Limit %";
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
-        if (g_hotkeyEnabled.load() && PtInRect(&pData->hotkeyChangeBtnRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_HOTKEY, 0); return; }
+        if (g_hotkeyEnabled.load() && PtInRect(&pData->hotkeyChangeBtnRect, pt)) {
+            if (g_simpleMode.load()) {
+                if (pData->currentPage != 0) {
+                    pData->prevPage = pData->currentPage;
+                    pData->currentPage = 0;
+                    pData->pageTransitionDirection = 1;
+                    pData->pageTransitionAnim = 0.0f;
+                }
+                pData->highlightElement = 6;
+                pData->highlightStartTime = GetTickCount64();
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
+            PostMessage(g_hwnd, WM_COMMAND, ID_CAPTURE_HOTKEY, 0);
+            return;
+        }
         if (PtInRect(&pData->actionDelaysEditButtonRect, pt)) {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -19726,7 +19741,12 @@ title = L"CPU Limit %";
             return;
         }
         if (PtInRect(&pData->muteRobloxCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_MUTE, 0); return; }
-        if (PtInRect(&pData->muteRobloxSubCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_UNMUTE_ON_FOCUS, 0); return; }
+        if (PtInRect(&pData->muteRobloxSubCompactRect, pt)) {
+            if (smRedirectCompact()) return;
+            if (g_simpleMode.load() || !g_autoMute.load()) return;
+            PostMessage(g_hwnd, WM_COMMAND, ID_UNMUTE_ON_FOCUS, 0);
+            return;
+        }
         if (PtInRect(&pData->fpsCapperCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_FPS, 0); return; }
         if (PtInRect(&pData->advancedFpsCapperLinkRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_ADVANCED_FPS_CAPPER, 0); return; }
         if (PtInRect(&pData->ramCleanerSweepCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_RAM_CLEAN_SWEEP, 0); return; }
@@ -22100,7 +22120,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         {
             std::wstring hkText = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
             RECT hkRowR = pData->rowRects.back();
-            bool hkEn = g_hotkeyEnabled.load();
+            bool hkEn = g_hotkeyEnabled.load() && !smAdvanced;
             BYTE hkA = hkEn ? 255 : 100;
 
             HFONT hkIconF = CreateFontW(-MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
