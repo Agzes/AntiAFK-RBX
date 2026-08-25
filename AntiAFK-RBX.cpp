@@ -392,6 +392,8 @@ std::atomic<bool> g_isRamCleanerRunning(false);
 std::atomic<bool> g_intervalMacroEnabled(false);
 std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
+std::atomic<int> g_intervalMacroGen(0);
+std::mutex g_intervalMacroThreadMutex;
 std::atomic<int> g_reconnectMacroDelaySec(60);
 std::mutex g_reconnectMacroDelayMutex;
 std::map<HWND, ULONGLONG> g_reconnectMacroPending;
@@ -6963,7 +6965,8 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
 
 void IntervalMacroThread() {
     g_intervalMacroThreadRunning = true;
-    while (g_intervalMacroEnabled.load() && !g_stopThread.load()) {
+    const int myGen = g_intervalMacroGen.load();
+    while (g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen) {
         ULONGLONG now = GetTickCount64();
         auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
@@ -6972,6 +6975,16 @@ void IntervalMacroThread() {
         Sleep(250);
     }
     g_intervalMacroThreadRunning = false;
+}
+
+static void SpawnIntervalMacroThreadIfNeeded() {
+    std::lock_guard<std::mutex> lock(g_intervalMacroThreadMutex);
+    if (g_intervalMacroThreadRunning.load()) return;
+    if (g_intervalMacroThread.joinable()) {
+        g_intervalMacroThread.detach();
+    }
+    g_intervalMacroGen++;
+    g_intervalMacroThread = std::thread(IntervalMacroThread);
 }
 
 static void MacroEngine_SendKey(BYTE vk, bool down) {
@@ -27313,12 +27326,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     g_intervalMacroEnabled = true;
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled with Anti-AFK.", false);
                 }
-                if (!g_intervalMacroThreadRunning.load()) {
-                    if (g_intervalMacroThread.joinable()) {
-                        g_intervalMacroThread.join();
-                    }
-                    g_intervalMacroThread = std::thread(IntervalMacroThread);
-                }
+                SpawnIntervalMacroThreadIfNeeded();
                 {
                     std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
                     g_manuallyStoppedPids.clear();
@@ -28528,12 +28536,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             g_intervalMacroEnabled = !g_intervalMacroEnabled.load();
             if (g_intervalMacroEnabled.load()) {
-                g_intervalMacroEnabled = false;
-                if (g_intervalMacroThread.joinable()) {
-                    g_intervalMacroThread.join();
-                }
-                g_intervalMacroEnabled = true;
-                g_intervalMacroThread = std::thread(IntervalMacroThread);
+                SpawnIntervalMacroThreadIfNeeded();
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled manually.", false);
             } else {
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Disabled manually.", false);
