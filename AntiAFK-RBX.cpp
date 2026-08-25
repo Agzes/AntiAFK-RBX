@@ -8682,7 +8682,14 @@ int ClearRobloxMemory()
     for (DWORD pid : pids) {
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA, FALSE, pid);
         if (hProcess) {
-            if (EmptyWorkingSet(hProcess)) {
+            wchar_t imageName[MAX_PATH] = { 0 };
+            DWORD nameSize = MAX_PATH;
+            bool isRoblox = false;
+            if (QueryFullProcessImageNameW(hProcess, 0, imageName, &nameSize)) {
+                CharLowerW(imageName);
+                isRoblox = wcsstr(imageName, L"roblox") != NULL;
+            }
+            if (isRoblox && EmptyWorkingSet(hProcess)) {
                 successCount++;
             }
             CloseHandle(hProcess);
