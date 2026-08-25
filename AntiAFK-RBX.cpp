@@ -13953,7 +13953,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     case WM_KEYDOWN:
         if (wParam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000))
         {
-            if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::DiscordWebhookUrl || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::InstanceGeometry || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)
+            if (pData->type == CustomInputDialogType::ProcessNames || pData->type == CustomInputDialogType::DiscordWebhookUrl || pData->type == CustomInputDialogType::DiscordMentionTarget || pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::InstanceGeometry || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename || pData->numInputs > 0)
             {
                 if (OpenClipboard(hwnd))
                 {
@@ -13965,12 +13965,18 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         {
                             int fi = pData->focusedInput;
                             size_t currentLen = wcslen(pData->inputText[fi]);
+                            bool digitsOnly = (pData->type != CustomInputDialogType::ProcessNames && pData->type != CustomInputDialogType::DiscordWebhookUrl && pData->type != CustomInputDialogType::DiscordMentionTarget && pData->type != CustomInputDialogType::InstanceTitle && pData->type != CustomInputDialogType::InstanceGeometry && pData->type != CustomInputDialogType::PresetName && pData->type != CustomInputDialogType::MacroName && pData->type != CustomInputDialogType::MacroRename);
                             size_t maxLen = (pData->type == CustomInputDialogType::InstanceTitle || pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename) ? 63 :
                                             (pData->type == CustomInputDialogType::DiscordMentionTarget) ? 127 :
-                                            (pData->type == CustomInputDialogType::InstanceGeometry) ? 15 : 511;
+                                            (pData->type == CustomInputDialogType::InstanceGeometry) ? 15 :
+                                            (digitsOnly) ? 8 : 511;
                             while (*pText && currentLen < maxLen)
                             {
-                                if (pData->type == CustomInputDialogType::InstanceGeometry) {
+                                if (digitsOnly) {
+                                    if (*pText >= '0' && *pText <= '9') {
+                                        pData->inputText[fi][currentLen++] = *pText;
+                                    }
+                                } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
                                     if ((*pText >= '0' && *pText <= '9') || *pText == '-') {
                                         pData->inputText[fi][currentLen++] = *pText;
                                     }
