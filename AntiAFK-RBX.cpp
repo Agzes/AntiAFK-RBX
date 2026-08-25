@@ -12670,6 +12670,14 @@ static bool ImportSettingsFromFile(HWND owner)
         InvalidateRect(g_hMainUiWnd, NULL, TRUE);
     }
 
+    RestartFpsCapperForEffectiveLimit();
+    RefreshRobloxWindowOpacity(false);
+    if (g_afkReminderEnabled.load() || g_skipActiveEnabled.load() || g_userSafeMode.load() > 0) {
+        StartActivityMonitor();
+    } else {
+        StopActivityMonitor();
+    }
+
     int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX • Import Settings", MB_YESNO);
     if (importMacros == IDYES) {
         wchar_t macroFile[MAX_PATH] = L"";
