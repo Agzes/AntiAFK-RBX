@@ -7015,6 +7015,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
     int repeats = macro.totalRepeats > 0 ? macro.totalRepeats : 1;
     for (int r = 0; r < repeats; r++) {
         if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
+        if (!IsWindow(hwnd) || IsRobloxWindowClosedToTray(hwnd)) goto macroEngineEnd;
         double base = MacroEngine_NowMs();
         double due = 0.0;
         auto waitDue = [&]() {
@@ -7023,6 +7024,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
         };
         for (const auto& a : macro.actions) {
             if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) goto macroEngineEnd;
+            if (!IsWindow(hwnd) || IsRobloxWindowClosedToTray(hwnd)) goto macroEngineEnd;
 
             switch (a.type) {
                 case MacroStepType::ImageClick: {
