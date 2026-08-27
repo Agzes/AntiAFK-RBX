@@ -6943,7 +6943,20 @@ std::vector<Macro> MacroEngine_GetReconnectMacros() {
 }
 
 std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target) {
-    return MacroEngine_GetCooldownMacros();
+    std::vector<Macro> globalCd = MacroEngine_GetCooldownMacros();
+    std::vector<std::wstring> names;
+    if (!GetWindowInstanceSetting_Macro(target, names) || names.empty()) return globalCd;
+    std::vector<Macro> result;
+    std::lock_guard<std::mutex> lock(g_macrosMutex);
+    for (const auto& name : names) {
+        for (const auto& m : g_macros) {
+            if (_wcsicmp(m.name.c_str(), name.c_str()) == 0) {
+                result.push_back(m);
+                break;
+            }
+        }
+    }
+    return result.empty() ? globalCd : result;
 }
 
 std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
