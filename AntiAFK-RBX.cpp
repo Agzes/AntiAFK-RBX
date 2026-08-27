@@ -929,6 +929,21 @@ HHOOK g_recordingKeyboardHook = NULL;
 HWND g_recordingOverlayWnd = NULL;
 bool g_recordingStopPending = false;
 std::vector<MacroAction> g_recordingActions;
+std::mutex g_recordingActionsMutex;
+static void MacroEngine_PushRecordingAction(const MacroAction& a) {
+    std::lock_guard<std::mutex> lock(g_recordingActionsMutex);
+    g_recordingActions.push_back(a);
+}
+static void MacroEngine_ClearRecordingActions() {
+    std::lock_guard<std::mutex> lock(g_recordingActionsMutex);
+    g_recordingActions.clear();
+}
+static std::vector<MacroAction> MacroEngine_TakeRecordingActions() {
+    std::lock_guard<std::mutex> lock(g_recordingActionsMutex);
+    std::vector<MacroAction> out = std::move(g_recordingActions);
+    g_recordingActions.clear();
+    return out;
+}
 double g_recordingStartTime = 0;
 double g_recordingLastEventTime = 0;
 int g_recordingClickCount = 0;
@@ -7439,7 +7454,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = isRight ? 1 : 0;
                 if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                    g_recordingActions.push_back(moveAction);
+                    MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
             }
@@ -7451,7 +7466,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
             action.mouseButton = isRight ? 1 : 0;
             action.image.CaptureFromWindow(g_recordingTargetHwnd, pt.x, pt.y, 12);
-            g_recordingActions.push_back(action);
+            MacroEngine_PushRecordingAction(action);
             g_recordingClickCount++;
             g_recordingLastEventTime = now;
         } else if (wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) {
@@ -7472,7 +7487,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = isRight ? 1 : 0;
                 if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                    g_recordingActions.push_back(moveAction);
+                    MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
             }
@@ -7483,7 +7498,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             action.y = (uint16_t)pt.y;
             action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
             action.mouseButton = isRight ? 1 : 0;
-            g_recordingActions.push_back(action);
+            MacroEngine_PushRecordingAction(action);
             g_recordingLastEventTime = now;
         } else if (wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL) {
             if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -7499,7 +7514,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
                 if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                    g_recordingActions.push_back(moveAction);
+                    MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
             }
@@ -7511,7 +7526,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
             action.wheelDelta = delta;
             action.mouseButton = (delta < 0) ? 1 : 0;
-            g_recordingActions.push_back(action);
+            MacroEngine_PushRecordingAction(action);
             g_recordingWheelCount++;
             g_recordingLastEventTime = now;
         } else if (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN || wParam == WM_MBUTTONUP || wParam == WM_XBUTTONUP) {
@@ -7539,7 +7554,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                     moveAction.mouseUp = false;
                     moveAction.mouseButton = (uint8_t)btn;
                     if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                        g_recordingActions.push_back(moveAction);
+                        MacroEngine_PushRecordingAction(moveAction);
                         delay = 0;
                     }
                 }
@@ -7551,7 +7566,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
                 action.mouseButton = (uint8_t)btn;
                 action.image.CaptureFromWindow(g_recordingTargetHwnd, pt.x, pt.y, 12);
-                g_recordingActions.push_back(action);
+                MacroEngine_PushRecordingAction(action);
                 g_recordingClickCount++;
                 g_recordingLastEventTime = now;
             } else {
@@ -7565,7 +7580,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                     moveAction.mouseUp = false;
                     moveAction.mouseButton = (uint8_t)btn;
                     if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                        g_recordingActions.push_back(moveAction);
+                        MacroEngine_PushRecordingAction(moveAction);
                         delay = 0;
                     }
                 }
@@ -7576,7 +7591,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 action.y = (uint16_t)pt.y;
                 action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
                 action.mouseButton = (uint8_t)btn;
-                g_recordingActions.push_back(action);
+                MacroEngine_PushRecordingAction(action);
                 g_recordingLastEventTime = now;
             }
         }
@@ -7590,15 +7605,17 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
 
         if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) &&
             p->vkCode == 'R' && (GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
-            auto& acts = g_recordingActions;
-            for (int i = (int)acts.size() - 1; i >= 0; i--) {
-                if (acts[i].type == MacroStepType::KeyDown &&
-                    (acts[i].vkCode == VK_CONTROL || acts[i].vkCode == VK_SHIFT ||
-                     acts[i].vkCode == VK_LCONTROL || acts[i].vkCode == VK_RCONTROL ||
-                     acts[i].vkCode == VK_LSHIFT || acts[i].vkCode == VK_RSHIFT)) {
-                    acts.erase(acts.begin() + i);
-                } else {
-                    break;
+            {
+                std::lock_guard<std::mutex> lock(g_recordingActionsMutex);
+                for (int i = (int)g_recordingActions.size() - 1; i >= 0; i--) {
+                    if (g_recordingActions[i].type == MacroStepType::KeyDown &&
+                        (g_recordingActions[i].vkCode == VK_CONTROL || g_recordingActions[i].vkCode == VK_SHIFT ||
+                         g_recordingActions[i].vkCode == VK_LCONTROL || g_recordingActions[i].vkCode == VK_RCONTROL ||
+                         g_recordingActions[i].vkCode == VK_LSHIFT || g_recordingActions[i].vkCode == VK_RSHIFT)) {
+                        g_recordingActions.erase(g_recordingActions.begin() + i);
+                    } else {
+                        break;
+                    }
                 }
             }
             g_recordingKeysDown.erase(VK_CONTROL);
@@ -7637,7 +7654,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
                 moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
                 moveAction.relative = false;
                 if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                    g_recordingActions.push_back(moveAction);
+                    MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
             }
@@ -7646,7 +7663,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
             action.type = MacroStepType::KeyDown;
             action.vkCode = (BYTE)p->vkCode;
             action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
-            g_recordingActions.push_back(action);
+            MacroEngine_PushRecordingAction(action);
             g_recordingKeyCount++;
             g_recordingLastEventTime = now;
         } else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
@@ -7662,7 +7679,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
                 moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
                 moveAction.relative = false;
                 if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-                    g_recordingActions.push_back(moveAction);
+                    MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
             }
@@ -7671,7 +7688,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
             action.type = MacroStepType::KeyUp;
             action.vkCode = (BYTE)p->vkCode;
             action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
-            g_recordingActions.push_back(action);
+            MacroEngine_PushRecordingAction(action);
             g_recordingLastEventTime = now;
         }
     }
@@ -7901,7 +7918,7 @@ void MacroEngine_StopRecording() {
         moveAction.delayBeforeMs = 0;
         moveAction.relative = false;
         if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
-            g_recordingActions.push_back(moveAction);
+            MacroEngine_PushRecordingAction(moveAction);
         }
     }
 
@@ -7915,8 +7932,7 @@ void MacroEngine_StopRecording() {
     g_recordingXButton2Down = false;
     g_recordingKeysDown.clear();
 
-    g_wizardMacro.actions = std::move(g_recordingActions);
-    g_recordingActions.clear();
+    g_wizardMacro.actions = MacroEngine_TakeRecordingActions();
 
     if (g_macroReRecording) {
         g_macroReRecording = false;
@@ -7985,7 +8001,7 @@ static void MacroEngine_CancelRecording() {
     HideRecordingOverlayWindow();
     g_isRecording = false;
 
-    g_recordingActions.clear();
+    MacroEngine_ClearRecordingActions();
     MacroEngine_ClearPendingMoves();
     g_recordingClickCount = 0;
     g_recordingKeyCount = 0;
@@ -8044,7 +8060,7 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     Sleep(100);
 
     g_recordingTargetHwnd = targetHwnd;
-    g_recordingActions.clear();
+    MacroEngine_ClearRecordingActions();
     MacroEngine_ClearPendingMoves();
     g_recordingLastMoveTime = 0;
     g_recordingClickCount = 0;
@@ -8528,7 +8544,7 @@ void MacroEngine_ShowWizard(HWND parent, int startStep) {
         g_macroWizardStep = startStep;
         if (startStep == 1) {
             g_wizardMacro = Macro();
-            g_recordingActions.clear();
+            MacroEngine_ClearRecordingActions();
         }
         PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
         return;
