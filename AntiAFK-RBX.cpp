@@ -972,6 +972,7 @@ Macro g_wizardMacro;
 std::map<std::pair<HWND, std::wstring>, ULONGLONG> g_lastIntervalMacroRun;
 std::mutex g_lastIntervalMacroRunMutex;
 std::atomic<bool> g_macroTestRunning(false);
+std::atomic<HWND> g_macroTestTargetWnd = nullptr;
 std::atomic<int> g_lastActionKind(1); // 0 - space, 1 - w/s, 2 - zoom (actual last performed)
 std::atomic<int> g_randomCyclePick(-1); // -1 = no pick yet, 0-2 = pick for current cycle
 std::atomic<int> g_restoreMethod(1); // 0 - Off, 1 - SetForeground, 2 - Alt+Tab (legacy), 3 - Smart Alt+Tab
@@ -7156,7 +7157,7 @@ void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
 }
 
 void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool allowWithoutAfk) {
-    if (g_macroTestRunning && !isTest) return;
+    if (g_macroTestRunning && !isTest && hwnd && hwnd == g_macroTestTargetWnd.load()) return;
     if (!hwnd || !IsWindow(hwnd)) return;
     if (IsRobloxWindowClosedToTray(hwnd)) return;
 
@@ -8514,11 +8515,13 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     auto wins = FindAllRobloxWindows(true);
                     if (!wins.empty()) testTarget = wins[0];
                 }
+                g_macroTestTargetWnd.store(testTarget);
                 g_macroTestRunning = true;
                 std::thread([testMacro, testTarget]() {
                     if (testTarget) {
                         MacroEngine_ExecuteMacro(testMacro, testTarget, true);
                     }
+                    g_macroTestTargetWnd.store(nullptr);
                     g_macroTestRunning = false;
                 }).detach();
                 return 0;
@@ -18754,10 +18757,12 @@ title = L"CPU Limit %";
                             QueueStatusBarOverlay(L"Macro not found", 2000, hwnd, StatusBarEventType::Macro);
                             return;
                         }
+                        g_macroTestTargetWnd.store(targetHwnd);
                         g_macroTestRunning = true;
                         QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd, StatusBarEventType::Macro);
                         std::thread([testCopy, targetHwnd, hwnd]() {
                             MacroEngine_ExecuteMacro(testCopy, targetHwnd, true);
+                            g_macroTestTargetWnd.store(nullptr);
                             g_macroTestRunning = false;
                             if (hwnd && IsWindow(hwnd)) {
                                 QueueStatusBarOverlay(L"Test run complete", 1500, hwnd, StatusBarEventType::Macro);
