@@ -27935,30 +27935,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
-        case ID_GRID_FORCE_SMALL:
-            g_gridForceSmall = !g_gridForceSmall.load();
-            SaveSettings();
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
-            }
-            CreateTrayMenu(g_isAfkStarted.load());
-            break;
-        case ID_GRID_ALL_MONITORS:
-            g_gridAllMonitors = !g_gridAllMonitors.load();
-            SaveSettings();
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
-            }
-            CreateTrayMenu(g_isAfkStarted.load());
-            break;
-        case ID_GRID_KEEP_ASPECT_RATIO:
-            g_gridKeepAspectRatio = !g_gridKeepAspectRatio.load();
-            SaveSettings();
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
-            }
-            CreateTrayMenu(g_isAfkStarted.load());
-            break;
         case ID_GRID_SETTINGS:
         {
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
