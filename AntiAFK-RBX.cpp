@@ -6920,7 +6920,9 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         g_selectedMacroIndex = (int)g_macros.size() - 1;
         g_selectedAction = 4;
     }
-    MacroEngine_SaveMacros();
+    if (!MacroEngine_SaveMacros()) {
+        ShowDarkMessageBox(parent, L"Failed to save macros. The macros file may be read-only or locked.", L"Import Macro", MB_OK);
+    }
     QueueStatusBarOverlay(L"Imported: " + imported.name, 2000, parent, StatusBarEventType::Macro);
     return true;
 }
@@ -8485,7 +8487,9 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     g_selectedMacroIndex = (int)g_macros.size() - 1;
                     g_selectedAction = 4;
                 }
-                MacroEngine_SaveMacros();
+                if (!MacroEngine_SaveMacros()) {
+                    ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Save Macro", MB_OK);
+                }
                 g_macroWizardActive = false;
                 HWND parentWnd = GetParent(hwnd);
                 DestroyWindow(hwnd);
@@ -14178,7 +14182,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         ShowDarkMessageBox(hwnd, L"A macro with this name already exists. Choose a different name.", L"Rename Macro", MB_OK);
                     }
                     if (saveNeeded) {
-                        MacroEngine_SaveMacros();
+                        if (!MacroEngine_SaveMacros()) {
+                            ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Rename Macro", MB_OK);
+                        }
                         HWND owner = GetWindow(hwnd, GW_OWNER);
                         if (owner && IsWindow(owner)) {
                             PostMessage(owner, WM_APP_SHOW_MACROS, 0, 0);
