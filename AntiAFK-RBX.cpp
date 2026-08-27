@@ -897,7 +897,7 @@ static bool MacroEngine_AllWindowsHaveInstanceMacros() {
 Macro* MacroEngine_FindMacro(const std::wstring& name) {
     if (name.empty()) return nullptr;
     for (auto& m : g_macros) {
-        if (m.name == name) {
+        if (_wcsicmp(m.name.c_str(), name.c_str()) == 0) {
             return &m;
         }
     }
@@ -6916,7 +6916,7 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         while (true) {
             bool dup = false;
             for (auto& m : g_macros) {
-                if (m.name == imported.name) { dup = true; break; }
+                if (_wcsicmp(m.name.c_str(), imported.name.c_str()) == 0) { dup = true; break; }
             }
             if (!dup) break;
             imported.name = origName + L" (" + std::to_wstring(suffix++) + L")";
