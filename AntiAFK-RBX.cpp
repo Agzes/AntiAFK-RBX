@@ -5350,6 +5350,10 @@ void GridSnapRobloxWindows()
             int usableBottom = wa.bottom - edgeMargin;
             int usableLeft = wa.left + edgeMargin;
             int usableTop = wa.top + edgeMargin;
+            int usableW = usableRight - usableLeft;
+            int usableH = usableBottom - usableTop;
+            if (winW > usableW) winW = usableW;
+            if (winH > usableH) winH = usableH;
             if (x + winW > usableRight) x = usableRight - winW;
             if (y + winH > usableBottom) y = usableBottom - winH;
             if (x < usableLeft) x = usableLeft;
