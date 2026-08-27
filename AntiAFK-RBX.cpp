@@ -15278,6 +15278,9 @@ struct TutorialData {
     UINT_PTR uTimerId = 0;
     HCURSOR hCursorHand = NULL, hCursorArrow = NULL;
 };
+
+static HWND g_tutorialWnd = NULL;
+
 LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     TutorialData* pData = (TutorialData*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
@@ -15734,6 +15737,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             if (pData->hFontText) DeleteObject(pData->hFontText);
             delete pData;
             SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)NULL);
+            g_tutorialWnd = NULL;
             HWND owner = GetWindow(hwnd, GW_OWNER);
             if (owner) {
                 EnableWindow(owner, TRUE);
@@ -15747,6 +15751,10 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 void ShowTutorialDialog(HWND owner)
 {
     static bool registered = false;
+    if (g_tutorialWnd && IsWindow(g_tutorialWnd)) {
+        SetForegroundWindow(g_tutorialWnd);
+        return;
+    }
     if (!registered)
     {
         WNDCLASS wc = { 0 };
@@ -15759,7 +15767,7 @@ void ShowTutorialDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-Tutorial", L"AntiAFK-RBX • First Welcome", WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 560, 370, owner, NULL, g_hInst, NULL);
-    if (h) { ShowWindow(h, SW_SHOW); UpdateWindow(h); }
+    if (h) { g_tutorialWnd = h; ShowWindow(h, SW_SHOW); UpdateWindow(h); }
 }
 // ==========
 
