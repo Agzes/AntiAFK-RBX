@@ -27399,11 +27399,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShellExecute(NULL, L"open", L"https://sourceforge.net/projects/antiafk-rbx/", NULL, NULL, SW_SHOWNORMAL);
             break;
         }
-        case ID_INFORMATION:
-        {
-            ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX", NULL, NULL, SW_SHOWNORMAL);
-            break;
-        }
         case ID_START_AFK:
         {
             auto wins = FindAllRobloxWindows(true);
