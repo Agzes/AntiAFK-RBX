@@ -6528,7 +6528,7 @@ bool MacroEngine_SaveMacros() {
     MacroEngine_EnsureDirectory();
     std::lock_guard<std::mutex> lock(g_macrosMutex);
 
-    std::string json = "{\n  \"macros\": [\n";
+    std::string json = "{\n  \"version\": 1,\n  \"macros\": [\n";
     for (size_t i = 0; i < g_macros.size(); i++) {
         const Macro& m = g_macros[i];
         json += "    {\n";
