@@ -6327,9 +6327,21 @@ bool MacroEngine_LoadMacros() {
         pos++;
         std::string val;
         while (pos < json.size() && json[pos] != '"') {
-            if (json[pos] == '\\' && pos + 1 < json.size()) { pos++; val += json[pos]; }
-            else val += json[pos];
-            pos++;
+            if (json[pos] == '\\' && pos + 1 < json.size()) {
+                char e = json[pos + 1];
+                switch (e) {
+                    case 'n': val += '\n'; break;
+                    case 'r': val += '\r'; break;
+                    case 't': val += '\t'; break;
+                    case 'b': val += '\b'; break;
+                    case 'f': val += '\f'; break;
+                    case '/': val += '/'; break;
+                    case '\\': val += '\\'; break;
+                    case '"': val += '"'; break;
+                    default: val += e; break;
+                }
+                pos += 2;
+            } else { val += json[pos]; pos++; }
         }
         out = val;
         return true;
