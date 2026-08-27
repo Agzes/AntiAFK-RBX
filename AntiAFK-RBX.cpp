@@ -3648,8 +3648,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (canSelect) {
                     HMENU hMenu = CreatePopupMenu();
                     AppendMenu(hMenu, MF_STRING, 7000, L"None (Default)");
+                    size_t macroCount = 0;
                     {
                         std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                        macroCount = g_macros.size();
                         for (size_t i = 0; i < g_macros.size(); i++) {
                             UINT flags = MF_STRING;
                             std::vector<std::wstring> names;
@@ -3678,12 +3680,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             s2.reconnectMacroNames.clear();
                         });
                         InvalidateRect(hwnd, NULL, FALSE);
-                    } else if (selected >= 7001 && selected < 7001 + (int)g_macros.size()) {
+                    } else if (selected >= 7001 && selected < 7001 + (int)macroCount) {
                         std::wstring macroName;
                         {
                             std::lock_guard<std::mutex> macroLock(g_macrosMutex);
-                            macroName = g_macros[selected - 7001].name;
+                            int macroIdx = selected - 7001;
+                            if (macroIdx >= 0 && macroIdx < (int)g_macros.size()) {
+                                macroName = g_macros[macroIdx].name;
+                            }
                         }
+                        if (macroName.empty()) return 0;
                         APPLY_TO_TARGETS({
                             s2.overrideMacro = true;
                             auto it = std::find(s2.reconnectMacroNames.begin(), s2.reconnectMacroNames.end(), macroName);
@@ -3711,8 +3717,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (canSelect) {
                     HMENU hMenu = CreatePopupMenu();
                     AppendMenu(hMenu, MF_STRING, 6000, L"None (Default)");
+                    size_t macroCount = 0;
                     {
                         std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                        macroCount = g_macros.size();
                         for (size_t i = 0; i < g_macros.size(); i++) {
                             UINT flags = MF_STRING;
                             std::vector<std::wstring> names;
@@ -3741,12 +3749,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             s2.macroNames.clear();
                         });
                         InvalidateRect(hwnd, NULL, FALSE);
-                    } else if (selected >= 6001 && selected < 6001 + (int)g_macros.size()) {
+                    } else if (selected >= 6001 && selected < 6001 + (int)macroCount) {
                         std::wstring macroName;
                         {
                             std::lock_guard<std::mutex> macroLock(g_macrosMutex);
-                            macroName = g_macros[selected - 6001].name;
+                            int macroIdx = selected - 6001;
+                            if (macroIdx >= 0 && macroIdx < (int)g_macros.size()) {
+                                macroName = g_macros[macroIdx].name;
+                            }
                         }
+                        if (macroName.empty()) return 0;
                         APPLY_TO_TARGETS({
                             auto it = std::find(s2.macroNames.begin(), s2.macroNames.end(), macroName);
                             if (it != s2.macroNames.end()) {
@@ -3783,8 +3795,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (!canSelect) return 0;
                 HMENU hMenu = CreatePopupMenu();
                 AppendMenu(hMenu, MF_STRING, 8000, L"None (Default)");
+                size_t macroCount = 0;
                 {
                     std::lock_guard<std::mutex> macroLock(g_macrosMutex);
+                    macroCount = g_macros.size();
                     for (size_t i = 0; i < g_macros.size(); i++) {
                         UINT flags = MF_STRING;
                         std::vector<std::wstring> names;
@@ -3819,12 +3833,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         s2.intervalMacroNames.clear();
                     });
                     InvalidateRect(hwnd, NULL, FALSE);
-                } else if (selected >= 8001 && selected < 8001 + (int)g_macros.size()) {
+                } else if (selected >= 8001 && selected < 8001 + (int)macroCount) {
                     std::wstring macroName;
                     {
                         std::lock_guard<std::mutex> macroLock(g_macrosMutex);
-                        macroName = g_macros[selected - 8001].name;
+                        int macroIdx = selected - 8001;
+                        if (macroIdx >= 0 && macroIdx < (int)g_macros.size()) {
+                            macroName = g_macros[macroIdx].name;
+                        }
                     }
+                    if (macroName.empty()) return 0;
                     APPLY_TO_TARGETS({
                         s2.overrideMacro = true;
                         auto it = std::find(s2.intervalMacroNames.begin(), s2.intervalMacroNames.end(), macroName);
