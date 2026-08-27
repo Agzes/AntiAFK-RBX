@@ -18275,7 +18275,7 @@ static void FocusRobloxWindow(HWND hwnd) {
     SetForegroundWindow(hwnd);
 }
 void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
-    if (pData->showingActionDelays || pData->actionDelaysViewAnim > 0.0f) {
+    if (pData->showingActionDelays || pData->actionDelaysViewAnim > 0.5f) {
 
         if (PtInRect(&pData->actionDelaysBackIconRect, pt)) {
             pData->actionDelaysViewDirection = -1;
@@ -18352,8 +18352,8 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
 
         return;
     }
+    if (pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.5f) {
 
-    if (pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f) {
         if (PtInRect(&pData->fpsCapperSettingsBackIconRect, pt)) {
             pData->fpsCapperSettingsViewDirection = -1;
             InvalidateRect(hwnd, NULL, FALSE);
@@ -18472,8 +18472,8 @@ title = L"CPU Limit %";
         InvalidateRect(hwnd, NULL, FALSE);
         return;
     }
+    if (pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.5f) {
 
-    if (pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f) {
         if (PtInRect(&pData->alphaInfoBackIconRect, pt)) {
             pData->alphaInfoViewDirection = -1;
             InvalidateRect(hwnd, NULL, FALSE);
@@ -18506,8 +18506,8 @@ title = L"CPU Limit %";
         }
         return;
     }
+    if (pData->showingTimings || pData->timingsViewAnim > 0.5f) {
 
-    if (pData->showingTimings || pData->timingsViewAnim > 0.0f) {
         if (PtInRect(&pData->timingsBackIconRect, pt)) {
             pData->timingsViewDirection = -1;
             InvalidateRect(hwnd, NULL, FALSE);
@@ -18520,8 +18520,8 @@ title = L"CPU Limit %";
         }
         return;
     }
+    if (pData->showingMacros || pData->macrosViewAnim > 0.5f) {
 
-    if (pData->showingMacros || pData->macrosViewAnim > 0.0f) {
         if (PtInRect(&pData->macrosBackIconRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
                 QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
@@ -18901,8 +18901,8 @@ title = L"CPU Limit %";
         }
         return;
     }
+    if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.5f) {
 
-    if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
         if (PtInRect(&pData->gridBackIconRect, pt)) {
             if (g_mainUiOpenedForGrid.load()) {
                 g_mainUiOpenedForGrid = false;
@@ -19045,8 +19045,8 @@ title = L"CPU Limit %";
 
         return;
     }
+    if (pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.5f) {
 
-    if (pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f) {
         if (PtInRect(&pData->statusBarSettingsBackIconRect, pt)) {
             pData->statusBarSettingsViewDirection = -1;
             InvalidateRect(hwnd, NULL, FALSE);
