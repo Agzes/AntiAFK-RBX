@@ -903,6 +903,23 @@ Macro* MacroEngine_FindMacro(const std::wstring& name) {
     }
     return nullptr;
 }
+
+static std::wstring MacroEngine_MakeUniqueName(const std::wstring& desired, int excludeIndex) {
+    if (desired.empty()) return desired;
+    auto nameExists = [&](const std::wstring& n) -> bool {
+        for (size_t i = 0; i < g_macros.size(); i++) {
+            if ((int)i == excludeIndex) continue;
+            if (_wcsicmp(g_macros[i].name.c_str(), n.c_str()) == 0) return true;
+        }
+        return false;
+    };
+    if (!nameExists(desired)) return desired;
+    std::wstring base = desired;
+    for (int suffix = 2; ; suffix++) {
+        std::wstring candidate = base + L" (" + std::to_wstring(suffix) + L")";
+        if (!nameExists(candidate)) return candidate;
+    }
+}
 bool g_isRecording = false;
 HWND g_recordingTargetHwnd = NULL;
 HHOOK g_recordingMouseHook = NULL;
@@ -7888,6 +7905,7 @@ void MacroEngine_StopRecording() {
     } else {
         {
             std::lock_guard<std::mutex> lock(g_macrosMutex);
+            g_wizardMacro.name = MacroEngine_MakeUniqueName(g_wizardMacro.name, -1);
             g_macros.push_back(g_wizardMacro);
             g_selectedMacroIndex = (int)g_macros.size() - 1;
             g_selectedAction = 4;
@@ -8409,6 +8427,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
 
                 {
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    g_wizardMacro.name = MacroEngine_MakeUniqueName(g_wizardMacro.name, -1);
                     g_macros.push_back(g_wizardMacro);
                     g_selectedMacroIndex = (int)g_macros.size() - 1;
                     g_selectedAction = 4;
@@ -14075,16 +14094,32 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     MainUI_UpdateMacroWizardName(owner, pData->inputText[0]);
                 }
                 g_wizardMacro.name = pData->inputText[0];
-            } else if (pData->type == CustomInputDialogType::MacroRename) {
-                if (wcslen(pData->inputText[0]) > 0) {
-                    int sel = g_selectedMacroIndex.load();
-                    bool saveNeeded = false;
+                } else if (pData->type == CustomInputDialogType::MacroRename) {
+                    if (wcslen(pData->inputText[0]) > 0) {
+                        int sel = g_selectedMacroIndex.load();
+                        bool saveNeeded = false;
+                        bool collision = false;
                     {
                         std::lock_guard<std::mutex> lock(g_macrosMutex);
                         if (sel >= 0 && sel < (int)g_macros.size()) {
-                            g_macros[sel].name = pData->inputText[0];
-                            saveNeeded = true;
+                            std::wstring newName = pData->inputText[0];
+                            if (g_macros[sel].name != newName) {
+                                for (size_t i = 0; i < g_macros.size(); i++) {
+                                    if ((int)i == sel) continue;
+                                    if (_wcsicmp(g_macros[i].name.c_str(), newName.c_str()) == 0) {
+                                        collision = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!collision) {
+                                g_macros[sel].name = newName;
+                                saveNeeded = true;
+                            }
                         }
+                    }
+                    if (collision) {
+                        ShowDarkMessageBox(hwnd, L"A macro with this name already exists. Choose a different name.", L"Rename Macro", MB_OK);
                     }
                     if (saveNeeded) {
                         MacroEngine_SaveMacros();
