@@ -27582,11 +27582,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             else
             {
-                GridSnapRobloxWindows();
-                ShowStatusBarOverlay(L"Roblox windows arranged", 1800, wins.front());
-                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                    SetForegroundWindow(g_hMainUiWnd);
-                }
+                ShowStatusBarOverlay(L"Arranging Roblox windows...", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                std::thread([wins]() {
+                    std::lock_guard<std::mutex> lock(g_autoWindowLayoutMutex);
+                    GridSnapRobloxWindows();
+                }).detach();
             }
             break;
         }
