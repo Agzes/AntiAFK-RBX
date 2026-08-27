@@ -3169,7 +3169,12 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
                 pData->robloxWins = currentWins;
                 pData->selectedIndex = -1;
-                pData->selectedWindows.clear();
+                std::vector<HWND> keptSelected;
+                for (HWND w : pData->selectedWindows) {
+                    if (std::find(currentWins.begin(), currentWins.end(), w) != currentWins.end())
+                        keptSelected.push_back(w);
+                }
+                pData->selectedWindows = keptSelected;
                 if (selectedWnd) {
                     for (size_t i = 0; i < pData->robloxWins.size(); i++) {
                         if (pData->robloxWins[i] == selectedWnd) {
