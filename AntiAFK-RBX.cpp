@@ -6973,13 +6973,13 @@ std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target) {
             }
         }
     }
-    return result.empty() ? globalCd : result;
+    return result;
 }
 
 std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
-    std::vector<Macro> globalRec = MacroEngine_GetReconnectMacros();
     std::vector<std::wstring> names;
-    if (!GetWindowInstanceSetting_ReconnectMacro(target, names) || names.empty()) return globalRec;
+    if (!GetWindowInstanceSetting_ReconnectMacro(target, names) || names.empty())
+        return MacroEngine_GetReconnectMacros();
 
     std::vector<Macro> result;
     std::lock_guard<std::mutex> lock(g_macrosMutex);
@@ -6991,7 +6991,7 @@ std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
             }
         }
     }
-    return result.empty() ? globalRec : result;
+    return result;
 }
 
 static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
