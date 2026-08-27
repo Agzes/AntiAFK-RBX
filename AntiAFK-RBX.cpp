@@ -2968,6 +2968,9 @@ static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring&
         s.reconnectMacroNames.clear();
         s.enableIntervalMacro = false;
         s.intervalMacroNames.clear();
+        s.overrideTimer = false;
+        s.enableTimer = false;
+        s.timerSeconds = 540;
         return;
     }
     std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
@@ -2996,6 +2999,9 @@ static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring&
             s.reconnectMacroNames = pr.reconnectMacroNames;
             s.enableIntervalMacro = pr.overrideMacro && !pr.intervalMacroNames.empty();
             s.intervalMacroNames = pr.intervalMacroNames;
+            s.overrideTimer = pr.overrideTimer;
+            s.enableTimer = pr.enableTimer;
+            s.timerSeconds = pr.timerSeconds;
             break;
         }
     }
@@ -14099,6 +14105,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                 newPreset.reconnectMacroNames = s.reconnectMacroNames;
                                 newPreset.enableIntervalMacro = s.enableIntervalMacro;
                                 newPreset.intervalMacroNames = s.intervalMacroNames;
+                                newPreset.overrideTimer = s.overrideTimer;
+                                newPreset.enableTimer = s.enableTimer;
+                                newPreset.timerSeconds = s.timerSeconds;
                             }
                         }
                         g_instancePresets.push_back(newPreset);
