@@ -5912,8 +5912,17 @@ void AutoReset_Action(HWND target)
 // Auto Reconnect Check
 void IncrementalMouseMove(int startX, int startY, int endX, int endY, int steps, int duration)
 {
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    int virtX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    int virtY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    int virtW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    int virtH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (virtW <= 0 || virtH <= 0) {
+        virtX = 0;
+        virtY = 0;
+        virtW = GetSystemMetrics(SM_CXSCREEN);
+        virtH = GetSystemMetrics(SM_CYSCREEN);
+    }
+    if (virtW <= 0 || virtH <= 0) return;
     const double PI = 3.14159265358979323846;
 
     for (int i = 1; i <= steps; ++i)
@@ -5924,10 +5933,10 @@ void IncrementalMouseMove(int startX, int startY, int endX, int endY, int steps,
         int currentX = (int)(startX + (endX - startX) * factor);
         int currentY = (int)(startY + (endY - startY) * factor);
 
-        long absoluteX = currentX * 65535 / screenWidth;
-        long absoluteY = currentY * 65535 / screenHeight;
+        long absoluteX = (currentX - virtX) * 65535 / virtW;
+        long absoluteY = (currentY - virtY) * 65535 / virtH;
 
-        mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, absoluteX, absoluteY, 0, 0);
+        mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, absoluteX, absoluteY, 0, 0);
 
         if (steps > 1 && duration > 0) {
             Sleep(duration / steps);
