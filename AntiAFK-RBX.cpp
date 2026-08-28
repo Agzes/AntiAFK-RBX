@@ -327,6 +327,7 @@ struct AnnouncementInfo {
 HWND g_hwnd;
 HINSTANCE g_hInst;
 NOTIFYICONDATA g_nid;
+std::mutex g_trayIconMutex;
 HMENU g_hMenu;
 std::atomic<bool> g_mainUiOpenedForMacros(false);
 std::atomic<bool> g_mainUiOpenedForGrid(false);
@@ -13484,6 +13485,7 @@ void CreateTrayMenu(bool afk)
 }
 void UpdateTrayIcon()
 {
+    std::lock_guard<std::mutex> lock(g_trayIconMutex);
     HICON oldIcon = g_nid.hIcon;
     g_nid.hIcon = CreateCustomIcon();
     Shell_NotifyIcon(NIM_MODIFY, &g_nid);
@@ -13496,6 +13498,7 @@ static int g_trayReaddAttempts = 0;
 
 static bool TryReAddTrayIcon(HWND hwnd)
 {
+    std::lock_guard<std::mutex> lock(g_trayIconMutex);
     HICON oldIcon = g_nid.hIcon;
     g_nid.hIcon = CreateCustomIcon();
     bool ok = Shell_NotifyIcon(NIM_ADD, &g_nid) != FALSE;
