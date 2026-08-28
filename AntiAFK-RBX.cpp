@@ -29449,7 +29449,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 if (val == L"time") mode = 0;
                 else if (val == L"smart") mode = 1;
                 else if (val == L"hybrid") mode = 2;
-                else if (val == L"disabled") mode = 3;
+                else if (val == L"disabled") { g_ramCleanerAutoStart = false; g_ramCleanerEnabled = false; }
                 if (mode >= 0) g_ramCleanerMode = mode;
             }
             else if (arg == L"--ram-cleaner-interval" && i + 1 < argc) {
