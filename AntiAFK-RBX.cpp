@@ -921,7 +921,7 @@ static std::wstring MacroEngine_MakeUniqueName(const std::wstring& desired, int 
         if (!nameExists(candidate)) return candidate;
     }
 }
-bool g_isRecording = false;
+std::atomic<bool> g_isRecording{false};
 HWND g_recordingTargetHwnd = NULL;
 HHOOK g_recordingMouseHook = NULL;
 std::thread g_recordingDeltaThread;
@@ -7905,7 +7905,8 @@ static void HideRecordingOverlayWindow()
 }
 
 void MacroEngine_StopRecording() {
-    if (!g_isRecording) return;
+    bool expected = true;
+    if (!g_isRecording.compare_exchange_strong(expected, false)) return;
     g_recordingStopPending = true;
     Sleep(50);
 
@@ -7975,7 +7976,7 @@ void MacroEngine_StopRecording() {
         MacroEngine_SaveMacros();
         g_macroWizardActive = false;
         if (g_macroWizardHwnd && IsWindow(g_macroWizardHwnd)) {
-            DestroyWindow(g_macroWizardHwnd);
+            PostMessage(g_macroWizardHwnd, WM_CLOSE, 0, 0);
             g_macroWizardHwnd = NULL;
         }
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -7985,9 +7986,9 @@ void MacroEngine_StopRecording() {
     }
     g_macroWizardStep = 3;
 
-    HideStatusBarOverlay(true);
+    QueueStatusBarHide(true);
     QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr, StatusBarEventType::Macro);
-    CreateTrayMenu(g_isAfkStarted.load());
+    QueueRefreshTrayMenu(g_isAfkStarted.load());
 }
 
 static void MacroEngine_CancelRecording() {
