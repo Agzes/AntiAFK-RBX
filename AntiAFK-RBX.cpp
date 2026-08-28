@@ -26830,6 +26830,15 @@ void main_thread(bool arg_tray)
                     }
                     Sleep(g_preActionDelay.load());
 
+                    for (int fgAttempt = 0; fgAttempt < 2 && GetForegroundWindow() != w; ++fgAttempt) {
+                        SetForegroundWindow(w);
+                        Sleep(g_preActionDelay.load());
+                    }
+                    if (GetForegroundWindow() != w) {
+                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                        continue;
+                    }
+
                     if (g_autoReconnect.load()) {
                         if (CheckForAutoReconnect(w)) {
                             g_autoReconnectsPerformed++;
