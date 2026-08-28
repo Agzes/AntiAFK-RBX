@@ -12732,7 +12732,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
                 vals[nParsed++] = v;
                 if (*p == L',') ++p;
             }
-            if (nParsed < 23) continue;
+            if (nParsed < 16) continue;
 
             auto splitNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
                 out.clear();
@@ -12765,9 +12765,16 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
             pr.overrideFpsLimit = vals[9] != 0; pr.enableFpsLimit = vals[10] != 0; pr.fpsLimitValue = vals[11];
             pr.overrideReconnect = vals[12] != 0; pr.enableReconnect = vals[13] != 0;
             pr.overrideReset = vals[14] != 0;   pr.enableReset = vals[15] != 0;
-            pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
-            pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
-            pr.enableReconnectMacro = vals[21] != 0; pr.enableIntervalMacro = vals[22] != 0;
+            if (nParsed >= 23) {
+                pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
+                pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
+                pr.enableReconnectMacro = vals[21] != 0; pr.enableIntervalMacro = vals[22] != 0;
+            } else if (nParsed >= 21) {
+                pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
+                pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
+            } else if (nParsed >= 18) {
+                pr.overrideMacro = vals[16] != 0;   pr.enableMacro = vals[17] != 0;
+            }
             if (!sections.empty()) splitNames(sections[0], pr.macroNames);
             if (sections.size() > 1) splitNames(sections[1], pr.reconnectMacroNames);
             if (sections.size() > 2) splitNames(sections[2], pr.intervalMacroNames);
