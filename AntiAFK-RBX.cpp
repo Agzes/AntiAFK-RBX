@@ -12925,7 +12925,7 @@ static bool ImportSettingsFromFile(HWND owner)
             if (IsDiscordWebhookUrl(importedUrl)) {
                 std::wstring currentUrl = GetDiscordWebhookUrlCopy();
                 if (importedUrl != currentUrl) {
-                    ShowDarkMessageBox(NULL,
+                    ShowDarkMessageBox(owner,
                         L"The imported settings contain a Discord webhook URL.\n\n"
                         L"Do you want to keep the imported webhook URL?",
                         L"AntiAFK-RBX • Import Settings", MB_YESNO) == IDYES
