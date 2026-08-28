@@ -27827,8 +27827,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_hotkeyCaptureWnd = hwnd;
             g_hotkeyCaptureIsGrid = false;
             UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
-            g_hotkeyCaptureActive = true;
-            g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+    g_hotkeyCaptureActive = true;
+    if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
+    g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
             ShowStatusBarOverlay(L"Press new hotkey combination...", 5000, hwnd);
             break;
         }
@@ -27854,8 +27855,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_hotkeyCaptureWnd = hwnd;
             g_hotkeyCaptureIsGrid = true;
             UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
-            g_hotkeyCaptureActive = true;
-            g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+    g_hotkeyCaptureActive = true;
+    if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
+    g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
             ShowStatusBarOverlay(L"Press new grid hotkey combination...", 5000, hwnd);
             break;
         }
