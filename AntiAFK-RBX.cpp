@@ -1789,6 +1789,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         break;
     case WM_MOUSEMOVE:
     {
+        if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         bool nowHovering = PtInRect(&pData->closeButtonRect, pt);
         if (nowHovering != pData->isHoveringClose)
@@ -1808,6 +1809,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         break;
     }
     case WM_MOUSELEAVE: {
+        if (!pData) break;
         if (pData->isHoveringClose)
         {
             pData->isHoveringClose = false;
@@ -1818,6 +1820,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     }
     case WM_LBUTTONDOWN:
     {
+        if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         if (PtInRect(&pData->closeButtonRect, pt))
         {
@@ -1828,6 +1831,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     }
     case WM_RBUTTONDOWN:
     {
+        if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         if (PtInRect(&pData->closeButtonRect, pt))
         {
@@ -1839,6 +1843,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     case WM_NCHITTEST:
     {
         LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
+        if (!pData) return hit;
         if (hit == HTCLIENT)
         {
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
