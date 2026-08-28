@@ -12572,7 +12572,7 @@ bool CheckForAnnouncement(bool showNotification)
     }
     if (g_hwnd)
     {
-        CreateTrayMenu(g_isAfkStarted.load());
+        QueueRefreshTrayMenu(g_isAfkStarted.load());
     }
 
     return nextAnnouncement.enabled;
@@ -13570,7 +13570,7 @@ bool CheckForUpdates(bool showNotification = true)
                     ShowTrayNotification(L"AntiAFK-RBX • Update Available", msg);
                 }
                 if (g_hwnd) {
-                    CreateTrayMenu(g_isAfkStarted.load());
+                    QueueRefreshTrayMenu(g_isAfkStarted.load());
                 }
             }
         }
