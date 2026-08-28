@@ -6155,6 +6155,13 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
     if (wins.empty()) return;
     bool reconnectTriggered = false;
     DWORD now = GetTickCount();
+    {
+        std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
+        for (auto it = g_reconnectCooldownMap.begin(); it != g_reconnectCooldownMap.end(); ) {
+            if ((now - it->second) > 60000) it = g_reconnectCooldownMap.erase(it);
+            else ++it;
+        }
+    }
     for (HWND w : wins) {
         if (g_stopThread.load() || !g_isAfkStarted.load()) break;
         if (!IsWindow(w)) continue;
