@@ -7441,9 +7441,9 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
     if (nCode >= 0 && g_isRecording && !g_recordingStopPending) {
         MSLLHOOKSTRUCT* p = (MSLLHOOKSTRUCT*)lParam;
         POINT pt = p->pt;
-        ScreenToClient(g_recordingTargetHwnd, &pt);
         RECT targetCr = { 0, 0, 800, 600 };
         if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
+            ScreenToClient(g_recordingTargetHwnd, &pt);
             GetClientRect(g_recordingTargetHwnd, &targetCr);
         }
         if (g_recordingOverlayWnd && IsWindow(g_recordingOverlayWnd)) {
