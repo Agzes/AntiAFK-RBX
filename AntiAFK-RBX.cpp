@@ -26677,6 +26677,9 @@ void main_thread(bool arg_tray)
                 {
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
+                    if (g_intervalMacroEnabled.exchange(false)) {
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+                    }
                     ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
@@ -26691,6 +26694,9 @@ void main_thread(bool arg_tray)
                     QueueStatusBarOverlay(L"Roblox window not found", 2200, user, StatusBarEventType::Session);
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
+                    if (g_intervalMacroEnabled.exchange(false)) {
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+                    }
                     ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
