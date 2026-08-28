@@ -3514,8 +3514,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             #define APPLY_TO_TARGETS(body) do { \
                 for (HWND tWnd : targets) { \
                     DWORD tPid = 0; GetWindowThreadProcessId(tWnd, &tPid); \
+                    lock.lock(); \
                     auto it2 = g_instanceSettings.find(tWnd); \
                     RobloxInstanceSettings s2 = (it2 != g_instanceSettings.end()) ? it2->second : GetDefaultInstanceSettingsForWindow(tWnd); \
+                    lock.unlock(); \
                     body; \
                     s2.presetName = L"Custom"; \
                     lock.lock(); g_instanceSettings[tWnd] = s2; lock.unlock(); \
