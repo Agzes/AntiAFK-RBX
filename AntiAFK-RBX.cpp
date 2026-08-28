@@ -27047,6 +27047,10 @@ void main_thread(bool arg_tray)
                     }
                 }
 
+                lock.unlock();
+                MacroEngine_RunPendingReconnectMacros();
+                lock.lock();
+
                 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
 
                 if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
