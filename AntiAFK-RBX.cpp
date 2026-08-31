@@ -7926,7 +7926,7 @@ static void ShowRecordingOverlayWindow(HWND targetHwnd)
 static void HideRecordingOverlayWindow()
 {
     if (g_recordingOverlayWnd && IsWindow(g_recordingOverlayWnd)) {
-        DestroyWindow(g_recordingOverlayWnd);
+        PostMessage(g_recordingOverlayWnd, WM_CLOSE, 0, 0);
         g_recordingOverlayWnd = NULL;
     }
 }
