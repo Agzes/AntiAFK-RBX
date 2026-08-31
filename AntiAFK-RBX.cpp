@@ -1916,7 +1916,7 @@ void UpdateSplashStatus(const wchar_t* status)
     if (g_hSplashWnd)
         PostMessage(g_hSplashWnd, WM_APP + 1, (WPARAM)status, 0);
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
-        PostMessage(g_hMainUiWnd, WM_APP + 11, 0, 0);
+        PostMessage(g_hMainUiWnd, WM_APP + 1, (WPARAM)status, 0);
 }
 void CreateSplashScreen(HINSTANCE hInstance)
 {
@@ -24640,6 +24640,11 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         break;
     }
+
+    case WM_APP + 1:
+        (void)lstrcpynW(g_splashStatus, (const wchar_t*)wParam, 128);
+        InvalidateRect(hwnd, NULL, FALSE);
+        return 0;
 
     case WM_APP + 11:
         InvalidateRect(hwnd, NULL, FALSE);
