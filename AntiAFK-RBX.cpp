@@ -1886,6 +1886,10 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
         break;
     }
+    case WM_APP + 2:
+        AnimateWindow(hwnd, (int)wParam > 0 ? 140 : 200, AW_BLEND | AW_HIDE);
+        DestroyWindow(hwnd);
+        return 0;
     case WM_CLOSE:
         DestroyWindow(hwnd);
         break;
@@ -26675,8 +26679,7 @@ void main_thread(bool arg_tray)
 
     if (g_hSplashWnd)
     {
-        AnimateWindow(g_hSplashWnd, shouldOpenMainUi ? 140 : 200, AW_BLEND | AW_HIDE);
-        DestroyWindow(g_hSplashWnd);
+        PostMessage(g_hSplashWnd, WM_APP + 2, shouldOpenMainUi ? 1 : 0, 0);
     }
 
     if (!arg_tray) {
