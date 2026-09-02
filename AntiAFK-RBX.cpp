@@ -11015,6 +11015,9 @@ void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring&
 
     {
         std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
+        if (g_webhookQueue.size() >= 64) {
+            g_webhookQueue.pop();
+        }
         g_webhookQueue.emplace(eventType, summary);
     }
     g_webhookCv.notify_one();
