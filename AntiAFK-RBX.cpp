@@ -11600,6 +11600,13 @@ bool LoadSettings()
                     pr.enableMacro = vals[20] != 0;
                     pr.enableReconnectMacro = vals[21] != 0;
                     pr.enableIntervalMacro = vals[22] != 0;
+                } else if (nParsed >= 22) {
+                    pr.overrideTimer = vals[16] != 0;
+                    pr.enableTimer = vals[17] != 0;
+                    pr.timerSeconds = vals[18];
+                    pr.overrideMacro = vals[19] != 0;
+                    pr.enableMacro = vals[20] != 0;
+                    pr.enableReconnectMacro = vals[21] != 0;
                 } else if (nParsed >= 21) {
                     pr.overrideTimer = vals[16] != 0;
                     pr.enableTimer = vals[17] != 0;
@@ -12796,6 +12803,10 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
                 pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
                 pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
                 pr.enableReconnectMacro = vals[21] != 0; pr.enableIntervalMacro = vals[22] != 0;
+            } else if (nParsed >= 22) {
+                pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
+                pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
+                pr.enableReconnectMacro = vals[21] != 0;
             } else if (nParsed >= 21) {
                 pr.overrideTimer = vals[16] != 0;   pr.enableTimer = vals[17] != 0;  pr.timerSeconds = vals[18];
                 pr.overrideMacro = vals[19] != 0;   pr.enableMacro = vals[20] != 0;
