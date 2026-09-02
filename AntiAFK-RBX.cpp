@@ -29848,8 +29848,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     if (t.joinable())
         t.join();
 
-    if (g_isFpsCapperRunning.load()) {
-        g_isFpsCapperRunning = false;
+    g_isFpsCapperRunning = false;
+    {
         std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
         if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
     }
@@ -29869,9 +29869,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         g_webhookThread.join();
     }
 
-    if (g_reconnectMonitorRunning.load()) {
-        g_reconnectMonitorRunning = false;
-    }
+    g_reconnectMonitorRunning = false;
     if (g_reconnectMonitorThread.joinable()) g_reconnectMonitorThread.join();
 
     MacroEngine_Shutdown();
