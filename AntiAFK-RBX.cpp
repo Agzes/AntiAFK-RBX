@@ -14187,6 +14187,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                             }
                         }
                         if (!exists) {
+                        if (g_instancePresets.size() < 32) {
                         RobloxInstancePreset newPreset;
                         newPreset.name = newName;
                         if (g_presetEditSource && IsWindow(g_presetEditSource)) {
@@ -14223,6 +14224,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         }
                         g_instancePresets.push_back(newPreset);
                         SaveSettings();
+                        } else {
+                            ShowDarkMessageBox(hwnd, L"Preset limit reached (32). Delete an existing preset first.", L"Instance Presets", MB_OK);
+                        }
                         }
                     }
                 }
