@@ -4933,14 +4933,13 @@ bool ShouldRunFpsCapperNow()
 void RestartFpsCapperForEffectiveLimit()
 {
     std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
-    if (g_isFpsCapperRunning.load()) {
-        g_isFpsCapperRunning = false;
-    }
+    g_isFpsCapperRunning = false;
     if (g_fpsCapperThread.joinable()) {
         g_fpsCapperThread.join();
     }
 
     if (GetEffectiveFpsLimit() > 0) {
+        g_isFpsCapperRunning = true;
         g_fpsCapperThread = std::thread(FpsCapperThread);
     }
 }
@@ -8962,14 +8961,13 @@ static void PreciseSleepMs(double ms)
 
 void FpsCapperThread()
 {
-    g_isFpsCapperRunning = true;
     bool timerPeriodActive = false;
 
     std::vector<HANDLE> threadHandles;
     std::mutex handlesMutex;
     auto last_update = std::chrono::steady_clock::now();
 
-    while (g_isFpsCapperRunning)
+    while (g_isFpsCapperRunning && !g_stopThread.load())
     {
         int effectiveFpsLimit = GetEffectiveFpsLimit();
         if (!ShouldRunFpsCapperNow() || g_isFpsCapperPaused.load() || effectiveFpsLimit <= 0) {
