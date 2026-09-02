@@ -6196,7 +6196,6 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
 
 void ReconnectMonitorThread()
 {
-    g_reconnectMonitorRunning = true;
     while (!g_stopThread.load() && g_reconnectMonitorRunning.load()) {
         int intervalSec = g_reconnectCheckInterval.load();
         if (!g_autoReconnect.load() || !g_isAfkStarted.load()) {
@@ -6234,6 +6233,7 @@ void StartReconnectMonitor()
     if (g_reconnectMonitorThread.joinable()) {
         g_reconnectMonitorThread.join();
     }
+    g_reconnectMonitorRunning = true;
     g_reconnectMonitorThread = std::thread(ReconnectMonitorThread);
 }
 
