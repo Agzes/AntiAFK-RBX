@@ -6762,6 +6762,14 @@ static std::string MacroEngine_MacroToJson(const Macro& m) {
             }
             json += "]";
         }
+        if (!a.pathDelays.empty()) {
+            json += ",\n      \"pathDelays\": [";
+            for (size_t k = 0; k < a.pathDelays.size(); k++) {
+                json += std::to_string(a.pathDelays[k]);
+                if (k < a.pathDelays.size() - 1) json += ",";
+            }
+            json += "]";
+        }
         if (a.type == MacroStepType::ImageClick && !a.image.pixels.empty()) {
             json += ",\n      \"image\": \"" + MacroEngine_Base64Encode(a.image.pixels) + "\"";
             json += ",\n      \"imageW\": " + std::to_string(a.image.width);
