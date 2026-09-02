@@ -2324,17 +2324,24 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         break;
     }
-    case WM_RBUTTONDOWN:
+case WM_RBUTTONDOWN:
+{
+    POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+    if (PtInRect(&pData->topCloseButtonRect, pt))
     {
-        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
-        if (PtInRect(&pData->topCloseButtonRect, pt))
-        {
-            ShowWindow(hwnd, SW_MINIMIZE);
-            return 0;
-        }
-        break;
+        ShowWindow(hwnd, SW_MINIMIZE);
+        return 0;
     }
-    case WM_NCHITTEST:
+    break;
+}
+case WM_KEYDOWN:
+    if (wParam == VK_ESCAPE)
+    {
+        PostMessage(hwnd, WM_CLOSE, 0, 0);
+        return 0;
+    }
+    break;
+case WM_NCHITTEST:
     {
         LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
         if (hit == HTCLIENT)
@@ -15651,6 +15658,12 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         }
         break;
     }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            PostMessage(hwnd, WM_COMMAND, ID_BTN_NEXT, 0);
+            return 0;
+        }
+        break;
     case WM_COMMAND:
     {
         switch (LOWORD(wParam))
@@ -15673,10 +15686,8 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         }
         break;
     }
-    case WM_KEYDOWN:
-        break;
     case WM_ERASEBKGND:
-        return 1;
+    return 1;
     case WM_PAINT:
     {
         if (!pData) { PAINTSTRUCT ps; BeginPaint(hwnd, &ps); EndPaint(hwnd, &ps); return 0; }
@@ -25134,6 +25145,10 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         break;
     case WM_KEYDOWN:
+        if (pData && wParam == VK_ESCAPE && !pData->isDiscordWebhookInputFocused && !pData->macrosNameFocused) {
+            PostMessage(hwnd, WM_CLOSE, 0, 0);
+            return 0;
+        }
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
             size_t* caretPos = &pData->discordWebhookCaretPos;
