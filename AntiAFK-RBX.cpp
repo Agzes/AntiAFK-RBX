@@ -570,6 +570,49 @@ std::vector<RobloxInstancePreset> g_instancePresets = {
 std::mutex g_instanceSettingsMutex;
 std::mutex g_instancePresetsMutex;
 
+static void RenameMacroReferences(const std::wstring& oldName, const std::wstring& newName)
+{
+    {
+        std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
+        for (auto& pr : g_instancePresets) {
+            for (auto& n : pr.macroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+            for (auto& n : pr.reconnectMacroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+            for (auto& n : pr.intervalMacroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+        for (auto& kv : g_instanceSettings) {
+            for (auto& n : kv.second.macroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+            for (auto& n : kv.second.reconnectMacroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+            for (auto& n : kv.second.intervalMacroNames) if (_wcsicmp(n.c_str(), oldName.c_str()) == 0) n = newName;
+        }
+    }
+}
+
+static void RemoveMacroReferences(const std::wstring& name)
+{
+    auto strip = [&name](std::vector<std::wstring>& v) {
+        v.erase(std::remove_if(v.begin(), v.end(), [&name](const std::wstring& n) { return _wcsicmp(n.c_str(), name.c_str()) == 0; }), v.end());
+    };
+    {
+        std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
+        for (auto& pr : g_instancePresets) {
+            strip(pr.macroNames);
+            strip(pr.reconnectMacroNames);
+            strip(pr.intervalMacroNames);
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+        for (auto& kv : g_instanceSettings) {
+            strip(kv.second.macroNames);
+            strip(kv.second.reconnectMacroNames);
+            strip(kv.second.intervalMacroNames);
+        }
+    }
+}
+
 bool GetWindowInstanceSetting_AntiAfk(HWND hwnd) {
     std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
     auto it = g_instanceSettings.find(hwnd);
@@ -14297,7 +14340,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                 }
                             }
                             if (!collision) {
+                                std::wstring oldName = g_macros[sel].name;
                                 g_macros[sel].name = newName;
+                                RenameMacroReferences(oldName, newName);
                                 saveNeeded = true;
                             }
                         }
@@ -14309,6 +14354,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         if (!MacroEngine_SaveMacros()) {
                             ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Rename Macro", MB_OK);
                         }
+                        SaveSettings();
                         HWND owner = GetWindow(hwnd, GW_OWNER);
                         if (owner && IsWindow(owner)) {
                             PostMessage(owner, WM_APP_SHOW_MACROS, 0, 0);
@@ -24772,19 +24818,25 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), L"AntiAFK-RBX • Delete Macro", MB_YESNO | MB_DEFBUTTON2);
                 EnableWindow(hwnd, TRUE);
                 SetForegroundWindow(hwnd);
-                if (delResult == IDYES) {
-                    {
-                        std::lock_guard<std::mutex> lock(g_macrosMutex);
-                        if (delIdx >= 0 && delIdx < (int)g_macros.size()) {
-                            g_macros.erase(g_macros.begin() + delIdx);
-                            if (g_selectedMacroIndex.load() == delIdx) g_selectedMacroIndex = -1;
-                            else if (g_selectedMacroIndex.load() > delIdx) g_selectedMacroIndex--;
-                        }
+            if (delResult == IDYES) {
+                std::wstring deletedName;
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (delIdx >= 0 && delIdx < (int)g_macros.size()) {
+                        deletedName = g_macros[delIdx].name;
+                        g_macros.erase(g_macros.begin() + delIdx);
+                        if (g_selectedMacroIndex.load() == delIdx) g_selectedMacroIndex = -1;
+                        else if (g_selectedMacroIndex.load() > delIdx) g_selectedMacroIndex--;
                     }
-                    pData->macrosSelectedIndex = -1;
-                    MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
                 }
+                pData->macrosSelectedIndex = -1;
+                MacroEngine_SaveMacros();
+                if (!deletedName.empty()) {
+                    RemoveMacroReferences(deletedName);
+                    SaveSettings();
+                }
+                QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
+            }
                 InvalidateRect(hwnd, NULL, FALSE);
             }
         }
