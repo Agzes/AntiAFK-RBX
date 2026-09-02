@@ -16007,6 +16007,8 @@ void ShowMainUIDialog(HWND owner)
 {
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
     {
+        if (IsIconic(g_hMainUiWnd)) ShowWindow(g_hMainUiWnd, SW_RESTORE);
+        ShowWindow(g_hMainUiWnd, SW_SHOW);
         SetForegroundWindow(g_hMainUiWnd);
         return;
     }
