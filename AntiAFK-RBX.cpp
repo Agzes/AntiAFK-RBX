@@ -16939,7 +16939,7 @@ void ScreenSaver_Start(HWND owner)
         }
         for (HWND h : handles) {
             if (h && IsWindow(h)) {
-                SendMessage(h, WM_CLOSE, 0, 0);
+                PostMessage(h, WM_CLOSE, 0, 0);
             }
         }
         if (g_ssKeyboardHook) { UnhookWindowsHookEx(g_ssKeyboardHook); g_ssKeyboardHook = NULL; }
