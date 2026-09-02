@@ -29302,6 +29302,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return TRUE;
     case WM_ENDSESSION:
         if (wParam) {
+            g_stopThread = true;
+            g_cv.notify_all();
+            if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
+                FinalizeAfkSession();
+                ResetIcanForgetCounter();
+            }
+            ResetRobloxSessionEffectsOnExit();
+            Shell_NotifyIcon(NIM_DELETE, &g_nid);
             SaveSettings();
         }
         return 0;
