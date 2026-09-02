@@ -391,6 +391,7 @@ std::atomic<int> g_ramCleanerMode(0); // 0 - time, 1 - ram, 2 - time + ram
 std::atomic<int> g_ramCleanerInterval(120); // s
 std::atomic<int> g_ramCleanerLimit(500); // MB
 std::atomic<bool> g_isRamCleanerRunning(false);
+std::mutex g_ramCleanerThreadMutex;
 std::atomic<bool> g_intervalMacroEnabled(false);
 std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
@@ -8880,7 +8881,6 @@ int ClearRobloxMemory()
 
 void RamCleanerThread()
 {
-    g_isRamCleanerRunning = true;
     uint64_t lastCleanTime = GetTickCount64();
 
     while (g_isRamCleanerRunning)
@@ -8925,6 +8925,15 @@ void RamCleanerThread()
         }
     }
     g_isRamCleanerRunning = false;
+}
+
+static void EnsureRamCleanerThreadStarted()
+{
+    std::lock_guard<std::mutex> lock(g_ramCleanerThreadMutex);
+    if (g_isRamCleanerRunning.load()) return;
+    if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+    g_isRamCleanerRunning = true;
+    g_ramCleanerThread = std::thread(RamCleanerThread);
 }
 
 static void PreciseSleepMs(double ms)
@@ -11876,7 +11885,10 @@ void ResetSettings()
     }
 
     g_isRamCleanerRunning = false;
-    if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+    {
+        std::lock_guard<std::mutex> lock(g_ramCleanerThreadMutex);
+        if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+    }
 
     if (g_hwnd && IsWindow(g_hwnd)) {
         if (g_hotkeyEnabled.load()) {
@@ -26697,8 +26709,7 @@ void main_thread(bool arg_tray)
     }
 
     UpdateSplashStatus(L"Starting RAM Cleaner...");
-    if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
-    g_ramCleanerThread = std::thread(RamCleanerThread);
+    EnsureRamCleanerThreadStarted();
 
     Sleep(500);
     UpdateSplashStatus(L"Loaded!");
@@ -28825,6 +28836,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_RAM_CLEANER_RUNTIME_TOGGLE:
         {
             g_ramCleanerEnabled = !g_ramCleanerEnabled.load();
+            if (g_ramCleanerEnabled.load()) {
+                EnsureRamCleanerThreadStarted();
+            }
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
@@ -29889,7 +29903,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     }
 
     g_isRamCleanerRunning = false;
-    if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+    {
+        std::lock_guard<std::mutex> lock(g_ramCleanerThreadMutex);
+        if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
+    }
 
     g_intervalMacroEnabled = false;
     if (g_intervalMacroThread.joinable()) g_intervalMacroThread.join();
