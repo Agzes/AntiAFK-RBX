@@ -10991,7 +10991,10 @@ void WebhookWorkerThread()
         webhookUrl = GetDiscordWebhookUrlCopy();
         if (IsDiscordWebhookUrl(webhookUrl)) {
             g_webhookBusy = true;
-            SendDiscordWebhookRequest(webhookUrl, item.first, item.second, nullptr, nullptr);
+            try {
+                SendDiscordWebhookRequest(webhookUrl, item.first, item.second, nullptr, nullptr);
+            } catch (...) {
+            }
             g_webhookBusy = false;
         }
     }
