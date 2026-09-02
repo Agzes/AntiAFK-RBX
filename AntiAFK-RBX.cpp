@@ -29303,6 +29303,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 if (i + 1 < argc) {
                     int val = _wtoi(argv[++i]);
                     if (val < 0) val = 0;
+                    if (val > 86400) val = 86400;
                     g_reconnectCheckInterval = val;
                 }
             }
