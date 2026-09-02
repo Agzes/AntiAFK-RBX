@@ -29860,8 +29860,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     g_intervalMacroEnabled = false;
     if (g_intervalMacroThread.joinable()) g_intervalMacroThread.join();
 
-    g_webhookThreadRunning = false;
-    g_webhookCv.notify_all();
+    {
+        std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
+        g_webhookThreadRunning = false;
+        g_webhookCv.notify_all();
+    }
     if (g_webhookThread.joinable()) {
         for (int i = 0; i < 30 && g_webhookBusy.load(); ++i) {
             Sleep(100);
