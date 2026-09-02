@@ -11445,8 +11445,9 @@ bool LoadSettings()
         {
             DWORD reconnectMacroDelaySec = 60;
             RegQueryValueEx(hKey, L"ReconnectMacroDelaySec", NULL, NULL, (LPBYTE)&reconnectMacroDelaySec, &dataSize); dataSize = sizeof(DWORD);
-            g_reconnectMacroDelaySec = (int)reconnectMacroDelaySec;
-            if (g_reconnectMacroDelaySec.load() < 0) g_reconnectMacroDelaySec = 0;
+    g_reconnectMacroDelaySec = (int)reconnectMacroDelaySec;
+    if (g_reconnectMacroDelaySec.load() < 0) g_reconnectMacroDelaySec = 0;
+    if (g_reconnectMacroDelaySec.load() > 3600) g_reconnectMacroDelaySec = 3600;
         }
         {
             DWORD hkEnabled = 1, hkMods = MOD_CONTROL | MOD_SHIFT, hkVk = VK_F1;
@@ -11720,6 +11721,7 @@ bool LoadSettings()
     g_discordMentionOnErrors = (discordMentionOnErrors != 0);
     g_reconnectCheckInterval = (int)reconnectCheckInterval;
     if (g_reconnectCheckInterval.load() < 0) g_reconnectCheckInterval = 0;
+    if (g_reconnectCheckInterval.load() > 86400) g_reconnectCheckInterval = 86400;
     SetDiscordWebhookUrl(discordWebhookUrl);
     SetDiscordMentionTarget(discordMentionTarget);
     g_useCustomProcessSearch = (useCustomProcessSearch != 0);
@@ -12746,6 +12748,9 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_reconnectCheckInterval = s.reconnectCheckInterval;
     g_reconnectMacroDelaySec = s.reconnectMacroDelaySec;
     if (g_reconnectCheckInterval.load() < 0) g_reconnectCheckInterval = 0;
+    if (g_reconnectCheckInterval.load() > 86400) g_reconnectCheckInterval = 86400;
+    if (g_reconnectMacroDelaySec.load() < 0) g_reconnectMacroDelaySec = 0;
+    if (g_reconnectMacroDelaySec.load() > 3600) g_reconnectMacroDelaySec = 3600;
     g_hotkeyEnabled = s.hotkeyEnabled;
     g_hotkeyModifiers = s.hotkeyModifiers;
     g_hotkeyVk = s.hotkeyVk;
