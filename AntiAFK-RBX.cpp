@@ -14316,7 +14316,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     pData->inputText[fi][len - 1] = L'\0';
                     InvalidateRect(hwnd, NULL, FALSE);
                 }
-            } else if (iswprint((wint_t)wParam) && !((wParam == L'|' && (pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || (wParam == L',' && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)))) {
+            } else if (iswprint((wint_t)wParam) && !((wParam == L'|' && (pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || (wParam == L',' && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || ((wParam == L'{' || wParam == L'}' || wParam == L'[' || wParam == L']') && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)))) {
                 size_t len = wcslen(pData->inputText[fi]);
                 size_t maxLen = (pData->type == CustomInputDialogType::DiscordMentionTarget) ? 127 : 511;
                 if (pData->type == CustomInputDialogType::InstanceTitle) maxLen = 63;
@@ -14409,7 +14409,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                     if ((*pText >= '0' && *pText <= '9') || *pText == '-') {
                                         pData->inputText[fi][currentLen++] = *pText;
                                     }
-                                } else if (iswprint(*pText) && !((*pText == L'|' && (pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || (*pText == L',' && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)))) {
+                                } else if (iswprint(*pText) && !((*pText == L'|' && (pData->type == CustomInputDialogType::PresetName || pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || (*pText == L',' && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)) || ((*pText == L'{' || *pText == L'}' || *pText == L'[' || *pText == L']') && (pData->type == CustomInputDialogType::MacroName || pData->type == CustomInputDialogType::MacroRename)))) {
                                     pData->inputText[fi][currentLen++] = *pText;
                                 }
                                 pText++;
