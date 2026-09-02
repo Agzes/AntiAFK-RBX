@@ -11300,8 +11300,9 @@ void SaveSettings()
         RegCloseKey(hKey);
     }
 }
-void LoadSettings()
+bool LoadSettings()
 {
+    bool loaded = false;
     HKEY hKey;
     DWORD multiSupport = 0, selectedTime = 540, selectedAction = 1, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
@@ -11324,6 +11325,7 @@ void LoadSettings()
 
     if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
     {
+        loaded = true;
         RegQueryValueEx(hKey, L"MultiSupport", NULL, NULL, (LPBYTE)&multiSupport, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"SelectedTime", NULL, NULL, (LPBYTE)&selectedTime, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"SelectedAction", NULL, NULL, (LPBYTE)&selectedAction, &dataSize); dataSize = sizeof(DWORD);
@@ -11705,6 +11707,7 @@ void LoadSettings()
     if (g_postActionDelay.load() < 0 || g_postActionDelay.load() > 10000) g_postActionDelay = 55;
     g_actionRepeatCount = (int)actionRepeatCount;
     if (g_actionRepeatCount.load() < 1 || g_actionRepeatCount.load() > 100) g_actionRepeatCount = 3;
+    return loaded;
 }
 void ResetSettings()
 {
@@ -29183,10 +29186,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     wc.lpszClassName = CLASS_NAME;
     wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 
-    LoadSettings();
+    bool settingsLoaded = LoadSettings();
     MacroEngine_Init();
     g_programLaunches++;
-    SaveSettings();
+    if (settingsLoaded) {
+        SaveSettings();
+    }
     g_lastActivityTime = GetTickCount64();
     RefreshRobloxWindowOpacity(false);
     if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
