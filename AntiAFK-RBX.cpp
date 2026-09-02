@@ -11795,6 +11795,7 @@ void ResetSettings()
     g_cpuLimitMode = false;
     g_multiInstanceInterval = 0;
     g_windowOpacity = false;
+    g_ramCleanerAutoStart = false;
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = 0;
     g_ramCleanerInterval = 120;
@@ -11893,6 +11894,7 @@ void ResetSettings()
     }
 
     RegDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Agzes\\AntiAFK-RBX");
+    SaveSettings();
 }
 
 static std::wstring SerializeInstancePreset(const RobloxInstancePreset& pr)
