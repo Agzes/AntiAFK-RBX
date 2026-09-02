@@ -422,6 +422,7 @@ int g_tutorialStartPage = 0;
 std::atomic<int> g_reconnectCheckInterval(0);
 std::atomic<bool> g_reconnectManualCheckRequest(false);
 std::thread g_activityMonitorThread;
+std::mutex g_activityMonitorMutex;
 std::thread g_reconnectMonitorThread;
 std::atomic<bool> g_reconnectMonitorRunning(false);
 std::mutex g_reconnectMonitorMutex;
@@ -9691,7 +9692,6 @@ static bool IsRobloxWindowActiveRecently(HWND hwnd)
 // UserSafe
 void MonitorUserActivity()
 {
-    g_monitorThreadRunning = true;
     g_lastActivityTime = GetTickCount64();
 
     while (g_monitorThreadRunning)
@@ -9841,20 +9841,21 @@ void MonitorUserActivity()
 }
 void StartActivityMonitor()
 {
-    if (!g_monitorThreadRunning)
+    std::lock_guard<std::mutex> lock(g_activityMonitorMutex);
+    g_lastActivityTime = GetTickCount64();
+    g_userActive = true;
+    g_afkReminderState = 0;
+    g_monitorThreadRunning = false;
+    if (g_activityMonitorThread.joinable())
     {
-        g_lastActivityTime = GetTickCount64();
-        g_userActive = true;
-        g_afkReminderState = 0;
-        if (g_activityMonitorThread.joinable())
-        {
-            g_activityMonitorThread.join();
-        }
-        g_activityMonitorThread = std::thread(MonitorUserActivity);
+        g_activityMonitorThread.join();
     }
+    g_monitorThreadRunning = true;
+    g_activityMonitorThread = std::thread(MonitorUserActivity);
 }
 void StopActivityMonitor()
 {
+    std::lock_guard<std::mutex> lock(g_activityMonitorMutex);
     g_monitorThreadRunning = false;
     if (g_activityMonitorThread.joinable())
     {
