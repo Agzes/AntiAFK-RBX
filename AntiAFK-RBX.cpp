@@ -29664,6 +29664,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     HWND hExistingWnd = FindWindow(CLASS_NAME, NULL);
     if (alreadyRunning || hExistingWnd) {
         if (arg_force && hExistingWnd) {
+            bool terminated = false;
             DWORD dwProcessId = 0;
             GetWindowThreadProcessId(hExistingWnd, &dwProcessId);
             if (dwProcessId != 0) {
@@ -29675,7 +29676,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                     }
                     CloseHandle(hProcess);
                     Sleep(500);
+                    terminated = true;
                 }
+            }
+            if (!terminated) {
+                if (hSingleInstanceMutex) { CloseHandle(hSingleInstanceMutex); hSingleInstanceMutex = NULL; }
+                ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running and could not be restarted.\nCheck the system tray or run this command as the same user.", L"AntiAFK-RBX", MB_OK);
+                GdiplusShutdown(gdiplusToken);
+                return 0;
             }
             if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
             hSingleInstanceMutex = CreateMutex(NULL, FALSE, L"AntiAFK-RBX-SingleInstance");
