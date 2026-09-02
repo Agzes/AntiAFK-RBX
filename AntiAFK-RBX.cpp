@@ -6380,16 +6380,19 @@ static MacroStepType MacroEngine_StringToStepType(const std::string& s) {
     return MacroStepType::ImageClick;
 }
 
+static std::atomic<bool> g_macrosLoadFailed(false);
+
 bool MacroEngine_LoadMacros() {
     MacroEngine_EnsureDirectory();
     std::wstring path = MacroEngine_GetMacrosPath();
     HANDLE hFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) return false;
+    if (hFile == INVALID_HANDLE_VALUE) { g_macrosLoadFailed = false; return false; }
     DWORD size = GetFileSize(hFile, NULL);
-    if (size == 0 || size > 1024 * 1024 * 5) { CloseHandle(hFile); return false; }
+    if (size == 0) { CloseHandle(hFile); g_macrosLoadFailed = false; return false; }
+    if (size > 1024 * 1024 * 5) { CloseHandle(hFile); g_macrosLoadFailed = true; return false; }
     std::string content(size, 0);
     DWORD read;
-    if (!ReadFile(hFile, &content[0], size, &read, NULL)) { CloseHandle(hFile); return false; }
+    if (!ReadFile(hFile, &content[0], size, &read, NULL)) { CloseHandle(hFile); g_macrosLoadFailed = true; return false; }
     CloseHandle(hFile);
     content.resize(read);
 
@@ -6461,9 +6464,11 @@ bool MacroEngine_LoadMacros() {
     };
 
     size_t scanPos = 0;
+    size_t nameCount = 0;
     while (true) {
         size_t namePos = content.find("\"name\"", scanPos);
         if (namePos == std::string::npos) break;
+        nameCount++;
 
         size_t macroStart = content.rfind('{', namePos);
         if (macroStart == std::string::npos) break;
@@ -6618,6 +6623,11 @@ bool MacroEngine_LoadMacros() {
         maxOrder = (std::max)(maxOrder, (std::max)((std::max)(m.triggerOrderCooldown, m.triggerOrderReconnect), m.triggerOrderInterval));
     }
     g_macroTriggerOrderCounter = maxOrder + 1;
+    if (nameCount > 0 && g_macros.empty()) {
+        g_macrosLoadFailed = true;
+    } else {
+        g_macrosLoadFailed = false;
+    }
     if (parseFailed && g_macros.empty()) {
         std::wstring badPath = MacroEngine_GetMacrosPath() + L".bad";
         HANDLE hBad = CreateFileW(badPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -6633,6 +6643,7 @@ bool MacroEngine_LoadMacros() {
 bool MacroEngine_SaveMacros() {
     MacroEngine_EnsureDirectory();
     std::lock_guard<std::mutex> lock(g_macrosMutex);
+    if (g_macrosLoadFailed.load()) return false;
 
     std::string json = "{\n  \"version\": 1,\n  \"macros\": [\n";
     for (size_t i = 0; i < g_macros.size(); i++) {
