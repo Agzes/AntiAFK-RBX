@@ -6541,6 +6541,7 @@ bool MacroEngine_LoadMacros() {
         std::string name;
         if (findStr(mjson, "name", 0, name)) {
             m.name = MacroEngine_Utf8ToWide(name);
+            if (m.name.size() > 63) m.name.resize(63);
             findBool(mjson, "triggerOnCooldown", 0, m.triggerOnCooldown);
             findBool(mjson, "triggerOnReconnect", 0, m.triggerOnReconnect);
             findBool(mjson, "triggerOnInterval", 0, m.triggerOnInterval);
@@ -6914,9 +6915,10 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         return s.find("\"" + key + "\": true") != std::string::npos;
     };
 
-    auto parseMacroJson = [&](const std::string& json) -> Macro {
-        Macro m;
-        m.name = MacroEngine_Utf8ToWide(findStrIn(json, "name"));
+auto parseMacroJson = [&](const std::string& json) -> Macro {
+Macro m;
+m.name = MacroEngine_Utf8ToWide(findStrIn(json, "name"));
+if (m.name.size() > 63) m.name.resize(63);
         m.triggerOnCooldown = findBoolIn(json, "triggerOnCooldown");
         m.triggerOnReconnect = findBoolIn(json, "triggerOnReconnect");
         m.triggerOnInterval = findBoolIn(json, "triggerOnInterval");
@@ -11612,20 +11614,21 @@ bool LoadSettings()
                         pos = bar + 1;
                     }
                 }
-                auto parseNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
-                    out.clear();
-                    size_t pos = 0;
-                    while (pos < raw.size()) {
-                        size_t comma = raw.find(L',', pos);
-                        std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
-                        size_t s = n.find_first_not_of(L' ');
-                        size_t e = n.find_last_not_of(L' ');
-                        if (s != std::wstring::npos) n = n.substr(s, e - s + 1);
-                        if (!n.empty()) out.push_back(n);
-                        if (comma == std::wstring::npos) break;
-                        pos = comma + 1;
-                    }
-                };
+auto parseNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
+out.clear();
+size_t pos = 0;
+while (pos < raw.size()) {
+size_t comma = raw.find(L',', pos);
+std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
+size_t s = n.find_first_not_of(L' ');
+size_t e = n.find_last_not_of(L' ');
+if (s != std::wstring::npos) n = n.substr(s, e - s + 1);
+if (n.size() > 63) n.resize(63);
+if (!n.empty()) out.push_back(n);
+if (comma == std::wstring::npos) break;
+pos = comma + 1;
+}
+};
 
                 int vals[32] = {0};
                 int nParsed = 0;
@@ -11642,9 +11645,10 @@ bool LoadSettings()
                 }
                 if (nParsed < 16) continue;
 
-                RobloxInstancePreset pr;
-                pr.name = name;
-                pr.overrideAntiAfk = vals[0] != 0;
+    RobloxInstancePreset pr;
+    pr.name = name;
+    if (pr.name.size() > 63) pr.name.resize(63);
+    pr.overrideAntiAfk = vals[0] != 0;
                 pr.enableAntiAfk = vals[1] != 0;
                 pr.overrideMute = vals[2] != 0;
                 pr.enableMute = vals[3] != 0;
@@ -12829,8 +12833,9 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
             if (p1 == std::wstring::npos) continue;
             size_t p2 = line.find(L'|', p1 + 1);
             if (p2 == std::wstring::npos) continue;
-            RobloxInstancePreset pr;
-            pr.name = line.substr(0, p1);
+        RobloxInstancePreset pr;
+        pr.name = line.substr(0, p1);
+        if (pr.name.size() > 63) pr.name.resize(63);
             std::wstring intsPart = line.substr(p1 + 1, p2 - p1 - 1);
             int vals[23] = { 0 };
             int nParsed = 0;
@@ -12845,20 +12850,21 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
             }
             if (nParsed < 16) continue;
 
-            auto splitNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
-                out.clear();
-                size_t pos = 0;
-                while (pos < raw.size()) {
-                    size_t comma = raw.find(L',', pos);
-                    std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
-                    size_t sIdx = n.find_first_not_of(L' ');
-                    size_t eIdx = n.find_last_not_of(L' ');
-                    if (sIdx != std::wstring::npos) n = n.substr(sIdx, eIdx - sIdx + 1);
-                    if (!n.empty()) out.push_back(n);
-                    if (comma == std::wstring::npos) break;
-                    pos = comma + 1;
-                }
-            };
+auto splitNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
+out.clear();
+size_t pos = 0;
+while (pos < raw.size()) {
+size_t comma = raw.find(L',', pos);
+std::wstring n = (comma == std::wstring::npos) ? raw.substr(pos) : raw.substr(pos, comma - pos);
+size_t sIdx = n.find_first_not_of(L' ');
+size_t eIdx = n.find_last_not_of(L' ');
+if (sIdx != std::wstring::npos) n = n.substr(sIdx, eIdx - sIdx + 1);
+if (n.size() > 63) n.resize(63);
+if (!n.empty()) out.push_back(n);
+if (comma == std::wstring::npos) break;
+pos = comma + 1;
+}
+};
             std::vector<std::wstring> sections;
             {
                 size_t pos2 = p2 + 1;
