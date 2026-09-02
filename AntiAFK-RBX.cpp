@@ -29262,7 +29262,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             else if (arg == L"--set-interval" && i + 1 < argc) {
                 try {
                     int val = std::stoi(argv[++i]);
-                    if (val > 0) g_selectedTime = val;
+                    if (val > 0) g_selectedTime = NormalizeSelectedTimeValue(val);
                 } catch (...) {}
             }
             else if (arg == L"--set-action" && i + 1 < argc) {
