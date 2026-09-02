@@ -9167,6 +9167,7 @@ static HBITMAP CreateMenuIconFromGlyph(wchar_t glyph, int size = 0, COLORREF col
     bmi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!hBmp || !bits) { DeleteDC(memDC); ReleaseDC(NULL, hdc); return NULL; }
     SelectObject(memDC, hBmp);
     memset(bits, 0, size * size * 4);
 
@@ -9239,6 +9240,7 @@ static HBITMAP CreateMenuIconFromString(const wchar_t* text, int textLen, COLORR
     bmi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!hBmp || !bits) { DeleteDC(memDC); ReleaseDC(NULL, hdc); return NULL; }
     SelectObject(memDC, hBmp);
     memset(bits, 0, size * size * 4);
 
@@ -9283,6 +9285,7 @@ static HBITMAP CreateMenuIconFromAppIcon(int size = 0)
     bmi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!hBmp || !bits) { DestroyIcon(hIcon); DeleteDC(memDC); ReleaseDC(NULL, hdc); return NULL; }
     SelectObject(memDC, hBmp);
     memset(bits, 0, size * size * 4);
     DrawIconEx(memDC, 0, 0, hIcon, size, size, 0, NULL, DI_NORMAL);
@@ -9317,6 +9320,7 @@ static HBITMAP CreateMenuIconFromTrayState(bool afk, int size = 0)
     bmi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP hBmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!hBmp || !bits) { DestroyIcon(hIcon); DeleteDC(memDC); ReleaseDC(NULL, hdc); return NULL; }
     SelectObject(memDC, hBmp);
     memset(bits, 0, size * size * 4);
     DrawIconEx(memDC, 0, 0, hIcon, size, size, 0, NULL, DI_NORMAL);
