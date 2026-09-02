@@ -13569,8 +13569,13 @@ void UpdateTrayIcon()
     std::lock_guard<std::mutex> lock(g_trayIconMutex);
     HICON oldIcon = g_nid.hIcon;
     g_nid.hIcon = CreateCustomIcon();
-    Shell_NotifyIcon(NIM_MODIFY, &g_nid);
-    if (oldIcon) DestroyIcon(oldIcon);
+    bool ok = Shell_NotifyIcon(NIM_MODIFY, &g_nid) != FALSE;
+    if (ok) {
+        if (oldIcon && oldIcon != g_nid.hIcon) DestroyIcon(oldIcon);
+    } else {
+        if (g_nid.hIcon && g_nid.hIcon != oldIcon) DestroyIcon(g_nid.hIcon);
+        g_nid.hIcon = oldIcon;
+    }
 }
 
 static constexpr UINT TRAY_READD_RETRY_TIMER = 9001;
