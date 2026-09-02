@@ -10918,7 +10918,7 @@ bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEve
         std::string responseBody;
         char buffer[512];
         DWORD bytesRead = 0;
-        while (InternetReadFile(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+        while (responseBody.size() < 512 && InternetReadFile(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
         {
             responseBody.append(buffer, bytesRead);
             bytesRead = 0;
@@ -10957,11 +10957,11 @@ static void QueueWebhookTestAsync(const std::wstring& webhookUrl, const std::wst
             L"Manual test message from " + sourceNote + L".",
             &errorText,
             &statusCode);
-        wchar_t body[256];
+        std::wstring body;
         if (sent) {
-            swprintf_s(body, L"Test message sent successfully (HTTP %lu).", statusCode);
+            body = L"Test message sent successfully (HTTP " + std::to_wstring(statusCode) + L").";
         } else {
-            swprintf_s(body, L"%s", errorText.empty() ? L"Failed to send the test webhook." : errorText.c_str());
+            body = errorText.empty() ? std::wstring(L"Failed to send the test webhook.") : errorText;
         }
         std::wstring* payload = new std::wstring(body);
         HWND target = (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) ? g_hMainUiWnd : g_hwnd;
