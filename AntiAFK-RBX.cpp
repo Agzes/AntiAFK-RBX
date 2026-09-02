@@ -929,7 +929,7 @@ std::thread g_recordingDeltaThread;
 std::mutex g_recordingMovesMutex;
 HHOOK g_recordingKeyboardHook = NULL;
 HWND g_recordingOverlayWnd = NULL;
-bool g_recordingStopPending = false;
+std::atomic<bool> g_recordingStopPending(false);
 std::vector<MacroAction> g_recordingActions;
 std::mutex g_recordingActionsMutex;
 static void MacroEngine_PushRecordingAction(const MacroAction& a) {
