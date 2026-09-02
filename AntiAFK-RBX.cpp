@@ -11617,11 +11617,9 @@ bool LoadSettings()
                     pr.overrideMacro = vals[16] != 0;
                     pr.enableMacro = vals[17] != 0;
                 }
-                if (pr.overrideMacro) {
-                    if (!sections.empty()) parseNames(sections[0], pr.macroNames);
-                    if (sections.size() > 1) parseNames(sections[1], pr.reconnectMacroNames);
-                    if (sections.size() > 2) parseNames(sections[2], pr.intervalMacroNames);
-                }
+                if (!sections.empty()) parseNames(sections[0], pr.macroNames);
+                if (sections.size() > 1) parseNames(sections[1], pr.reconnectMacroNames);
+                if (sections.size() > 2) parseNames(sections[2], pr.intervalMacroNames);
                 loaded.push_back(pr);
             }
             if (!loaded.empty()) {
