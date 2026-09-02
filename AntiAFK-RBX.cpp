@@ -13615,13 +13615,14 @@ bool CheckForUpdates(bool showNotification = true)
     InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
     InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
 
-    HINTERNET hConnect = InternetOpenUrl(hInternet, GetVersionCheckUrl(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
+    HINTERNET hConnect = InternetOpenUrl(hInternet, GetVersionCheckUrl(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_UI, 0);
     if (!hConnect) {
         g_updateCheckFailed = true;
         InternetCloseHandle(hInternet);
         return false;
     }
 
+    InternetSetOption(hConnect, INTERNET_OPTION_CONNECT_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
     InternetSetOption(hConnect, INTERNET_OPTION_SEND_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
     InternetSetOption(hConnect, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs));
 
