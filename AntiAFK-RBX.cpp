@@ -1014,7 +1014,7 @@ void SaveSettings();
 std::string EscapeJsonStringUtf8(const std::string& input);
 void FpsCapperThread();
 void RamCleanerThread();
-void IntervalMacroThread();
+void IntervalMacroThread(int myGen);
 int ClearRobloxMemory();
 bool AnyRobloxWindowExceedsRamLimit(int limitMb);
 void ShowAllRobloxWindows_Multi();
@@ -7097,9 +7097,7 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
     }
 }
 
-void IntervalMacroThread() {
-    g_intervalMacroThreadRunning = true;
-    const int myGen = g_intervalMacroGen.load();
+void IntervalMacroThread(int myGen) {
     uint64_t lastSweep = 0;
     while (g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen) {
         ULONGLONG now = GetTickCount64();
@@ -7123,10 +7121,12 @@ static void SpawnIntervalMacroThreadIfNeeded() {
     std::lock_guard<std::mutex> lock(g_intervalMacroThreadMutex);
     if (g_intervalMacroThreadRunning.load()) return;
     if (g_intervalMacroThread.joinable()) {
-        g_intervalMacroThread.detach();
+        g_intervalMacroThread.join();
     }
     g_intervalMacroGen++;
-    g_intervalMacroThread = std::thread(IntervalMacroThread);
+    int myGen = g_intervalMacroGen.load();
+    g_intervalMacroThreadRunning = true;
+    g_intervalMacroThread = std::thread([myGen] { IntervalMacroThread(myGen); });
 }
 
 static void MacroEngine_SendKey(BYTE vk, bool down) {
