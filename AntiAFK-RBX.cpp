@@ -26550,6 +26550,20 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             DestroyWindow(hwnd);
             return 0;
         }
+        else if (wParam == VK_RETURN)
+        {
+            if (pData && pData->params && pData->params->result)
+            {
+                UINT btnType = pData->params->type & 0x0F;
+                UINT defBtn = pData->params->type & MB_DEFMASK;
+                if (btnType == MB_OK) *(pData->params->result) = IDOK;
+                else if (btnType == MB_OKCANCEL) *(pData->params->result) = (defBtn == MB_DEFBUTTON2) ? IDCANCEL : IDOK;
+                else if (btnType == MB_YESNO) *(pData->params->result) = (defBtn == MB_DEFBUTTON2) ? IDNO : IDYES;
+                else if (btnType == MB_YESNOCANCEL) *(pData->params->result) = (defBtn == MB_DEFBUTTON2) ? IDNO : ((defBtn == MB_DEFBUTTON3) ? IDCANCEL : IDYES);
+            }
+            DestroyWindow(hwnd);
+            return 0;
+        }
         break;
     case WM_CLOSE:
         if (pData && pData->params && pData->params->result)
@@ -26606,6 +26620,7 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
     {
         ShowWindow(hDialog, SW_SHOW);
         UpdateWindow(hDialog);
+        SetForegroundWindow(hDialog);
         if (owner)
             EnableWindow(owner, FALSE);
     MSG msg;
