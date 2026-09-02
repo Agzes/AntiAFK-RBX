@@ -11698,6 +11698,7 @@ bool LoadSettings()
     g_ramCleanerAutoStart = (ramCleanerEnabled != 0);
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = (int)ramCleanerMode;
+    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) g_ramCleanerMode = 0;
     g_ramCleanerInterval = ClampInt((int)ramCleanerInterval, 1, 86400);
     g_ramCleanerLimit = ClampInt((int)ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = (afkReminder != 0);
@@ -12706,6 +12707,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_ramCleanerAutoStart = s.ramCleanerEnabled;
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = s.ramCleanerMode;
+    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) g_ramCleanerMode = 0;
     g_ramCleanerInterval = ClampInt(s.ramCleanerInterval, 1, 86400);
     g_ramCleanerLimit = ClampInt(s.ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = s.afkReminder;
