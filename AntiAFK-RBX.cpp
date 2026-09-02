@@ -13124,11 +13124,30 @@ static bool ImportSettingsFromFile(HWND owner)
         ofn2.nMaxFile = MAX_PATH;
         ofn2.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
         if (GetOpenFileName(&ofn2)) {
-            if (CopyFileW(ofn2.lpstrFile, MacroEngine_GetMacrosPath().c_str(), FALSE)) {
+            bool validMacrosFile = false;
+            {
+                HANDLE hCheck = CreateFileW(ofn2.lpstrFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (hCheck != INVALID_HANDLE_VALUE) {
+                    DWORD checkSize = GetFileSize(hCheck, NULL);
+                    if (checkSize > 0 && checkSize <= 1024 * 1024 * 5) {
+                        std::string checkContent(checkSize, 0);
+                        DWORD checkRead = 0;
+                        if (ReadFile(hCheck, &checkContent[0], checkSize, &checkRead, NULL) && checkRead > 64) {
+                            validMacrosFile = checkContent.find("\"macros\"") != std::string::npos;
+                        }
+                    }
+                    CloseHandle(hCheck);
+                }
+            }
+            if (!validMacrosFile) {
+                ShowDarkMessageBox(owner, L"The selected file is not a valid macros file.", L"AntiAFK-RBX  Import Settings", MB_OK);
+            } else if (CopyFileW(ofn2.lpstrFile, MacroEngine_GetMacrosPath().c_str(), FALSE)) {
                 MacroEngine_LoadMacros();
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
+            } else {
+                ShowDarkMessageBox(owner, L"Failed to import macros. The file may be locked or the destination is not writable.", L"AntiAFK-RBX  Import Settings", MB_OK);
             }
         }
     }
