@@ -25222,10 +25222,6 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         }
         break;
     case WM_KEYDOWN:
-        if (pData && wParam == VK_ESCAPE && !pData->isDiscordWebhookInputFocused && !pData->macrosNameFocused) {
-            PostMessage(hwnd, WM_CLOSE, 0, 0);
-            return 0;
-        }
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
             size_t* caretPos = &pData->discordWebhookCaretPos;
