@@ -23825,31 +23825,38 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             drawDisclaimerIconAndText(newText, newAlpha);
         }
 
-        {
-            if (showMoreVisible) {
-                const wchar_t* showMoreText = L"preview info";
-                RectF smBounds;
-                g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
-                int smW = (int)smBounds.Width + 14;
-                int smH = 16;
-                int smX = pData->disclaimerRect.right - smW - 8;
-                int smY = pData->disclaimerRect.top + (pData->disclaimerRect.bottom - pData->disclaimerRect.top - smH) / 2;
-                pData->disclaimerShowMoreRect = { smX, smY, smX + smW, smY + smH };
-                Color smBg = pData->isHoveringDisclaimerShowMore ? Color(80, 60, 60, 60) : Color(40, 50, 50, 50);
-                SolidBrush smBgBrush(smBg);
-                g.FillRectangle(&smBgBrush, (REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
-                Pen smBorderPen(Color(120, 56, 56, 56), 1.0f);
-                g.DrawRectangle(&smBorderPen, (REAL)smX + 0.5f, (REAL)smY + 0.5f, (REAL)(smW - 1), (REAL)(smH - 1));
-                SolidBrush smTextBrush(Color(255, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150));
-                StringFormat sfSm;
-                sfSm.SetAlignment(StringAlignmentCenter);
-                sfSm.SetLineAlignment(StringAlignmentCenter);
-                RectF smTextRect((REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
-                g.DrawString(showMoreText, -1, &discFont, smTextRect, &sfSm, &smTextBrush);
-            } else {
-                pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
-            }
+    {
+        if (showMoreVisible) {
+            const wchar_t* showMoreText = L"preview info";
+            RectF smBounds;
+            g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
+            int smW = (int)smBounds.Width + 22;
+            int smH = discH;
+            int smX = pData->disclaimerRect.right - smW;
+            int smY = pData->disclaimerRect.top;
+            pData->disclaimerShowMoreRect = { smX, smY, smX + smW, smY + smH };
+            PixelOffsetMode smOldOffset = g.GetPixelOffsetMode();
+            SmoothingMode smOldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            Color smBg = pData->isHoveringDisclaimerShowMore ? Color(80, 60, 60, 60) : Color(40, 50, 50, 50);
+            SolidBrush smBgBrush(smBg);
+            g.FillRectangle(&smBgBrush, (REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
+            SolidBrush smSepBrush(Color(180, 56, 56, 56));
+            g.FillRectangle(&smSepBrush, (REAL)smX, (REAL)smY, 1.0f, (REAL)smH);
+            g.FillRectangle(&disclaimerBorderBrush, (REAL)(pData->disclaimerRect.right - 1), (REAL)smY, 1.0f, (REAL)smH);
+            g.SetPixelOffsetMode(smOldOffset);
+            g.SetSmoothingMode(smOldSmooth);
+            SolidBrush smTextBrush(Color(255, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150));
+            StringFormat sfSm;
+            sfSm.SetAlignment(StringAlignmentCenter);
+            sfSm.SetLineAlignment(StringAlignmentCenter);
+            RectF smTextRect((REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
+            g.DrawString(showMoreText, -1, &discFont, smTextRect, &sfSm, &smTextBrush);
+        } else {
+            pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
         }
+    }
 
     if (renderMacrosPrimary) {
         pData->macrosOkButtonRect = pData->startButtonRect;
