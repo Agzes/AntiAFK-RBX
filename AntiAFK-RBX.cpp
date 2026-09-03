@@ -29260,9 +29260,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 int newLimit = LOWORD(wParam) - ID_FPS_CAP_CUSTOM_BASE;
                 int oldLimit = g_fpsLimit;
                 g_fpsLastActiveLimit = newLimit;
-                if (g_fpsLimit > 0) {
-                    g_fpsLimit = newLimit;
-                }
+                g_fpsLimit = newLimit;
                 if (oldLimit != g_fpsLimit) {
                     RestartFpsCapperForEffectiveLimit();
                 }
