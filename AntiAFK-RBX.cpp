@@ -777,6 +777,7 @@ bool GetWindowInstanceSetting_IntervalMacro(HWND hwnd, std::vector<std::wstring>
 }
 
 wchar_t g_splashStatus[128] = L"Initializing...";
+std::atomic<int> g_splashProgress(0);
 
 HBRUSH g_hSplashBgBrush = NULL;
 HBRUSH g_hMutexBgBrush = NULL;
@@ -1718,17 +1719,21 @@ void Splash_Paint_DrawLogoAndStatus(HDC hdc, const RECT& clientRect, Bitmap* pLo
             g.DrawImage(pLogoBitmap, RectF(drawX, drawY, drawW, drawH), 0.0f, 0.0f, (REAL)srcW, (REAL)srcH, UnitPixel, &imageAttributes);
     }
 
-    Font font12(hdc, hFont12);
-    SolidBrush textBrush(Color(ScaleOverlayAlpha(255, overlayAlpha), 205, 205, 205));
-    SolidBrush glowBrush(Color(ScaleOverlayAlpha(70, overlayAlpha), 255, 255, 255));
-
-    StringFormat sfCenter;
-    sfCenter.SetAlignment(StringAlignmentCenter);
-    sfCenter.SetLineAlignment(StringAlignmentNear);
-    RectF noteGlowRectF(originX, originY + 224.0f, baseWidth, 24.0f);
-    RectF noteRectF(originX, originY + 225.0f, baseWidth, 22.0f);
-    g.DrawString(g_splashStatus, -1, &font12, noteGlowRectF, &sfCenter, &glowBrush);
-    g.DrawString(g_splashStatus, -1, &font12, noteRectF, &sfCenter, &textBrush);
+    const int totalSteps = 8;
+    int filledSteps = g_splashProgress.load();
+    if (filledSteps > totalSteps) filledSteps = totalSteps;
+    const float dotRadius = 4.0f;
+    const float dotGap = 14.0f;
+    const float rowWidth = (totalSteps - 1) * dotGap;
+    const float rowStartX = (width - rowWidth) / 2.0f;
+    const float rowY = originY + 236.0f;
+    for (int i = 0; i < totalSteps; i++) {
+        SolidBrush dotBrush(i < filledSteps
+            ? Color(ScaleOverlayAlpha(255, overlayAlpha), 66, 118, 255)
+            : Color(ScaleOverlayAlpha(255, overlayAlpha), 70, 70, 70));
+        float cx = rowStartX + i * dotGap;
+        g.FillEllipse(&dotBrush, cx - dotRadius, rowY - dotRadius, dotRadius * 2.0f, dotRadius * 2.0f);
+    }
 }
 void Splash_Paint_DrawFooter(HDC hdc, const RECT& clientRect, HFONT hFont10, HFONT hFont12, BYTE overlayAlpha = 255) {
     Graphics g(hdc);
@@ -1751,19 +1756,6 @@ void Splash_Paint_DrawFooter(HDC hdc, const RECT& clientRect, HFONT hFont10, HFO
     sfRightBottom.SetLineAlignment(StringAlignmentFar);
     RectF verRectF((REAL)version_rect.left, (REAL)version_rect.top, (REAL)(version_rect.right - version_rect.left), (REAL)(version_rect.bottom - version_rect.top));
     g.DrawString(g_Version, -1, &font10, verRectF, &sfRightBottom, &grayBrush);
-
-    const wchar_t* loadingStr = L"LOADING";
-    RECT loading_rect = { clientRect.left, clientRect.top, clientRect.right, clientRect.bottom - 7 };
-
-    float sine_wave = (sin(GetTickCount64() * 0.003f) + 1.0f) / 2.0f;
-    int brightness = 120 + (int)(sine_wave * 100);
-    SolidBrush loadingBrush(Color(ScaleOverlayAlpha(255, overlayAlpha), static_cast<BYTE>(brightness), static_cast<BYTE>(brightness), static_cast<BYTE>(brightness)));
-    Font font12(hdc, hFont12);
-    StringFormat sfCenterBottom;
-    sfCenterBottom.SetAlignment(StringAlignmentCenter);
-    sfCenterBottom.SetLineAlignment(StringAlignmentFar);
-    RectF loadRectF((REAL)loading_rect.left, (REAL)loading_rect.top, (REAL)(loading_rect.right - loading_rect.left), (REAL)(loading_rect.bottom - loading_rect.top));
-    g.DrawString(loadingStr, -1, &font12, loadRectF, &sfCenterBottom, &loadingBrush);
 }
 LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -1932,7 +1924,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         break;
     }
     case WM_APP + 2:
-        AnimateWindow(hwnd, (int)wParam > 0 ? 140 : 200, AW_BLEND | AW_HIDE);
+        AnimateWindow(hwnd, (int)wParam > 0 ? 90 : 120, AW_BLEND | AW_HIDE);
         DestroyWindow(hwnd);
         return 0;
     case WM_CLOSE:
@@ -1962,6 +1954,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 }
 void UpdateSplashStatus(const wchar_t* status)
 {
+    g_splashProgress++;
     if (g_hSplashWnd)
         PostMessage(g_hSplashWnd, WM_APP + 1, (WPARAM)status, 0);
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
@@ -1992,7 +1985,7 @@ void CreateSplashScreen(HINSTANCE hInstance)
     if (g_hSplashWnd)
     {
         EnableAcrylic(g_hSplashWnd);
-        AnimateWindow(g_hSplashWnd, 200, AW_BLEND);
+        AnimateWindow(g_hSplashWnd, 120, AW_BLEND);
         UpdateWindow(g_hSplashWnd);
     }
 }
@@ -26837,9 +26830,8 @@ void main_thread(bool arg_tray)
     UpdateSplashStatus(L"Starting RAM Cleaner...");
     EnsureRamCleanerThreadStarted();
 
-    Sleep(500);
+    Sleep(250);
     UpdateSplashStatus(L"Loaded!");
-    Sleep(500);
 
     const bool shouldOpenMainUi = !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
     if (shouldOpenMainUi && g_hMainUiWnd && IsWindow(g_hMainUiWnd))
