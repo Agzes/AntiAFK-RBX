@@ -17866,7 +17866,7 @@ void MainUI_Paint_DrawToggleGetHitbox(const RECT& rowRect, RECT* outToggleRect) 
     outToggleRect->right = toggleX + toggleW;
     outToggleRect->bottom = toggleY + toggleH;
 }
-void MainUI_Paint_DrawCompactOptionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, bool checked, bool isHovering, float animState, bool isEnabled = true, int iconXOffset = 0) {
+void MainUI_Paint_DrawCompactOptionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, bool checked, bool isHovering, float animState, bool isEnabled = true, int iconXOffset = 0, int iconYOffset = 0) {
     (void)animState; (void)font;
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeNone);
@@ -17899,7 +17899,7 @@ void MainUI_Paint_DrawCompactOptionButton(HDC hdc, const RECT& rect, HFONT font,
     HFONT iconFontH = CreateFontW(-MulDiv(iconSize, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, iconFontName);
     Font iconFont(hdc, iconFontH);
     SolidBrush iconBrush(Color(iconAlpha, GetRValue(iconColor), GetGValue(iconColor), GetBValue(iconColor)));
-    RectF iconRectF((REAL)(rect.left + 1 + iconXOffset), (REAL)(rect.top + 1.5f), (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    RectF iconRectF((REAL)(rect.left + 1 + iconXOffset), (REAL)(rect.top + 1.5f + iconYOffset), (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
     StringFormat sfIcon;
     sfIcon.SetAlignment(StringAlignmentCenter);
     sfIcon.SetLineAlignment(StringAlignmentCenter);
@@ -22415,7 +22415,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         bool smAdvanced = g_simpleMode.load();
         MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
-        MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true);
+        MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true, 1, 1);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarContentCompactRect, pData->hFontText, L"\uE713", pData->isHoveringStatusBarContentCompact, L"\uE713", false);
 
