@@ -29862,9 +29862,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         } else {
             if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
             if (hExistingWnd) {
-                if (IsIconic(hExistingWnd)) ShowWindow(hExistingWnd, SW_RESTORE);
-                ShowWindow(hExistingWnd, SW_SHOW);
-                SetForegroundWindow(hExistingWnd);
+                PostMessage(hExistingWnd, WM_COMMAND, ID_OPEN_UI, 0);
             }
             ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK);
             GdiplusShutdown(gdiplusToken);
