@@ -20828,7 +20828,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
-        pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+        pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
         pData->updateBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
         if (!g_mutexBannerMessage.empty()) {
             if (g_updateFound.load() || g_updateCheckFailed.load()) {
@@ -21053,13 +21053,13 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             y += rowH + vGap;
         }
 
-        pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
-    } else if (pData->currentPage == 4) { // Statistics
+pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
+} else if (pData->currentPage == 4) { // Statistics
         for (int i = 0; i < 8; i++) {
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             y += rowH + vGap;
         }
-        pData->resetStatsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
+        pData->resetStatsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
         } else if (pData->currentPage == 5) { // Discord
             const int noteH = 26;
             const int buttonGap = 0;
@@ -25142,8 +25142,8 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 y += rowH + vGap;
             }
 
-            pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH };
-        } else if (pData->currentPage == 5) { // Discord
+pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
+} else if (pData->currentPage == 5) { // Discord
             const int noteH = 26;
             const int buttonGap = 0;
             int toggleWPage = ctrlEndX - ctrlStartX - help_btn_size;
@@ -25592,7 +25592,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             if (pData->currentPage == 4) {
                 anyHover |= checkHover(pData->isHoveringResetStats, pData->resetStatsButtonRect);
             }
-            anyHover |= checkHover(pData->isHoveringReset, pData->resetSettingsButtonRect);
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringReset, pData->resetSettingsButtonRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringInterval, pData->intervalDropdownRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringAction, pData->actionDropdownRect));
             anyHover |= (pData->currentPage == 0 && checkHover(pData->isHoveringActionDelaysSettingsCompact, pData->actionDelaysSettingsCompactRect));
