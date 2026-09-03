@@ -25349,11 +25349,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
     {
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         pData->hoverPoint = pt;
-        auto checkHover = [&](bool& flag, const RECT& rect) {
-            bool now = PtInRect(&rect, pt);
-            if (now != flag) { flag = now; InvalidateRect(hwnd, &rect, FALSE); }
-            return now;
-        };
+auto checkHover = [&](bool& flag, const RECT& rect) {
+bool now = PtInRect(&rect, pt);
+if (now != flag) { flag = now; InvalidateRect(hwnd, NULL, FALSE); }
+return now;
+};
         auto checkToggleHover = [&](bool& flag, const RECT& rowRect) {
             RECT toggleHitbox;
             MainUI_Paint_DrawToggleGetHitbox(rowRect, &toggleHitbox);
