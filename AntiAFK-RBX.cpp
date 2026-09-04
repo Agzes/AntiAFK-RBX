@@ -394,6 +394,7 @@ std::mutex g_ramCleanerThreadMutex;
 std::atomic<bool> g_intervalMacroEnabled(false);
 std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
+std::thread g_manualGridSnapThread;
 std::atomic<int> g_intervalMacroGen(0);
 std::mutex g_intervalMacroThreadMutex;
 std::atomic<int> g_reconnectMacroDelaySec(60);
@@ -494,10 +495,10 @@ bool IsRobloxWindowSelfHidden(HWND w)
     return it != g_selfHiddenRobloxWindows.end() && it->second == pid;
 }
 
-std::mutex g_discordWebhookMutex;
+std::mutex& g_discordWebhookMutex = *new std::mutex();
 std::mutex g_announcementMutex;
-std::wstring g_discordWebhookUrl;
-std::wstring g_discordMentionTarget = L"@everyone";
+std::wstring& g_discordWebhookUrl = *new std::wstring();
+std::wstring& g_discordMentionTarget = *new std::wstring(L"@everyone");
 AnnouncementInfo g_announcement;
 
 struct RobloxInstanceSettings {
@@ -892,6 +893,7 @@ std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target);
 std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target);
 void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest = false, bool allowWithoutAfk = false);
 void MacroEngine_StopRecording();
+static void MacroEngine_RestoreRecordingWindowSize();
 void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button);
 void MacroEngine_ShowWizard(HWND parent, int startStep = 1);
 void MacroEngine_ShowEditor(HWND parent, int macroIndex);
@@ -974,6 +976,8 @@ std::mutex g_recordingMovesMutex;
 HHOOK g_recordingKeyboardHook = NULL;
 HWND g_recordingOverlayWnd = NULL;
 std::atomic<bool> g_recordingStopPending(false);
+std::atomic<bool> g_recordingWindowRestorePending(false);
+RECT g_recordingWindowRestoreRect = { 0, 0, 0, 0 };
 std::vector<MacroAction> g_recordingActions;
 std::mutex g_recordingActionsMutex;
 static void MacroEngine_PushRecordingAction(const MacroAction& a) {
@@ -1087,10 +1091,10 @@ enum class DiscordWebhookEvent
     Heartbeat,
     UtilityRam
 };
-std::queue<std::pair<DiscordWebhookEvent, std::wstring>> g_webhookQueue;
-std::condition_variable g_webhookCv;
-std::atomic<bool> g_webhookThreadRunning(false);
-std::atomic<bool> g_webhookBusy(false);
+std::queue<std::pair<DiscordWebhookEvent, std::wstring>>& g_webhookQueue = *new std::queue<std::pair<DiscordWebhookEvent, std::wstring>>();
+std::condition_variable& g_webhookCv = *new std::condition_variable();
+std::atomic<bool>& g_webhookThreadRunning = *new std::atomic<bool>(false);
+std::atomic<bool>& g_webhookBusy = *new std::atomic<bool>(false);
 std::thread g_webhookThread;
 std::wstring BuildDiscordTotalStatsLine();
 std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds);
@@ -7215,7 +7219,14 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
 
 void IntervalMacroThread(int myGen) {
     uint64_t lastSweep = 0;
-    while (g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen) {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(g_intervalMacroThreadMutex);
+            if (!(g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen)) {
+                g_intervalMacroThreadRunning = false;
+                return;
+            }
+        }
         ULONGLONG now = GetTickCount64();
         auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
@@ -7230,7 +7241,6 @@ void IntervalMacroThread(int myGen) {
         }
         Sleep(250);
     }
-    g_intervalMacroThreadRunning = false;
 }
 
 static void SpawnIntervalMacroThreadIfNeeded() {
@@ -7242,7 +7252,11 @@ static void SpawnIntervalMacroThreadIfNeeded() {
     g_intervalMacroGen++;
     int myGen = g_intervalMacroGen.load();
     g_intervalMacroThreadRunning = true;
-    g_intervalMacroThread = std::thread([myGen] { IntervalMacroThread(myGen); });
+    try {
+        g_intervalMacroThread = std::thread([myGen] { IntervalMacroThread(myGen); });
+    } catch (...) {
+        g_intervalMacroThreadRunning = false;
+    }
 }
 
 static void MacroEngine_SendKey(BYTE vk, bool down) {
@@ -7590,6 +7604,14 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             if (PtInRect(&ovRc, p->pt)) {
                 return CallNextHookEx(NULL, nCode, wParam, lParam);
             }
+        }
+
+        if (wParam != WM_MOUSEMOVE && !(g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd))) {
+            if (!g_recordingStopPending) {
+                g_recordingStopPending = true;
+                std::thread([]() { MacroEngine_StopRecording(); }).detach();
+            }
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
         }
 
         bool inBounds = (pt.x >= 0 && pt.y >= 0 && pt.x < targetCr.right && pt.y < targetCr.bottom);
@@ -8074,6 +8096,7 @@ void MacroEngine_StopRecording() {
     if (g_recordingDeltaThread.joinable()) {
         g_recordingDeltaThread.join();
     }
+    MacroEngine_RestoreRecordingWindowSize();
 
     {
         MacroAction moveAction;
@@ -8161,6 +8184,7 @@ static void MacroEngine_CancelRecording() {
     if (g_recordingDeltaThread.joinable()) {
         g_recordingDeltaThread.join();
     }
+    MacroEngine_RestoreRecordingWindowSize();
 
     HideRecordingOverlayWindow();
     g_isRecording = false;
@@ -8186,6 +8210,16 @@ static void MacroEngine_CancelRecording() {
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
+static void MacroEngine_RestoreRecordingWindowSize() {
+    if (g_recordingWindowRestorePending.exchange(false)) {
+        HWND target = g_recordingTargetHwnd;
+        RECT r = g_recordingWindowRestoreRect;
+        if (target && IsWindow(target)) {
+            SetWindowPos(target, NULL, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+}
+
 static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macroName) {
     if (g_isRecording) return false;
     if (!targetHwnd || !IsWindow(targetHwnd)) return false;
@@ -8196,6 +8230,8 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     if (GetWindowPlacement(targetHwnd, &wp) && (wp.flags & WPF_RESTORETOMAXIMIZED) == 0) {
         restoreRect = wp.rcNormalPosition;
     }
+    g_recordingWindowRestoreRect = restoreRect;
+    g_recordingWindowRestorePending = true;
 
     if (IsIconic(targetHwnd) || !IsWindowVisible(targetHwnd)) {
         ShowWindow(targetHwnd, SW_RESTORE);
@@ -8241,10 +8277,7 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     if (!g_recordingMouseHook || !g_recordingKeyboardHook) {
         if (g_recordingMouseHook) { UnhookWindowsHookEx(g_recordingMouseHook); g_recordingMouseHook = NULL; }
         if (g_recordingKeyboardHook) { UnhookWindowsHookEx(g_recordingKeyboardHook); g_recordingKeyboardHook = NULL; }
-        SetWindowPos(targetHwnd, NULL, restoreRect.left, restoreRect.top,
-                     restoreRect.right - restoreRect.left,
-                     restoreRect.bottom - restoreRect.top,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+        MacroEngine_RestoreRecordingWindowSize();
         g_isRecording = false;
         g_recordingStopPending = false;
         return false;
@@ -8632,10 +8665,13 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     targetHwnd = wins[0];
                 }
 
+                if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
+                    ShowStatusBarOverlay(L"Failed to start recording", 2500, hwnd, StatusBarEventType::Macro);
+                    return 0;
+                }
                 DestroyWindow(hwnd);
                 g_macroWizardHwnd = NULL;
                 g_wizardMacro.actions.clear();
-                MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name);
                 return 0;
             }
             if (id == ID_MACROS_WIZARD_FINISH) {
@@ -8883,6 +8919,11 @@ void UpdateBloxstrapIntegration(bool enable) {
 
         size_t openingBracket = content.find('[', integrationsArrayPos);
         size_t closingBracket = content.find(']', openingBracket);
+        if (openingBracket == std::string::npos || closingBracket == std::string::npos) {
+            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find 'CustomIntegrations' array bounds in the launcher settings file.");
+            g_bloxstrapIntegration = false;
+            return;
+        }
         bool isEmpty = true;
         for (size_t i = openingBracket + 1; i < closingBracket; ++i) {
             if (!isspace(content[i])) {
@@ -8913,15 +8954,17 @@ void UpdateBloxstrapIntegration(bool enable) {
             content.erase(start, end - start);
 
             size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
-            size_t openingBracket = content.find('[', integrationsArrayPos);
-            size_t closingBracket = content.find(']', openingBracket);
-            bool isEmpty = true;
-            for (size_t i = openingBracket + 1; i < closingBracket; ++i) {
-                if (!isspace(content[i])) {
-                    isEmpty = false; break;
+            size_t openingBracket = (integrationsArrayPos == std::string::npos) ? std::string::npos : content.find('[', integrationsArrayPos);
+            size_t closingBracket = (openingBracket == std::string::npos) ? std::string::npos : content.find(']', openingBracket);
+            if (openingBracket != std::string::npos && closingBracket != std::string::npos) {
+                bool isEmpty = true;
+                for (size_t i = openingBracket + 1; i < closingBracket; ++i) {
+                    if (!isspace(content[i])) {
+                        isEmpty = false; break;
+                    }
                 }
+                if (isEmpty) content.erase(openingBracket + 1, closingBracket - (openingBracket + 1));
             }
-            if (isEmpty) content.erase(openingBracket + 1, closingBracket - (openingBracket + 1));
         }
     }
 
@@ -13273,14 +13316,32 @@ static bool ImportSettingsFromFile(HWND owner)
                 }
             }
             if (!validMacrosFile) {
-                ShowDarkMessageBox(owner, L"The selected file is not a valid macros file.", L"AntiAFK-RBX  Import Settings", MB_OK);
-            } else if (CopyFileW(ofn2.lpstrFile, MacroEngine_GetMacrosPath().c_str(), FALSE)) {
-                MacroEngine_LoadMacros();
-                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                    InvalidateRect(g_hMainUiWnd, NULL, TRUE);
-                }
+                ShowDarkMessageBox(owner, L"The selected file is not a valid macros file.", L"AntiAFK-RBX • Import Settings", MB_OK);
             } else {
-                ShowDarkMessageBox(owner, L"Failed to import macros. The file may be locked or the destination is not writable.", L"AntiAFK-RBX  Import Settings", MB_OK);
+                std::wstring macrosPath = MacroEngine_GetMacrosPath();
+                std::wstring backupPath = macrosPath + L".import-bak";
+                bool hadBackup = CopyFileW(macrosPath.c_str(), backupPath.c_str(), FALSE);
+                if (CopyFileW(ofn2.lpstrFile, macrosPath.c_str(), FALSE)) {
+                    MacroEngine_LoadMacros();
+                    if (g_macrosLoadFailed.load()) {
+                        bool restored = hadBackup && CopyFileW(backupPath.c_str(), macrosPath.c_str(), FALSE);
+                        MacroEngine_LoadMacros();
+                        ShowDarkMessageBox(owner, restored ? L"The imported macros file could not be parsed. Your previous macros were restored." : L"The imported macros file could not be parsed and no previous macros file existed - macros were reset.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                        if (restored) {
+                            DeleteFileW(backupPath.c_str());
+                        } else {
+                            DeleteFileW(macrosPath.c_str());
+                            MacroEngine_LoadMacros();
+                        }
+                    } else {
+                        DeleteFileW(backupPath.c_str());
+                    }
+                    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                        InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+                    }
+                } else {
+                    ShowDarkMessageBox(owner, L"Failed to import macros. The file may be locked or the destination is not writable.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                }
             }
         }
     }
@@ -28400,10 +28461,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else
             {
                 ShowStatusBarOverlay(L"Arranging Roblox windows...", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                std::thread([wins]() {
+                if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
+                g_manualGridSnapThread = std::thread([wins]() {
                     std::lock_guard<std::mutex> lock(g_autoWindowLayoutMutex);
                     GridSnapRobloxWindows();
-                }).detach();
+                });
             }
             break;
         }
@@ -30473,6 +30535,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     g_reconnectMonitorRunning = false;
     if (g_reconnectMonitorThread.joinable()) g_reconnectMonitorThread.join();
+    if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
 
     MacroEngine_Shutdown();
     DisableMultiInstanceSupport();
