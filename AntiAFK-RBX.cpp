@@ -16448,8 +16448,22 @@ struct MainUIData {
     float stateChangeProgress = 0.0f;
     int stateChangeDirection = 0;
 
-    bool showingGridSettings = false;
-    float gridSettingsViewAnim = 0.0f;
+bool showingGridSettings = false;
+float gridSettingsViewAnim = 0.0f;
+int settingsSubKind = 0;
+bool showingSettingsSub = false;
+float settingsSubViewAnim = 0.0f;
+int settingsSubViewDirection = 0;
+bool isHoveringSettingsSubDropdown = false;
+bool isHoveringSettingsSubInterval = false;
+bool isHoveringSettingsSubLimit = false;
+bool isHoveringSettingsSubOk = false;
+int hoveringSettingsSubHelp = -1;
+RECT settingsSubDropdownRect = { 0 };
+RECT settingsSubOkButtonRect = { 0 };
+RECT settingsSubIntervalRect = { 0 };
+RECT settingsSubLimitRect = { 0 };
+RECT settingsSubHelpRects[3] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
     int gridSettingsViewDirection = 0;
     bool isHoveringBackIcon = false;
     bool isHoveringGridForceSmall = false;
@@ -19218,6 +19232,101 @@ title = L"CPU Limit %";
         }
         return;
     }
+    if (pData->showingSettingsSub || pData->settingsSubViewAnim > 0.5f) {
+        if (PtInRect(&pData->iconButtonRect, pt)) {
+            pData->settingsSubViewDirection = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        if (PtInRect(&pData->startButtonRect, pt)) {
+            pData->settingsSubViewDirection = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        for (int i = 0; i < 3; ++i) {
+            if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
+                const wchar_t* title = L"Help";
+                const wchar_t* text = L"No help text available for this setting.";
+                if (pData->settingsSubKind == 1) {
+                    title = L"Multi-Instance Delay";
+                    text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC.";
+                } else if (pData->settingsSubKind == 2) {
+                    if (i == 0) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions."; }
+                    else if (i == 1) { title = L"Clean Cycle Time"; text = L"Fixed interval (in seconds) used by 'Time Cycle' and 'Hybrid' RAM Cleaner strategies between memory optimizations."; }
+                    else { title = L"RAM Limit"; text = L"Usage threshold (in MB) used by 'Smart Clean' and 'Hybrid' strategies: memory is optimized when a Roblox process exceeds it."; }
+                } else if (pData->settingsSubKind == 3) {
+                    title = L"Reconnect Interval";
+                    text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus.";
+                }
+                ShowDarkMessageBox(hwnd, text, title, MB_OK);
+                return;
+            }
+        }
+        if (pData->settingsSubKind == 1 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
+            POINT menuPt;
+            menuPt.x = pData->settingsSubDropdownRect.left;
+            menuPt.y = pData->settingsSubDropdownRect.bottom;
+            ClientToScreen(hwnd, &menuPt);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+            PostMessage(g_hwnd, WM_NULL, 0, 0);
+            DestroyMenu(hMenu);
+            return;
+        }
+        if (pData->settingsSubKind == 2 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Smart Clean");
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Time Cycle");
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, L"Hybrid");
+            POINT menuPt;
+            menuPt.x = pData->settingsSubDropdownRect.left;
+            menuPt.y = pData->settingsSubDropdownRect.bottom;
+            ClientToScreen(hwnd, &menuPt);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+            PostMessage(g_hwnd, WM_NULL, 0, 0);
+            DestroyMenu(hMenu);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        if (pData->settingsSubKind == 2 && PtInRect(&pData->settingsSubIntervalRect, pt)) {
+            ShowCustomInputDialog(hwnd, CustomInputDialogType::RamCleanInterval);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        if (pData->settingsSubKind == 2 && PtInRect(&pData->settingsSubLimitRect, pt)) {
+            ShowCustomInputDialog(hwnd, CustomInputDialogType::RamCleanLimit);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        if (pData->settingsSubKind == 3 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, L"Off (main cycle)");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, L"Every 30 sec");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, L"Every 1 min");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, L"Every 2 min");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, L"Every 5 min");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, L"Every 10 min");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hMenu, MF_STRING, ID_RECONNECT_INTERVAL_CUSTOM, L"Custom...");
+            POINT menuPt;
+            menuPt.x = pData->settingsSubDropdownRect.left;
+            menuPt.y = pData->settingsSubDropdownRect.bottom;
+            ClientToScreen(hwnd, &menuPt);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+            PostMessage(g_hwnd, WM_NULL, 0, 0);
+            DestroyMenu(hMenu);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
+        return;
+    }
     if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.5f) {
 
         if (PtInRect(&pData->gridBackIconRect, pt)) {
@@ -19598,13 +19707,10 @@ title = L"CPU Limit %";
                 if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
-                if (i == 1) { title = L"Multi-Instance Delay"; text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC."; }
-                if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
-                if (i == 3) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions.\n- Disabled: turns off memory cleaning.\n\nUse 'Set...' to configure thresholds and intervals."; }
-                if (i == 4) { title = L"Reconnect Interval"; text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus."; }
-                if (i == 5) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
-                if (i == 6) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
-                if (i == 7) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
+                if (i == 1) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
+                if (i == 2) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
+                if (i == 3) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
+                if (i == 4) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
             } else if (pData->currentPage == 5) { // Discord
                 if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."; }
                 if (i == 1) { title = L"Start / Stop"; text = L"Notifies Discord when Anti-AFK starts and stops.\n\nGood for basic remote monitoring - 2 messages per session, no spam."; }
@@ -19642,10 +19748,14 @@ title = L"CPU Limit %";
             PostMessage(g_hwnd, WM_COMMAND, ID_RECONNECT_MANUAL_CHECK, 0);
             return;
         }
-        if (PtInRect(&pData->advancedReconnectLinkRect, pt)) {
-            PostMessage(g_hwnd, WM_COMMAND, ID_ADVANCED_RECONNECT, 0);
-            return;
-        }
+            if (PtInRect(&pData->advancedReconnectLinkRect, pt)) {
+                pData->settingsSubKind = 3;
+                pData->showingSettingsSub = false;
+                pData->settingsSubViewDirection = 1;
+                pData->settingsSubViewAnim = 0.0f;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
         auto simpleModeRedirect = [&]() {
             if (g_simpleMode.load()) {
                 if (pData->currentPage != 0) {
@@ -19812,7 +19922,14 @@ title = L"CPU Limit %";
             DestroyMenu(hMenu);
             return;
         }
-        if (PtInRect(&pData->advancedMultiInstanceLinkRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_ADVANCED_MULTI_INSTANCE, 0); return; }
+        if (PtInRect(&pData->advancedMultiInstanceLinkRect, pt)) {
+            pData->settingsSubKind = 1;
+            pData->showingSettingsSub = false;
+            pData->settingsSubViewDirection = 1;
+            pData->settingsSubViewAnim = 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
         if (pData->mutexStatusAnim > 0.01f && PtInRect(&pData->mutexStatusRect, pt)) {
             if (g_mutexIgnored) {
                 g_mutexIgnored = false;
@@ -19882,80 +19999,6 @@ title = L"CPU Limit %";
     }
 
     if (pData->currentPage == 3) {
-        if (PtInRect(&pData->multiInstanceIntervalDropdownRect, pt)) {
-            if (g_simpleMode.load()) {
-                if (pData->currentPage != 0) {
-                    pData->prevPage = pData->currentPage;
-                    pData->currentPage = 0;
-                    pData->pageTransitionDirection = 1;
-                    pData->pageTransitionAnim = 0.0f;
-                }
-                pData->highlightElement = 6;
-                pData->highlightStartTime = GetTickCount64();
-                InvalidateRect(hwnd, NULL, FALSE);
-                return;
-            }
-            HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
-            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
-            POINT menuPt;
-            menuPt.x = pData->multiInstanceIntervalDropdownRect.left;
-            menuPt.y = pData->multiInstanceIntervalDropdownRect.bottom;
-            ClientToScreen(hwnd, &menuPt);
-            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
-            PostMessage(g_hwnd, WM_NULL, 0, 0);
-            DestroyMenu(hMenu);
-            return;
-        }
-        if (PtInRect(&pData->ramCleanerDropdownRect, pt)) {
-            HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Smart Clean");
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Time Cycle");
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, L"Hybrid");
-            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            wchar_t cycleValueText[64];
-            swprintf_s(cycleValueText, L"Interval: %d sec", g_ramCleanerInterval.load());
-            AppendMenu(hMenu, MF_GRAYED | MF_DISABLED, 0, cycleValueText);
-            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"╰ Set Interval...");
-            wchar_t limitValueText[64];
-            swprintf_s(limitValueText, L"Limit: %d MB", g_ramCleanerLimit.load());
-            AppendMenu(hMenu, MF_GRAYED | MF_DISABLED, 0, limitValueText);
-            AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"╰ Set Limit...");
-            POINT menuPt;
-            menuPt.x = pData->ramCleanerDropdownRect.left;
-            menuPt.y = pData->ramCleanerDropdownRect.bottom;
-            ClientToScreen(hwnd, &menuPt);
-            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
-            PostMessage(g_hwnd, WM_NULL, 0, 0);
-            DestroyMenu(hMenu);
-            InvalidateRect(hwnd, NULL, FALSE);
-            return;
-        }
-        if (PtInRect(&pData->reconnectIntervalDropdownRect, pt)) {
-            HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, L"Off (main cycle)");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, L"Every 30 sec");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, L"Every 1 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, L"Every 2 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, L"Every 5 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, L"Every 10 min");
-            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING, ID_RECONNECT_INTERVAL_CUSTOM, L"Custom...");
-            POINT menuPt;
-            menuPt.x = pData->reconnectIntervalDropdownRect.left;
-            menuPt.y = pData->reconnectIntervalDropdownRect.bottom;
-            ClientToScreen(hwnd, &menuPt);
-            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
-            PostMessage(g_hwnd, WM_NULL, 0, 0);
-            DestroyMenu(hMenu);
-            InvalidateRect(hwnd, NULL, FALSE);
-            return;
-        }
         if (PtInRect(&pData->userSafeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
             AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
@@ -20101,7 +20144,14 @@ title = L"CPU Limit %";
         if (PtInRect(&pData->advancedFpsCapperLinkRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_ADVANCED_FPS_CAPPER, 0); return; }
         if (PtInRect(&pData->ramCleanerSweepCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_RAM_CLEAN_SWEEP, 0); return; }
         if (PtInRect(&pData->ramCleanerToggleCompactRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_RAM_CLEANER_RUNTIME_TOGGLE, 0); return; }
-        if (PtInRect(&pData->advancedRamCleanerLinkRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_ADVANCED_RAM_CLEANER, 0); return; }
+        if (PtInRect(&pData->advancedRamCleanerLinkRect, pt)) {
+            pData->settingsSubKind = 2;
+            pData->showingSettingsSub = false;
+            pData->settingsSubViewDirection = 1;
+            pData->settingsSubViewAnim = 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
     }
 
     if (pData->currentPage == 2) {
@@ -20248,6 +20298,31 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         gridAnim = pData->gridSettingsViewAnim;
         wasShowingGrid = pData->showingGridSettings;
+    }
+
+    bool wasShowingSettingsSub = pData->showingSettingsSub;
+    float settingsSubAnim = pData->settingsSubViewAnim;
+
+    if (wasShowingSettingsSub || pData->settingsSubViewDirection != 0) {
+        if (pData->settingsSubViewDirection == 1) {
+            pData->settingsSubViewAnim += (1.0f - pData->settingsSubViewAnim) * animSpeed;
+            if (pData->settingsSubViewAnim > 0.995f) {
+                pData->settingsSubViewAnim = 1.0f;
+                pData->settingsSubViewDirection = 0;
+                pData->showingSettingsSub = true;
+            }
+            needsRedraw = true;
+        } else if (pData->settingsSubViewDirection == -1) {
+            pData->settingsSubViewAnim += (0.0f - pData->settingsSubViewAnim) * animSpeed;
+            if (pData->settingsSubViewAnim < 0.005f) {
+                pData->settingsSubViewAnim = 0.0f;
+                pData->settingsSubViewDirection = 0;
+                pData->showingSettingsSub = false;
+            }
+            needsRedraw = true;
+        }
+        settingsSubAnim = pData->settingsSubViewAnim;
+        wasShowingSettingsSub = pData->showingSettingsSub;
     }
 
     bool wasShowingStatusBarSettings = pData->showingStatusBarSettings;
@@ -20442,9 +20517,11 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         int disclaimerContext = -1;
         if (pData->actionDelaysViewDirection != 0 || pData->showingActionDelays) {
             disclaimerContext = 100;
-        } else if (pData->gridSettingsViewDirection != 0 || pData->showingGridSettings) {
-            disclaimerContext = 101;
-        } else if (pData->statusBarSettingsViewDirection != 0 || pData->showingStatusBarSettings) {
+    } else if (pData->gridSettingsViewDirection != 0 || pData->showingGridSettings) {
+        disclaimerContext = 101;
+    } else if (pData->settingsSubViewDirection != 0 || pData->showingSettingsSub) {
+        disclaimerContext = 107;
+    } else if (pData->statusBarSettingsViewDirection != 0 || pData->showingStatusBarSettings) {
             disclaimerContext = 106;
         } else if (pData->fpsCapperSettingsViewDirection != 0 || pData->showingFpsCapperSettings) {
             disclaimerContext = 102;
@@ -20480,13 +20557,14 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     }
 
     bool renderGridPrimary = wasShowingGrid || gridAnim > 0.0f;
+    bool renderSettingsSubPrimary = wasShowingSettingsSub || settingsSubAnim > 0.0f;
     bool renderStatusBarSettingsPrimary = wasShowingStatusBarSettings || statusBarSettingsAnim > 0.0f;
     bool renderActionDelaysPrimary = wasShowingActionDelays || actionDelaysAnim > 0.0f;
     bool renderFpsCapperSettingsPrimary = wasShowingFpsCapperSettings || fpsCapperSettingsAnim > 0.0f;
     bool renderAlphaInfoPrimary = wasShowingAlphaInfo || alphaInfoAnim > 0.0f;
     bool renderTimingsPrimary = wasShowingTimings || timingsAnim > 0.0f;
     bool renderMacrosPrimary = (pData->showingMacros || pData->macrosViewAnim > 0.0f);
-    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->statusBarSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim), macrosAnim)));
+    float overlayAlpha = max(0.0f, min(1.0f, max(max(max(max(max(max(max(pData->actionDelaysViewAnim, pData->gridSettingsViewAnim), pData->statusBarSettingsViewAnim), pData->fpsCapperSettingsViewAnim), pData->alphaInfoViewAnim), pData->timingsViewAnim), macrosAnim), settingsSubAnim)));
     bool renderMainPrimary = overlayAlpha < 0.5f;
 
     pData->closeButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
@@ -20505,7 +20583,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     pData->timingsBackIconRect = pData->iconButtonRect;
     pData->macrosBackIconRect = pData->iconButtonRect;
 
-    float activeBackAnim = max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+    float activeBackAnim = max(max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), settingsSubAnim);
     bool isHoveringActiveBack = pData->isHoveringBackIcon || pData->isHoveringActionDelaysBackIcon || pData->isHoveringFpsCapperSettingsBackIcon || pData->isHoveringAlphaInfoBackIcon || pData->isHoveringTimingsBackIcon || pData->isHoveringMacrosBackIcon;
 
     if (activeBackAnim > 0.0f) {
@@ -20587,6 +20665,14 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             SolidBrush textBrushGrid(Color((BYTE)(255 * gridAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX • Grid Settings", -1, &gdiFont, titleRect, &sf, &textBrushGrid);
         }
+        if (settingsSubAnim > 0.0f) {
+            const wchar_t* settingsSubTitle = L"AntiAFK-RBX • Settings";
+            if (pData->settingsSubKind == 1) settingsSubTitle = L"AntiAFK-RBX • Multi-Instance Delay";
+            else if (pData->settingsSubKind == 2) settingsSubTitle = L"AntiAFK-RBX • RAM Cleaner";
+            else if (pData->settingsSubKind == 3) settingsSubTitle = L"AntiAFK-RBX • Reconnect Interval";
+            SolidBrush textBrushSub(Color((BYTE)(255 * settingsSubAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
+            g.DrawString(settingsSubTitle, -1, &gdiFont, titleRect, &sf, &textBrushSub);
+        }
         if (statusBarSettingsAnim > 0.0f) {
             SolidBrush textBrushSb(Color((BYTE)(255 * statusBarSettingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX • Status Bar Settings", -1, &gdiFont, titleRect, &sf, &textBrushSb);
@@ -20621,7 +20707,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             g.DrawString(titleText, -1, &gdiFont, titleRect, &sf, &textBrushMacros);
         }
         float badgeAnim = pData->badgeRevealAnim;
-        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim);
+        float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim), settingsSubAnim);
         if (mainTitleFade > 0.0f) {
             SolidBrush textBrushNormal(Color((BYTE)(255 * mainTitleFade), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX", -1, &gdiFont, titleRect, &sf, &textBrushNormal);
@@ -20673,12 +20759,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     BYTE g_normal = (BYTE)(g_state_normal * (1.0f - progress) + GetGValue(errorColor) * progress);
     BYTE b_normal = (BYTE)(b_state_normal * (1.0f - progress) + GetBValue(errorColor) * progress);
 
-    float overlayAnim = max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+    float overlayAnim = max(max(max(max(max(max(max(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), settingsSubAnim);
 
     bool isContinueBtn = pData->alphaInfoAutoShown && alphaInfoAnim > 0.0f && alphaInfoAnim >= overlayAnim * 0.99f;
     COLORREF startColor_back = isContinueBtn ? RGB(0, 100, 180) : RGB(80, 80, 80);
     COLORREF startHoverColor_back = isContinueBtn ? RGB(0, 130, 210) : RGB(100, 100, 100);
-    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringStatusBarSettingsOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton || pData->isHoveringMacrosOkButton;
+    bool isOverlayOkHovered = pData->isHoveringGridOkButton || pData->isHoveringStatusBarSettingsOkButton || pData->isHoveringActionDelaysOkButton || pData->isHoveringFpsCapperSettingsOkButton || pData->isHoveringAlphaInfoOkButton || pData->isHoveringTimingsOkButton || pData->isHoveringMacrosOkButton || pData->isHoveringSettingsSubOk;
     COLORREF currentBackColor = isOverlayOkHovered ? startHoverColor_back : startColor_back;
     BYTE r_back = GetRValue(currentBackColor);
     BYTE g_back = GetGValue(currentBackColor);
@@ -20983,7 +21069,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->importSettingsRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, halfX, clientRect.bottom - startBtnH - disclaimerH + 1 };
         pData->exportSettingsRect = { halfX, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
     } else if (pData->currentPage == 3) { // Advanced
-        int ddW_fps = 156, ddW_mi_interval = 155, ddW_userSafe = 110;
+        int ddW_userSafe = 110;
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
         int compactW = help_btn_size;
         int inlineGap = 4;
@@ -21000,40 +21086,21 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->statusBarContentCompactRect = { pData->statusBarPositionBottomCompactRect.left - inlineGap - compactW, controlTop, pData->statusBarPositionBottomCompactRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
 
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        pData->multiInstanceIntervalDropdownRect = { ctrlEndX - ddW_mi_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
-        y += rowH + vGap;
+    pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+    controlTop = y + (rowH - help_btn_size) / 2 + 4;
+    controlBottom = controlTop + help_btn_size;
+    pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+    pData->customProcessSearchToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+    toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+    pData->customProcessSearchSettingsRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+    pData->customProcessSearchExcludeRect = { pData->customProcessSearchSettingsRect.left - inlineGap - compactW, controlTop, pData->customProcessSearchSettingsRect.left - inlineGap, controlBottom };
+    y += rowH + vGap;
 
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        controlTop = y + (rowH - help_btn_size) / 2 + 4;
-        controlBottom = controlTop + help_btn_size;
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
-        pData->customProcessSearchToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
-        toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
-        pData->customProcessSearchSettingsRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
-        pData->customProcessSearchExcludeRect = { pData->customProcessSearchSettingsRect.left - inlineGap - compactW, controlTop, pData->customProcessSearchSettingsRect.left - inlineGap, controlBottom };
-        y += rowH + vGap;
-
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        controlTop = y + (rowH - help_btn_size) / 2 + 4;
-        controlBottom = controlTop + help_btn_size;
-        pData->ramCleanerDropdownRect = { ctrlEndX - ddW_fps - help_btn_size, controlTop, ctrlEndX - help_btn_size, controlBottom };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
-        y += rowH + vGap;
-
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        controlTop = y + (rowH - help_btn_size) / 2 + 4;
-        controlBottom = controlTop + help_btn_size;
-        pData->reconnectIntervalDropdownRect = { ctrlEndX - ddW_fps - help_btn_size - 2, controlTop, ctrlEndX - help_btn_size, controlBottom };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
-        y += rowH + vGap;
-
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        controlTop = y + (rowH - help_btn_size) / 2 + 4;
-        controlBottom = controlTop + help_btn_size;
-        pData->userSafeDropdownRect = { ctrlEndX - ddW_userSafe - help_btn_size, controlTop, ctrlEndX - help_btn_size, controlBottom };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+    pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+    controlTop = y + (rowH - help_btn_size) / 2 + 4;
+    controlBottom = controlTop + help_btn_size;
+    pData->userSafeDropdownRect = { ctrlEndX - ddW_userSafe - help_btn_size, controlTop, ctrlEndX - help_btn_size, controlBottom };
+    pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -21899,17 +21966,156 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
         }
     }
+    if (renderSettingsSubPrimary) {
+        const int ss_rowH = 32;
+        const int ss_vGap = 10;
+        const int ss_content_y = 31;
+        const int ss_help = 24;
+        int ss_y = ss_content_y;
+        int ss_ctrlEndX = clientRect.right - 20;
+        int ss_ddW = (pData->settingsSubKind == 1) ? 155 : ((pData->settingsSubKind == 3) ? 154 : 156);
+
+        std::vector<RECT> ssRowRects;
+        int ssRowCount = (pData->settingsSubKind == 2) ? 3 : 1;
+
+        for (int r = 0; r < ssRowCount; ++r) {
+            ssRowRects.push_back({ 0, ss_y, clientRect.right, ss_y + ss_rowH + ss_vGap });
+            ss_y += ss_rowH + ss_vGap;
+        }
+        ss_y = ss_content_y;
+
+        pData->settingsSubDropdownRect = { ss_ctrlEndX - ss_ddW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+        pData->settingsSubHelpRects[0] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+        ss_y += ss_rowH + ss_vGap;
+
+        if (pData->settingsSubKind == 2) {
+            const int ss_customW = 156;
+            pData->settingsSubIntervalRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+            pData->settingsSubHelpRects[1] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+            ss_y += ss_rowH + ss_vGap;
+            pData->settingsSubLimitRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+            pData->settingsSubHelpRects[2] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+            ss_y += ss_rowH + ss_vGap;
+        } else {
+            pData->settingsSubIntervalRect = { 0, 0, 0, 0 };
+            pData->settingsSubLimitRect = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[1] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[2] = { 0, 0, 0, 0 };
+        }
+
+        pData->settingsSubOkButtonRect = pData->startButtonRect;
+
+        float ssAnimVal = pData->settingsSubViewAnim;
+        int ssW = clientRect.right;
+        int ssH = clientRect.bottom;
+
+        auto drawSettingsSubContent = [&](Graphics& dg) {
+            {
+                PixelOffsetMode oldOffset = dg.GetPixelOffsetMode();
+                SmoothingMode oldSmooth = dg.GetSmoothingMode();
+                dg.SetPixelOffsetMode(PixelOffsetModeNone);
+                dg.SetSmoothingMode(SmoothingModeNone);
+                SolidBrush sepLineBrush(Color(180, 56, 56, 56));
+                dg.FillRectangle(&sepLineBrush, 0.0f, 30.0f, (REAL)ssW, 1.0f);
+                dg.SetPixelOffsetMode(oldOffset);
+                dg.SetSmoothingMode(oldSmooth);
+            }
+
+            dg.SetSmoothingMode(SmoothingModeNone);
+            dg.SetPixelOffsetMode(PixelOffsetModeHalf);
+            for (size_t i = 0; i < ssRowRects.size(); ++i) {
+                RECT rr = ssRowRects[i];
+                Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+                SolidBrush rowBrush(rowBgColor);
+                dg.FillRectangle(&rowBrush, (REAL)0, (REAL)rr.top, (REAL)ssW, (REAL)(rr.bottom - rr.top));
+                SolidBrush sepBrush(Color(180, 56, 56, 56));
+                {
+                    PixelOffsetMode oldOffset = dg.GetPixelOffsetMode();
+                    SmoothingMode oldSmooth = dg.GetSmoothingMode();
+                    dg.SetPixelOffsetMode(PixelOffsetModeNone);
+                    dg.SetSmoothingMode(SmoothingModeNone);
+                    dg.FillRectangle(&sepBrush, (REAL)0, (REAL)(rr.bottom - 1), (REAL)ssW, 1.0f);
+                    dg.SetPixelOffsetMode(oldOffset);
+                    dg.SetSmoothingMode(oldSmooth);
+                }
+            }
+
+            if (pData->settingsSubKind == 1) {
+                const wchar_t* miNames[] = { L"Minimum (0)", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
+                const int miValues[] = { 0, 1000, 3000, 5000, 10000 };
+                int miIdx = -1;
+                int miCur = g_multiInstanceInterval.load();
+                for (int k = 0; k < 5; ++k) { if (miCur == miValues[k]) { miIdx = k; break; } }
+                wchar_t miCustom[48] = { 0 };
+                const wchar_t* miDisp = (miIdx >= 0) ? miNames[miIdx] : miCustom;
+                if (miIdx < 0) swprintf_s(miCustom, L"Custom (%d ms)", miCur);
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Multi-Instance Delay", miDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE916", true, &dg, 1);
+            } else if (pData->settingsSubKind == 2) {
+                const wchar_t* ssModeNames[] = { L"Time Cycle", L"Smart Clean", L"Hybrid" };
+                int ssModeVal = g_ramCleanerMode.load();
+                if (ssModeVal < 0 || ssModeVal > 2) ssModeVal = 0;
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"RAM Cleaner Mode", ssModeNames[ssModeVal], pData->isHoveringSettingsSubDropdown, true, L"\uE964", true, &dg, 1);
+                wchar_t ssCycleText[48];
+                swprintf_s(ssCycleText, L"%d sec", g_ramCleanerInterval.load());
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubIntervalRect, pData->hFontText, L"Clean Cycle Time", ssCycleText, pData->isHoveringSettingsSubInterval, true, L"\uE787", true, &dg, 1, 0, L"\uE70F");
+                wchar_t ssLimitText[48];
+                swprintf_s(ssLimitText, L"%d MB", g_ramCleanerLimit.load());
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubLimitRect, pData->hFontText, L"RAM Limit", ssLimitText, pData->isHoveringSettingsSubLimit, true, L"\uE950", true, &dg, 1, 0, L"\uE70F");
+            } else {
+                const wchar_t* riLabels[] = { L"Off (main cycle)", L"30 sec", L"1 min", L"2 min", L"5 min", L"10 min" };
+                const int riValues[] = { 0, 30, 60, 120, 300, 600 };
+                int riIdx = -1;
+                int riCur = g_reconnectCheckInterval.load();
+                for (int k = 0; k < 6; ++k) { if (riCur == riValues[k]) { riIdx = k; break; } }
+                wchar_t riCustom[32] = { 0 };
+                const wchar_t* riDisp = (riIdx >= 0) ? riLabels[riIdx] : riCustom;
+                if (riIdx < 0) {
+                    if (riCur < 60) swprintf_s(riCustom, L"%d sec", riCur);
+                    else swprintf_s(riCustom, L"%d min", riCur / 60);
+                }
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Reconnect Interval", riDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE8AF", true, &dg, 1);
+            }
+
+            for (int i = 0; i < 3; ++i) {
+                if (pData->settingsSubHelpRects[i].left != 0) {
+                    MainUI_Paint_DrawHelpButton(hdc, pData->settingsSubHelpRects[i], pData->hFontText, pData->hoveringSettingsSubHelp == i, false, &dg);
+                }
+            }
+        };
+
+        if (ssAnimVal < 1.0f) {
+            Bitmap ssBmp(ssW, ssH);
+            Graphics ssG(&ssBmp);
+            ssG.SetSmoothingMode(g.GetSmoothingMode());
+            ssG.SetPixelOffsetMode(g.GetPixelOffsetMode());
+            ssG.SetTextRenderingHint(g.GetTextRenderingHint());
+            ssG.Clear(Color(0, 0, 0, 0));
+            drawSettingsSubContent(ssG);
+            ColorMatrix sscm = {
+                1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, ssAnimVal, 0.0f,
+                0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+            };
+            ImageAttributes ssia;
+            ssia.SetColorMatrix(&sscm, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
+            g.DrawImage(&ssBmp, Rect(0, 0, ssW, ssH), 0, 0, ssW, ssH, UnitPixel, &ssia);
+        } else {
+            drawSettingsSubContent(g);
+        }
+    }
     if (renderMainPrimary) {
-        if (pData->currentPage == 0) { // General
-        int rowCount = (int)pData->rowRects.size();
-        int rowLeft = 0;
-        int rowRight = clientRect.right;
-        for (int i = 0; i < rowCount; i++) {
-            RECT rr = pData->rowRects[i];
-            Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
-            SolidBrush rowBrush(rowBgColor);
-            g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
-            SolidBrush sepBrush(Color(180, 56, 56, 56));
+    if (pData->currentPage == 0) { // General
+    int rowCount = (int)pData->rowRects.size();
+    int rowLeft = 0;
+    int rowRight = clientRect.right;
+    for (int i = 0; i < rowCount; i++) {
+    RECT rr = pData->rowRects[i];
+    Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+    SolidBrush rowBrush(rowBgColor);
+    g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
+    SolidBrush sepBrush(Color(180, 56, 56, 56));
             {
                 PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
                 SmoothingMode oldSmooth = g.GetSmoothingMode();
@@ -22419,46 +22625,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarContentCompactRect, pData->hFontText, L"\uE713", pData->isHoveringStatusBarContentCompact, L"\uE713", false);
 
-        const wchar_t* miIntervalNames[] = { L"Minimum", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
-        int miIntervalIndex = 0;
-        int miValDisp = g_multiInstanceInterval.load();
-        if (miValDisp == 1000) miIntervalIndex = 1;
-        else if (miValDisp == 3000) miIntervalIndex = 2;
-        else if (miValDisp == 5000) miIntervalIndex = 3;
-        else if (miValDisp == 10000) miIntervalIndex = 4;
-        wchar_t miCustomDisp[48] = { 0 };
-        const wchar_t* miDispText = miIntervalNames[miIntervalIndex];
-        if (miValDisp != 0 && miValDisp != 1000 && miValDisp != 3000 && miValDisp != 5000 && miValDisp != 10000) {
-            swprintf_s(miCustomDisp, L"Custom (%d ms)", miValDisp);
-            miDispText = miCustomDisp;
-        }
-        MainUI_Paint_DrawDropdown(hdc, pData->multiInstanceIntervalDropdownRect, pData->hFontText, L"Multi-Instance Delay", miDispText, pData->isHoveringMultiInstanceInterval, true, L"\uE916", !smAdvanced);
-
         MainUI_Paint_DrawToggle(hdc, pData->customProcessSearchToggleRect, pData->hFontText, L"Custom Process Search", g_useCustomProcessSearch.load(), pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchAnim, true, L"\uE721", !smAdvanced);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->customProcessSearchExcludeRect, pData->hFontText, L"\uE711", g_excludeBuiltinNames.load(), pData->isHoveringCustomProcessSearchExclude, pData->customProcessSearchExcludeAnim, smAdvanced ? false : g_useCustomProcessSearch.load());
         MainUI_Paint_DrawCompactButton(hdc, pData->customProcessSearchSettingsRect, pData->hFontText, L"\uE713", pData->isHoveringCustomProcessSearchSettings, L"\uE713", false, 0, !smAdvanced);
-
-        wchar_t ramCleanerText[64];
-        const wchar_t* modeNames[] = { L"Time Cycle", L"Smart Clean", L"Hybrid" };
-        int modeVal = g_ramCleanerMode.load();
-        if (modeVal < 0 || modeVal > 2) modeVal = 0;
-        swprintf_s(ramCleanerText, L"%s", modeNames[modeVal]);
-        MainUI_Paint_DrawDropdown(hdc, pData->ramCleanerDropdownRect, pData->hFontText, L"RAM Cleaner Mode", ramCleanerText, pData->isHoveringRamCleanerDropdown, true, L"\uE964");
-
-        {
-            const wchar_t* riIntervalLabels[] = { L"Off (main cycle)", L"30 sec", L"1 min", L"2 min", L"5 min", L"10 min" };
-            const int riIntervalValues[] = { 0, 30, 60, 120, 300, 600 };
-            int riIdx = -1;
-            int riCur = g_reconnectCheckInterval.load();
-            for (int k = 0; k < 6; ++k) { if (riCur == riIntervalValues[k]) { riIdx = k; break; } }
-            wchar_t riCustomBuf[32];
-            if (riIdx < 0) {
-                if (riCur < 60) swprintf_s(riCustomBuf, L"%d sec", riCur);
-                else swprintf_s(riCustomBuf, L"%d min", riCur / 60);
-            }
-            const wchar_t* riLabel = (riIdx >= 0) ? riIntervalLabels[riIdx] : riCustomBuf;
-            MainUI_Paint_DrawDropdown(hdc, pData->reconnectIntervalDropdownRect, pData->hFontText, L"Reconnect Interval", riLabel, pData->isHoveringReconnectIntervalDropdown, true, L"\uE8AF");
-        }
 
         const wchar_t* userSafeModeNames[] = { L"Off", L"Legacy", L"Beta" };
         int userSafeIdx = g_userSafeMode.load();
@@ -22537,10 +22706,6 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 if (!h) return;
                 MainUI_Paint_DrawHoverTooltip(hdc, anchor, pData->hFontSmall, smAdvMsg);
             };
-            {
-                RECT a = { pData->multiInstanceIntervalDropdownRect.right - 24, pData->multiInstanceIntervalDropdownRect.top, pData->multiInstanceIntervalDropdownRect.right, pData->multiInstanceIntervalDropdownRect.bottom };
-                drawAdvTt(pData->multiInstanceIntervalDropdownRect, pData->isHoveringMultiInstanceInterval, a);
-            }
             drawAdvTt(pData->customProcessSearchToggleRect, pData->isHoveringCustomProcessSearchToggle, { pData->customProcessSearchToggleRect.right - 50, pData->customProcessSearchToggleRect.top + 4, pData->customProcessSearchToggleRect.right, pData->customProcessSearchToggleRect.top + 28 });
         }
 
@@ -23699,6 +23864,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         auto getDisclaimerText = [&](int ctx) -> const wchar_t* {
             if (ctx >= 100) {
                 if (ctx == 101) return L"Arrange Roblox windows";
+            if (ctx == 107) {
+                if (pData->settingsSubKind == 1) return L"Delay between handling each Roblox window";
+                if (pData->settingsSubKind == 2) return L"Configure RAM Cleaner strategy";
+                return L"Configure Auto Reconnect check interval";
+            }
                 if (ctx == 106) return L"Choose what the Status Bar shows";
                 if (ctx == 102) return L"Configure FPS Capper (CPU Limiter) settings";
                 if (ctx == 104) return L"Live session timings";
@@ -25090,7 +25260,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->importSettingsRect = { 0, bottomY, halfX, bottomY + rowH + 1 };
             pData->exportSettingsRect = { halfX, bottomY, clientRect.right, bottomY + rowH + 1 };
         } else if (pData->currentPage == 3) { // Advanced
-            int ddW_fps = 156, ddW_restore = 161, ddW_mi_interval = 155;
+            int ddW_fps = 156, ddW_restore = 161;
             int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
             int compactW = help_btn_size;
             int inlineGap = 4;
@@ -25114,11 +25284,6 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->restoreMethodDropdownRect = { ctrlEndX - ddW_restore - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
-            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
-            y += rowH + vGap;
-
-            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-            pData->multiInstanceIntervalDropdownRect = { ctrlEndX - ddW_mi_interval - help_btn_size, y + 8, ctrlEndX - help_btn_size, y + rowH };
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
 
@@ -25368,8 +25533,9 @@ return now;
                              pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f ||
                              pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f ||
                              pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f ||
-                             pData->showingTimings || pData->timingsViewAnim > 0.0f ||
-                             pData->showingMacros || pData->macrosViewAnim > 0.0f;
+pData->showingTimings || pData->timingsViewAnim > 0.0f ||
+pData->showingMacros || pData->macrosViewAnim > 0.0f ||
+pData->showingSettingsSub || pData->settingsSubViewAnim > 0.0f;
 
         if (pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f) {
             anyHover |= checkHover(pData->isHoveringFpsCapperSettingsBackIcon, pData->fpsCapperSettingsBackIconRect);
@@ -25521,7 +25687,29 @@ return now;
             }
         }
 
-        if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
+        if (pData->showingSettingsSub || pData->settingsSubViewAnim > 0.0f) {
+anyHover |= checkHover(pData->isHoveringBackIcon, pData->iconButtonRect);
+anyHover |= checkHover(pData->isHoveringSettingsSubOk, pData->startButtonRect);
+anyHover |= checkHover(pData->isHoveringSettingsSubDropdown, pData->settingsSubDropdownRect);
+anyHover |= checkHover(pData->isHoveringSettingsSubInterval, pData->settingsSubIntervalRect);
+anyHover |= checkHover(pData->isHoveringSettingsSubLimit, pData->settingsSubLimitRect);
+
+int newHoveringSettingsSubHelp = -1;
+for (int i = 0; i < 3; ++i) {
+if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
+newHoveringSettingsSubHelp = i;
+break;
+}
+}
+if (newHoveringSettingsSubHelp != pData->hoveringSettingsSubHelp) {
+pData->hoveringSettingsSubHelp = newHoveringSettingsSubHelp;
+InvalidateRect(hwnd, NULL, FALSE);
+anyHover = true;
+}
+anyHover |= (newHoveringSettingsSubHelp != -1);
+}
+
+if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= checkHover(pData->isHoveringBackIcon, pData->gridBackIconRect);
             anyHover |= checkHover(pData->isHoveringGridOkButton, pData->gridOkButtonRect);
             anyHover |= checkToggleHover(pData->isHoveringGridForceSmall, pData->gridForceSmallToggleRect);
@@ -25607,11 +25795,6 @@ return now;
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringRestore, pData->restoreMethodDropdownRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringScreenSaverButton, pData->screenSaverButtonRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringSsAlwaysShow, pData->ssAlwaysShowButtonRect));
-            if (pData->currentPage == 3) {
-                anyHover |= checkHover(pData->isHoveringMultiInstanceInterval, pData->multiInstanceIntervalDropdownRect);
-            }
-            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringRamCleanerDropdown, pData->ramCleanerDropdownRect));
-            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringReconnectIntervalDropdown, pData->reconnectIntervalDropdownRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
@@ -25769,8 +25952,13 @@ return now;
         pData->isHoveringGridSpacingBorders = false;
         pData->isHoveringGridHotkeyChange = false;
         pData->isHoveringGridHotkeyToggle = false;
-        pData->hoveringGridHelpButton = -1;
-        pData->isHoveringDiscord = false;
+pData->hoveringGridHelpButton = -1;
+pData->isHoveringSettingsSubDropdown = false;
+pData->isHoveringSettingsSubInterval = false;
+pData->isHoveringSettingsSubLimit = false;
+pData->isHoveringSettingsSubOk = false;
+pData->hoveringSettingsSubHelp = -1;
+pData->isHoveringDiscord = false;
         pData->isHoveringUpdateBanner = false;
         pData->isHoveringMutexBanner = false;
         pData->isHoveringFpsCapperEdit = false;
@@ -28994,48 +29182,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::RamCleanLimit);
             break;
         }
-        case ID_ADVANCED_RAM_CLEANER:
-        {
-            if (!g_hMainUiWnd || !IsWindow(g_hMainUiWnd)) {
-                ShowMainUIDialog(hwnd);
-            }
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
-                if (pData) {
-                    if (pData->currentPage != 3) {
-                        pData->prevPage = pData->currentPage;
-                        pData->currentPage = 3;
-                        pData->pageTransitionDirection = 1;
-                        pData->pageTransitionAnim = 0.0f;
-                    }
-                    pData->highlightElement = 4;
-                    pData->highlightStartTime = GetTickCount64();
-                    InvalidateRect(g_hMainUiWnd, NULL, FALSE);
-                }
-            }
-            break;
-        }
-        case ID_ADVANCED_RECONNECT:
-        {
-            if (!g_hMainUiWnd || !IsWindow(g_hMainUiWnd)) {
-                ShowMainUIDialog(hwnd);
-            }
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
-                if (pData) {
-                    if (pData->currentPage != 3) {
-                        pData->prevPage = pData->currentPage;
-                        pData->currentPage = 3;
-                        pData->pageTransitionDirection = 1;
-                        pData->pageTransitionAnim = 0.0f;
-                    }
-                    pData->highlightElement = 5;
-                    pData->highlightStartTime = GetTickCount64();
-                    InvalidateRect(g_hMainUiWnd, NULL, FALSE);
-                }
-            }
-            break;
-        }
         case ID_RAM_CLEAN_MODE_DISABLED:
         {
             g_ramCleanerAutoStart = false;
@@ -29211,27 +29357,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
-        case ID_ADVANCED_MULTI_INSTANCE:
-        {
-            if (!g_hMainUiWnd || !IsWindow(g_hMainUiWnd)) {
-                ShowMainUIDialog(hwnd);
-            }
-            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
-                MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
-                if (pData) {
-                    if (pData->currentPage != 3) {
-                        pData->prevPage = pData->currentPage;
-                        pData->currentPage = 3;
-                        pData->pageTransitionDirection = 1;
-                        pData->pageTransitionAnim = 0.0f;
-                    }
-                    pData->highlightElement = 1;
-                    pData->highlightStartTime = GetTickCount64();
-                    InvalidateRect(g_hMainUiWnd, NULL, FALSE);
-                }
-            }
-            break;
-        }
         case ID_ADVANCED_FPS_CAPPER:
         {
             if (!g_hMainUiWnd || !IsWindow(g_hMainUiWnd)) {
