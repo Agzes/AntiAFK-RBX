@@ -6907,9 +6907,28 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         auto pos = s.find("\"" + key + "\": \"");
         if (pos == std::string::npos) return "";
         pos += key.size() + 5;
-        auto end = s.find("\"", pos);
-        if (end == std::string::npos) return "";
-        return s.substr(pos, end - pos);
+        std::string val;
+        while (pos < s.size() && s[pos] != '"') {
+            if (s[pos] == '\\' && pos + 1 < s.size()) {
+                char e = s[pos + 1];
+                switch (e) {
+                    case 'n': val += '\n'; break;
+                    case 't': val += '\t'; break;
+                    case 'r': val += '\r'; break;
+                    case 'b': val += '\b'; break;
+                    case 'f': val += '\f'; break;
+                    case '"': val += '"'; break;
+                    case '\\': val += '\\'; break;
+                    case '/': val += '/'; break;
+                    default: val += e; break;
+                }
+                pos += 2;
+            } else {
+                val += s[pos];
+                pos++;
+            }
+        }
+        return val;
     };
     auto findIntIn = [](const std::string& s, const std::string& key) -> int {
         auto pos = s.find("\"" + key + "\": ");
@@ -6931,6 +6950,7 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
 auto parseMacroJson = [&](const std::string& json) -> Macro {
 Macro m;
 m.name = MacroEngine_Utf8ToWide(findStrIn(json, "name"));
+for (auto& c : m.name) { if (c == L'|' || c == L',' || c == L'{' || c == L'}' || c == L'[' || c == L']') c = L'_'; }
 if (m.name.size() > 63) m.name.resize(63);
         m.triggerOnCooldown = findBoolIn(json, "triggerOnCooldown");
         m.triggerOnReconnect = findBoolIn(json, "triggerOnReconnect");
@@ -7008,6 +7028,28 @@ if (m.name.size() > 63) m.name.resize(63);
                         a.image.width = w;
                         a.image.height = h;
                         a.image.pixels = MacroEngine_Base64Decode(imgStr);
+                    }
+                }
+                size_t pdPos = block.find("\"pathDelays\"");
+                if (pdPos != std::string::npos) {
+                    size_t pdStart = block.find('[', pdPos);
+                    if (pdStart != std::string::npos) {
+                        size_t pdEnd = block.find(']', pdStart);
+                        if (pdEnd != std::string::npos) {
+                            std::string pdStr = block.substr(pdStart + 1, pdEnd - pdStart - 1);
+                            size_t pdCur = 0;
+                            while (pdCur < pdStr.size()) {
+                                size_t pdComma = pdStr.find(',', pdCur);
+                                std::string valStr = (pdComma != std::string::npos) ? pdStr.substr(pdCur, pdComma - pdCur) : pdStr.substr(pdCur);
+                                while (!valStr.empty() && isspace((unsigned char)valStr.front())) valStr.erase(valStr.begin());
+                                while (!valStr.empty() && isspace((unsigned char)valStr.back())) valStr.pop_back();
+                                if (!valStr.empty()) {
+                                    try { a.pathDelays.push_back((uint16_t)std::stoi(valStr)); } catch (...) {}
+                                }
+                                if (pdComma == std::string::npos) break;
+                                pdCur = pdComma + 1;
+                            }
+                        }
                     }
                 }
                 m.actions.push_back(a);
@@ -7381,7 +7423,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                         int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
 
                         if (a.relative && (a.x != 0 || a.y != 0)) {
-                            SetCursorPos(a.x, a.y);
+                            SetCursorPos((int)(int16_t)a.x, (int)(int16_t)a.y);
                         }
 
                         if (a.mouseDown && !MacroEngine_IsMouseButtonDown(a.mouseButton)) {
@@ -7507,8 +7549,9 @@ static bool MacroEngine_TakePendingMoves(std::vector<std::pair<uint16_t, uint16_
     outPath = std::move(g_recordingPendingMoves);
     outDelays = std::move(g_recordingPendingDelays);
     outRelative = g_recordingHasRelativeMoves;
-    outStartX = (uint16_t)g_recordingPendingStartX;
-    outStartY = (uint16_t)g_recordingPendingStartY;
+    auto clampTo16 = [](LONG v) { return (v < -32768) ? -32768 : ((v > 32767) ? 32767 : v); };
+    outStartX = (uint16_t)(int16_t)clampTo16(g_recordingPendingStartX);
+    outStartY = (uint16_t)(int16_t)clampTo16(g_recordingPendingStartY);
     g_recordingHasRelativeMoves = false;
     g_recordingPendingMoves.clear();
     g_recordingPendingDelays.clear();
@@ -8070,7 +8113,8 @@ void MacroEngine_StopRecording() {
         if (!replaced) {
             QueueStatusBarOverlay(L"Original macro was deleted - recording discarded", 2500, nullptr, StatusBarEventType::Macro);
         }
-        MacroEngine_SaveMacros();
+        if (!MacroEngine_SaveMacros())
+            QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, nullptr, StatusBarEventType::Macro);
         g_macroWizardActive = false;
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
@@ -8083,7 +8127,7 @@ void MacroEngine_StopRecording() {
             g_selectedMacroIndex = (int)g_macros.size() - 1;
             g_selectedAction = 4;
         }
-        MacroEngine_SaveMacros();
+        bool macroSaved = MacroEngine_SaveMacros();
         g_macroWizardActive = false;
         if (g_macroWizardHwnd && IsWindow(g_macroWizardHwnd)) {
             PostMessage(g_macroWizardHwnd, WM_CLOSE, 0, 0);
@@ -8092,7 +8136,7 @@ void MacroEngine_StopRecording() {
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
         }
-        QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
+        QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, nullptr, StatusBarEventType::Macro);
     }
     g_macroWizardStep = 3;
 
@@ -12973,6 +13017,7 @@ pos = comma + 1;
             imported.push_back(pr);
         }
         if (!imported.empty()) {
+            if (imported.size() > 32) imported.resize(32);
             std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
             g_instancePresets = std::move(imported);
         }
@@ -13189,6 +13234,17 @@ static bool ImportSettingsFromFile(HWND owner)
         StartActivityMonitor();
     } else {
         StopActivityMonitor();
+    }
+    if (g_isAfkStarted.load() && g_autoReconnect.load()) {
+        StartReconnectMonitor();
+    }
+    if (g_isAfkStarted.load()) {
+        if (g_ramCleanerAutoStart.load()) {
+            if (!g_ramCleanerEnabled.exchange(true))
+                EnsureRamCleanerThreadStarted();
+        } else {
+            g_ramCleanerEnabled = false;
+        }
     }
 
     int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX • Import Settings", MB_YESNO);
@@ -14486,7 +14542,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     }
                 }
                 if (saveNeeded) {
-                    MacroEngine_SaveMacros();
+                    if (!MacroEngine_SaveMacros())
+                        QueueStatusBarOverlay(L"Failed to save macro settings - file locked or corrupt", 3000, hwnd, StatusBarEventType::Macro);
                 }
             }
             HWND owner = GetWindow(hwnd, GW_OWNER);
@@ -19144,11 +19201,12 @@ title = L"CPU Limit %";
                     QueueStatusBarOverlay(L"Macro exported", 1500, hwnd, StatusBarEventType::Macro);
                 }
                 if (needSave) {
-                    MacroEngine_SaveMacros();
+                    if (!MacroEngine_SaveMacros())
+                        QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, hwnd, StatusBarEventType::Macro);
                 }
                 if (deleted) {
-                    MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
+                    bool macroSaved = MacroEngine_SaveMacros();
+                    QueueStatusBarOverlay(macroSaved ? std::wstring(L"Macro deleted") : std::wstring(L"Failed to save macro - file locked or corrupt"), 1500, hwnd, StatusBarEventType::Macro);
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
@@ -19277,11 +19335,11 @@ title = L"CPU Limit %";
                     g_selectedMacroIndex = (int)g_macros.size() - 1;
                     g_selectedAction = 4;
                 }
-                MacroEngine_SaveMacros();
+                bool macroSaved = MacroEngine_SaveMacros();
                 pData->macrosViewMode = 0;
                 g_macroWizardActive = false;
                 InvalidateRect(hwnd, NULL, FALSE);
-                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (PtInRect(&pData->macrosBtnRectBack, pt)) {
@@ -27485,7 +27543,7 @@ void main_thread(bool arg_tray)
                     if (ShouldMuteRobloxNow()) {
                         DWORD wPid = 0;
                         GetWindowThreadProcessId(w, &wPid);
-                        if (wPid > 0) MuteProcessByPid(wPid, true);
+                        if (wPid > 0 && GetWindowInstanceSetting_Mute(w, true)) MuteProcessByPid(wPid, true);
                     }
                     g_randomCyclePick = -1;
                     if (!(g_selectedAction.load() == 4 && perInstanceAction)) {
@@ -29217,9 +29275,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             int oldLimit = g_fpsLimit;
             g_fpsLastActiveLimit = newLimit;
-            if (g_fpsLimit > 0) {
-                g_fpsLimit = newLimit;
-            }
+            g_fpsLimit = newLimit;
 
             if (oldLimit != g_fpsLimit) {
                 RestartFpsCapperForEffectiveLimit();
