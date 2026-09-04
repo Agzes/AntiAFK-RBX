@@ -1008,6 +1008,8 @@ std::set<uint8_t> g_recordingKeysDown;
 int g_recordingRawDeltaX = 0;
 int g_recordingRawDeltaY = 0;
 bool g_recordingHasRelativeMoves = false;
+LONG g_recordingPendingStartX = 0;
+LONG g_recordingPendingStartY = 0;
 bool g_macroWizardActive = false;
 HWND g_macroWizardHwnd = NULL;
 int g_macroWizardStep = 0;
@@ -7366,6 +7368,10 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                         int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
                         int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
 
+                        if (a.relative && (a.x != 0 || a.y != 0)) {
+                            SetCursorPos(a.x, a.y);
+                        }
+
                         if (a.mouseDown && !MacroEngine_IsMouseButtonDown(a.mouseButton)) {
                             switch (a.mouseButton) {
                                 case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
@@ -7380,9 +7386,6 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                         DWORD numPoints = (DWORD)a.path.size();
                         DWORD stepDelay = (numPoints > 0) ? (totalDurationMs / numPoints) : 0;
                         DWORD extraMs = (numPoints > 0) ? (totalDurationMs % numPoints) : 0;
-                        int centerX = hwWr.left + borderX + hwCr.right / 2;
-                        int centerY = hwWr.top + borderY + hwCr.bottom / 2;
-                        int accX = 0, accY = 0;
 
                         for (size_t i = 0; i < numPoints; i++) {
                             if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
@@ -7392,13 +7395,6 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                             const auto& pt = a.path[i];
                             if (a.relative) {
                                 mouse_event(MOUSEEVENTF_MOVE, (int16_t)pt.first, (int16_t)pt.second, 0, 0);
-                                accX += (int16_t)pt.first;
-                                accY += (int16_t)pt.second;
-                                if (accX * accX + accY * accY > 150 * 150) {
-                                    accX = 0;
-                                    accY = 0;
-                                    SetCursorPos(centerX, centerY);
-                                }
                             } else {
                                 int sx = hwWr.left + borderX + pt.first;
                                 int sy = hwWr.top + borderY + pt.second;
@@ -7493,13 +7489,21 @@ static void MacroEngine_FlushRecordingMouseDeltas() {
     g_recordingHasRelativeMoves = true;
 }
 
-static bool MacroEngine_TakePendingMoves(std::vector<std::pair<uint16_t, uint16_t>>& outPath, std::vector<uint16_t>& outDelays, bool& outRelative) {
+static bool MacroEngine_TakePendingMoves(std::vector<std::pair<uint16_t, uint16_t>>& outPath, std::vector<uint16_t>& outDelays, bool& outRelative, uint16_t& outStartX, uint16_t& outStartY) {
     std::lock_guard<std::mutex> lock(g_recordingMovesMutex);
     if (g_recordingPendingMoves.empty()) return false;
     outPath = std::move(g_recordingPendingMoves);
     outDelays = std::move(g_recordingPendingDelays);
     outRelative = g_recordingHasRelativeMoves;
+    outStartX = (uint16_t)g_recordingPendingStartX;
+    outStartY = (uint16_t)g_recordingPendingStartY;
     g_recordingHasRelativeMoves = false;
+    g_recordingPendingMoves.clear();
+    g_recordingPendingDelays.clear();
+    POINT cp = {};
+    GetCursorPos(&cp);
+    g_recordingPendingStartX = cp.x;
+    g_recordingPendingStartY = cp.y;
     return true;
 }
 
@@ -7510,6 +7514,10 @@ static void MacroEngine_ClearPendingMoves() {
     g_recordingHasRelativeMoves = false;
     g_recordingRawDeltaX = 0;
     g_recordingRawDeltaY = 0;
+    POINT cp = {};
+    GetCursorPos(&cp);
+    g_recordingPendingStartX = cp.x;
+    g_recordingPendingStartY = cp.y;
 }
 
 static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -7560,7 +7568,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseDown = wasDown;
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = isRight ? 1 : 0;
-                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                     MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
@@ -7593,7 +7601,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseDown = true;
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = isRight ? 1 : 0;
-                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                     MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
@@ -7620,7 +7628,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 moveAction.mouseDown = g_recordingLeftDown || g_recordingRightDown;
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
-                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                     MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
@@ -7660,7 +7668,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                     moveAction.mouseDown = wasDown;
                     moveAction.mouseUp = false;
                     moveAction.mouseButton = (uint8_t)btn;
-                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                         MacroEngine_PushRecordingAction(moveAction);
                         delay = 0;
                     }
@@ -7686,7 +7694,7 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                     moveAction.mouseDown = true;
                     moveAction.mouseUp = false;
                     moveAction.mouseButton = (uint8_t)btn;
-                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                    if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                         MacroEngine_PushRecordingAction(moveAction);
                         delay = 0;
                     }
@@ -7760,7 +7768,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
                 moveAction.type = MacroStepType::MouseMove;
                 moveAction.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
                 moveAction.relative = false;
-                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                     MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
@@ -7785,7 +7793,7 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
                 moveAction.mouseUp = false;
                 moveAction.mouseButton = g_recordingRightDown ? 1 : 0;
                 moveAction.relative = false;
-                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+                if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
                     MacroEngine_PushRecordingAction(moveAction);
                     delay = 0;
                 }
@@ -8017,7 +8025,7 @@ void MacroEngine_StopRecording() {
         moveAction.type = MacroStepType::MouseMove;
         moveAction.delayBeforeMs = 0;
         moveAction.relative = false;
-        if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative)) {
+        if (MacroEngine_TakePendingMoves(moveAction.path, moveAction.pathDelays, moveAction.relative, moveAction.x, moveAction.y)) {
             MacroEngine_PushRecordingAction(moveAction);
         }
     }
