@@ -27182,9 +27182,7 @@ void main_thread(bool arg_tray)
 
     if (GetEffectiveFpsLimit() > 0) {
         UpdateSplashStatus(L"Starting FPS Capper (CPU Limiter)...");
-        std::lock_guard<std::mutex> lock(g_fpsCapperThreadMutex);
-        if (g_fpsCapperThread.joinable()) g_fpsCapperThread.join();
-        g_fpsCapperThread = std::thread(FpsCapperThread);
+        RestartFpsCapperForEffectiveLimit();
     }
 
     UpdateSplashStatus(L"Starting RAM Cleaner...");
