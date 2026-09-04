@@ -25123,6 +25123,16 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
 
+    case WM_APP_WEBHOOK_TEST_RESULT:
+    {
+        std::wstring* msg = reinterpret_cast<std::wstring*>(wParam);
+        if (msg) {
+            ShowDarkMessageBox(hwnd, msg->c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
+            delete msg;
+        }
+        return 0;
+    }
+
     case WM_APP + 11:
         InvalidateRect(hwnd, NULL, FALSE);
         UpdateWindow(hwnd);
