@@ -363,7 +363,7 @@ std::wstring g_customProcessNames = L"";
 std::mutex g_customProcessNamesMutex;
 bool g_enableMainUiIntroAnimation = false;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false), g_disableSplash(false), g_disableAcrylic(false), g_disableAnimations(false), g_keepWindowOnTop(false), g_disableWindowCorners(false);
 std::atomic<bool> g_statusBarPrimaryMonitor(false);
 std::atomic<bool> g_statusBarPositionBottom(false);
 std::atomic<bool> g_statusBarShowIcon(true);
@@ -1332,13 +1332,40 @@ void EnableAcrylic(HWND hWnd) {
             DWORD acrylicColor = 0x301A1A1A;
 
 
-            ACCENT_POLICY accent = { ACCENT_ENABLE_ACRYLICBLURBEHIND, 0, acrylicColor, 0 };
+            ACCENT_POLICY accent = { g_disableAcrylic.load() ? ACCENT_DISABLED : ACCENT_ENABLE_ACRYLICBLURBEHIND, 0, g_disableAcrylic.load() ? 0 : acrylicColor, 0 };
             WINDOWCOMPOSITIONATTRIBDATA data = { WCA_ACCENT_POLICY, &accent, sizeof(accent) };
             SetWindowCompositionAttribute(hWnd, &data);
         }
     }
-    MARGINS margins = { -1 };
+    MARGINS margins = g_disableAcrylic.load() ? MARGINS{ 0, 0, 0, 0 } : MARGINS{ -1 };
     DwmExtendFrameIntoClientArea(hWnd, &margins);
+}
+void ApplyAcrylicSetting() {
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) EnableAcrylic(g_hMainUiWnd);
+    if (g_hwnd && IsWindow(g_hwnd)) EnableAcrylic(g_hwnd);
+}
+void ApplyWindowOnTopSetting() {
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        SetWindowPos(g_hMainUiWnd, g_keepWindowOnTop.load() ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+static void ApplyWindowCornerPreference(HWND hWnd) {
+    if (!hWnd || !IsWindow(hWnd)) return;
+    enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_DEFAULT = 0, DWMWCP_DONOTROUND = 1, DWMWCP_ROUND = 2, DWMWCP_ROUNDSMALL = 3 };
+    const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    DWM_WINDOW_CORNER_PREFERENCE preference = g_disableWindowCorners.load() ? DWMWCP_DONOTROUND : DWMWCP_ROUND;
+    DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+}
+void ApplyWindowCornersSetting() {
+    ApplyWindowCornerPreference(g_hMainUiWnd);
+}
+static HBRUSH AcrylicBaseBgBrush() {
+    static HBRUSH s_hDark = NULL;
+    if (g_disableAcrylic.load()) {
+        if (!s_hDark) s_hDark = CreateSolidBrush(RGB(18, 18, 18));
+        return s_hDark;
+    }
+    return (HBRUSH)GetStockObject(BLACK_BRUSH);
 }
 void ShowTrayNotification(const wchar_t* title, const wchar_t* msg)
 {
@@ -1788,15 +1815,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->closeButtonRect.right = clientRect.right;
         pData->closeButtonRect.bottom = 32;
 
-        enum DWM_WINDOW_CORNER_PREFERENCE {
-            DWMWCP_DEFAULT = 0,
-            DWMWCP_DONOTROUND = 1,
-            DWMWCP_ROUND = 2,
-            DWMWCP_ROUNDSMALL = 3
-        };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         pData->uTimerId = SetTimer(hwnd, 1, 16, NULL);
 
@@ -2224,15 +2243,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pData->updateButtonRect = { 0, updateBtnY, clientRect.right, updateBtnY + updateHeight };
         pData->topCloseButtonRect = { clientRect.right - 46, 0, clientRect.right, 30 };
 
-        enum DWM_WINDOW_CORNER_PREFERENCE {
-            DWMWCP_DEFAULT = 0,
-            DWMWCP_DONOTROUND = 1,
-            DWMWCP_ROUND = 2,
-            DWMWCP_ROUNDSMALL = 3
-        };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
         pData->hCursorArrow = LoadCursor(NULL, IDC_ARROW);
@@ -2404,7 +2415,7 @@ case WM_NCHITTEST:
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
 
         SetBkMode(memDC, TRANSPARENT);
 
@@ -2509,11 +2520,11 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, cr.right, cr.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
-        FillRect(memDC, &cr, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    FillRect(memDC, &cr, AcrylicBaseBgBrush());
 
-        Graphics g(memDC);
-        g.SetSmoothingMode(SmoothingModeAntiAlias);
-        g.SetPixelOffsetMode(PixelOffsetModeHalf);
+    Graphics g(memDC);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
         Popup_DrawChrome(&g, memDC, cr, d->closeButtonRect, d->hFontText, L"AntiAFK-RBX • Multi-Instance Mutex", d->hCloseX);
@@ -3108,10 +3119,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
         EnableAcrylic(hwnd);
 
-        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
@@ -4017,10 +4025,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, cr.right, cr.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
-        FillRect(memDC, &cr, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        SetBkMode(memDC, TRANSPARENT);
+    FillRect(memDC, &cr, AcrylicBaseBgBrush());
+    SetBkMode(memDC, TRANSPARENT);
 
-        InstanceManager_UpdateLayout(hwnd, pData);
+    InstanceManager_UpdateLayout(hwnd, pData);
 
         {
             Gdiplus::Graphics gfx(memDC);
@@ -7811,15 +7819,7 @@ static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         UpdateStatusBarWindowRegion(hwnd);
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
 
-        enum DWM_WINDOW_CORNER_PREFERENCE {
-            DWMWCP_DEFAULT = 0,
-            DWMWCP_DONOTROUND = 1,
-            DWMWCP_ROUND = 2,
-            DWMWCP_ROUNDSMALL = 3
-        };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         SetTimer(hwnd, 1, 200, NULL);
         SetTimer(hwnd, 2, 16, NULL);
@@ -11116,6 +11116,12 @@ void SaveSettings()
     DWORD autoMute = g_autoMute.load();
     DWORD unmuteOnFocus = g_unmuteOnFocus.load();
     DWORD simpleMode = g_simpleMode.load();
+    DWORD disableSplash = g_disableSplash.load();
+    DWORD disableAcrylic = g_disableAcrylic.load();
+    DWORD disableAnimations = g_disableAnimations.load();
+    DWORD notificationsDisabled = g_notificationsDisabled.load();
+    DWORD keepWindowOnTop = g_keepWindowOnTop.load();
+    DWORD disableWindowCorners = g_disableWindowCorners.load();
     DWORD discordWebhookEnabled = g_discordWebhookEnabled.load();
     DWORD discordNotifyStart = g_discordNotifyStart.load();
     DWORD discordNotifyStop = g_discordNotifyStop.load();
@@ -11237,6 +11243,12 @@ void SaveSettings()
         RegSetValueEx(hKey, L"AutoMute", 0, REG_DWORD, (const BYTE*)&autoMute, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnmuteOnFocus", 0, REG_DWORD, (const BYTE*)&unmuteOnFocus, sizeof(DWORD));
         RegSetValueEx(hKey, L"SimpleMode", 0, REG_DWORD, (const BYTE*)&simpleMode, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DisableSplash", 0, REG_DWORD, (const BYTE*)&disableSplash, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DisableAcrylic", 0, REG_DWORD, (const BYTE*)&disableAcrylic, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DisableAnimations", 0, REG_DWORD, (const BYTE*)&disableAnimations, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DisableNotifications", 0, REG_DWORD, (const BYTE*)&notificationsDisabled, sizeof(DWORD));
+        RegSetValueEx(hKey, L"KeepWindowOnTop", 0, REG_DWORD, (const BYTE*)&keepWindowOnTop, sizeof(DWORD));
+        RegSetValueEx(hKey, L"DisableWindowCorners", 0, REG_DWORD, (const BYTE*)&disableWindowCorners, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordWebhookEnabled", 0, REG_DWORD, (const BYTE*)&discordWebhookEnabled, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordNotifyStart", 0, REG_DWORD, (const BYTE*)&discordNotifyStart, sizeof(DWORD));
         RegSetValueEx(hKey, L"DiscordNotifyStop", 0, REG_DWORD, (const BYTE*)&discordNotifyStop, sizeof(DWORD));
@@ -11380,6 +11392,8 @@ bool LoadSettings()
     DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, statusBarShowIcon = 1, statusBarShowBrand = 1, statusBarEventSession = 1, statusBarEventAction = 1, statusBarEventReconnect = 1, statusBarEventMacro = 1, statusBarEventUi = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
     DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
+    DWORD disableSplash = 0, disableAcrylic = 0, disableAnimations = 0, notificationsDisabled = 0, keepWindowOnTop = 0;
+    DWORD disableWindowCorners = 0;
     DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
     DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordNotifyMacro = 0, discordNotifyIntervalMacros = 0, discordDisableEmbed = 0, discordMentionOnErrors = 0;
     DWORD reconnectCheckInterval = 0;    DWORD gridForceSmall = 0, gridAllMonitors = 0, gridKeepAspectRatio = 1;
@@ -11462,6 +11476,12 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"AutoMute", NULL, NULL, (LPBYTE)&autoMute, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"UnmuteOnFocus", NULL, NULL, (LPBYTE)&unmuteOnFocus, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"SimpleMode", NULL, NULL, (LPBYTE)&simpleMode, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DisableSplash", NULL, NULL, (LPBYTE)&disableSplash, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DisableAcrylic", NULL, NULL, (LPBYTE)&disableAcrylic, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DisableAnimations", NULL, NULL, (LPBYTE)&disableAnimations, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DisableNotifications", NULL, NULL, (LPBYTE)&notificationsDisabled, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"KeepWindowOnTop", NULL, NULL, (LPBYTE)&keepWindowOnTop, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"DisableWindowCorners", NULL, NULL, (LPBYTE)&disableWindowCorners, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordWebhookEnabled", NULL, NULL, (LPBYTE)&discordWebhookEnabled, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordNotifyStart", NULL, NULL, (LPBYTE)&discordNotifyStart, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"DiscordNotifyStop", NULL, NULL, (LPBYTE)&discordNotifyStop, &dataSize); dataSize = sizeof(DWORD);
@@ -11755,6 +11775,12 @@ pos = comma + 1;
     g_autoMute = (autoMute != 0);
     g_unmuteOnFocus = (unmuteOnFocus != 0);
     g_simpleMode = (simpleMode != 0);
+    g_disableSplash = (disableSplash != 0);
+    g_disableAcrylic = (disableAcrylic != 0);
+    g_disableAnimations = (disableAnimations != 0);
+    g_notificationsDisabled = (notificationsDisabled != 0);
+    g_keepWindowOnTop = (keepWindowOnTop != 0);
+    g_disableWindowCorners = (disableWindowCorners != 0);
     g_discordWebhookEnabled = (discordWebhookEnabled != 0);
     g_discordNotifyStart = (discordNotifyStart != 0);
     g_discordNotifyStop = (discordNotifyStop != 0);
@@ -11875,6 +11901,15 @@ void ResetSettings()
     g_autoMute = false;
     g_unmuteOnFocus = false;
     g_simpleMode = false;
+    g_disableSplash = false;
+    g_disableAcrylic = false;
+    g_disableAnimations = false;
+    g_notificationsDisabled = false;
+    g_keepWindowOnTop = false;
+    g_disableWindowCorners = false;
+    ApplyAcrylicSetting();
+    ApplyWindowOnTopSetting();
+    ApplyWindowCornersSetting();
     g_ssAlwaysShowExitUI = false;
     g_hotkeyEnabled = true;
     g_hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
@@ -12102,6 +12137,12 @@ struct SettingsSnapshot {
     int postActionDelay = 55;
     int actionRepeatCount = 3;
     bool ssAlwaysShowExitUI = false;
+    bool disableSplash = false;
+    bool disableAcrylic = false;
+    bool disableAnimations = false;
+    bool disableNotifications = false;
+    bool keepWindowOnTop = false;
+    bool disableWindowCorners = false;
     std::wstring instancePresetsBlob;
 };
 
@@ -12169,6 +12210,12 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.autoMute = g_autoMute.load();
     s.unmuteOnFocus = g_unmuteOnFocus.load();
     s.simpleMode = g_simpleMode.load();
+    s.disableSplash = g_disableSplash.load();
+    s.disableAcrylic = g_disableAcrylic.load();
+    s.disableAnimations = g_disableAnimations.load();
+    s.disableNotifications = g_notificationsDisabled.load();
+    s.keepWindowOnTop = g_keepWindowOnTop.load();
+    s.disableWindowCorners = g_disableWindowCorners.load();
     s.discordWebhookEnabled = g_discordWebhookEnabled.load();
     s.discordNotifyStart = g_discordNotifyStart.load();
     s.discordNotifyStop = g_discordNotifyStop.load();
@@ -12324,6 +12371,12 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"AutoMute", s.autoMute, first);
     AppendJsonBool(ss, L"UnmuteOnFocus", s.unmuteOnFocus, first);
     AppendJsonBool(ss, L"SimpleMode", s.simpleMode, first);
+    AppendJsonBool(ss, L"DisableSplash", s.disableSplash, first);
+    AppendJsonBool(ss, L"DisableAcrylic", s.disableAcrylic, first);
+    AppendJsonBool(ss, L"DisableAnimations", s.disableAnimations, first);
+    AppendJsonBool(ss, L"DisableNotifications", s.disableNotifications, first);
+    AppendJsonBool(ss, L"KeepWindowOnTop", s.keepWindowOnTop, first);
+    AppendJsonBool(ss, L"DisableWindowCorners", s.disableWindowCorners, first);
     AppendJsonBool(ss, L"DiscordWebhookEnabled", s.discordWebhookEnabled, first);
     AppendJsonBool(ss, L"DiscordNotifyStart", s.discordNotifyStart, first);
     AppendJsonBool(ss, L"DiscordNotifyStop", s.discordNotifyStop, first);
@@ -12765,6 +12818,12 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_autoMute = s.autoMute;
     g_unmuteOnFocus = s.unmuteOnFocus;
     g_simpleMode = s.simpleMode;
+    g_disableSplash = s.disableSplash;
+    g_disableAcrylic = s.disableAcrylic;
+    g_disableAnimations = s.disableAnimations;
+    g_notificationsDisabled = s.disableNotifications;
+    g_keepWindowOnTop = s.keepWindowOnTop;
+    g_disableWindowCorners = s.disableWindowCorners;
     g_discordWebhookEnabled = s.discordWebhookEnabled;
     g_discordNotifyStart = s.discordNotifyStart;
     g_discordNotifyStop = s.discordNotifyStop;
@@ -13013,6 +13072,12 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"AutoMute", s.autoMute);
     ParseJsonBool(json, L"UnmuteOnFocus", s.unmuteOnFocus);
     ParseJsonBool(json, L"SimpleMode", s.simpleMode);
+    ParseJsonBool(json, L"DisableSplash", s.disableSplash);
+    ParseJsonBool(json, L"DisableAcrylic", s.disableAcrylic);
+    ParseJsonBool(json, L"DisableAnimations", s.disableAnimations);
+    ParseJsonBool(json, L"DisableNotifications", s.disableNotifications);
+    ParseJsonBool(json, L"KeepWindowOnTop", s.keepWindowOnTop);
+    ParseJsonBool(json, L"DisableWindowCorners", s.disableWindowCorners);
     ParseJsonBool(json, L"DiscordWebhookEnabled", s.discordWebhookEnabled);
     ParseJsonBool(json, L"DiscordNotifyStart", s.discordNotifyStart);
     ParseJsonBool(json, L"DiscordNotifyStop", s.discordNotifyStop);
@@ -13809,10 +13874,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
         EnableAcrylic(hwnd);
 
-        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
@@ -14647,6 +14709,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+        if (g_disableAcrylic.load()) {
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
+        }
 
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -15131,10 +15196,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
 
         EnableAcrylic(hwnd);
-        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
@@ -15335,6 +15397,9 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+        if (g_disableAcrylic.load()) {
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
+        }
 
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -15596,10 +15661,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
         EnableAcrylic(hwnd);
 
-        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         HDC screen = GetDC(NULL);
         int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
@@ -15764,7 +15826,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
 
-        FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
         SetBkMode(memDC, TRANSPARENT);
 
         const int dlgW = clientRect.right;
@@ -16114,16 +16176,9 @@ void ShowMainUIDialog(HWND owner)
 
     if (g_hMainUiWnd)
     {
-        enum DWM_WINDOW_CORNER_PREFERENCE {
-            DWMWCP_DEFAULT = 0,
-            DWMWCP_DONOTROUND = 1,
-            DWMWCP_ROUND = 2,
-            DWMWCP_ROUNDSMALL = 3
-        };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(g_hMainUiWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(g_hMainUiWnd);
         EnableAcrylic(g_hMainUiWnd);
+        ApplyWindowOnTopSetting();
         ShowWindow(g_hMainUiWnd, SW_SHOW);
         UpdateWindow(g_hMainUiWnd);
         if (g_enableMainUiIntroAnimation) {
@@ -16209,6 +16264,11 @@ struct MainUIData {
     RECT restoreMethodDropdownRect = { 0 };
     RECT actionDelaysRowRect = { 0 };
     RECT actionDelaysEditButtonRect = { 0 };
+    RECT uiSettingsRowRect = { 0 };
+    RECT uiSettingsBtnRect = { 0 };
+    RECT settingsSubToggleRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+    bool isHoveringSettingsSubToggle[6] = { false, false, false, false, false, false };
+    float settingsSubToggleAnims[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
     RECT screenSaverRowRect = { 0 };
     RECT screenSaverButtonRect = { 0 };
     RECT ssAlwaysShowButtonRect = { 0 };
@@ -16305,6 +16365,7 @@ struct MainUIData {
     bool isHoveringMacrosOkButton = false;
     bool isHoveringInstanceManager = false;
     bool isHoveringActionDelaysEdit = false;
+bool isHoveringUiSettings = false;
     bool isHoveringResetAllCompact = false;
     bool isHoveringShowRobloxCompact = false;
     bool isHoveringHideRobloxCompact = false;
@@ -16463,7 +16524,7 @@ RECT settingsSubDropdownRect = { 0 };
 RECT settingsSubOkButtonRect = { 0 };
 RECT settingsSubIntervalRect = { 0 };
 RECT settingsSubLimitRect = { 0 };
-RECT settingsSubHelpRects[3] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
     int gridSettingsViewDirection = 0;
     bool isHoveringBackIcon = false;
     bool isHoveringGridForceSmall = false;
@@ -17607,15 +17668,7 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         UpdateStatusBarWindowRegion(hwnd);
         SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
 
-        enum DWM_WINDOW_CORNER_PREFERENCE {
-            DWMWCP_DEFAULT = 0,
-            DWMWCP_DONOTROUND = 1,
-            DWMWCP_ROUND = 2,
-            DWMWCP_ROUNDSMALL = 3
-        };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
         return 0;
     }
     case WM_ERASEBKGND:
@@ -19243,7 +19296,7 @@ title = L"CPU Limit %";
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 6; ++i) {
             if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
                 const wchar_t* title = L"Help";
                 const wchar_t* text = L"No help text available for this setting.";
@@ -19257,9 +19310,33 @@ title = L"CPU Limit %";
                 } else if (pData->settingsSubKind == 3) {
                     title = L"Reconnect Interval";
                     text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus.";
+                } else if (pData->settingsSubKind == 4) {
+                    if (i == 0) { title = L"Disable Splash-Screen"; text = L"Skips the animated loading window (and the MainUI startup overlay) when AntiAFK-RBX starts.\n\nThe app still finishes all startup tasks in the background. Turn this off to see loading progress again."; }
+                    else if (i == 1) { title = L"Disable Acrylic Blur"; text = L"Replaces the blurred acrylic window background with a solid dark one (applied immediately).\n\nBlur can hurt readability on busy desktops and costs a little GPU compositing on some setups."; }
+                    else if (i == 2) { title = L"Disable UI Animations"; text = L"Makes all interface transitions instant: page switches, sub-window open/close, toggle knobs and fades.\n\nRecommended on slow machines or if you prefer zero-movement UI."; }
+                    else if (i == 3) { title = L"Disable Tray Notifications"; text = L"Hides balloon notifications shown near the tray icon (start/stop, errors, update found).\n\nThe Status Bar overlay and Discord webhooks are not affected and stay independent."; }
+                    else if (i == 4) { title = L"Keep Window On Top"; text = L"Places the main window above all other windows so it stays visible while you work or game.\n\nCan be toggled at any time; takes effect immediately."; }
+                    else if (i == 5) { title = L"Disable Rounded Corners"; text = L"Draws windows with square corners instead of the rounded Windows 11 style.\n\nApplies to the main window and dialogs; takes effect immediately."; }
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
+            }
+        }
+        if (pData->settingsSubKind == 4) {
+            for (int i = 0; i < 6; ++i) {
+                if (PtInRect(&pData->settingsSubToggleRects[i], pt)) {
+                    bool target = false;
+                    if (i == 0) { g_disableSplash = !g_disableSplash.load(); target = g_disableSplash.load(); }
+                    else if (i == 1) { g_disableAcrylic = !g_disableAcrylic.load(); target = g_disableAcrylic.load(); ApplyAcrylicSetting(); }
+                    else if (i == 2) { g_disableAnimations = !g_disableAnimations.load(); target = g_disableAnimations.load(); }
+                    else if (i == 3) { g_notificationsDisabled = !g_notificationsDisabled.load(); target = g_notificationsDisabled.load(); }
+                    else if (i == 4) { g_keepWindowOnTop = !g_keepWindowOnTop.load(); target = g_keepWindowOnTop.load(); ApplyWindowOnTopSetting(); }
+                    else { g_disableWindowCorners = !g_disableWindowCorners.load(); target = g_disableWindowCorners.load(); ApplyWindowCornersSetting(); }
+                    pData->settingsSubToggleAnims[i] = target ? 0.0f : 1.0f;
+                    SaveSettings();
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return;
+                }
             }
         }
         if (pData->settingsSubKind == 1 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
@@ -19706,11 +19783,12 @@ title = L"CPU Limit %";
                 if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
                 if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
             } else if (pData->currentPage == 3) { // Advanced
-                if (i == 0) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
-                if (i == 1) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
-                if (i == 2) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
-                if (i == 3) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
-                if (i == 4) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
+                if (i == 0) { title = L"User Interface"; text = L"Interface preferences that don't affect Anti-AFK behaviour.\n\n- Disable Splash-Screen: skip the startup loading window.\n- Disable Acrylic Blur: solid window background instead of the acrylic blur effect (applied immediately).\n- Disable UI Animations: all interface transitions become instant.\n- Disable Tray Notifications: no balloon tips near the tray icon.\n- Keep Window On Top: keep the main window above all other windows.\n- Disable Rounded Corners: square window corners instead of the rounded Windows 11 style."; }
+                if (i == 1) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
+                if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
+                if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
+                if (i == 4) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
+                if (i == 5) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
             } else if (pData->currentPage == 5) { // Discord
                 if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."; }
                 if (i == 1) { title = L"Start / Stop"; text = L"Notifies Discord when Anti-AFK starts and stops.\n\nGood for basic remote monitoring - 2 messages per session, no spam."; }
@@ -19999,6 +20077,18 @@ title = L"CPU Limit %";
     }
 
     if (pData->currentPage == 3) {
+        if (PtInRect(&pData->uiSettingsBtnRect, pt)) {
+            pData->settingsSubKind = 4;
+            pData->showingSettingsSub = false;
+            pData->settingsSubViewDirection = 1;
+            pData->settingsSubViewAnim = 0.0f;
+            {
+                const bool uiSnapValues[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
+                for (int k = 0; k < 6; ++k) pData->settingsSubToggleAnims[k] = uiSnapValues[k] ? 1.0f : 0.0f;
+            }
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
         if (PtInRect(&pData->userSafeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
             AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
@@ -20231,6 +20321,7 @@ static inline float MainUI_AnimFrameScale(float dtMs)
 
 static inline float MainUI_AnimFactor(float dtMs, float baseRate)
 {
+    if (g_disableAnimations.load()) return 1.0f;
     float s = MainUI_AnimFrameScale(dtMs);
     if (s < 0.0f) s = 0.0f;
     if (s > 4.0f) s = 4.0f;
@@ -20323,6 +20414,13 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
         settingsSubAnim = pData->settingsSubViewAnim;
         wasShowingSettingsSub = pData->showingSettingsSub;
+    }
+
+    if (wasShowingSettingsSub || pData->settingsSubViewAnim > 0.0f) {
+        if (pData->settingsSubKind == 4) {
+            const bool uiToggleStates[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
+            for (int i = 0; i < 6; ++i) animateToggle(pData->settingsSubToggleAnims[i], uiToggleStates[i]);
+        }
     }
 
     bool wasShowingStatusBarSettings = pData->showingStatusBarSettings;
@@ -20572,7 +20670,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
     RECT topBarRect = { 0, 0, clientRect.right, 30 };
 
-    SolidBrush mainBgBrush(Color(100, 10, 10, 10));
+    SolidBrush mainBgBrush(Color(g_disableAcrylic.load() ? (BYTE)255 : (BYTE)100, 18, 18, 18));
     g.FillRectangle(&mainBgBrush, (REAL)clientRect.left, (REAL)clientRect.top, (REAL)(clientRect.right - clientRect.left), (REAL)(clientRect.bottom - clientRect.top));
 
     pData->gridBackIconRect = pData->iconButtonRect;
@@ -20670,6 +20768,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             if (pData->settingsSubKind == 1) settingsSubTitle = L"AntiAFK-RBX • Multi-Instance Delay";
             else if (pData->settingsSubKind == 2) settingsSubTitle = L"AntiAFK-RBX • RAM Cleaner";
             else if (pData->settingsSubKind == 3) settingsSubTitle = L"AntiAFK-RBX • Reconnect Interval";
+            else if (pData->settingsSubKind == 4) settingsSubTitle = L"AntiAFK-RBX • User Interface";
             SolidBrush textBrushSub(Color((BYTE)(255 * settingsSubAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(settingsSubTitle, -1, &gdiFont, titleRect, &sf, &textBrushSub);
         }
@@ -21074,6 +21173,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         int compactW = help_btn_size;
         int inlineGap = 4;
         int controlTop, controlBottom, toggleSwitchLeft;
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        pData->uiSettingsRowRect = { 0, y, clientRect.right, y + rowH + vGap };
+        pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - 58, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
+        pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         controlTop = y + (rowH - help_btn_size) / 2 + 4;
@@ -21976,7 +22081,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         int ss_ddW = (pData->settingsSubKind == 1) ? 155 : ((pData->settingsSubKind == 3) ? 154 : 156);
 
         std::vector<RECT> ssRowRects;
-        int ssRowCount = (pData->settingsSubKind == 2) ? 3 : 1;
+        int ssRowCount = (pData->settingsSubKind == 2) ? 3 : ((pData->settingsSubKind == 4) ? 6 : 1);
 
         for (int r = 0; r < ssRowCount; ++r) {
             ssRowRects.push_back({ 0, ss_y, clientRect.right, ss_y + ss_rowH + ss_vGap });
@@ -21984,23 +22089,42 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
         ss_y = ss_content_y;
 
-        pData->settingsSubDropdownRect = { ss_ctrlEndX - ss_ddW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
-        pData->settingsSubHelpRects[0] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
-        ss_y += ss_rowH + ss_vGap;
-
-        if (pData->settingsSubKind == 2) {
-            const int ss_customW = 156;
-            pData->settingsSubIntervalRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
-            pData->settingsSubHelpRects[1] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+        if (pData->settingsSubKind == 4) {
+            pData->settingsSubDropdownRect = { 0, 0, 0, 0 };
+            pData->settingsSubIntervalRect = { 0, 0, 0, 0 };
+            pData->settingsSubLimitRect = { 0, 0, 0, 0 };
+            for (int r = 0; r < 6; ++r) {
+                pData->settingsSubToggleRects[r] = { 20, ss_y, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+                pData->settingsSubHelpRects[r] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+                ss_y += ss_rowH + ss_vGap;
+            }
+        } else if (pData->settingsSubKind == 2) {
+            pData->settingsSubDropdownRect = { ss_ctrlEndX - ss_ddW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+            pData->settingsSubHelpRects[0] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
             ss_y += ss_rowH + ss_vGap;
-            pData->settingsSubLimitRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
-            pData->settingsSubHelpRects[2] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
-            ss_y += ss_rowH + ss_vGap;
+            {
+                const int ss_customW = 156;
+                pData->settingsSubIntervalRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+                pData->settingsSubHelpRects[1] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+                ss_y += ss_rowH + ss_vGap;
+                pData->settingsSubLimitRect = { ss_ctrlEndX - ss_customW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+                pData->settingsSubHelpRects[2] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+                ss_y += ss_rowH + ss_vGap;
+            }
+            pData->settingsSubHelpRects[3] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[4] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[5] = { 0, 0, 0, 0 };
         } else {
+            pData->settingsSubDropdownRect = { ss_ctrlEndX - ss_ddW - ss_help, ss_y + 8, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
+            pData->settingsSubHelpRects[0] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
+            ss_y += ss_rowH + ss_vGap;
             pData->settingsSubIntervalRect = { 0, 0, 0, 0 };
             pData->settingsSubLimitRect = { 0, 0, 0, 0 };
             pData->settingsSubHelpRects[1] = { 0, 0, 0, 0 };
             pData->settingsSubHelpRects[2] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[3] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[4] = { 0, 0, 0, 0 };
+            pData->settingsSubHelpRects[5] = { 0, 0, 0, 0 };
         }
 
         pData->settingsSubOkButtonRect = pData->startButtonRect;
@@ -22061,7 +22185,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 wchar_t ssLimitText[48];
                 swprintf_s(ssLimitText, L"%d MB", g_ramCleanerLimit.load());
                 MainUI_Paint_DrawDropdown(hdc, pData->settingsSubLimitRect, pData->hFontText, L"RAM Limit", ssLimitText, pData->isHoveringSettingsSubLimit, true, L"\uE950", true, &dg, 1, 0, L"\uE70F");
-            } else {
+            } else if (pData->settingsSubKind == 3) {
                 const wchar_t* riLabels[] = { L"Off (main cycle)", L"30 sec", L"1 min", L"2 min", L"5 min", L"10 min" };
                 const int riValues[] = { 0, 30, 60, 120, 300, 600 };
                 int riIdx = -1;
@@ -22074,9 +22198,16 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     else swprintf_s(riCustom, L"%d min", riCur / 60);
                 }
                 MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Reconnect Interval", riDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE8AF", true, &dg, 1);
+            } else if (pData->settingsSubKind == 4) {
+                const wchar_t* uiLabels[6] = { L"Disable Splash-Screen", L"Disable Acrylic Blur", L"Disable UI Animations", L"Disable Tray Notifications", L"Keep Window On Top", L"Disable Rounded Corners" };
+                const wchar_t* uiIcons[6] = { L"\uE823", L"\uE727", L"\uE916", L"\uEA8F", L"\uE718", L"\uE72E" };
+                const bool uiValues[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
+                for (int k = 0; k < 6; ++k) {
+                    MainUI_Paint_DrawToggle(hdc, pData->settingsSubToggleRects[k], pData->hFontText, uiLabels[k], uiValues[k], pData->isHoveringSettingsSubToggle[k], pData->settingsSubToggleAnims[k], false, uiIcons[k], true, &dg);
+                }
             }
 
-            for (int i = 0; i < 3; ++i) {
+            for (int i = 0; i < 6; ++i) {
                 if (pData->settingsSubHelpRects[i].left != 0) {
                     MainUI_Paint_DrawHelpButton(hdc, pData->settingsSubHelpRects[i], pData->hFontText, pData->hoveringSettingsSubHelp == i, false, &dg);
                 }
@@ -22620,6 +22751,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         bool smAdvanced = g_simpleMode.load();
+        MainUI_Paint_DrawListActionRow(hdc, pData->uiSettingsRowRect, pData->hFontText, L"User Interface", false, pData->isHoveringUiSettings, L"\uE713", false, &pData->uiSettingsBtnRect, L"open", true);
         MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true, 1, 1);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
@@ -22683,6 +22815,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
         if (pData->isHoveringActionDelaysEdit) {
             MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysEditButtonRect, pData->hFontSmall, g_simpleMode.load() ? L"Simple Mode is on • disable it to use this setting" : L"Configure custom key hold, action intervals and repetition count", false);
+        }
+        if (pData->isHoveringUiSettings) {
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->uiSettingsBtnRect, pData->hFontSmall, L"Open User Interface settings", false);
         }
         if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, L"Click to change hotkey", false);
         if (pData->isHoveringCustomProcessSearchExclude) {
@@ -23867,6 +24002,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             if (ctx == 107) {
                 if (pData->settingsSubKind == 1) return L"Delay between handling each Roblox window";
                 if (pData->settingsSubKind == 2) return L"Configure RAM Cleaner strategy";
+                if (pData->settingsSubKind == 4) return L"Customize interface preferences";
                 return L"Configure Auto Reconnect check interval";
             }
                 if (ctx == 106) return L"Choose what the Status Bar shows";
@@ -25267,6 +25403,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             int controlTop, controlBottom, toggleSwitchLeft;
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            pData->uiSettingsRowRect = { 0, y, clientRect.right, y + rowH + vGap };
+            pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - 58, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
+            pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->bloxstrapIntegrationToggleRect = { ctrlStartX, y, ctrlStartX + ctrlW, y + rowH };
             pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
@@ -25693,9 +25835,14 @@ anyHover |= checkHover(pData->isHoveringSettingsSubOk, pData->startButtonRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubDropdown, pData->settingsSubDropdownRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubInterval, pData->settingsSubIntervalRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubLimit, pData->settingsSubLimitRect);
+if (pData->settingsSubKind == 4) {
+for (int i = 0; i < 6; ++i) {
+anyHover |= checkToggleHover(pData->isHoveringSettingsSubToggle[i], pData->settingsSubToggleRects[i]);
+}
+}
 
 int newHoveringSettingsSubHelp = -1;
-for (int i = 0; i < 3; ++i) {
+for (int i = 0; i < 6; ++i) {
 if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
 newHoveringSettingsSubHelp = i;
 break;
@@ -25796,6 +25943,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringScreenSaverButton, pData->screenSaverButtonRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringSsAlwaysShow, pData->ssAlwaysShowButtonRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUiSettings, pData->uiSettingsBtnRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringSimpleModeToggle, pData->simpleModeToggleRect));
@@ -25958,6 +26106,7 @@ pData->isHoveringSettingsSubInterval = false;
 pData->isHoveringSettingsSubLimit = false;
 pData->isHoveringSettingsSubOk = false;
 pData->hoveringSettingsSubHelp = -1;
+for (int i = 0; i < 6; ++i) { pData->isHoveringSettingsSubToggle[i] = false; }
 pData->isHoveringDiscord = false;
         pData->isHoveringUpdateBanner = false;
         pData->isHoveringMutexBanner = false;
@@ -26358,7 +26507,7 @@ pData->isHoveringDiscord = false;
             HDC prevDC = CreateCompatibleDC(memDC);
             HBITMAP prevBmp = CreateCompatibleBitmap(memDC, clientRect.right, clientRect.bottom);
             HGDIOBJ oldPrevBmp = SelectObject(prevDC, prevBmp);
-            FillRect(prevDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            FillRect(prevDC, &clientRect, AcrylicBaseBgBrush());
             SetBkMode(prevDC, TRANSPARENT);
 
             static MainUIData* prevScratch = nullptr;
@@ -26384,7 +26533,7 @@ pData->isHoveringDiscord = false;
             DeleteObject(prevBmp);
             DeleteDC(prevDC);
         } else {
-            FillRect(memDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
             SetBkMode(memDC, TRANSPARENT);
             if (MainUI_Paint_DrawContent(memDC, clientRect, pData)) {
                 needsRedraw = true;
@@ -26520,10 +26669,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
 
         EnableAcrylic(hwnd);
-        enum DWM_WINDOW_CORNER_PREFERENCE { DWMWCP_ROUND = 2 };
-        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        ApplyWindowCornerPreference(hwnd);
 
         LPCREATESTRUCT lpcs = (LPCREATESTRUCT)lParam;
         pData->params = (DarkMessageBoxParams*)lpcs->lpCreateParams;
@@ -26754,6 +26900,9 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBMP = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
         HGDIOBJ oldBMP = SelectObject(memDC, memBMP);
+        if (g_disableAcrylic.load()) {
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
+        }
 
         Graphics g(memDC);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -29265,6 +29414,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (ImportSettingsFromFile(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd)) {
                 CreateTrayMenu(g_isAfkStarted.load());
                 UpdateTrayIcon();
+                ApplyAcrylicSetting();
+                ApplyWindowOnTopSetting();
+                ApplyWindowCornersSetting();
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
@@ -30015,8 +30167,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started via CLI.", false);
     }
 
-    const bool useMainUiStartupOverlay = !arg_noSplash && !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
-    if (!arg_noSplash && g_firstWelcomeShown.load() && !g_useLegacyUi.load() && !useMainUiStartupOverlay) {
+    const bool noSplash = arg_noSplash || g_disableSplash.load();
+    const bool useMainUiStartupOverlay = !noSplash && !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
+    if (!noSplash && g_firstWelcomeShown.load() && !g_useLegacyUi.load() && !useMainUiStartupOverlay) {
         CreateSplashScreen(hInstance);
     }
 
@@ -30024,7 +30177,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     g_hwnd = CreateWindowEx(0, CLASS_NAME, L"AntiAFK-RBX", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
 
-    if (g_useLegacyUi.load() && !arg_tray && !arg_noSplash && g_firstWelcomeShown.load()) {
+    if (g_useLegacyUi.load() && !arg_tray && !noSplash && g_firstWelcomeShown.load()) {
         ShowTrayNotification(L"AntiAFK-RBX • Legacy Mode", L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure.");
     }
 
@@ -30058,6 +30211,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     ShowWindow(g_hwnd, SW_HIDE);
     if (useMainUiStartupOverlay) {
         g_useMainUiStartupOverlay = true;
+        ShowMainUIDialog(g_hwnd);
+    } else if (g_disableSplash.load() && !arg_noSplash && !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load()) {
         ShowMainUIDialog(g_hwnd);
     }
 
