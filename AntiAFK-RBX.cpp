@@ -1,4 +1,4 @@
-﻿// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
+// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 #define ALPHA   1
@@ -11067,16 +11067,17 @@ void WebhookWorkerThread()
             if (g_webhookQueue.empty()) continue;
             item = std::move(g_webhookQueue.front());
             g_webhookQueue.pop();
+            g_webhookBusy = true;
         }
         webhookUrl = GetDiscordWebhookUrlCopy();
         if (IsDiscordWebhookUrl(webhookUrl)) {
-            g_webhookBusy = true;
             try {
                 SendDiscordWebhookRequest(webhookUrl, item.first, item.second, nullptr, nullptr);
             } catch (...) {
             }
-            g_webhookBusy = false;
         }
+        g_webhookBusy = false;
+        g_webhookCv.notify_all();
     }
 }
 
@@ -30354,10 +30355,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         g_webhookCv.notify_all();
     }
     if (g_webhookThread.joinable()) {
-        for (int i = 0; i < 30 && g_webhookBusy.load(); ++i) {
-            Sleep(100);
+        bool webhookIdle;
+        {
+            std::unique_lock<std::mutex> lock(g_discordWebhookMutex);
+            webhookIdle = g_webhookCv.wait_for(lock, std::chrono::seconds(3), [] { return !g_webhookBusy.load(); });
         }
-        g_webhookThread.join();
+        if (webhookIdle)
+            g_webhookThread.join();
+        else
+            g_webhookThread.detach();
     }
 
     g_reconnectMonitorRunning = false;
