@@ -1405,6 +1405,7 @@ struct SplashData {
     bool isHoveringClose = false;
     bool isTrackingMouse = false;
     UINT_PTR uTimerId = 0;
+    ULONGLONG autoCloseTick = 0;
 };
 void DrawSharedCloseButton(Graphics* g, const RECT& closeButtonRect, bool isHovering) {
     if (isHovering) {
@@ -1819,6 +1820,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         ApplyWindowCornerPreference(hwnd);
 
         pData->uTimerId = SetTimer(hwnd, 1, 16, NULL);
+        pData->autoCloseTick = GetTickCount64() + 12000;
 
         return 0;
     }
@@ -1840,6 +1842,11 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     case WM_TIMER:
         if (pData && wParam == pData->uTimerId && IsWindowVisible(hwnd) && !IsIconic(hwnd))
         {
+            if (pData->autoCloseTick != 0 && GetTickCount64() >= pData->autoCloseTick) {
+                pData->autoCloseTick = 0;
+                PostMessage(hwnd, WM_APP + 2, 0, 0);
+                return 0;
+            }
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
@@ -5103,6 +5110,7 @@ void GridSnapRobloxWindows()
 
     auto isGridCandidate = [forceSmall](HWND w) -> bool {
         if (!IsWindow(w)) return false;
+        if (IsHungAppWindow(w)) return false;
         if (GetWindow(w, GW_OWNER) != NULL) return false;
 
         LONG exStyle = GetWindowLong(w, GWL_EXSTYLE);
@@ -5139,6 +5147,10 @@ void GridSnapRobloxWindows()
 
         if (IsIconic(w)) {
             ShowWindow(w, SW_RESTORE);
+            Sleep(80);
+        } else if (IsZoomed(w)) {
+            ShowWindow(w, SW_RESTORE);
+            Sleep(80);
         } else if (!IsWindowVisible(w)) {
             ShowWindow(w, SW_SHOWNOACTIVATE);
         }
@@ -5530,7 +5542,7 @@ void GridSnapRobloxWindows()
     }
 
     for (HWND w : wins) {
-        if (!IsWindow(w)) continue;
+        if (!IsWindow(w) || IsHungAppWindow(w)) continue;
         BringWindowToTop(w);
         SetForegroundWindow(w);
         Sleep(25);
@@ -16445,9 +16457,10 @@ bool isHoveringUiSettings = false;
     HICON hIcon = NULL;
     HICON hSplashLogoIcon = NULL;
     Bitmap* pSplashLogoBitmap = NULL;
-    bool startupOverlayVisible = false;
-    float startupOverlayAlpha = 0.0f;
-    int startupOverlayFadeDirection = 0;
+bool startupOverlayVisible = false;
+float startupOverlayAlpha = 0.0f;
+int startupOverlayFadeDirection = 0;
+ULONGLONG startupOverlayShownTick = 0;
     float badgeRevealAnim = 0.0f;
     int badgeRevealDirection = 0;
     float multiInstanceAnim = 0.0f;
@@ -25013,6 +25026,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->startupOverlayVisible = g_useMainUiStartupOverlay.exchange(false);
         pData->startupOverlayAlpha = pData->startupOverlayVisible ? 1.0f : 0.0f;
         pData->startupOverlayFadeDirection = 0;
+        pData->startupOverlayShownTick = pData->startupOverlayVisible ? GetTickCount64() : 0;
         pData->badgeRevealAnim = 1.0f;
         pData->badgeRevealDirection = 0;
 
@@ -26377,6 +26391,10 @@ pData->isHoveringDiscord = false;
 
 
         needsRedraw = needsRedraw || (pData->errorAnimationDirection != 0) || (pData->stateChangeDirection != 0);
+        if (pData->startupOverlayVisible && pData->startupOverlayFadeDirection == 0 &&
+            pData->startupOverlayShownTick != 0 && GetTickCount64() - pData->startupOverlayShownTick > 15000) {
+            pData->startupOverlayFadeDirection = -1;
+        }
         if (pData->startupOverlayVisible) {
             if (pData->startupOverlayFadeDirection < 0) {
                 pData->startupOverlayAlpha -= 2.4f * animDtSec;
