@@ -1,33 +1,86 @@
-# How do I compile a C++ application in Visual Studio?
+<a href="https://github.com/Agzes/AntiAFK-RBX/wiki/"><kbd><- Go to Wiki</kbd></a>
 
-> [!NOTE]
-> Since version **v.3.2.0**, the repository includes a Visual Studio Solution (`.sln`) file. You no longer need to manually create a project and copy code.
+<div align="center">
+    <h1>AntiAFK-RBX • How To Compile?</h1>
+</div>
 
-## Step 1: Download and install Visual Studio
+## Overview
 
-1. Go to [Visual Studio official website](https://visualstudio.microsoft.com/downloads/).
-2. Select the version of Visual Studio (for example, **Community**) and click **Download**.
-3. Run the installer and select the workload **Development of classic applications in C++**. Make sure that you have installed the necessary components.
-4. Complete the installation and open Visual Studio.
+AntiAFK-RBX is a native Win32 application written in **one C++ file** (`AntiAFK-RBX.cpp`) with plain WinAPI + GDI+. There are **no third-party libraries, no package managers, no external dependencies** - everything needed ships with Visual Studio. Since **v3.2.0** the repository includes a ready-to-build Visual Studio solution.
 
-## Step 2: Get the source code
+```mermaid
+flowchart LR
+    A["git clone"] --> B["open AntiAFK-RBX.sln"]
+    B --> C["select Release | x64"]
+    C --> D["Build Solution<br/>(Ctrl+Shift+B)"]
+    D --> E["x64\Release\AntiAFK-RBX.exe"]
+    F["GitHub Actions"] -.->|"same msbuild command,<br/>artifact in Actions tab"| E
+```
 
-There are several ways to get the project files:
+## Requirements
 
-*   **Option A (Easiest):** On the GitHub repository page, click the green **Code** button and select **Open with Visual Studio**.
-*   **Option B:** Clone the repository using Git: `git clone https://github.com/Agzes/AntiAFK-RBX.git`
-*   **Option C:** Download the repository as a ZIP file from GitHub and extract it to a folder.
+| Requirement            | Details                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| **Visual Studio 2026** | project uses platform toolset **v145**                                   |
+| Workload               | _Desktop development with C++_                                           |
+| Windows SDK            | any recent Windows 10/11 SDK (project auto-selects the latest installed) |
+| OS                     | Windows 10/11 x64                                                        |
 
-## Step 3: Open the project and Build
+> Using **Visual Studio 2022**? The solution will refuse to open its toolset (`error MSB8020: v145 not found`). Either install VS 2026, or double-click the solution in Solution Explorer → **Retarget Solutions** → pick your installed toolset (v143 works fine).
 
-1. If you used **Option A**, Visual Studio will open the project automatically.
-2. If you used **Option B or C**, navigate to the project folder and double-click the `AntiAFK-RBX.sln` file to open it in Visual Studio.
-3. Once the project is loaded, make sure the configuration is set to **Release** and **x64** (recommended).
-4. Press **Ctrl+Shift+B** (or go to **Build > Build Solution**) to compile the project.
-5. After a successful build, you can press **F5** to run the application.
+## Step by step (IDE)
 
-## Step 4: Verify files
+1. **Get the source**
 
-1. After successful compilation, an icon should appear in the Windows tray (usually in the lower right corner) indicating that the application is running.
-2. In Windows Explorer, navigate to the `x64/Release` (or `x64/Debug`) folder inside your project directory. You should see the compiled `AntiAFK-RBX.exe` file.
+    ```bat
+    git clone https://github.com/Agzes/AntiAFK-RBX.git
+    ```
 
+    ...or download the repository ZIP, or press _Code → Open with Visual Studio_ on GitHub.
+
+2. **Open `AntiAFK-RBX.sln`** - always through the solution file, not the loose `.cpp`.
+
+3. Set the configuration to **`Release` | `x64`** in the top toolbar. (The project is x64-only; there are no Win32 configurations.)
+
+4. **Build → Build Solution** (`Ctrl+Shift+B`). First build takes a while - it is one large translation unit compiled with optimizations.
+
+5. Find the result at **`x64\Release\AntiAFK-RBX.exe`** (Debug builds land in `x64\Debug`). Run it - the tray icon appears near the clock.
+
+## Step by step (command line)
+
+Open **Developer PowerShell for VS**, then:
+
+```bat
+cd AntiAFK-RBX
+msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /m
+```
+
+This is the exact same command the project's own [CI workflow](https://github.com/Agzes/AntiAFK-RBX/blob/preview/.github/workflows/build.yml) runs on every push to `preview`.
+
+## Project facts
+
+| Property       | Value                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| Standard       | C++20 (`/std:c++20`), C17                                                                |
+| Character set  | Unicode                                                                                  |
+| Subsystem      | Windows (`WinMain`)                                                                      |
+| Toolset / SDK  | v145, latest Windows 10 SDK                                                              |
+| Configurations | `Debug\|x64`, `Release\|x64` only                                                        |
+| Resources      | `AntiAFK-RBX.rc` + `resource.h` + icons in `Resources/` (tray icons, logo, version info) |
+
+Libraries are linked automatically via `#pragma comment(lib, ...)`: `psapi`, `dwmapi`, `winmm`, `Gdiplus`, `WinInet`, `Comdlg32`, `msimg32` - nothing to configure manually.
+
+## Distributing your build
+
+- The binary is statically laid out but uses the **dynamic CRT**: machines without Visual Studio need the [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist), otherwise users get _"MSVCP140.dll is missing"_.
+- Windows SmartScreen may warn on unsigned self-built executables - this is expected.
+- Settings live in the Registry (`HKCU\Software\Agzes\AntiAFK-RBX`), macros in `%APPDATA%\AntiAFK-RBX` - a fresh build picks them up automatically.
+
+## Troubleshooting
+
+| Problem                                                    | Fix                                                                           |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `MSB8020: build tools for v145 cannot be found`            | retarget the solution to your installed toolset (see note above)              |
+| `C1083: Cannot open include file 'winsdk...'` / SDK errors | install the **Windows 10/11 SDK** component via VS Installer                  |
+| Weird syntax errors around unicode strings                 | open the solution as-is; do not convert/re-save `AntiAFK-RBX.cpp` encodings   |
+| Antivirus flags freshly built exe                          | typical for unsigned input-simulation tools; verify the source you built from |

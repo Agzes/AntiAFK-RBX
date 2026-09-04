@@ -23,4 +23,5 @@
 /AntiAFK-RBX/Release
 AntiAFK-RBX.vcxproj.user
 .dev/
-/.zed
+.zed/
+.wiki/
