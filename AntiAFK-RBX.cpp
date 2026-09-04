@@ -1,4 +1,4 @@
-// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
+﻿// AntiAFK-RBX.cpp • The best program for AntiAFK and Multi-Instance in Roblox. Or just Roblox Anti-AFK. • By Agzes
 // https://github.com/Agzes/AntiAFK-RBX • \[=_=]/
 
 #define ALPHA   1
@@ -25552,6 +25552,55 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
         break;
     case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
+                pData->isDiscordWebhookInputFocused = false;
+                InvalidateRect(hwnd, &pData->discordWebhookInputRect, FALSE);
+                return 0;
+            }
+            if (pData) {
+                if (pData->showingActionDelays || pData->actionDelaysViewAnim > 0.5f) {
+                    pData->actionDelaysViewDirection = -1;
+                } else if (pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.5f) {
+                    pData->fpsCapperSettingsViewDirection = -1;
+                } else if (pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.5f) {
+                    pData->alphaInfoViewDirection = -1;
+                } else if (pData->showingTimings || pData->timingsViewAnim > 0.5f) {
+                    pData->timingsViewDirection = -1;
+                } else if (pData->showingMacros || pData->macrosViewAnim > 0.5f) {
+                    if (g_isRecording && pData->macrosViewMode == 5) {
+                        QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                        return 0;
+                    }
+                    if (pData->macrosViewMode > 0) {
+                        pData->macrosViewMode = 0;
+                        g_macroWizardActive = false;
+                        g_macroReRecording = false;
+                    } else if (g_mainUiOpenedForMacros.load()) {
+                        g_mainUiOpenedForMacros = false;
+                        DestroyWindow(hwnd);
+                        return 0;
+                    } else {
+                        pData->macrosViewDirection = -1;
+                    }
+                } else if (pData->showingSettingsSub || pData->settingsSubViewAnim > 0.5f) {
+                    pData->settingsSubViewDirection = -1;
+                } else if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.5f) {
+                    if (g_mainUiOpenedForGrid.load()) {
+                        g_mainUiOpenedForGrid = false;
+                        DestroyWindow(hwnd);
+                        return 0;
+                    }
+                    pData->gridSettingsViewDirection = -1;
+                } else if (pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.5f) {
+                    pData->statusBarSettingsViewDirection = -1;
+                } else {
+                    return 0;
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+            return 0;
+        }
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
             size_t* caretPos = &pData->discordWebhookCaretPos;
