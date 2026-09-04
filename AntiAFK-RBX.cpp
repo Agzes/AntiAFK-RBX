@@ -107,7 +107,6 @@ using namespace std::chrono_literals;
 
 
 #define ID_TRAY_ICON 0
-#define ID_INFORMATION 1
 #define ID_START_AFK 3
 #define ID_STOP_AFK 4
 #define ID_SHOW_WINDOW 5
@@ -177,10 +176,7 @@ using namespace std::chrono_literals;
 #define ID_STATUS_BAR 316
 #define ID_AUTO_OPACITY 317
 #define ID_AUTO_GRID 318
-#define ID_GRID_FORCE_SMALL 325
-#define ID_GRID_ALL_MONITORS 326
 #define ID_GRID_SETTINGS 327
-#define ID_GRID_KEEP_ASPECT_RATIO 328
 
 #define ID_RESTORE_OFF 401
 #define ID_RESTORE_FOREGROUND 402
@@ -3767,7 +3763,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                                 }
                             }
                             for (const auto& n : names) {
-                                if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                                if (_wcsicmp(n.c_str(), g_macros[i].name.c_str()) == 0) { flags |= MF_CHECKED; break; }
                             }
                             AppendMenu(hMenu, flags, 7001 + i, g_macros[i].name.c_str());
                         }
@@ -3836,7 +3832,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                                 }
                             }
                             for (const auto& n : names) {
-                                if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                                if (_wcsicmp(n.c_str(), g_macros[i].name.c_str()) == 0) { flags |= MF_CHECKED; break; }
                             }
                             AppendMenu(hMenu, flags, 6001 + i, g_macros[i].name.c_str());
                         }
@@ -3914,7 +3910,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             }
                         }
                         for (const auto& n : names) {
-                            if (n == g_macros[i].name) { flags |= MF_CHECKED; break; }
+                            if (_wcsicmp(n.c_str(), g_macros[i].name.c_str()) == 0) { flags |= MF_CHECKED; break; }
                         }
                         std::wstring item = g_macros[i].name;
                         if (g_macros[i].intervalSec > 0) {
@@ -5146,6 +5142,9 @@ void GridSnapRobloxWindows()
             continue;
         }
         if (IsRobloxWindowClosedToTray(w)) {
+            continue;
+        }
+        if (IsRobloxWindowSelfHidden(w)) {
             continue;
         }
 
@@ -9629,11 +9628,8 @@ case ID_STATUS_BAR_EVENT_UI:       return 0xE713;
         case ID_AUTO_HIDE:                 return 0xEE47;
         case ID_AUTO_OPACITY:              return 0xE727;
         case ID_AUTO_GRID:                 return 0xE80A;
-        case ID_GRID_SETTINGS:             return 0xE713;
-        case ID_GRID_FORCE_SMALL:          return 0xE73F;
-        case ID_GRID_KEEP_ASPECT_RATIO:    return 0xE799;
-        case ID_GRID_ALL_MONITORS:         return 0xE81E;
-        case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
+case ID_GRID_SETTINGS:             return 0xE713;
+case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
         case ID_BLOXSTRAP_INTEGRATION:     return 0xE71B;
         case ID_I_CAN_FORGET:              return 0xE916;
         case ID_SKIP_ACTIVE:               return 0xE893;
@@ -11872,7 +11868,10 @@ pos = comma + 1;
     g_ramCleanerAutoStart = (ramCleanerEnabled != 0);
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = (int)ramCleanerMode;
-    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) g_ramCleanerMode = 0;
+    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) {
+        g_ramCleanerMode = 0;
+        g_ramCleanerAutoStart = false;
+    }
     g_ramCleanerInterval = ClampInt((int)ramCleanerInterval, 1, 86400);
     g_ramCleanerLimit = ClampInt((int)ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = (afkReminder != 0);
@@ -12915,7 +12914,10 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_ramCleanerAutoStart = s.ramCleanerEnabled;
     g_ramCleanerEnabled = false;
     g_ramCleanerMode = s.ramCleanerMode;
-    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) g_ramCleanerMode = 0;
+    if (g_ramCleanerMode.load() < 0 || g_ramCleanerMode.load() > 2) {
+        g_ramCleanerMode = 0;
+        g_ramCleanerAutoStart = false;
+    }
     g_ramCleanerInterval = ClampInt(s.ramCleanerInterval, 1, 86400);
     g_ramCleanerLimit = ClampInt(s.ramCleanerLimit, 50, 16384);
     g_afkReminderEnabled = s.afkReminder;
@@ -15417,7 +15419,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                     {
                         std::lock_guard<std::mutex> lock(g_macrosMutex);
                         for (size_t mi = 0; mi < g_macros.size(); mi++) {
-                            if (g_macros[mi].name == g_macroOrderNames[row]) { macroIdx = (int)mi; break; }
+                            if (_wcsicmp(g_macros[mi].name.c_str(), g_macroOrderNames[row].c_str()) == 0) { macroIdx = (int)mi; break; }
                         }
                     }
                     if (macroIdx >= 0) {
@@ -15611,7 +15613,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                 {
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
                     for (size_t mi = 0; mi < g_macros.size(); mi++) {
-                        if (g_macros[mi].name == g_macroOrderNames[i]) {
+                        if (_wcsicmp(g_macros[mi].name.c_str(), g_macroOrderNames[i].c_str()) == 0) {
                             sec = (g_macros[mi].intervalSec > 0) ? g_macros[mi].intervalSec : 0;
                             break;
                         }
@@ -17277,9 +17279,9 @@ void ScreenSaver_Start(HWND owner)
             }
         }
         if (g_ssKeyboardHook) { UnhookWindowsHookEx(g_ssKeyboardHook); g_ssKeyboardHook = NULL; }
-        if (g_hwnd && IsWindow(g_hwnd)) { PostMessage(g_hwnd, WM_APP + 50, 0, 0); }
-        QueueRefreshTrayMenu(g_isAfkStarted.load());
-        g_screenSaverActive.store(false);
+    if (g_hwnd && IsWindow(g_hwnd)) { PostMessage(g_hwnd, WM_APP + 50, 0, 0); }
+    g_screenSaverActive.store(false);
+    QueueRefreshTrayMenu(g_isAfkStarted.load());
     }).detach();
 }
 
@@ -19386,7 +19388,7 @@ title = L"CPU Limit %";
                 {
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
                     for (auto& m : g_macros) {
-                        if (m.name == pData->macrosWizardName) {
+                        if (_wcsicmp(m.name.c_str(), pData->macrosWizardName.c_str()) == 0) {
                             QueueStatusBarOverlay(L"Macro name already exists", 2000, hwnd, StatusBarEventType::Macro);
                             InvalidateRect(hwnd, NULL, FALSE);
                             return;
@@ -27540,8 +27542,9 @@ void main_thread(bool arg_tray)
                     }
                 }
 
-                bool anyActionPerformed = false;
-                for (size_t i = 0; i < wins.size(); i++)
+    bool anyActionPerformed = false;
+    bool anySkippedHidden = false;
+    for (size_t i = 0; i < wins.size(); i++)
                 {
                     if (g_stopThread.load() || !g_isAfkStarted.load()) {
                         cancelPendingAction = true;
@@ -27574,10 +27577,11 @@ void main_thread(bool arg_tray)
                         SetForegroundWindow(w);
                         Sleep(g_preActionDelay.load());
                     }
-                    if (GetForegroundWindow() != w) {
-                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
-                        continue;
-                    }
+        if (GetForegroundWindow() != w) {
+            if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+            if (!IsWindowVisible(w)) anySkippedHidden = true;
+            continue;
+        }
 
                     if (g_autoReconnect.load()) {
                         if (CheckForAutoReconnect(w)) {
@@ -27705,10 +27709,14 @@ void main_thread(bool arg_tray)
                     if (autoReconnectTriggered) {
                         QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered.", false);
                     }
-                } else {
-                    QueueStatusBarHide(false);
-                    QueueStatusBarOverlay(L"Anti-AFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
-                }
+        } else {
+            QueueStatusBarHide(false);
+            if (anySkippedHidden && !cancelPendingAction) {
+                QueueStatusBarOverlay(L"Anti-AFK skipped: Roblox window is hidden", 1800, wins.front(), StatusBarEventType::Action);
+            } else {
+                QueueStatusBarOverlay(L"Anti-AFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
+            }
+        }
             }
             g_updateInterval = false;
 
@@ -29763,8 +29771,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return TRUE;
     case WM_ENDSESSION:
         if (wParam) {
-            g_stopThread = true;
-            g_cv.notify_all();
+            {
+                std::lock_guard<std::mutex> cvLock(g_cv_m);
+                g_stopThread = true;
+                g_cv.notify_all();
+            }
             if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
                 FinalizeAfkSession();
                 ResetIcanForgetCounter();
@@ -30488,7 +30499,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     g_webhookThread = std::thread(WebhookWorkerThread);
     std::thread t(main_thread, arg_tray);
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0))
+    while (GetMessage(&msg, NULL, 0, 0) > 0)
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
