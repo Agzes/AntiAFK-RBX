@@ -13235,7 +13235,7 @@ static bool ImportSettingsFromFile(HWND owner)
     } else {
         StopActivityMonitor();
     }
-    if (g_isAfkStarted.load() && g_autoReconnect.load()) {
+    if (g_isAfkStarted.load() && g_autoReconnect.load() && g_reconnectCheckInterval.load() > 0) {
         StartReconnectMonitor();
     }
     if (g_isAfkStarted.load()) {
@@ -14543,7 +14543,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 }
                 if (saveNeeded) {
                     if (!MacroEngine_SaveMacros())
-                        QueueStatusBarOverlay(L"Failed to save macro settings - file locked or corrupt", 3000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(L"Failed to save macro settings - file locked or corrupt", 3000, GetWindow(hwnd, GW_OWNER), StatusBarEventType::Macro);
                 }
             }
             HWND owner = GetWindow(hwnd, GW_OWNER);
