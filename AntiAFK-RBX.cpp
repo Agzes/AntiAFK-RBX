@@ -361,7 +361,6 @@ std::atomic<bool> g_useCustomProcessSearch(false);
 std::atomic<bool> g_excludeBuiltinNames(false);
 std::wstring g_customProcessNames = L"";
 std::mutex g_customProcessNamesMutex;
-bool g_enableMainUiIntroAnimation = false;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
 std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false), g_disableSplash(false), g_disableAcrylic(false), g_disableAnimations(false), g_keepWindowOnTop(false), g_disableWindowCorners(false);
 std::atomic<bool> g_statusBarPrimaryMonitor(false);
@@ -1943,7 +1942,7 @@ LRESULT CALLBACK SplashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         break;
     }
     case WM_APP + 2:
-        AnimateWindow(hwnd, (int)wParam > 0 ? 90 : 120, AW_BLEND | AW_HIDE);
+        ShowWindow(hwnd, SW_HIDE);
         DestroyWindow(hwnd);
         return 0;
     case WM_CLOSE:
@@ -2004,7 +2003,6 @@ void CreateSplashScreen(HINSTANCE hInstance)
     if (g_hSplashWnd)
     {
         EnableAcrylic(g_hSplashWnd);
-        AnimateWindow(g_hSplashWnd, 120, AW_BLEND);
         UpdateWindow(g_hSplashWnd);
     }
 }
@@ -16181,10 +16179,6 @@ void ShowMainUIDialog(HWND owner)
         ApplyWindowOnTopSetting();
         ShowWindow(g_hMainUiWnd, SW_SHOW);
         UpdateWindow(g_hMainUiWnd);
-        if (g_enableMainUiIntroAnimation) {
-            AnimateWindow(g_hMainUiWnd, 140, AW_BLEND);
-            g_enableMainUiIntroAnimation = false;
-        }
     }
 }
 struct NavItem {
@@ -18817,7 +18811,7 @@ title = L"CPU Limit %";
             menuPt.x = pData->fpsCapperLimitDropdownRect.left;
             menuPt.y = pData->fpsCapperLimitDropdownRect.bottom;
             ClientToScreen(hwnd, &menuPt);
-            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, hwnd, NULL);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
             PostMessage(hwnd, WM_NULL, 0, 0);
             DestroyMenu(hMenu);
             InvalidateRect(hwnd, NULL, FALSE);
@@ -21672,11 +21666,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperCpuPeriodDropdownRect, pData->hFontText, L"Cycle Period (ms)", periodText, pData->isHoveringFpsCapperCpuPeriodDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
             } else {
                 wchar_t limitText[64];
-                if (g_fpsLimit > 0) {
-                    swprintf_s(limitText, L"%d FPS", g_fpsLimit.load());
-                } else {
-                    swprintf_s(limitText, L"Disabled (%d FPS)", g_fpsLastActiveLimit.load());
-                }
+                swprintf_s(limitText, L"%d FPS", g_fpsLimit > 0 ? g_fpsLimit.load() : g_fpsLastActiveLimit.load());
                 MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperLimitDropdownRect, pData->hFontText, L"FPS Limit Preset", limitText, pData->isHoveringFpsCapperLimitDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
             }
 
@@ -27182,10 +27172,9 @@ void main_thread(bool arg_tray)
     {
         PostMessage(g_hMainUiWnd, WM_APP + 12, 0, 0);
     }
-    else if (shouldOpenMainUi && g_hSplashWnd)
+    if (shouldOpenMainUi && g_hSplashWnd)
     {
         UpdateSplashStatus(L"Opening MainUI...");
-        g_enableMainUiIntroAnimation = false;
     }
 
     if (g_hSplashWnd)
