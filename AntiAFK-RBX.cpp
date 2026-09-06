@@ -391,6 +391,7 @@ std::atomic<bool> g_intervalMacroEnabled(false);
 std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
 std::thread g_manualGridSnapThread;
+std::thread g_manualReconnectCheckThread;
 std::atomic<int> g_intervalMacroGen(0);
 std::mutex g_intervalMacroThreadMutex;
 std::atomic<int> g_reconnectMacroDelaySec(60);
@@ -3865,6 +3866,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             } else {
                                 s2.macroNames.push_back(macroName);
                             }
+                            s2.overrideMacro = true;
                         });
                         InvalidateRect(hwnd, NULL, FALSE);
                     }
@@ -4186,10 +4188,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 wchar_t itemText[256];
                 GetWindowTextW(w, itemText, 256);
                 const wchar_t* displayText = itemText;
+                wchar_t fullText[320];
                 if (wcslen(itemText) == 0) {
                     swprintf_s(itemText, L"Roblox (PID %d)", pid);
                 } else {
-                    wchar_t fullText[320];
                     swprintf_s(fullText, L"%s (PID: %d)", itemText, pid);
                     displayText = fullText;
                 }
@@ -4201,7 +4203,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
                 gfx.DrawString(displayText, -1, &labelFont, Gdiplus::PointF((REAL)(rowRect.left + 12), (REAL)(rowRect.top + 3)), &textBrush);
 
-                wchar_t presetLabel[64];
+                wchar_t presetLabel[128];
                 swprintf_s(presetLabel, L"Preset: %s", prName.c_str());
                 gfx.DrawString(presetLabel, -1, &presetFont, Gdiplus::PointF((REAL)(rowRect.left + 12), (REAL)(rowRect.top + 19)), &presetBrush);
 
@@ -5568,9 +5570,8 @@ void RestoreForegroundWindow(HWND prevWnd)
 {
     if (!prevWnd)
         return;
-    wchar_t className[256];
-    GetClassNameW(prevWnd, className, 256);
-    if (wcscmp(className, L"AntiAFK-RBX-tray") == 0)
+    wchar_t className[256] = { 0 };
+    if (GetClassNameW(prevWnd, className, 256) > 0 && wcscmp(className, L"AntiAFK-RBX-tray") == 0)
         return;
     if (!IsWindowVisible(prevWnd) || IsIconic(prevWnd))
         return;
@@ -6878,10 +6879,10 @@ static bool MacroEngine_ExportMacroToFile(HWND parent, int macroIndex) {
 
     HANDLE hFile = CreateFileW(fileName, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) return false;
-    DWORD written;
-    WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
+    DWORD written = 0;
+    BOOL writeOk = WriteFile(hFile, json.c_str(), (DWORD)json.size(), &written, NULL);
     CloseHandle(hFile);
-    return true;
+    return writeOk && written == (DWORD)json.size();
 }
 
 static bool MacroEngine_ImportMacroFromFile(HWND parent) {
@@ -7683,15 +7684,19 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
                 }
             }
 
-            MacroAction action;
-            action.type = MacroStepType::MouseUp;
-            action.x = (uint16_t)pt.x;
-            action.y = (uint16_t)pt.y;
-            action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
-            action.mouseButton = isRight ? 1 : 0;
-            MacroEngine_PushRecordingAction(action);
-            g_recordingLastEventTime = now;
-        } else if (wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL) {
+        MacroAction action;
+        action.type = MacroStepType::MouseUp;
+        if (pt.x < 0) pt.x = 0;
+        if (pt.y < 0) pt.y = 0;
+        if (pt.x >= targetCr.right) pt.x = targetCr.right - 1;
+        if (pt.y >= targetCr.bottom) pt.y = targetCr.bottom - 1;
+        action.x = (uint16_t)pt.x;
+        action.y = (uint16_t)pt.y;
+        action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+        action.mouseButton = isRight ? 1 : 0;
+        MacroEngine_PushRecordingAction(action);
+        g_recordingLastEventTime = now;
+    } else if (wParam == WM_MOUSEWHEEL || wParam == WM_MOUSEHWHEEL) {
             if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
             short delta = (short)HIWORD(p->mouseData);
             double now = MacroEngine_NowMs();
@@ -7721,7 +7726,16 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             g_recordingWheelCount++;
             g_recordingLastEventTime = now;
         } else if (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN || wParam == WM_MBUTTONUP || wParam == WM_XBUTTONUP) {
-            if (!inBounds) return CallNextHookEx(NULL, nCode, wParam, lParam);
+            if (!inBounds) {
+                if (wParam == WM_MBUTTONUP && g_recordingMiddleDown) {
+                    g_recordingMiddleDown = false;
+                } else if (wParam == WM_XBUTTONUP && (g_recordingXButton1Down || g_recordingXButton2Down)) {
+                    int xBtn = (int)HIWORD(p->mouseData);
+                    if (xBtn == 1) g_recordingXButton1Down = false;
+                    else if (xBtn == 2) g_recordingXButton2Down = false;
+                }
+                return CallNextHookEx(NULL, nCode, wParam, lParam);
+            }
             bool isDown = (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN);
             int btn = 2;
             if (wParam == WM_XBUTTONDOWN || wParam == WM_XBUTTONUP) {
@@ -7822,9 +7836,30 @@ static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPA
             return 1;
         }
 
-        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
-            g_recordingKeysDown.erase((uint8_t)p->vkCode);
-        }
+if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+    bool wasTracked = g_recordingKeysDown.count((uint8_t)p->vkCode) > 0;
+    if (wasTracked && GetAncestor(GetForegroundWindow(), GA_ROOT) != g_recordingTargetHwnd) {
+        double now = MacroEngine_NowMs();
+        DWORD delay = (g_recordingLastEventTime > 0) ? (DWORD)(now - g_recordingLastEventTime) : 0;
+        MacroAction action;
+        action.type = MacroStepType::KeyUp;
+        action.vkCode = (BYTE)p->vkCode;
+        action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+        MacroEngine_PushRecordingAction(action);
+        g_recordingLastEventTime = now;
+        g_recordingKeysDown.erase((uint8_t)p->vkCode);
+        return CallNextHookEx(NULL, nCode, wParam, lParam);
+    }
+    g_recordingKeysDown.erase((uint8_t)p->vkCode);
+}
+
+if (wParam != WM_KEYUP && wParam != WM_SYSKEYUP && !(g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd))) {
+    if (!g_recordingStopPending) {
+        g_recordingStopPending = true;
+        std::thread([]() { MacroEngine_StopRecording(); }).detach();
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
 
         if (GetAncestor(GetForegroundWindow(), GA_ROOT) != g_recordingTargetHwnd) {
             return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -8168,7 +8203,8 @@ void MacroEngine_StopRecording() {
 }
 
 static void MacroEngine_CancelRecording() {
-    if (!g_isRecording) return;
+    bool expected = true;
+    if (!g_isRecording.compare_exchange_strong(expected, false)) return;
     g_recordingStopPending = true;
     Sleep(50);
 
@@ -8521,14 +8557,22 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         return 0;
                     }
 
-                    HWND combo = GetDlgItem(hwnd, 1002);
-                    int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
-                    if (sel == CB_ERR) {
-                        ShowStatusBarOverlay(L"Select a target window", 2000, hwnd, StatusBarEventType::Macro);
-                        return 0;
-                    }
+HWND combo = GetDlgItem(hwnd, 1002);
+int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
+if (sel == CB_ERR) {
+ShowStatusBarOverlay(L"Select a target window", 2000, hwnd, StatusBarEventType::Macro);
+return 0;
+}
 
-                    g_wizardMacro = Macro();
+wchar_t selBuf[320] = { 0 };
+SendMessage(combo, CB_GETLBTEXT, sel, (LPARAM)selBuf);
+wchar_t* selBracket = wcsrchr(selBuf, L'[');
+if (selBracket) {
+HWND selTarget = (HWND)(uintptr_t)_wtoi(selBracket + 1);
+if (selTarget && IsWindow(selTarget)) g_wizardTargetHwnd = selTarget;
+}
+
+g_wizardMacro = Macro();
                     g_wizardMacro.name = name;
 
                     DestroyWindow(GetDlgItem(hwnd, 1001));
@@ -8655,16 +8699,19 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         }
                     }
                 }
-                if (!targetHwnd) {
-                    auto wins = FindAllRobloxWindows(true);
-                    if (wins.empty()) {
-                        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
-                        return 0;
-                    }
-                    targetHwnd = wins[0];
-                }
+if (!targetHwnd && g_wizardTargetHwnd && IsWindow(g_wizardTargetHwnd)) {
+    targetHwnd = g_wizardTargetHwnd;
+}
+if (!targetHwnd) {
+    auto wins = FindAllRobloxWindows(true);
+    if (wins.empty()) {
+        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
+        return 0;
+    }
+    targetHwnd = wins[0];
+}
 
-                if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
+if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                     ShowStatusBarOverlay(L"Failed to start recording", 2500, hwnd, StatusBarEventType::Macro);
                     return 0;
                 }
@@ -8813,6 +8860,21 @@ void MacroEngine_Shutdown() {
 
 // ==========
 
+static size_t FindUnquotedJsonChar(const std::string& content, size_t from, char target) {
+    bool inString = false;
+    for (size_t i = from; i < content.size(); ++i) {
+        char c = content[i];
+        if (inString) {
+            if (c == '\\') { ++i; continue; }
+            if (c == '"') inString = false;
+            continue;
+        }
+        if (c == '"') { inString = true; continue; }
+        if (c == target) return i;
+    }
+    return std::string::npos;
+}
+
 // Fish/Void/Bloxstrap integration
 std::string GetBloxstrapSettingsPath() {
     HKEY hKey;
@@ -8820,15 +8882,16 @@ std::string GetBloxstrapSettingsPath() {
         return "";
     }
 
-    wchar_t value[MAX_PATH];
-    DWORD size = sizeof(value);
-    if (RegQueryValueExW(hKey, NULL, NULL, NULL, (LPBYTE)value, &size) != ERROR_SUCCESS) {
-        RegCloseKey(hKey);
-        return "";
-    }
-    RegCloseKey(hKey);
+wchar_t value[MAX_PATH + 1] = { 0 };
+DWORD size = sizeof(value) - sizeof(wchar_t);
+if (RegQueryValueExW(hKey, NULL, NULL, NULL, (LPBYTE)value, &size) != ERROR_SUCCESS) {
+RegCloseKey(hKey);
+return "";
+}
+RegCloseKey(hKey);
+value[MAX_PATH] = L'\0';
 
-    std::wstring path_w(value);
+std::wstring path_w(value);
     std::wstring exe_path_w;
 
     size_t first_quote = path_w.find(L'"');
@@ -8878,14 +8941,25 @@ std::string GetSelfExePath() {
     return spath;
 }
 void UpdateBloxstrapIntegration(bool enable) {
-    std::string settingsPath = GetBloxstrapSettingsPath();
-    if (settingsPath.empty()) {
-        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find launcher installation path in registry.");
-        g_bloxstrapIntegration = false;
-        return;
-    }
+std::string settingsPath = GetBloxstrapSettingsPath();
+if (settingsPath.empty()) {
+ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find launcher installation path in registry.");
+g_bloxstrapIntegration = false;
+return;
+}
 
-    std::ifstream inFile(settingsPath, std::ios::binary);
+std::wstring settingsPathW;
+{
+int wlen = MultiByteToWideChar(CP_UTF8, 0, settingsPath.c_str(), -1, NULL, 0);
+if (wlen > 0) {
+std::wstring wbuf(wlen, L'\0');
+MultiByteToWideChar(CP_UTF8, 0, settingsPath.c_str(), -1, &wbuf[0], wlen);
+wbuf.pop_back();
+settingsPathW = wbuf;
+}
+}
+
+std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
     if (!inFile.is_open()) {
         ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find/open the launcher settings file.");
         g_bloxstrapIntegration = false;
@@ -8917,7 +8991,7 @@ void UpdateBloxstrapIntegration(bool enable) {
         }
 
         size_t openingBracket = content.find('[', integrationsArrayPos);
-        size_t closingBracket = content.find(']', openingBracket);
+        size_t closingBracket = (openingBracket == std::string::npos) ? std::string::npos : FindUnquotedJsonChar(content, openingBracket + 1, ']');
         if (openingBracket == std::string::npos || closingBracket == std::string::npos) {
             ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find 'CustomIntegrations' array bounds in the launcher settings file.");
             g_bloxstrapIntegration = false;
@@ -8925,7 +8999,7 @@ void UpdateBloxstrapIntegration(bool enable) {
         }
         bool isEmpty = true;
         for (size_t i = openingBracket + 1; i < closingBracket; ++i) {
-            if (!isspace(content[i])) {
+            if (!isspace((unsigned char)content[i])) {
                 isEmpty = false;
                 break;
             }
@@ -8941,7 +9015,7 @@ void UpdateBloxstrapIntegration(bool enable) {
             return;
         }
         size_t start = content.rfind('{', integrationPos);
-        size_t findEnd = content.find('}', integrationPos);
+        size_t findEnd = (start == std::string::npos) ? std::string::npos : FindUnquotedJsonChar(content, start, '}');
         if (start == std::string::npos || findEnd == std::string::npos) {
             return;
         }
@@ -8958,7 +9032,7 @@ void UpdateBloxstrapIntegration(bool enable) {
             if (openingBracket != std::string::npos && closingBracket != std::string::npos) {
                 bool isEmpty = true;
                 for (size_t i = openingBracket + 1; i < closingBracket; ++i) {
-                    if (!isspace(content[i])) {
+                    if (!isspace((unsigned char)content[i])) {
                         isEmpty = false; break;
                     }
                 }
@@ -8967,11 +9041,20 @@ void UpdateBloxstrapIntegration(bool enable) {
         }
     }
 
-    std::ofstream outFile(settingsPath, std::ios::binary);
-    if (outFile.is_open()) {
-        outFile << content;
-        outFile.close();
-    } else {
+    std::wstring tmpPathW = settingsPathW + L".tmp";
+    {
+        std::ofstream outFile(tmpPathW.c_str(), std::ios::binary);
+        if (outFile.is_open()) {
+            outFile << content;
+            outFile.close();
+        } else {
+            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
+            g_bloxstrapIntegration = false;
+            return;
+        }
+    }
+    if (!MoveFileExW(tmpPathW.c_str(), settingsPathW.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileW(tmpPathW.c_str());
         ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
         g_bloxstrapIntegration = false;
     }
@@ -13327,13 +13410,18 @@ static bool ImportSettingsFromFile(HWND owner)
                     MacroEngine_LoadMacros();
                     if (g_macrosLoadFailed.load()) {
                         bool restored = hadBackup && CopyFileW(backupPath.c_str(), macrosPath.c_str(), FALSE);
-                        MacroEngine_LoadMacros();
-                        ShowDarkMessageBox(owner, restored ? L"The imported macros file could not be parsed. Your previous macros were restored." : L"The imported macros file could not be parsed and no previous macros file existed - macros were reset.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                        if (restored) MacroEngine_LoadMacros();
+                        if (restored && g_macrosLoadFailed.load()) {
+                            DeleteFileW(backupPath.c_str());
+                            restored = false;
+                        }
                         if (restored) {
                             DeleteFileW(backupPath.c_str());
+                            ShowDarkMessageBox(owner, L"The imported macros file could not be parsed. Your previous macros were restored.", L"AntiAFK-RBX • Import Settings", MB_OK);
                         } else {
                             DeleteFileW(macrosPath.c_str());
                             MacroEngine_LoadMacros();
+                            ShowDarkMessageBox(owner, L"The imported macros file could not be parsed and no previous valid macros file existed - macros were reset.", L"AntiAFK-RBX • Import Settings", MB_OK);
                         }
                     } else {
                         DeleteFileW(backupPath.c_str());
@@ -18983,7 +19071,7 @@ title = L"CPU Limit %";
         return;
     }
 
-    if (!(pData->showingMacros || pData->macrosViewAnim > 0.0f) && pData->currentPage == 0 && PtInRect(&pData->actionDelaysSettingsCompactRect, pt)) {
+    if (!(pData->showingActionDelays || pData->actionDelaysViewAnim > 0.0f || pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f || pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f || pData->showingTimings || pData->timingsViewAnim > 0.0f || pData->showingMacros || pData->macrosViewAnim > 0.0f || pData->showingSettingsSub || pData->settingsSubViewAnim > 0.0f || pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f || pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f) && pData->currentPage == 0 && PtInRect(&pData->actionDelaysSettingsCompactRect, pt)) {
         pData->actionDelaysPreviousPage = pData->currentPage;
         pData->actionDelaysViewDirection = 1;
         pData->actionDelaysViewAnim = 0.0f;
@@ -26272,8 +26360,9 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
         pData->isHoveringIcon = pData->isHoveringClose = pData->isHoveringStart = pData->isHoveringReset = pData->isHoveringInterval = pData->isHoveringAction = pData->isHoveringRestore = false;
         pData->isHoveringMultiInstanceInterval = false;
         pData->hoveringNavItem = -1; pData->isHoveringResetStats = false; pData->isPressingResetStats = false;
-        pData->isHoveringBackIcon = false;
-        pData->isHoveringActionDelaysBackIcon = false;
+pData->isHoveringBackIcon = false;
+pData->isHoveringUiSettings = false;
+pData->isHoveringActionDelaysBackIcon = false;
         pData->isHoveringActionDelaysSettingsCompact = false;
         pData->isHoveringActionDelaysOkButton = false;
         pData->hoveringActionDelaysHelpButton = -1;
@@ -27727,10 +27816,10 @@ void main_thread(bool arg_tray)
             while (true) {
                 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
 
-                {
-                    ULONGLONG now = GetTickCount64();
-                    for (HWND w : wins) {
-                        if (!IsWindow(w)) continue;
+                    if (g_intervalMacroEnabled.load()) {
+                        ULONGLONG now = GetTickCount64();
+                        for (HWND w : wins) {
+                            if (!IsWindow(w)) continue;
                         std::vector<Macro> intervalMacros;
                         {
                             std::vector<std::wstring> macroNames;
@@ -28776,14 +28865,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_RECONNECT_INTERVAL_CUSTOM:
             ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, CustomInputDialogType::ReconnectInterval);
             break;
-        case ID_RECONNECT_MANUAL_CHECK:
-            if (g_autoReconnect.load()) {
-                QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
-                std::thread([]() {
-                    PerformReconnectCheckOnAllWindows(true);
-                }).detach();
-            }
-            break;
+case ID_RECONNECT_MANUAL_CHECK:
+if (g_autoReconnect.load()) {
+QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
+if (g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
+g_manualReconnectCheckThread = std::thread([]() {
+PerformReconnectCheckOnAllWindows(true);
+});
+}
+break;
         case ID_AUTO_RESET:
             g_autoReset = !g_autoReset.load();
             SaveSettings();
@@ -29780,21 +29870,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 FinalizeAfkSession();
                 ResetIcanForgetCounter();
             }
-            ResetRobloxSessionEffectsOnExit();
-            Shell_NotifyIcon(NIM_DELETE, &g_nid);
-            SaveSettings();
-        }
-        return 0;
-    case WM_DESTROY:
+    ResetRobloxSessionEffectsOnExit();
+    {
+        std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
+        Shell_NotifyIcon(NIM_DELETE, &g_nid);
+    }
+    SaveSettings();
+}
+return 0;
+case WM_DESTROY:
         UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
         UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
         if (g_hHotkeyHook) {
             UnhookWindowsHookEx(g_hHotkeyHook);
             g_hHotkeyHook = NULL;
         }
-        g_hotkeyCaptureActive = false;
-        ResetRobloxSessionEffectsOnExit();
+    g_hotkeyCaptureActive = false;
+    ResetRobloxSessionEffectsOnExit();
+    {
+        std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
+    }
         if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
             FinalizeAfkSession();
             ResetIcanForgetCounter();
@@ -29836,14 +29932,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
     bool settingsLoaded = LoadSettings();
     MacroEngine_Init();
+    HANDLE hEarlyInstanceMutex = CreateMutex(NULL, FALSE, L"AntiAFK-RBX-SingleInstance");
+    bool earlyAlreadyRunning = (hEarlyInstanceMutex && GetLastError() == ERROR_ALREADY_EXISTS);
+    HWND hEarlyExistingWnd = FindWindow(CLASS_NAME, NULL);
+    bool isSecondInstance = (earlyAlreadyRunning || hEarlyExistingWnd);
     g_programLaunches++;
-    if (settingsLoaded) {
+    if (settingsLoaded && !isSecondInstance) {
         SaveSettings();
     }
     g_lastActivityTime = GetTickCount64();
-    RefreshRobloxWindowOpacity(false);
-    if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
-        ApplyAutoRobloxWindowLayout();
+    if (!isSecondInstance) {
+        RefreshRobloxWindowOpacity(false);
+        if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+            ApplyAutoRobloxWindowLayout();
+        }
     }
 
     int argc;
@@ -30298,10 +30400,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         arg_startAfk = true;
     }
 
-    HANDLE hSingleInstanceMutex = CreateMutex(NULL, FALSE, L"AntiAFK-RBX-SingleInstance");
-    bool alreadyRunning = (hSingleInstanceMutex && GetLastError() == ERROR_ALREADY_EXISTS);
+    HANDLE hSingleInstanceMutex = hEarlyInstanceMutex;
+    bool alreadyRunning = earlyAlreadyRunning;
 
-    HWND hExistingWnd = FindWindow(CLASS_NAME, NULL);
+    HWND hExistingWnd = hEarlyExistingWnd;
     if (alreadyRunning || hExistingWnd) {
         if (arg_force && hExistingWnd) {
             bool terminated = false;
@@ -30547,6 +30649,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     g_reconnectMonitorRunning = false;
     if (g_reconnectMonitorThread.joinable()) g_reconnectMonitorThread.join();
     if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
+    if (g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
 
     MacroEngine_Shutdown();
     DisableMultiInstanceSupport();
