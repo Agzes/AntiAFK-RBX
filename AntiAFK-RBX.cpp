@@ -17503,13 +17503,9 @@ HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
     return MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
 }
 
-RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
+static void GetMonitorDpi(HMONITOR hMon, int& dpiX, int& dpiY)
 {
-MONITORINFO mi = { sizeof(mi) };
-HMONITOR hMon = ResolveStatusBarMonitor(anchorWindow);
-GetMonitorInfo(hMon, &mi);
-
-int dpiX = 96, dpiY = 96;
+dpiX = 96; dpiY = 96;
 typedef HRESULT(WINAPI* GetDpiForMonitor_fn)(HMONITOR, int, UINT*, UINT*);
 static GetDpiForMonitor_fn fnGetDpiForMonitor = []() -> GetDpiForMonitor_fn {
 HMODULE shcore = GetModuleHandleW(L"Shcore.dll");
@@ -17530,6 +17526,16 @@ dpiY = GetDeviceCaps(screen, LOGPIXELSY);
 ReleaseDC(NULL, screen);
 }
 }
+}
+
+RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
+{
+MONITORINFO mi = { sizeof(mi) };
+HMONITOR hMon = ResolveStatusBarMonitor(anchorWindow);
+GetMonitorInfo(hMon, &mi);
+
+int dpiX = 96, dpiY = 96;
+GetMonitorDpi(hMon, dpiX, dpiY);
 
     int workWidth = mi.rcWork.right - mi.rcWork.left;
     int contentWidth = MeasureStatusBarContentWidth(message, dpiY);
@@ -17548,12 +17554,13 @@ ReleaseDC(NULL, screen);
     return { x, y, x + width, y + height };
 }
 
-static void EnsureStatusBarFonts(HWND hwnd, StatusBarData* pData)
+static void EnsureStatusBarFonts(HWND pData_hwnd_unused, StatusBarData* pData)
 {
+(void)pData_hwnd_unused;
 if (!pData) return;
-HDC wndDC = GetDC(hwnd);
-int dpiY = wndDC ? GetDeviceCaps(wndDC, LOGPIXELSY) : 96;
-if (wndDC) ReleaseDC(hwnd, wndDC);
+HMONITOR hMon = MonitorFromRect(&pData->targetBounds, MONITOR_DEFAULTTONEAREST);
+int dpiX = 96, dpiY = 96;
+GetMonitorDpi(hMon, dpiX, dpiY);
 if (pData->fontDpi == dpiY && pData->hFontBrand && pData->hFontText) return;
 if (pData->hFontBrand) { DeleteObject(pData->hFontBrand); pData->hFontBrand = NULL; }
 if (pData->hFontText) { DeleteObject(pData->hFontText); pData->hFontText = NULL; }
@@ -28905,14 +28912,18 @@ if (g_manualReconnectCheckRunning.exchange(true)) {
 QueueStatusBarOverlay(L"Reconnect check already running", 1500, NULL, StatusBarEventType::Reconnect);
 } else {
 QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
+try {
 g_manualReconnectCheckThread = std::thread([]() {
 PerformReconnectCheckOnAllWindows(true);
 g_manualReconnectCheckRunning = false;
 });
+} catch (...) {
+g_manualReconnectCheckRunning = false;
+}
 }
 }
 break;
-        case ID_AUTO_RESET:
+case ID_AUTO_RESET:
             g_autoReset = !g_autoReset.load();
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -30479,6 +30490,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK);
             GdiplusShutdown(gdiplusToken);
             return 0;
+        }
+    }
+
+    if (isSecondInstance) {
+        if (settingsLoaded) SaveSettings();
+        RefreshRobloxWindowOpacity(false);
+        if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+            ApplyAutoRobloxWindowLayout();
         }
     }
 
