@@ -24378,8 +24378,6 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             g.SetPixelOffsetMode(PixelOffsetModeNone);
             g.SetSmoothingMode(SmoothingModeNone);
             g.FillRectangle(&disclaimerBorderBrush, (REAL)pData->disclaimerRect.left, (REAL)(pData->disclaimerRect.bottom - 1), (REAL)discW, 1.0f);
-            g.FillRectangle(&disclaimerBorderBrush, (REAL)pData->disclaimerRect.left, (REAL)pData->disclaimerRect.top, 1.0f, (REAL)discH);
-            g.FillRectangle(&disclaimerBorderBrush, (REAL)(pData->disclaimerRect.right - 1), (REAL)pData->disclaimerRect.top, 1.0f, (REAL)discH);
             g.FillRectangle(&disclaimerBorderBrush, (REAL)pData->disclaimerRect.left, (REAL)pData->disclaimerRect.top, (REAL)discW, 1.0f);
             g.SetPixelOffsetMode(oldOffset);
             g.SetSmoothingMode(oldSmooth);
@@ -24411,7 +24409,6 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             g.FillRectangle(&smBgBrush, (REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
             SolidBrush smSepBrush(Color(180, 56, 56, 56));
             g.FillRectangle(&smSepBrush, (REAL)smX, (REAL)smY, 1.0f, (REAL)smH);
-            g.FillRectangle(&disclaimerBorderBrush, (REAL)(pData->disclaimerRect.right - 1), (REAL)smY, 1.0f, (REAL)smH);
             g.SetPixelOffsetMode(smOldOffset);
             g.SetSmoothingMode(smOldSmooth);
             SolidBrush smTextBrush(Color(255, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150));
