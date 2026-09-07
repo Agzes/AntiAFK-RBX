@@ -392,6 +392,7 @@ std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
 std::thread g_manualGridSnapThread;
 std::thread g_manualReconnectCheckThread;
+std::atomic<bool> g_manualReconnectCheckRunning(false);
 std::atomic<int> g_intervalMacroGen(0);
 std::mutex g_intervalMacroThreadMutex;
 std::atomic<int> g_reconnectMacroDelaySec(60);
@@ -423,6 +424,7 @@ std::thread g_activityMonitorThread;
 std::mutex g_activityMonitorMutex;
 std::thread g_reconnectMonitorThread;
 std::atomic<bool> g_reconnectMonitorRunning(false);
+std::atomic<bool> g_reconnectCheckAbort(false);
 std::mutex g_reconnectMonitorMutex;
 std::mutex g_fpsCapperThreadMutex;
 std::map<HWND, DWORD> g_reconnectCooldownMap;
@@ -6234,8 +6236,9 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
             else ++it;
         }
     }
-    for (HWND w : wins) {
-        if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+for (HWND w : wins) {
+if (g_reconnectCheckAbort.load()) return;
+if (g_stopThread.load() || !g_isAfkStarted.load()) break;
         if (!IsWindow(w)) continue;
         if (!GetWindowInstanceSetting_Reconnect(w, g_autoReconnect.load())) continue;
         {
@@ -6296,24 +6299,26 @@ void ReconnectMonitorThread()
 
 void StartReconnectMonitor()
 {
-    std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
-    if (g_reconnectMonitorRunning.load()) return;
-    if (g_reconnectMonitorThread.joinable()) {
-        g_reconnectMonitorThread.join();
-    }
-    g_reconnectMonitorRunning = true;
-    g_reconnectMonitorThread = std::thread(ReconnectMonitorThread);
+std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
+if (g_reconnectMonitorRunning.load()) return;
+if (g_reconnectMonitorThread.joinable()) {
+g_reconnectMonitorThread.join();
+}
+g_reconnectCheckAbort = false;
+g_reconnectMonitorRunning = true;
+g_reconnectMonitorThread = std::thread(ReconnectMonitorThread);
 }
 
 void StopReconnectMonitor()
 {
-    std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
-    g_reconnectMonitorRunning = false;
-    if (g_reconnectMonitorThread.joinable()) {
-        g_reconnectMonitorThread.join();
-    }
-    std::lock_guard<std::mutex> cooldownLock(g_reconnectCooldownMutex);
-    g_reconnectCooldownMap.clear();
+std::lock_guard<std::mutex> lock(g_reconnectMonitorMutex);
+g_reconnectCheckAbort = true;
+g_reconnectMonitorRunning = false;
+if (g_reconnectMonitorThread.joinable()) {
+g_reconnectMonitorThread.join();
+}
+std::lock_guard<std::mutex> cooldownLock(g_reconnectCooldownMutex);
+g_reconnectCooldownMap.clear();
 }
 
 static std::wstring MacroEngine_GetMacrosPath() {
@@ -17392,16 +17397,17 @@ static void MainUI_Paint_DrawStartupOverlay(HDC hdc, const RECT& clientRect, Mai
 }
 
 struct StatusBarData {
-    HFONT hFontBrand = NULL;
-    HFONT hFontText = NULL;
-    HICON hIcon = NULL;
-    std::wstring message = L"Ready";
-    RECT targetBounds = { 0 };
-    BYTE currentAlpha = 0;
-    BYTE targetAlpha = 0;
-    ULONGLONG lastFadeTick = 0;
-    bool persistent = false;
-    StatusBarEventType eventType = StatusBarEventType::Ui;
+HFONT hFontBrand = NULL;
+HFONT hFontText = NULL;
+int fontDpi = 0;
+HICON hIcon = NULL;
+std::wstring message = L"Ready";
+RECT targetBounds = { 0 };
+BYTE currentAlpha = 0;
+BYTE targetAlpha = 0;
+ULONGLONG lastFadeTick = 0;
+bool persistent = false;
+StatusBarEventType eventType = StatusBarEventType::Ui;
 };
 
 bool StatusBarHasAnyContent()
@@ -17499,14 +17505,31 @@ HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
 
 RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
 {
-    HDC screen = GetDC(NULL);
-    int dpiX = GetDeviceCaps(screen, LOGPIXELSX);
-    int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
-    ReleaseDC(NULL, screen);
+MONITORINFO mi = { sizeof(mi) };
+HMONITOR hMon = ResolveStatusBarMonitor(anchorWindow);
+GetMonitorInfo(hMon, &mi);
 
-    MONITORINFO mi = { sizeof(mi) };
-    HMONITOR hMon = ResolveStatusBarMonitor(anchorWindow);
-    GetMonitorInfo(hMon, &mi);
+int dpiX = 96, dpiY = 96;
+typedef HRESULT(WINAPI* GetDpiForMonitor_fn)(HMONITOR, int, UINT*, UINT*);
+static GetDpiForMonitor_fn fnGetDpiForMonitor = []() -> GetDpiForMonitor_fn {
+HMODULE shcore = GetModuleHandleW(L"Shcore.dll");
+if (!shcore) shcore = LoadLibraryW(L"Shcore.dll");
+return shcore ? (GetDpiForMonitor_fn)GetProcAddress(shcore, "GetDpiForMonitor") : nullptr;
+}();
+if (fnGetDpiForMonitor) {
+UINT dx = 0, dy = 0;
+if (SUCCEEDED(fnGetDpiForMonitor(hMon, 0, &dx, &dy)) && dx > 0 && dy > 0) {
+dpiX = (int)dx;
+dpiY = (int)dy;
+}
+} else {
+HDC screen = GetDC(NULL);
+if (screen) {
+dpiX = GetDeviceCaps(screen, LOGPIXELSX);
+dpiY = GetDeviceCaps(screen, LOGPIXELSY);
+ReleaseDC(NULL, screen);
+}
+}
 
     int workWidth = mi.rcWork.right - mi.rcWork.left;
     int contentWidth = MeasureStatusBarContentWidth(message, dpiY);
@@ -17523,6 +17546,20 @@ RECT CalculateStatusBarBounds(HWND anchorWindow, const std::wstring& message)
         y = mi.rcWork.top + MulDiv(14, dpiY, 96);
     }
     return { x, y, x + width, y + height };
+}
+
+static void EnsureStatusBarFonts(HWND hwnd, StatusBarData* pData)
+{
+if (!pData) return;
+HDC wndDC = GetDC(hwnd);
+int dpiY = wndDC ? GetDeviceCaps(wndDC, LOGPIXELSY) : 96;
+if (wndDC) ReleaseDC(hwnd, wndDC);
+if (pData->fontDpi == dpiY && pData->hFontBrand && pData->hFontText) return;
+if (pData->hFontBrand) { DeleteObject(pData->hFontBrand); pData->hFontBrand = NULL; }
+if (pData->hFontText) { DeleteObject(pData->hFontText); pData->hFontText = NULL; }
+pData->hFontBrand = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+pData->fontDpi = dpiY;
 }
 
 void UpdateStatusBarWindowRegion(HWND hwnd)
@@ -17551,12 +17588,13 @@ void UpdateStatusBarPlacement(HWND hwnd, StatusBarData* pData)
         return;
     }
 
-    SetWindowPos(hwnd, HWND_TOPMOST,
-        pData->targetBounds.left, pData->targetBounds.top,
-        width, height,
-        SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+SetWindowPos(hwnd, HWND_TOPMOST,
+pData->targetBounds.left, pData->targetBounds.top,
+width, height,
+SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 
-    UpdateStatusBarWindowRegion(hwnd);
+EnsureStatusBarFonts(hwnd, pData);
+UpdateStatusBarWindowRegion(hwnd);
 }
 
 void HideStatusBarOverlay(bool animate)
@@ -17875,16 +17913,11 @@ LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
     {
     case WM_CREATE:
     {
-        pData = new StatusBarData();
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
+pData = new StatusBarData();
+SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pData);
 
-        HDC screen = GetDC(NULL);
-        int dpiY = GetDeviceCaps(screen, LOGPIXELSY);
-        ReleaseDC(NULL, screen);
-
-        pData->hFontBrand = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        pData->hIcon = CreateCustomIcon();
+EnsureStatusBarFonts(hwnd, pData);
+pData->hIcon = CreateCustomIcon();
         pData->currentAlpha = 0;
         pData->targetAlpha = 0;
 
@@ -28867,11 +28900,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
 case ID_RECONNECT_MANUAL_CHECK:
 if (g_autoReconnect.load()) {
+if (!g_manualReconnectCheckRunning.load() && g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
+if (g_manualReconnectCheckRunning.exchange(true)) {
+QueueStatusBarOverlay(L"Reconnect check already running", 1500, NULL, StatusBarEventType::Reconnect);
+} else {
 QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
-if (g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
 g_manualReconnectCheckThread = std::thread([]() {
 PerformReconnectCheckOnAllWindows(true);
+g_manualReconnectCheckRunning = false;
 });
+}
 }
 break;
         case ID_AUTO_RESET:
