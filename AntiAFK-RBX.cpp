@@ -833,7 +833,7 @@ struct ImageTemplate {
         if (!hdcMem) { ReleaseDC(hwnd, hdcWindow); return false; }
         HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, size, size);
         if (!hBitmap) { DeleteDC(hdcMem); ReleaseDC(hwnd, hdcWindow); return false; }
-        SelectObject(hdcMem, hBitmap);
+        HGDIOBJ hOldBmp = SelectObject(hdcMem, hBitmap);
         BitBlt(hdcMem, 0, 0, size, size, hdcWindow, cx - size / 2, cy - size / 2, SRCCOPY);
         BITMAPINFO bmi = {};
         bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -843,6 +843,7 @@ struct ImageTemplate {
         bmi.bmiHeader.biBitCount = 32;
         bmi.bmiHeader.biCompression = BI_RGB;
         GetDIBits(hdcMem, hBitmap, 0, size, pixels.data(), &bmi, DIB_RGB_COLORS);
+        SelectObject(hdcMem, hOldBmp);
         DeleteObject(hBitmap);
         DeleteDC(hdcMem);
         ReleaseDC(hwnd, hdcWindow);
@@ -3458,7 +3459,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         if (!pData) break;
         short delta = GET_WHEEL_DELTA_WPARAM(wParam);
         pData->scrollOffset -= (delta / WHEEL_DELTA) * 22;
-        int maxScroll = (std::max)(0, (int)pData->robloxWins.size() * 44 - 395);
+        int maxScroll = (std::max)(0, (int)pData->robloxWins.size() * 40 - 395);
         if (pData->scrollOffset < 0) pData->scrollOffset = 0;
         if (pData->scrollOffset > maxScroll) pData->scrollOffset = maxScroll;
         InvalidateRect(hwnd, NULL, FALSE);
@@ -6073,6 +6074,7 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
 
     const int kickWidth = 400;
     const int kickHeight = 250;
+    if (windowWidth < kickWidth || windowHeight < kickHeight) return false;
     int elemX = (windowWidth - kickWidth) / 2;
     int elemY = (windowHeight - kickHeight) / 2;
     POINT checkPoint = { elemX + 10, elemY + 10 };
@@ -6159,6 +6161,10 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 
     const int kickWidth = 400;
     const int kickHeight = 250;
+    if (ww < kickWidth || wh < kickHeight) {
+        if (windowWasHidden) restorePreviousWindowState();
+        return false;
+    }
     int elemX = (ww - kickWidth) / 2;
     int elemY = (wh - kickHeight) / 2;
     const int btnWidth = 161;
@@ -6237,7 +6243,7 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
         }
     }
 for (HWND w : wins) {
-if (g_reconnectCheckAbort.load()) return;
+if (g_reconnectCheckAbort.load()) break;
 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
         if (!IsWindow(w)) continue;
         if (!GetWindowInstanceSetting_Reconnect(w, g_autoReconnect.load())) continue;
@@ -8752,6 +8758,7 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                 return 0;
             }
             if (id == ID_MACROS_TEST_RUN) {
+                if (g_macroTestRunning) return 0;
                 Macro testMacro = g_wizardMacro;
                 HWND testTarget = g_wizardTargetHwnd;
                 if (!testTarget || !IsWindow(testTarget)) {
@@ -8934,7 +8941,8 @@ std::wstring path_w(value);
 }
 std::string GetSelfExePath() {
     wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH);
+    DWORD pathLen = GetModuleFileNameW(NULL, path, MAX_PATH);
+    if (pathLen == 0 || pathLen >= MAX_PATH) return "";
     std::wstring wpath = path;
     for (auto& c : wpath) {
         if (c == '\\') c = '/';
@@ -13091,9 +13099,11 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
             while (nParsed < 23 && *p) {
                 while (*p == L',' || *p == L' ') ++p;
                 if (!*p) break;
+                int sign = 1;
+                if (*p == L'-') { sign = -1; ++p; }
                 int v = 0;
                 while (*p >= L'0' && *p <= L'9') { v = v * 10 + (*p - L'0'); ++p; }
-                vals[nParsed++] = v;
+                vals[nParsed++] = sign * v;
                 if (*p == L',') ++p;
             }
             if (nParsed < 16) continue;
@@ -15842,7 +15852,7 @@ void ShowMacroOrderDialog(HWND owner, const std::vector<HWND>& targets, MacroOrd
         y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
     }
 
-    g_hMacroOrderWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CLASS_NAME,
+    g_hMacroOrderWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW | WS_EX_LAYERED, CLASS_NAME,
         MacroOrder_TitleText(listType), WS_POPUP,
         x, y, dlgW, dlgH, owner, NULL, g_hInst, NULL);
 
@@ -17517,14 +17527,14 @@ UINT dx = 0, dy = 0;
 if (SUCCEEDED(fnGetDpiForMonitor(hMon, 0, &dx, &dy)) && dx > 0 && dy > 0) {
 dpiX = (int)dx;
 dpiY = (int)dy;
+return;
 }
-} else {
+}
 HDC screen = GetDC(NULL);
 if (screen) {
 dpiX = GetDeviceCaps(screen, LOGPIXELSX);
 dpiY = GetDeviceCaps(screen, LOGPIXELSY);
 ReleaseDC(NULL, screen);
-}
 }
 }
 
@@ -17951,10 +17961,10 @@ pData->hIcon = CreateCustomIcon();
 
         if (wParam == STATUS_BAR_HIDE_TIMER) {
             KillTimer(hwnd, STATUS_BAR_HIDE_TIMER);
-            KillTimer(hwnd, STATUS_BAR_POSITION_TIMER);
             if (pData && pData->persistent) {
                 return 0;
             }
+            KillTimer(hwnd, STATUS_BAR_POSITION_TIMER);
             HideStatusBarOverlay(true);
             return 0;
         }
@@ -17991,7 +18001,7 @@ pData->hIcon = CreateCustomIcon();
             return 0;
         }
         if (wParam == STATUS_BAR_POSITION_TIMER) {
-            if (!g_statusBarPrimaryMonitor.load() && IsWindowVisible(hwnd)) {
+            if (IsWindowVisible(hwnd)) {
                 RECT newBounds = CalculateStatusBarBounds(NULL, pData->message);
                 if (newBounds.left != pData->targetBounds.left || newBounds.top != pData->targetBounds.top) {
                     pData->targetBounds = newBounds;
@@ -18262,7 +18272,16 @@ void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, 
         tooltipX = anchorRect.right - tooltipW;
     }
     int tooltipY = anchorRect.top - tooltipH - 6 - extraTopOffset;
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenW = 0;
+    RECT tooltipBoundsRect;
+    HWND hTooltipPaintWnd = WindowFromDC(hdc);
+    if (hTooltipPaintWnd && IsWindow(hTooltipPaintWnd) && GetClientRect(hTooltipPaintWnd, &tooltipBoundsRect)) {
+        screenW = tooltipBoundsRect.right;
+    } else if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && GetClientRect(g_hMainUiWnd, &tooltipBoundsRect)) {
+        screenW = tooltipBoundsRect.right;
+    } else {
+        screenW = GetSystemMetrics(SM_CXSCREEN);
+    }
     if (tooltipX < 8) tooltipX = 8;
     if (tooltipX + tooltipW > screenW - 8) tooltipX = screenW - 8 - tooltipW;
     if (tooltipY < 34) tooltipY = anchorRect.bottom + 6;
@@ -28271,13 +28290,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_hotkeyCaptureWnd = NULL;
         bool wasGrid = g_hotkeyCaptureIsGrid.load();
         g_hotkeyCaptureIsGrid = false;
+        bool hotkeyRegisterFailed = false;
         if (wasGrid) {
             if (g_hotkeyGridEnabled.load()) {
-                RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+                hotkeyRegisterFailed = !RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
             }
         } else {
             if (g_hotkeyEnabled.load()) {
-                RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+                hotkeyRegisterFailed = !RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
             }
         }
         SaveSettings();
@@ -28285,7 +28305,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             InvalidateRect(g_hMainUiWnd, NULL, TRUE);
         }
-        if (wasGrid) {
+        if (hotkeyRegisterFailed) {
+            ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+        } else if (wasGrid) {
             ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 2000, hwnd);
         } else {
             ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 2000, hwnd);
@@ -28662,8 +28684,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             g_hotkeyEnabled = !g_hotkeyEnabled.load();
             if (g_hotkeyEnabled.load()) {
-                RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
-                ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 1800, hwnd);
+                if (!RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load())) {
+                    g_hotkeyEnabled = false;
+                    ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+                } else {
+                    ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 1800, hwnd);
+                }
             } else {
                 UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
                 ShowStatusBarOverlay(L"Hotkey disabled", 1800, hwnd);
@@ -28690,8 +28716,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             g_hotkeyGridEnabled = !g_hotkeyGridEnabled.load();
             if (g_hotkeyGridEnabled.load()) {
-                RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
-                ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 1800, hwnd);
+                if (!RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load())) {
+                    g_hotkeyGridEnabled = false;
+                    ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+                } else {
+                    ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 1800, hwnd);
+                }
             } else {
                 UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
                 ShowStatusBarOverlay(L"Grid hotkey disabled", 1800, hwnd);
@@ -28721,13 +28751,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            if (g_autoUpdate.load())
-                try
-            {
-                CheckForUpdates();
-            }
-            catch (...)
-            {
+            if (g_autoUpdate.load()) {
+                std::thread([]()
+                {
+                    try
+                    {
+                        CheckForUpdates();
+                    }
+                    catch (...)
+                    {
+                    }
+                }).detach();
             }
             break;
         case ID_STATUS_BAR:
@@ -28911,7 +28945,11 @@ QueueStatusBarOverlay(L"Reconnect check already running", 1500, NULL, StatusBarE
 QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
 try {
 g_manualReconnectCheckThread = std::thread([]() {
+g_reconnectCheckAbort = false;
+try {
 PerformReconnectCheckOnAllWindows(true);
+} catch (...) {
+}
 g_manualReconnectCheckRunning = false;
 });
 } catch (...) {
@@ -29941,6 +29979,9 @@ case WM_DESTROY:
             FinalizeAfkSession();
             ResetIcanForgetCounter();
         }
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+            DestroyWindow(g_hMainUiWnd);
+        }
         if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
             DestroyWindow(g_hStatusBarWnd);
         }
@@ -30479,24 +30520,27 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
             GdiplusShutdown(gdiplusToken);
             return 0;
-        } else {
-            if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
-            if (hExistingWnd) {
-                PostMessage(hExistingWnd, WM_COMMAND, ID_OPEN_UI, 0);
-            }
-            ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK);
-            GdiplusShutdown(gdiplusToken);
-            return 0;
-        }
-    }
+} else {
+if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
+if (hExistingWnd) {
+PostMessage(hExistingWnd, WM_COMMAND, ID_OPEN_UI, 0);
+}
+if (arg_force && !hExistingWnd) {
+ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running, but its window could not be located, so it could not be restarted.\nClose the other instance from the system tray and try again.", L"AntiAFK-RBX", MB_OK);
+} else {
+ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK);
+}
+GdiplusShutdown(gdiplusToken);
+return 0;
+}
+}
 
-    if (isSecondInstance) {
-        if (settingsLoaded) SaveSettings();
-        RefreshRobloxWindowOpacity(false);
-        if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
-            ApplyAutoRobloxWindowLayout();
-        }
-    }
+if (isSecondInstance) {
+RefreshRobloxWindowOpacity(false);
+if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
+ApplyAutoRobloxWindowLayout();
+}
+}
 
     if (arg_resetSettingsAndExit) {
         int result = ShowDarkMessageBox(NULL, L"Are you sure you want to reset all settings to their defaults via command line?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Settings", MB_YESNO | MB_DEFBUTTON2);
