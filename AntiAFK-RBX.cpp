@@ -391,6 +391,7 @@ std::atomic<bool> g_intervalMacroEnabled(false);
 std::atomic<bool> g_intervalMacroThreadRunning(false);
 std::thread g_intervalMacroThread;
 std::thread g_manualGridSnapThread;
+std::atomic<bool> g_manualGridSnapRunning(false);
 std::thread g_manualReconnectCheckThread;
 std::atomic<bool> g_manualReconnectCheckRunning(false);
 std::atomic<int> g_intervalMacroGen(0);
@@ -437,6 +438,7 @@ std::condition_variable g_cv;
 std::vector<DWORD> g_manuallyStoppedPids;
 std::mutex g_manuallyStoppedPidsMutex;
 std::mutex g_autoWindowLayoutMutex;
+std::mutex g_autoUtilsStartMutex;
 std::vector<UINT_PTR> g_lastAutoGridWindowSignature;
 std::mutex g_cv_m;
 std::mutex g_selfHiddenMutex;
@@ -842,8 +844,8 @@ struct ImageTemplate {
         bmi.bmiHeader.biPlanes = 1;
         bmi.bmiHeader.biBitCount = 32;
         bmi.bmiHeader.biCompression = BI_RGB;
-        GetDIBits(hdcMem, hBitmap, 0, size, pixels.data(), &bmi, DIB_RGB_COLORS);
         SelectObject(hdcMem, hOldBmp);
+        GetDIBits(hdcMem, hBitmap, 0, size, pixels.data(), &bmi, DIB_RGB_COLORS);
         DeleteObject(hBitmap);
         DeleteDC(hdcMem);
         ReleaseDC(hwnd, hdcWindow);
@@ -3388,7 +3390,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             if (pt.x >= 215 - 30 && pt.x <= 215 - 6 && pt.y >= 65) {
                 RECT cr2; GetClientRect(hwnd, &cr2);
                 if (pt.y <= cr2.bottom) {
-                    int idx = (pt.y - 65 + pData->scrollOffset) / 40;
+                    int idx = (pt.y - 66 + pData->scrollOffset) / 40;
                     if (idx >= 0 && idx < (int)pData->robloxWins.size()) {
                         int rowTop = 66 - pData->scrollOffset + idx * 40;
                         RECT fBtn = { 215 - 30, rowTop + 8, 215 - 6, rowTop + 32 };
@@ -3507,7 +3509,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         if (pt.x >= 0 && pt.x <= 215 && pt.y >= 65) {
             RECT cr2; GetClientRect(hwnd, &cr2);
             if (pt.y <= cr2.bottom) {
-                int idx = (pt.y - 65 + pData->scrollOffset) / 40;
+                int idx = (pt.y - 66 + pData->scrollOffset) / 40;
                 if (idx >= 0 && idx < (int)pData->robloxWins.size()) {
                     HWND clickedWnd = pData->robloxWins[idx];
                     int rowTop = 66 - pData->scrollOffset + idx * 40;
@@ -5042,6 +5044,7 @@ void ActivateAutoUtilsOnAfkStart()
 
 void ApplyAutoUtilsStartEffects()
 {
+    std::lock_guard<std::mutex> guard(g_autoUtilsStartMutex);
     RefreshRobloxWindowOpacity(false);
     RestartFpsCapperForEffectiveLimit();
     if (g_utilsMuteOverride.load() == 1) {
@@ -6060,10 +6063,17 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
     if (!IsWindow(hRobloxWnd) || !IsWindowVisible(hRobloxWnd)) {
         return false;
     }
+    if (IsHungAppWindow(hRobloxWnd)) {
+        return false;
+    }
 
     BringWindowToTop(hRobloxWnd);
     SetForegroundWindow(hRobloxWnd);
     Sleep(250);
+
+    if (GetForegroundWindow() != hRobloxWnd) {
+        return false;
+    }
 
     RECT clientRect;
     if (!GetClientRect(hRobloxWnd, &clientRect)) {
@@ -6086,7 +6096,7 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
     COLORREF pixelColor = GetPixel(hdcScreen, checkPoint.x, checkPoint.y);
     ReleaseDC(NULL, hdcScreen);
 
-    if (pixelColor != RGB(57, 59, 61)) {
+    if (pixelColor == CLR_INVALID || pixelColor != RGB(57, 59, 61)) {
         return false;
     }
 
@@ -6140,6 +6150,11 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
         if (windowWasIconic) ShowWindow(hRobloxWnd, SW_MINIMIZE);
         else if (windowWasInvisible) HideRobloxWindowTracked(hRobloxWnd);
     };
+
+    if (IsHungAppWindow(hRobloxWnd)) {
+        if (windowWasHidden) restorePreviousWindowState();
+        return false;
+    }
 
     if (windowWasHidden) {
         ShowWindow(hRobloxWnd, SW_RESTORE);
@@ -6198,7 +6213,7 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 }
 
 static void MacroEngine_RunPendingReconnectMacros() {
-    if (g_stopThread.load() || !g_isAfkStarted.load()) {
+    if (g_stopThread.load() || !g_isAfkStarted.load() || g_reconnectCheckAbort.load()) {
         std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
         g_reconnectMacroPending.clear();
         return;
@@ -6218,7 +6233,7 @@ static void MacroEngine_RunPendingReconnectMacros() {
         }
     }
     for (HWND w : due) {
-        if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+        if (g_stopThread.load() || !g_isAfkStarted.load() || g_reconnectCheckAbort.load()) break;
         if (!IsWindow(w)) continue;
         std::vector<Macro> recs = MacroEngine_GetReconnectMacrosForWindow(w);
         for (const auto& m : recs) {
@@ -7015,7 +7030,7 @@ if (m.name.size() > 63) m.name.resize(63);
                         }
                         if (pArrEnd != std::string::npos) {
                             std::string pstr = block.substr(pArrStart, pArrEnd - pArrStart + 1);
-                            size_t pairPos = 0;
+                            size_t pairPos = (pstr.size() > 1 && pstr[0] == '[') ? 1 : 0;
                             while (true) {
                                 size_t pairStart = pstr.find('[', pairPos);
                                 if (pairStart == std::string::npos) break;
@@ -7974,6 +7989,14 @@ static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             ReleaseDC(NULL, screen);
             int x = wr.left + 12;
             int y = wr.top - MulDiv(35, dpiY, 96);
+            HMONITOR mon = MonitorFromWindow(g_recordingTargetHwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi;
+            mi.rcMonitor = { 0 };
+            mi.rcWork = { 0 };
+            mi.dwFlags = 0;
+            if (mon && GetMonitorInfo(mon, &mi) && y < mi.rcWork.top) {
+                y = mi.rcWork.top + 4;
+            }
             SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
         }
         return 0;
@@ -8830,8 +8853,20 @@ void MacroEngine_ShowWizard(HWND parent, int startStep) {
     RegisterClass(&wc);
 
     int w = 400, h = 400;
-    int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
-    int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
+    HMONITOR mon = parent && IsWindow(parent) ? MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST) : NULL;
+    RECT wa = { 0 };
+    if (mon) {
+        MONITORINFO mi;
+        mi.rcMonitor = { 0 };
+        mi.rcWork = { 0 };
+        mi.dwFlags = 0;
+        if (GetMonitorInfo(mon, &mi)) wa = mi.rcWork;
+        else SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+    } else {
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+    }
+    int x = wa.left + ((wa.right - wa.left) - w) / 2;
+    int y = wa.top + ((wa.bottom - wa.top) - h) / 2;
 
     g_macroWizardHwnd = CreateWindowEx(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
@@ -8993,6 +9028,11 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
         }
 
         std::string selfPath = EscapeJsonStringUtf8(GetSelfExePath());
+        if (selfPath.empty()) {
+            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not determine the application path.");
+            g_bloxstrapIntegration = false;
+            return;
+        }
 
         std::string integrationJson = "    {\r\n      \"Name\": \"" + integrationName + "\",\r\n      \"Location\": \"" + selfPath + "\",\r\n      \"LaunchArgs\": \"--bloxstrap-integration\",\r\n      \"Delay\": 0,\r\n      \"PreLaunch\": true,\r\n      \"AutoClose\": true\r\n    }";
 
@@ -13435,6 +13475,7 @@ static bool ImportSettingsFromFile(HWND owner)
                             ShowDarkMessageBox(owner, L"The imported macros file could not be parsed. Your previous macros were restored.", L"AntiAFK-RBX • Import Settings", MB_OK);
                         } else {
                             DeleteFileW(macrosPath.c_str());
+                            DeleteFileW(backupPath.c_str());
                             MacroEngine_LoadMacros();
                             ShowDarkMessageBox(owner, L"The imported macros file could not be parsed and no previous valid macros file existed - macros were reset.", L"AntiAFK-RBX • Import Settings", MB_OK);
                         }
@@ -15852,12 +15893,11 @@ void ShowMacroOrderDialog(HWND owner, const std::vector<HWND>& targets, MacroOrd
         y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
     }
 
-    g_hMacroOrderWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW | WS_EX_LAYERED, CLASS_NAME,
+    g_hMacroOrderWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CLASS_NAME,
         MacroOrder_TitleText(listType), WS_POPUP,
         x, y, dlgW, dlgH, owner, NULL, g_hInst, NULL);
 
     if (g_hMacroOrderWnd) {
-        SetLayeredWindowAttributes(g_hMacroOrderWnd, 0, 0, LWA_ALPHA);
         if (owner) EnableWindow(owner, FALSE);
         ShowWindow(g_hMacroOrderWnd, SW_SHOW);
         UpdateWindow(g_hMacroOrderWnd);
@@ -18276,6 +18316,8 @@ void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, 
     RECT tooltipBoundsRect;
     HWND hTooltipPaintWnd = WindowFromDC(hdc);
     if (hTooltipPaintWnd && IsWindow(hTooltipPaintWnd) && GetClientRect(hTooltipPaintWnd, &tooltipBoundsRect)) {
+        screenW = tooltipBoundsRect.right;
+    } else if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg) && GetClientRect(g_hInstanceManagerDlg, &tooltipBoundsRect)) {
         screenW = tooltipBoundsRect.right;
     } else if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && GetClientRect(g_hMainUiWnd, &tooltipBoundsRect)) {
         screenW = tooltipBoundsRect.right;
@@ -27133,8 +27175,21 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         int finalW = wndRect.right - wndRect.left;
         int finalH = wndRect.bottom - wndRect.top;
 
-        int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
-        int x = (screenW - finalW) / 2, y = (screenH - finalH) / 2;
+        HWND ownerHwnd = GetParent(hwnd);
+        HMONITOR mon = ownerHwnd && IsWindow(ownerHwnd) ? MonitorFromWindow(ownerHwnd, MONITOR_DEFAULTTONEAREST) : NULL;
+        RECT wa = { 0 };
+        if (mon) {
+            MONITORINFO mi;
+            mi.rcMonitor = { 0 };
+            mi.rcWork = { 0 };
+            mi.dwFlags = 0;
+            if (GetMonitorInfo(mon, &mi)) wa = mi.rcWork;
+            else SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+        } else {
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+        }
+        int x = wa.left + ((wa.right - wa.left) - finalW) / 2;
+        int y = wa.top + ((wa.bottom - wa.top) - finalH) / 2;
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, finalW, finalH, 0);
 
         pData->hCursorHand = LoadCursor(NULL, IDC_HAND);
@@ -28300,6 +28355,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 hotkeyRegisterFailed = !RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
             }
         }
+        if (hotkeyRegisterFailed) {
+            if (wasGrid) g_hotkeyGridEnabled = false;
+            else g_hotkeyEnabled = false;
+        }
         SaveSettings();
         CreateTrayMenu(g_isAfkStarted.load());
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -28482,7 +28541,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 ActivateAutoUtilsOnAfkStart();
                 g_cv.notify_all();
-                ApplyAutoUtilsStartEffects();
+                std::thread([]()
+                {
+                    try
+                    {
+                        ApplyAutoUtilsStartEffects();
+                    }
+                    catch (...)
+                    {
+                    }
+                }).detach();
 
                 ShowStatusBarOverlay(L"Anti-AFK started", 1800, wins.front(), StatusBarEventType::Session);
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started manually.", false);
@@ -28617,11 +28685,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else
             {
                 ShowStatusBarOverlay(L"Arranging Roblox windows...", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
-                g_manualGridSnapThread = std::thread([wins]() {
-                    std::lock_guard<std::mutex> lock(g_autoWindowLayoutMutex);
-                    GridSnapRobloxWindows();
-                });
+                if (!g_manualGridSnapRunning.exchange(true)) {
+                    if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
+                    try {
+                        g_manualGridSnapThread = std::thread([]() {
+                            std::lock_guard<std::mutex> lock(g_autoWindowLayoutMutex);
+                            try {
+                                GridSnapRobloxWindows();
+                            } catch (...) {
+                            }
+                            g_manualGridSnapRunning = false;
+                        });
+                    } catch (...) {
+                        g_manualGridSnapRunning = false;
+                    }
+                } else {
+                    ShowStatusBarOverlay(L"Grid snap already running", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                }
             }
             break;
         }
@@ -29166,12 +29246,21 @@ case ID_AUTO_RESET:
             if (result == IDYES)
             {
                 bool hadRoblox = !FindAllRobloxProcessIds().empty();
-                int terminatedCount = CloseAllRobloxInstances();
-                if (hadRoblox || terminatedCount > 0) {
-                    ShowStatusBarOverlay(L"Closed all Roblox clients", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                } else {
-                    ShowStatusBarOverlay(L"No Roblox processes found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                }
+                std::thread([hadRoblox]()
+                {
+                    try
+                    {
+                        int terminatedCount = CloseAllRobloxInstances();
+                        if (hadRoblox || terminatedCount > 0) {
+                            QueueStatusBarOverlay(L"Closed all Roblox clients", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                        } else {
+                            QueueStatusBarOverlay(L"No Roblox processes found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                        }
+                    }
+                    catch (...)
+                    {
+                    }
+                }).detach();
             }
             break;
         }
@@ -29971,9 +30060,13 @@ case WM_DESTROY:
         }
     g_hotkeyCaptureActive = false;
     ResetRobloxSessionEffectsOnExit();
-    {
+{
         std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
+        if (g_nid.hIcon) {
+            DestroyIcon(g_nid.hIcon);
+            g_nid.hIcon = NULL;
+        }
     }
         if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
             FinalizeAfkSession();
