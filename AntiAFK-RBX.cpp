@@ -6649,7 +6649,7 @@ bool MacroEngine_LoadMacros() {
                                 }
                                 if (pArrEnd != std::string::npos) {
                                     std::string pstr = astr.substr(pArrStart, pArrEnd - pArrStart + 1);
-                                    size_t pairPos = 0;
+                                    size_t pairPos = (pstr.size() > 1 && pstr[0] == '[') ? 1 : 0;
                                     while (true) {
                                         size_t pairStart = pstr.find('[', pairPos);
                                         if (pairStart == std::string::npos) break;
@@ -7305,15 +7305,38 @@ static bool MacroEngine_IsMouseButtonDown(int btn) {
     return (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0;
 }
 
+static void MacroEngine_EnsureWindowInsideWorkArea(HWND hwnd, int desiredW = 800, int desiredH = 600) {
+    if (!hwnd || !IsWindow(hwnd)) return;
+    RECT curWr = { 0 };
+    GetWindowRect(hwnd, &curWr);
+    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    if (!mon) mon = MonitorFromWindow(NULL, MONITOR_DEFAULTTOPRIMARY);
+    MONITORINFO mi = { sizeof(mi) };
+    if (!GetMonitorInfoW(mon, &mi)) {
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &mi.rcWork, 0);
+    }
+    int x = curWr.left;
+    int y = curWr.top;
+    if (x + desiredW > mi.rcWork.right) {
+        x = mi.rcWork.right - desiredW;
+    }
+    if (x < mi.rcWork.left) {
+        x = mi.rcWork.left;
+    }
+    if (y + desiredH > mi.rcWork.bottom) {
+        y = mi.rcWork.bottom - desiredH;
+    }
+    if (y < mi.rcWork.top) {
+        y = mi.rcWork.top;
+    }
+    SetWindowPos(hwnd, HWND_TOP, x, y, desiredW, desiredH, SWP_SHOWWINDOW);
+}
+
 void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
     SetForegroundWindow(hwnd);
     Sleep(30);
-    RECT hwWr, hwCr;
-    GetWindowRect(hwnd, &hwWr);
-    GetClientRect(hwnd, &hwCr);
-    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
-    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
-    POINT screenPt = { hwWr.left + borderX + targetX, hwWr.top + borderY + targetY };
+    POINT screenPt = { targetX, targetY };
+    ClientToScreen(hwnd, &screenPt);
 
     int r = RandomInt(5) - 2;
     screenPt.x += r;
@@ -7366,7 +7389,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
     }
 
     if (!selfHidden) {
-        SetWindowPos(hwnd, HWND_TOP, origRect.left, origRect.top, 800, 600, SWP_NOACTIVATE);
+        MacroEngine_EnsureWindowInsideWorkArea(hwnd, 800, 600);
         Sleep(100);
         SetForegroundWindow(hwnd);
         BringWindowToTop(hwnd);
@@ -7375,6 +7398,13 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
 
     POINT cursorRestore;
     GetCursorPos(&cursorRestore);
+
+    std::unordered_set<uint8_t> keysActuallyDown;
+    bool leftButtonDown = false;
+    bool rightButtonDown = false;
+    bool middleButtonDown = false;
+    bool xButton1Down = false;
+    bool xButton2Down = false;
 
     int repeats = macro.totalRepeats > 0 ? macro.totalRepeats : 1;
     for (int r = 0; r < repeats; r++) {
@@ -7408,20 +7438,15 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                     due += a.delayBeforeMs;
                     waitDue();
                     SetForegroundWindow(hwnd);
-                    RECT hwWr, hwCr;
-                    GetWindowRect(hwnd, &hwWr);
-                    GetClientRect(hwnd, &hwCr);
-                    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
-                    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
-                    int sx = hwWr.left + borderX + a.x;
-                    int sy = hwWr.top + borderY + a.y;
-                    SetCursorPos(sx, sy);
+                    POINT screenPt = { a.x, a.y };
+                    ClientToScreen(hwnd, &screenPt);
+                    SetCursorPos(screenPt.x, screenPt.y);
                     switch (a.mouseButton) {
-                        case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
-                        case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); break;
-                        case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); break;
-                        case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); break;
-                        default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); break;
+                        case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); leftButtonDown = true; break;
+                        case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); rightButtonDown = true; break;
+                        case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); middleButtonDown = true; break;
+                        case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); xButton1Down = true; break;
+                        default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); xButton2Down = true; break;
                     }
                     break;
                 }
@@ -7429,11 +7454,11 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                     due += a.delayBeforeMs;
                     waitDue();
                     switch (a.mouseButton) {
-                        case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); break;
-                        case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); break;
-                        case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); break;
-                        case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); break;
-                        default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); break;
+                        case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); leftButtonDown = false; break;
+                        case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); rightButtonDown = false; break;
+                        case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); middleButtonDown = false; break;
+                        case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); xButton1Down = false; break;
+                        default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); xButton2Down = false; break;
                     }
                     break;
                 }
@@ -7448,31 +7473,29 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                     due += a.delayBeforeMs;
                     waitDue();
                     MacroEngine_SendKey(a.vkCode, true);
+                    keysActuallyDown.insert(a.vkCode);
                     break;
                 case MacroStepType::KeyUp:
                     due += a.delayBeforeMs + 15.0;
                     waitDue();
                     MacroEngine_SendKey(a.vkCode, false);
+                    keysActuallyDown.erase(a.vkCode);
                     break;
                 case MacroStepType::MouseMove: {
                     if (!a.path.empty()) {
-                        RECT hwWr, hwCr;
-                        GetWindowRect(hwnd, &hwWr);
-                        GetClientRect(hwnd, &hwCr);
-                        int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
-                        int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
-
                         if (a.relative && (a.x != 0 || a.y != 0)) {
-                            SetCursorPos((int)(int16_t)a.x, (int)(int16_t)a.y);
+                            POINT startPt = { (int)(int16_t)a.x, (int)(int16_t)a.y };
+                            ClientToScreen(hwnd, &startPt);
+                            SetCursorPos(startPt.x, startPt.y);
                         }
 
                         if (a.mouseDown && !MacroEngine_IsMouseButtonDown(a.mouseButton)) {
                             switch (a.mouseButton) {
-                                case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); break;
-                                case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); break;
-                                case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); break;
-                                case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); break;
-                                default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); break;
+                                case 0: mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); leftButtonDown = true; break;
+                                case 1: mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); rightButtonDown = true; break;
+                                case 2: mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); middleButtonDown = true; break;
+                                case 3: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1, 0); xButton1Down = true; break;
+                                default: mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2, 0); xButton2Down = true; break;
                             }
                         }
 
@@ -7490,20 +7513,20 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                             if (a.relative) {
                                 mouse_event(MOUSEEVENTF_MOVE, (int16_t)pt.first, (int16_t)pt.second, 0, 0);
                             } else {
-                                int sx = hwWr.left + borderX + pt.first;
-                                int sy = hwWr.top + borderY + pt.second;
-                                SetCursorPos(sx, sy);
+                                POINT pathPt = { (int)(int16_t)pt.first, (int)(int16_t)pt.second };
+                                ClientToScreen(hwnd, &pathPt);
+                                SetCursorPos(pathPt.x, pathPt.y);
                             }
                         }
                         if (a.mouseUp && MacroEngine_IsMouseButtonDown(a.mouseButton)) {
                             due += 10;
                             waitDue();
                             switch (a.mouseButton) {
-                                case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); break;
-                                case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); break;
-                                case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); break;
-                                case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); break;
-                                default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); break;
+                                case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); leftButtonDown = false; break;
+                                case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); rightButtonDown = false; break;
+                                case 2: mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); middleButtonDown = false; break;
+                                case 3: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0); xButton1Down = false; break;
+                                default: mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0); xButton2Down = false; break;
                             }
                         }
                     } else {
@@ -7533,15 +7556,15 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
     }
 
 macroEngineEnd:
-    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
-    mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
-    mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0);
-    mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0);
+    if (leftButtonDown) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    if (rightButtonDown) mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+    if (middleButtonDown) mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
+    if (xButton1Down) mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1, 0);
+    if (xButton2Down) mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2, 0);
 
-    MacroEngine_SendKey(VK_CONTROL, false);
-    MacroEngine_SendKey(VK_SHIFT, false);
-    MacroEngine_SendKey(VK_MENU, false);
+    for (uint8_t vk : keysActuallyDown) {
+        MacroEngine_SendKey(vk, false);
+    }
 
     SetCursorPos(cursorRestore.x, cursorRestore.y);
 
@@ -7597,6 +7620,9 @@ static bool MacroEngine_TakePendingMoves(std::vector<std::pair<uint16_t, uint16_
     g_recordingPendingDelays.clear();
     POINT cp = {};
     GetCursorPos(&cp);
+    if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
+        ScreenToClient(g_recordingTargetHwnd, &cp);
+    }
     g_recordingPendingStartX = cp.x;
     g_recordingPendingStartY = cp.y;
     return true;
@@ -7611,6 +7637,9 @@ static void MacroEngine_ClearPendingMoves() {
     g_recordingRawDeltaY = 0;
     POINT cp = {};
     GetCursorPos(&cp);
+    if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
+        ScreenToClient(g_recordingTargetHwnd, &cp);
+    }
     g_recordingPendingStartX = cp.x;
     g_recordingPendingStartY = cp.y;
 }
@@ -8188,6 +8217,22 @@ void MacroEngine_StopRecording() {
 
     g_wizardMacro.actions = MacroEngine_TakeRecordingActions();
 
+    while (!g_wizardMacro.actions.empty()) {
+        const auto& last = g_wizardMacro.actions.back();
+        if ((last.type == MacroStepType::KeyDown || last.type == MacroStepType::KeyUp || last.type == MacroStepType::KeyPress) &&
+            (last.vkCode == VK_CONTROL || last.vkCode == VK_SHIFT || last.vkCode == VK_MENU ||
+             last.vkCode == VK_LCONTROL || last.vkCode == VK_RCONTROL ||
+             last.vkCode == VK_LSHIFT || last.vkCode == VK_RSHIFT ||
+             last.vkCode == VK_LMENU || last.vkCode == VK_RMENU ||
+             last.vkCode == 'R')) {
+            g_wizardMacro.actions.pop_back();
+        } else if (last.type == MacroStepType::MouseMove && last.path.empty()) {
+            g_wizardMacro.actions.pop_back();
+        } else {
+            break;
+        }
+    }
+
     if (g_macroReRecording) {
         g_macroReRecording = false;
         bool replaced = false;
@@ -8308,7 +8353,7 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
         Sleep(200);
     }
 
-    SetWindowPos(targetHwnd, NULL, restoreRect.left, restoreRect.top, 800, 600, SWP_NOZORDER);
+    MacroEngine_EnsureWindowInsideWorkArea(targetHwnd, 800, 600);
     Sleep(200);
 
     {
@@ -8318,14 +8363,11 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     }
     Sleep(250);
 
-    RECT hwWr, hwCr;
-    GetWindowRect(targetHwnd, &hwWr);
+    RECT hwCr;
     GetClientRect(targetHwnd, &hwCr);
-    int borderX = ((hwWr.right - hwWr.left) - hwCr.right) / 2;
-    int borderY = ((hwWr.bottom - hwWr.top) - hwCr.bottom) - borderX;
-    int centerX = hwWr.left + borderX + hwCr.right / 2;
-    int centerY = hwWr.top + borderY + hwCr.bottom / 2;
-    SetCursorPos(centerX, centerY);
+    POINT centerPt = { hwCr.right / 2, hwCr.bottom / 2 };
+    ClientToScreen(targetHwnd, &centerPt);
+    SetCursorPos(centerPt.x, centerPt.y);
     Sleep(100);
 
     g_recordingTargetHwnd = targetHwnd;
@@ -9310,9 +9352,9 @@ void FpsCapperThread()
                     auto procWins = GetWindowsForProcess(pid, true);
                     if (!procWins.empty()) {
                         int dummyFps = 0;
-                        shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), (g_fpsLimit > 0), dummyFps);
+                        shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), ShouldRunFpsCapperNow(), dummyFps);
                     } else {
-                        shouldCap = (g_fpsLimit > 0);
+                        shouldCap = ShouldRunFpsCapperNow();
                     }
                     if (shouldCap && foreground_wnd && !procWins.empty()) {
                         bool isFocused = std::any_of(procWins.begin(), procWins.end(), [foreground_wnd](HWND w) {
@@ -9334,9 +9376,9 @@ void FpsCapperThread()
                                 auto procWins = GetWindowsForProcess(pe.th32ProcessID, true);
                                 if (!procWins.empty()) {
                                     int dummyFps = 0;
-                                    shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), (g_fpsLimit > 0), dummyFps);
+                                    shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), ShouldRunFpsCapperNow(), dummyFps);
                                 } else {
-                                    shouldCap = (g_fpsLimit > 0);
+                                    shouldCap = ShouldRunFpsCapperNow();
                                 }
                                 if (shouldCap && foreground_wnd && !procWins.empty()) {
                                     bool isFocused = std::any_of(procWins.begin(), procWins.end(), [foreground_wnd](HWND w) {
@@ -25693,6 +25735,16 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             pData->helpButtonRects.push_back({ pData->advancedFpsCapperLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedFpsCapperLinkRect.left - inlineGap, controlBottom });
             pData->fpsCapperToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
             y += rowH + vGap;
+
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            controlTop = y + (rowH - help_btn_size) / 2 + 4;
+            controlBottom = controlTop + help_btn_size;
+            pData->ramCleanerSweepCompactRect = { ctrlEndX - compactW, controlTop, ctrlEndX, controlBottom };
+            pData->ramCleanerToggleCompactRect = { pData->ramCleanerSweepCompactRect.left - inlineGap - compactW, controlTop, pData->ramCleanerSweepCompactRect.left - inlineGap, controlBottom };
+            pData->advancedRamCleanerLinkRect = { pData->ramCleanerToggleCompactRect.left - inlineGap - compactW, controlTop, pData->ramCleanerToggleCompactRect.left - inlineGap, controlBottom };
+            pData->helpButtonRects.push_back({ pData->advancedRamCleanerLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedRamCleanerLinkRect.left - inlineGap, controlBottom });
+            pData->ramCleanerToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+            y += rowH + vGap;
         } else if (pData->currentPage == 2) { // Misc
             int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
 
@@ -29317,7 +29369,7 @@ case ID_AUTO_RESET:
         case ID_UTILS_TOGGLE_FPS:
         {
             bool isCurrentlyOn = ShouldRunFpsCapperNow();
-            int sessionFpsLimit = g_fpsLimit > 0 ? g_fpsLimit.load() : 5;
+            int sessionFpsLimit = g_fpsLimit > 0 ? g_fpsLimit.load() : (g_fpsLastActiveLimit.load() > 0 ? g_fpsLastActiveLimit.load() : 5);
             g_utilsFpsLimitOverride = isCurrentlyOn ? 0 : sessionFpsLimit;
             RestartFpsCapperForEffectiveLimit();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
