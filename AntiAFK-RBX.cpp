@@ -6,8 +6,8 @@
 #define RC      3
 #define STABLE  4
 #define MAKE_VERSION(major, minor, patch, type, num) ((major)*10000000 + (minor)*100000 + (patch)*1000 + (type)*100 + (num))
-int currentVersion = MAKE_VERSION(4, 0, 0, BETA, 1);
-const wchar_t* g_Version = L"v.4.0.0-beta1";
+int currentVersion = MAKE_VERSION(4, 0, 0, BETA, 2);
+const wchar_t* g_Version = L"v.4.0.0-beta2";
 
 #include <windows.h>
 #include <mmsystem.h>
@@ -16718,6 +16718,7 @@ bool isHoveringUiSettings = false;
     bool isHoveringTimingsBackIcon = false;
     bool isHoveringTimingsToggle = false;
     bool isHoveringDisclaimerShowMore = false;
+    bool isHoveringDisclaimerWiki = false;
     bool isHoveringDiscordWebhookEnableToggle = false;
     bool isHoveringDiscordNotifyStartToggle = false;
     bool isHoveringDiscordNotifyActionToggle = false;
@@ -16987,6 +16988,7 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     RECT timingsOkButtonRect = { 0 };
     bool isHoveringTimingsOkButton = false;
     RECT disclaimerShowMoreRect = { 0 };
+    RECT disclaimerWikiRect = { 0 };
 
     bool showingTimings = false;
     float timingsViewAnim = 0.0f;
@@ -20538,6 +20540,10 @@ title = L"CPU Limit %";
                 }
             }
         }
+        return;
+    }
+    if (pData->disclaimerWikiRect.right > 0 && PtInRect(&pData->disclaimerWikiRect, pt)) {
+        ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/wiki", NULL, NULL, SW_SHOWNORMAL);
         return;
     }
     if (pData->disclaimerShowMoreRect.right > 0 && PtInRect(&pData->disclaimerShowMoreRect, pt)) {
@@ -24357,6 +24363,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         if (alphaInfoAnim > 0.001f && pData->alphaInfoViewDirection != -1) {
             pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
+            pData->disclaimerWikiRect = { 0, 0, 0, 0 };
             return needsRedraw;
         }
 
@@ -24426,17 +24433,39 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         int relType = (currentVersion / 100) % 10;
         bool isPreRelease = (relType != STABLE && relType != 0);
-        bool noOverlay = overlayAlphaInner < 0.5f;
-        bool showMoreVisible = isPreRelease && noOverlay && pData->currentPage == 0;
+        float homeAlpha = 0.0f;
+        if (overlayAlphaInner > 0.0f) {
+            if (pData->currentPage == 0) {
+                homeAlpha = 1.0f - overlayAlphaInner;
+            }
+        } else {
+            if (pData->currentPage == 0) {
+                homeAlpha = crossfading ? newAlpha : pData->disclaimerTextAnim;
+            } else if (crossfading && pData->prevDisclaimerContext == 0) {
+                homeAlpha = oldAlpha;
+            }
+        }
+        if (homeAlpha < 0.0f) homeAlpha = 0.0f;
+        if (homeAlpha > 1.0f) homeAlpha = 1.0f;
+
+        bool showMoreVisible = isPreRelease && homeAlpha > 0.001f;
+        bool wikiVisible = homeAlpha > 0.001f;
         int showMoreReservedW = 0;
-        if (showMoreVisible) {
+        {
             const wchar_t* showMoreText = L"preview info";
             RectF smBounds;
             g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
-            showMoreReservedW = (int)smBounds.Width + 20;
+            showMoreReservedW = (int)smBounds.Width + 22;
+        }
+        int wikiReservedW = 0;
+        {
+            const wchar_t* wikiText = L"wiki";
+            RectF wikiBounds;
+            g.MeasureString(wikiText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &wikiBounds);
+            wikiReservedW = (int)wikiBounds.Width + 44;
         }
 
-        auto drawDisclaimerIconAndText = [&](const wchar_t* text, float alpha) {
+        auto drawDisclaimerIconAndText = [&](const wchar_t* text, float alpha, bool homeCenter) {
             BYTE discAlpha = (BYTE)(255 * alpha);
             HFONT discIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
             Font discIconFont(hdc, discIconFontH);
@@ -24447,9 +24476,12 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             int textWidth = (int)discTextBounds.Width;
 
             int discContentWidth = discIconSize + discIconGap + textWidth;
-            int centerX = (pData->disclaimerRect.left + pData->disclaimerRect.right) / 2;
-            if (showMoreVisible) centerX -= showMoreReservedW / 2;
+            int availableLeft = pData->disclaimerRect.left + (homeCenter ? wikiReservedW : 0);
+            int availableRight = pData->disclaimerRect.right - (homeCenter && isPreRelease ? showMoreReservedW : 0);
+            int centerX = (availableLeft + availableRight) / 2;
             int discStartX = centerX - discContentWidth / 2;
+            if (discStartX < availableLeft + 6) discStartX = availableLeft + 6;
+            if (discStartX + discContentWidth > availableRight - 6) discStartX = availableRight - 6 - discContentWidth;
             int discIconX = discStartX - discIconPadding;
             int discIconY = pData->disclaimerRect.top + (pData->disclaimerRect.bottom - pData->disclaimerRect.top - discIconSize) / 2 - discIconPadding + 1;
             RectF discIconRectF((REAL)discIconX, (REAL)discIconY, (REAL)(discIconSize + discIconPadding * 2), (REAL)(discIconSize + discIconPadding * 2));
@@ -24461,11 +24493,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
             SolidBrush disclaimerBrush(Color(discAlpha, 140, 140, 140));
             int discTextX = discStartX + discIconSize + discIconGap;
-            int discTextWidth = pData->disclaimerRect.right - discTextX - (showMoreVisible ? showMoreReservedW : 0);
+            int discTextWidth = availableRight - discTextX;
+            if (discTextWidth < textWidth + 10) discTextWidth = textWidth + 10;
             RectF disclaimerRectF((REAL)discTextX, (REAL)pData->disclaimerRect.top, (REAL)discTextWidth, (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top));
             StringFormat sfDisclaimer;
             sfDisclaimer.SetAlignment(StringAlignmentNear);
             sfDisclaimer.SetLineAlignment(StringAlignmentCenter);
+            sfDisclaimer.SetFormatFlags(StringFormatFlagsNoWrap);
             g.DrawString(text, -1, &discFont, disclaimerRectF, &sfDisclaimer, &disclaimerBrush);
         };
 
@@ -24487,13 +24521,68 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         if (crossfading) {
-            drawDisclaimerIconAndText(oldText, oldAlpha);
-            drawDisclaimerIconAndText(newText, newAlpha);
+            drawDisclaimerIconAndText(oldText, oldAlpha, pData->prevDisclaimerContext == 0);
+            drawDisclaimerIconAndText(newText, newAlpha, pData->currentPage == 0);
         } else {
-            drawDisclaimerIconAndText(newText, newAlpha);
+            drawDisclaimerIconAndText(newText, newAlpha, pData->currentPage == 0);
         }
 
     {
+        if (wikiVisible) {
+            const wchar_t* wikiText = L"wiki";
+            int wW = wikiReservedW;
+            int wH = discH;
+            int wX = pData->disclaimerRect.left;
+            int wY = pData->disclaimerRect.top;
+            pData->disclaimerWikiRect = (homeAlpha > 0.5f) ? RECT{ wX, wY, wX + wW, wY + wH } : RECT{ 0, 0, 0, 0 };
+            PixelOffsetMode wikiOldOffset = g.GetPixelOffsetMode();
+            SmoothingMode wikiOldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            BYTE wBgAlpha = (BYTE)((pData->isHoveringDisclaimerWiki ? 80 : 40) * homeAlpha);
+            Color wBg = pData->isHoveringDisclaimerWiki ? Color(wBgAlpha, 60, 60, 60) : Color(wBgAlpha, 50, 50, 50);
+            SolidBrush wBgBrush(wBg);
+            g.FillRectangle(&wBgBrush, (REAL)wX, (REAL)wY, (REAL)wW, (REAL)wH);
+            BYTE wSepAlpha = (BYTE)(180 * homeAlpha);
+            SolidBrush wSepBrush(Color(wSepAlpha, 56, 56, 56));
+            g.FillRectangle(&wSepBrush, (REAL)(wX + wW - 1), (REAL)wY, 1.0f, (REAL)wH);
+            g.SetPixelOffsetMode(wikiOldOffset);
+            g.SetSmoothingMode(wikiOldSmooth);
+
+            HFONT wikiIconFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font wikiIconFont(hdc, wikiIconFontH);
+            BYTE wTextA = (BYTE)(255 * homeAlpha);
+            int wTextC = pData->isHoveringDisclaimerWiki ? 200 : 150;
+            SolidBrush wTextBrush(Color(wTextA, wTextC, wTextC, wTextC));
+
+            int iconSize = discIconSize;
+            int iconGap = discIconGap;
+            int iconPadding = discIconPadding;
+            RectF wikiTextBounds;
+            g.MeasureString(wikiText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &wikiTextBounds);
+            int textW = (int)ceil(wikiTextBounds.Width);
+            int totalBtnContentW = iconSize + iconGap + textW;
+            int startBtnContentX = wX + (wW - totalBtnContentW) / 2;
+
+            int iconX = startBtnContentX - iconPadding;
+            int iconY = wY + (wH - iconSize) / 2 - iconPadding + 1;
+            RectF iconRectF((REAL)iconX, (REAL)iconY, (REAL)(iconSize + iconPadding * 2), (REAL)(iconSize + iconPadding * 2));
+            StringFormat sfDiscIcon;
+            sfDiscIcon.SetAlignment(StringAlignmentCenter);
+            sfDiscIcon.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(L"\uE82D", -1, &wikiIconFont, iconRectF, &sfDiscIcon, &wTextBrush);
+
+            RectF textRectF((REAL)(startBtnContentX + iconSize + iconGap), (REAL)wY, (REAL)(textW + 10), (REAL)wH);
+            StringFormat sfNear;
+            sfNear.SetAlignment(StringAlignmentNear);
+            sfNear.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(wikiText, -1, &discFont, textRectF, &sfNear, &wTextBrush);
+
+            DeleteObject(wikiIconFontH);
+        } else {
+            pData->disclaimerWikiRect = { 0, 0, 0, 0 };
+        }
+
         if (showMoreVisible) {
             const wchar_t* showMoreText = L"preview info";
             RectF smBounds;
@@ -24502,19 +24591,23 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             int smH = discH;
             int smX = pData->disclaimerRect.right - smW;
             int smY = pData->disclaimerRect.top;
-            pData->disclaimerShowMoreRect = { smX, smY, smX + smW, smY + smH };
+            pData->disclaimerShowMoreRect = (homeAlpha > 0.5f) ? RECT{ smX, smY, smX + smW, smY + smH } : RECT{ 0, 0, 0, 0 };
             PixelOffsetMode smOldOffset = g.GetPixelOffsetMode();
             SmoothingMode smOldSmooth = g.GetSmoothingMode();
             g.SetPixelOffsetMode(PixelOffsetModeNone);
             g.SetSmoothingMode(SmoothingModeNone);
-            Color smBg = pData->isHoveringDisclaimerShowMore ? Color(80, 60, 60, 60) : Color(40, 50, 50, 50);
+            BYTE smBgAlpha = (BYTE)((pData->isHoveringDisclaimerShowMore ? 80 : 40) * homeAlpha);
+            Color smBg = pData->isHoveringDisclaimerShowMore ? Color(smBgAlpha, 60, 60, 60) : Color(smBgAlpha, 50, 50, 50);
             SolidBrush smBgBrush(smBg);
             g.FillRectangle(&smBgBrush, (REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
-            SolidBrush smSepBrush(Color(180, 56, 56, 56));
+            BYTE smSepAlpha = (BYTE)(180 * homeAlpha);
+            SolidBrush smSepBrush(Color(smSepAlpha, 56, 56, 56));
             g.FillRectangle(&smSepBrush, (REAL)smX, (REAL)smY, 1.0f, (REAL)smH);
             g.SetPixelOffsetMode(smOldOffset);
             g.SetSmoothingMode(smOldSmooth);
-            SolidBrush smTextBrush(Color(255, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150, pData->isHoveringDisclaimerShowMore ? 200 : 150));
+            BYTE smTextA = (BYTE)(255 * homeAlpha);
+            int smTextC = pData->isHoveringDisclaimerShowMore ? 200 : 150;
+            SolidBrush smTextBrush(Color(smTextA, smTextC, smTextC, smTextC));
             StringFormat sfSm;
             sfSm.SetAlignment(StringAlignmentCenter);
             sfSm.SetLineAlignment(StringAlignmentCenter);
@@ -26350,6 +26443,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
         }
 
         anyHover |= checkHover(pData->isHoveringClose, pData->closeButtonRect);
+        anyHover |= checkHover(pData->isHoveringDisclaimerWiki, pData->disclaimerWikiRect);
         anyHover |= checkHover(pData->isHoveringDisclaimerShowMore, pData->disclaimerShowMoreRect);
 
         if (!overlayActive) {
@@ -26570,6 +26664,7 @@ pData->isHoveringDiscord = false;
         pData->macrosHoverFinish = false;
         pData->macrosHoveringItem = -1;
         pData->isHoveringDisclaimerShowMore = false;
+        pData->isHoveringDisclaimerWiki = false;
         pData->isHoveringFpsCapperSettingsOkButton = false;
         pData->isHoveringFpsCapperModeDropdown = false;
         pData->isHoveringFpsCapperLimitDropdown = false;
