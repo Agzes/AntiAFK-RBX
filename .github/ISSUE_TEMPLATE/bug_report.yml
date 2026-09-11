@@ -12,7 +12,7 @@ body:
       id: version
       attributes:
           label: Version
-          placeholder: e.g. v4.0.0-beta1
+          placeholder: e.g. v4.0.0-beta2
       validations:
           required: true
     - type: textarea
