@@ -5721,11 +5721,13 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
     for (HWND w : wins)
     {
         if (!IsWindow(w)) continue;
+        if (IsRobloxWindowClosedToTray(w)) continue;
         ++winIndex;
         const bool isLastWindow = (winIndex == validWindowCount);
 
         bool wasVisible = IsWindowVisible(w) != FALSE;
-        bool wasMinimized = IsIconic(w);
+        bool selfHidden = IsRobloxWindowSelfHidden(w);
+        bool wasMinimized = IsIconic(w) && !(selfHidden && !showHiddenWindows);
 
         if (!wasVisible && showHiddenWindows) {
             ShowRobloxWindowTracked(w);
@@ -7231,7 +7233,8 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
             }
         }
         if (shouldRun) {
-            bool wasMinimized = IsIconic(w);
+            bool selfHidden = IsRobloxWindowSelfHidden(w);
+            bool wasMinimized = IsIconic(w) && !selfHidden;
             if (wasMinimized) ShowWindow(w, SW_RESTORE);
             SetForegroundWindow(w);
             Sleep(g_preActionDelay.load());
@@ -27908,7 +27911,8 @@ void main_thread(bool arg_tray)
                         continue;
                     }
 
-                    bool wasMinimized = IsIconic(w);
+                    bool selfHidden = IsRobloxWindowSelfHidden(w);
+                    bool wasMinimized = IsIconic(w) && !selfHidden;
                     if (wasMinimized)
                         ShowWindow(w, SW_RESTORE);
 
@@ -28121,7 +28125,8 @@ void main_thread(bool arg_tray)
                                     }
                                 }
                                 if (shouldRun) {
-                                    bool wasMinimized = IsIconic(w);
+                                    bool selfHidden = IsRobloxWindowSelfHidden(w);
+                                    bool wasMinimized = IsIconic(w) && !selfHidden;
                                     if (wasMinimized) ShowWindow(w, SW_RESTORE);
                                     SetForegroundWindow(w);
                                     Sleep(g_preActionDelay.load());
