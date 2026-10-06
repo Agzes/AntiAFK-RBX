@@ -2,78 +2,105 @@ name: Release AntiAFK-RBX
 
 on:
     push:
-        tags:
-            - "v*"
+        branches:
+            - preview
+        paths:
+            - "version.preview"
 
 permissions:
     contents: write
+    actions: read
 
 jobs:
-    build:
-        name: Build Release
-        runs-on: windows-latest
-
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Setup MSBuild
-              uses: microsoft/setup-msbuild@v2
-
-            - name: Build solution
-              run: msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /m
-
-            - name: Compute SHA-256 of the executable
-              shell: pwsh
-              run: |
-                  $exe = Get-ChildItem 'x64/Release/*.exe' -File | Select-Object -First 1
-                  if (-not $exe) { throw 'No executable found in x64/Release' }
-                  $hash = (Get-FileHash -Path $exe.FullName -Algorithm SHA256).Hash.ToLower()
-                  $line = "$hash  $($exe.Name)"
-                  $line | Set-Content -Path 'x64/Release/SHA256SUMS.txt' -Encoding ascii
-                  Write-Output $line
-                  Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## SHA-256`n$line"
-
-            - name: Upload build artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: AntiAFK-RBX-Release
-                  path: |
-                      x64/Release/*.exe
-                      x64/Release/SHA256SUMS.txt
-                  if-no-files-found: error
-
     publish:
         name: Publish Release
-        needs: build
         runs-on: ubuntu-latest
-        environment: release
 
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Download build artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: AntiAFK-RBX-Release
-                  path: dist
+            - name: Derive release tag from version.preview
+              id: version
+              shell: bash
+              run: |
+                  V=$(tr -dc '0-9' < version.preview)
+                  if [ -z "$V" ]; then
+                    echo "::error::version.preview contains no version number"
+                    exit 1
+                  fi
+                  MAJOR=$((V / 10000000))
+                  MINOR=$(( (V / 100000) % 100 ))
+                  PATCH=$(( (V / 1000) % 100 ))
+                  TYPE=$(( (V / 100) % 10 ))
+                  NUM=$(( V % 100 ))
+                  case "$TYPE" in
+                    1) SUFFIX="-alpha.$NUM" ;;
+                    2) SUFFIX="-beta.$NUM" ;;
+                    3) SUFFIX="-rc.$NUM" ;;
+                    *) SUFFIX="" ;;
+                  esac
+                  TAG="v.$MAJOR.$MINOR.$PATCH$SUFFIX"
+                  echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+                  echo "Derived tag: $TAG"
+
+            - name: Verify tag exists
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TAG: ${{ steps.version.outputs.tag }}
+              run: |
+                  gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha >/dev/null \
+                    || { echo "::error::Tag $TAG does not exist. Push the tag first so the build runs."; exit 1; }
+                  echo "Tag $TAG exists."
+
+            - name: Wait for tag build and download artifact
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TAG: ${{ steps.version.outputs.tag }}
+              run: |
+                  mkdir -p dist
+                  ART_NAME="AntiAFK-RBX-Release-$TAG"
+                  for attempt in $(seq 1 60); do
+                    RUN_ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ART_NAME" \
+                      --jq '.artifacts[0].workflow_run.id // empty')
+                    if [ -n "$RUN_ID" ]; then
+                      echo "Found artifact $ART_NAME in run $RUN_ID"
+                      gh run download "$RUN_ID" -n "$ART_NAME" -D dist
+                      break
+                    fi
+                    echo "Attempt $attempt: artifact $ART_NAME not ready yet. Waiting..."
+                    sleep 20
+                  done
+                  EXE=$(find dist -name '*.exe' -print -quit)
+                  SUMS=$(find dist -name 'SHA256SUMS.txt' -print -quit)
+                  if [ -z "$EXE" ] || [ -z "$SUMS" ]; then
+                    echo "::error::Build artifact for $TAG was not downloaded in time."
+                    exit 1
+                  fi
+                  echo "Downloaded: $EXE"
+                  echo "Downloaded: $SUMS"
 
             - name: Fill version into release notes
+              shell: bash
+              env:
+                  TAG: ${{ steps.version.outputs.tag }}
               run: |
-                  VERSION="v.${GITHUB_REF_NAME#v}"
-                  sed "s/{{VERSION}}/${VERSION}/g" .github/release-template.md > release-notes.md
-                  echo "Release version: ${VERSION}"
+                  sed "s/{{VERSION}}/${TAG}/g" .github/release-template.md > release-notes.md
+                  echo "Release version: ${TAG}"
 
             - name: Publish GitHub Release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ github.ref_name }}
-                  name: ${{ github.ref_name }}
-                  body_path: release-notes.md
-                  files: |
-                      dist/*.exe
-                      dist/SHA256SUMS.txt
-                  fail_on_unmatched_files: true
-                  draft: false
-                  prerelease: ${{ contains(github.ref_name, '-') }}
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TAG: ${{ steps.version.outputs.tag }}
+              run: |
+                  PRERELEASE=""
+                  case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
+                  gh release create "$TAG" \
+                    $(find dist -name '*.exe') \
+                    $(find dist -name 'SHA256SUMS.txt') \
+                    --title "$TAG" \
+                    --notes-file release-notes.md \
+                    $PRERELEASE

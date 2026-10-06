@@ -2,23 +2,18 @@ name: Build AntiAFK-RBX
 
 on:
     push:
-        branches: [preview]
-        paths:
-            - "**.cpp"
-            - "**.h"
-            - "**.hpp"
-            - "**.rc"
-            - "**.sln"
-            - "**.vcxproj"
-            - "**.vcxproj.filters"
+        branches:
+            - preview
+        tags:
+            - "v*"
+
+permissions:
+    contents: read
 
 jobs:
     build:
+        name: Build Release
         runs-on: windows-latest
-
-        strategy:
-            matrix:
-                configuration: [Release]
 
         steps:
             - name: Checkout repository
@@ -28,10 +23,27 @@ jobs:
               uses: microsoft/setup-msbuild@v2
 
             - name: Build solution
-              run: msbuild AntiAFK-RBX.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /m
+              run: msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /m
 
-            - name: Upload build artifacts
+            - name: Prepare release files
+              shell: pwsh
+              run: |
+                  $exe = Get-ChildItem 'x64/Release/*.exe' -File | Select-Object -First 1
+                  if (-not $exe) { throw 'No executable found in x64/Release' }
+                  $name = "AntiAFK-RBX.$env:GITHUB_REF_NAME.exe"
+                  $target = Join-Path 'x64/Release' $name
+                  Move-Item -Path $exe.FullName -Destination $target -Force
+                  $hash = (Get-FileHash -Path $target -Algorithm SHA256).Hash.ToLower()
+                  $line = "$hash  $name"
+                  $line | Set-Content -Path 'x64/Release/SHA256SUMS.txt' -Encoding ascii
+                  Write-Output $line
+                  Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## SHA-256`n$line"
+
+            - name: Upload build artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: AntiAFK-RBX-${{ matrix.configuration }}
-                  path: x64/${{ matrix.configuration }}/*.exe
+                  name: AntiAFK-RBX-Release-${{ github.ref_name }}
+                  path: |
+                      x64/Release/*.exe
+                      x64/Release/SHA256SUMS.txt
+                  if-no-files-found: error
