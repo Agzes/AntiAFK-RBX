@@ -15,7 +15,7 @@ You are looking at the preview version of the new AntiAFK-RBX **V4**, which is c
 
 <p align="center" width="100%">
     <a href="https://agzes.github.io/go/to/discord"><img src="ReadME/discord-server.png" alt="Join Discord Server" style="width:45%; min-width:190px; max-width:500px;"></a>
-    <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.4.0.0-beta.2/AntiAFK-RBX.v.4.0.0-beta.2.exe"><img src="ReadME/download-preview.png" alt="Download Now (v.4.0.0-beta.2)" style="width:45%; min-width:190px; max-width:500px;"></a>
+    <a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/v.4.0.0-beta.3/AntiAFK-RBX.v.4.0.0-beta.3.exe"><img src="ReadME/download-preview.png" alt="Download Now (v.4.0.0-beta.3)" style="width:45%; min-width:190px; max-width:500px;"></a>
   <br>
     <img src="ReadME/V4.0.0beta2-Main.png" alt="AntiAFK-RBX by Agzes v.4.0.0 (beta2), UI, Features: Lightweight, Fully Customizable, Clean Dark Theme, Free, Stable, Portable, Fast & Responsive, Unique 'User-Safe' feature, Custom Games Support, FPS (CPU) Limiter, Safe To Use, Multi-Instance, Background/Stealth Mode, Low Resource Usage, All-in-One Utility, Non-intrusive, Tray Mode, Window Management, Bloxstrap/Fishstrap integration, WebHook, Regular Updates, Auto-Mute, Easy to use, Live Statistics, Open-Source, Auto-Reconnect, Grid Snap, Macros System, Status Bar, Launch Arguments, Auto-Start, RAM Cleaner, Simple Mode, Delay Control, Instance Manager, UI Customization, Ad-Free, Screen Saver, Native C++ & WinAPI and more...">
   <br>
