@@ -1,0 +1,79 @@
+name: Release AntiAFK-RBX
+
+on:
+    push:
+        tags:
+            - "v*"
+
+permissions:
+    contents: write
+
+jobs:
+    build:
+        name: Build Release
+        runs-on: windows-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup MSBuild
+              uses: microsoft/setup-msbuild@v2
+
+            - name: Build solution
+              run: msbuild AntiAFK-RBX.sln /p:Configuration=Release /p:Platform=x64 /m
+
+            - name: Compute SHA-256 of the executable
+              shell: pwsh
+              run: |
+                  $exe = Get-ChildItem 'x64/Release/*.exe' -File | Select-Object -First 1
+                  if (-not $exe) { throw 'No executable found in x64/Release' }
+                  $hash = (Get-FileHash -Path $exe.FullName -Algorithm SHA256).Hash.ToLower()
+                  $line = "$hash  $($exe.Name)"
+                  $line | Set-Content -Path 'x64/Release/SHA256SUMS.txt' -Encoding ascii
+                  Write-Output $line
+                  Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## SHA-256`n$line"
+
+            - name: Upload build artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: AntiAFK-RBX-Release
+                  path: |
+                      x64/Release/*.exe
+                      x64/Release/SHA256SUMS.txt
+                  if-no-files-found: error
+
+    publish:
+        name: Publish Release
+        needs: build
+        runs-on: ubuntu-latest
+        environment: release
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Download build artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: AntiAFK-RBX-Release
+                  path: dist
+
+            - name: Fill version into release notes
+              run: |
+                  VERSION="v.${GITHUB_REF_NAME#v}"
+                  sed "s/{{VERSION}}/${VERSION}/g" .github/release-template.md > release-notes.md
+                  echo "Release version: ${VERSION}"
+
+            - name: Publish GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ github.ref_name }}
+                  name: ${{ github.ref_name }}
+                  body_path: release-notes.md
+                  files: |
+                      dist/*.exe
+                      dist/SHA256SUMS.txt
+                  fail_on_unmatched_files: true
+                  draft: false
+                  prerelease: ${{ contains(github.ref_name, '-') }}

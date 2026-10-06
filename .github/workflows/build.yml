@@ -1,40 +1,37 @@
 name: Build AntiAFK-RBX
 
 on:
-  push:
-    branches: [preview]
-    tags: ['v*']
-    paths:
-      - '**.cpp'
-      - '**.h'
-      - '**.hpp'
-      - '**.rc'
-      - '**.sln'
-      - '**.vcxproj'
-      - '**.vcxproj.filters'
+    push:
+        branches: [preview]
+        paths:
+            - "**.cpp"
+            - "**.h"
+            - "**.hpp"
+            - "**.rc"
+            - "**.sln"
+            - "**.vcxproj"
+            - "**.vcxproj.filters"
 
 jobs:
-  build:
-    runs-on: windows-latest
+    build:
+        runs-on: windows-latest
 
-    strategy:
-      matrix:
-        configuration: [Release]
+        strategy:
+            matrix:
+                configuration: [Release]
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+            - name: Setup MSBuild
+              uses: microsoft/setup-msbuild@v2
 
-      - name: Build solution
-        run: msbuild AntiAFK-RBX.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /m
+            - name: Build solution
+              run: msbuild AntiAFK-RBX.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /m
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: AntiAFK-RBX-${{ matrix.configuration }}
-          path: x64/${{ matrix.configuration }}/*.exe
-
-
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: AntiAFK-RBX-${{ matrix.configuration }}
+                  path: x64/${{ matrix.configuration }}/*.exe
