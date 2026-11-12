@@ -1044,6 +1044,11 @@ const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
 const int AFK_REMINDER_TIME = 18 * 60;
 const int AFK_AUTO_START_TIME = 19 * 60;
+const int ROBLOX_IDLE_KICK_TIME = 20 * 60;  // Roblox disconnects after 20 minutes without input
+const int IDLE_KICK_SAFETY_MARGIN = 60;     // finish the action at least this long before the kick
+const int FOCUS_RETRY_DELAY = 15;           // seconds before retrying when Roblox couldn't be focused
+const int FOCUS_RETRY_DELAY_SLOW = 60;      // retry delay once FOCUS_RETRY_FAST_ATTEMPTS retries in a row failed
+const int FOCUS_RETRY_FAST_ATTEMPTS = 8;
 const size_t DISCORD_WEBHOOK_MAX_LENGTH = 2048;
 const COLORREF DARK_BG = RGB(30, 30, 30);
 const COLORREF DARK_TEXT = RGB(235, 235, 235);
@@ -5572,6 +5577,50 @@ std::vector<UINT_PTR> BuildRobloxWindowSignature(const std::vector<HWND>& wins)
     std::sort(signature.begin(), signature.end());
     return signature;
 }
+static bool IsAnyKeyHeldDown()
+{
+    for (int vk = 1; vk < 255; vk++)
+    {
+        if (GetAsyncKeyState(vk) & 0x8000)
+            return true;
+    }
+    return false;
+}
+
+// Windows refuses SetForegroundWindow from a background process while the user
+// is working in another window (ForegroundLockTimeout, 200 s by default). The
+// anti-AFK keys then never reach Roblox. Attach to the foreground thread's input
+// queue first. If Windows still refuses and allowAltTap is set, tap Alt twice:
+// an Alt press lifts the lock, and the second tap undoes the menu activation in
+// the user's window. Skipped while the user holds a key, to avoid Alt combos.
+static bool ForceForegroundWindow(HWND target, bool allowAltTap)
+{
+    if (!target || !IsWindow(target)) return false;
+    if (GetForegroundWindow() == target) return true;
+
+    HWND fg = GetForegroundWindow();
+    DWORD selfThread = GetCurrentThreadId();
+    DWORD fgThread = (fg && !IsHungAppWindow(fg)) ? GetWindowThreadProcessId(fg, NULL) : 0;
+    bool attached = fgThread != 0 && fgThread != selfThread && AttachThreadInput(selfThread, fgThread, TRUE);
+    BringWindowToTop(target);
+    SetForegroundWindow(target);
+    if (attached) AttachThreadInput(selfThread, fgThread, FALSE);
+    if (GetForegroundWindow() == target) return true;
+
+    if (allowAltTap && !IsAnyKeyHeldDown())
+    {
+        BYTE altScan = static_cast<BYTE>(MapVirtualKey(VK_MENU, 0));
+        for (int tap = 0; tap < 2; tap++)
+        {
+            keybd_event(VK_MENU, altScan, 0, 0);
+            keybd_event(VK_MENU, altScan, KEYEVENTF_KEYUP, 0);
+        }
+        Sleep(20);
+        SetForegroundWindow(target);
+    }
+    return GetForegroundWindow() == target;
+}
+
 void RestoreForegroundWindow(HWND prevWnd)
 {
     if (!prevWnd)
@@ -10035,6 +10084,17 @@ static bool IsRobloxWindowActiveRecently(HWND hwnd)
     uint64_t now = GetTickCount64();
     uint64_t elapsed = (now - lastActive) / 1000;
     return elapsed < (uint64_t)USER_INACTIVITY_WAIT;
+}
+
+// Seconds since Roblox last got input in this window: our last action there or
+// the user's last key press in it, whichever is later. 0 if neither is known.
+static uint64_t EstimateRobloxIdleSeconds(HWND hwnd, const std::map<HWND, uint64_t>& lastActionTicks, uint64_t now)
+{
+    uint64_t anchor = GetLastActiveTickForWindow(hwnd);
+    auto it = lastActionTicks.find(hwnd);
+    if (it != lastActionTicks.end() && it->second > anchor) anchor = it->second;
+    if (anchor == 0 || anchor > now) return 0;
+    return (now - anchor) / 1000;
 }
 
 // UserSafe
@@ -27749,12 +27809,34 @@ void main_thread(bool arg_tray)
         }
     }
 
+    // Per-window time of the last anti-AFK input, and the retry state for windows
+    // that Windows refused to bring to the foreground.
+    std::map<HWND, uint64_t> lastWindowActionTick;
+    std::vector<HWND> focusRetryWins;
+    int focusFailStreak = 0;
+    int focusRetryDelaySec = FOCUS_RETRY_DELAY;
+    bool focusFailNotified = false;
+    uint64_t seenAfkSessionStart = 0;
+
     while (!g_stopThread.load())
     {
         std::unique_lock<std::mutex> lock(g_cv_m);
         if (g_isAfkStarted.load())
         {
             HWND user = GetForegroundWindow();
+            uint64_t afkSessionStart = g_afkStartTime.load();
+            if (afkSessionStart != seenAfkSessionStart)
+            {
+                seenAfkSessionStart = afkSessionStart;
+                focusRetryWins.clear();
+                focusFailStreak = 0;
+                focusFailNotified = false;
+            }
+            for (auto it = lastWindowActionTick.begin(); it != lastWindowActionTick.end(); )
+            {
+                if (!IsWindow(it->first)) it = lastWindowActionTick.erase(it);
+                else ++it;
+            }
             auto wins = FindAllRobloxWindows(true);
             wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
             if (wins.empty())
@@ -27798,7 +27880,33 @@ void main_thread(bool arg_tray)
                 bool cancelPendingAction = false;
                 if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load()) RefreshRobloxWindowOpacity(false);
                 if (g_autoGrid.load()) ApplyAutoRobloxWindowLayout();
-                if (g_userSafeMode.load() > 0)
+
+                // A retry after a failed foreground switch only handles the windows that missed the action.
+                std::vector<HWND> cycleWins = wins;
+                if (!focusRetryWins.empty())
+                {
+                    std::vector<HWND> retryOnly;
+                    for (HWND hw : wins)
+                    {
+                        if (std::find(focusRetryWins.begin(), focusRetryWins.end(), hw) != focusRetryWins.end())
+                            retryOnly.push_back(hw);
+                    }
+                    if (!retryOnly.empty()) cycleWins.swap(retryOnly);
+                    focusRetryWins.clear();
+                }
+
+                // The user-safe wait must not push the action past Roblox's idle kick.
+                int userSafeMaxWait = MAX_WAIT_TIME;
+                {
+                    uint64_t nowTick = GetTickCount64();
+                    uint64_t mostIdle = 0;
+                    for (HWND hw : cycleWins)
+                        mostIdle = (std::max)(mostIdle, EstimateRobloxIdleSeconds(hw, lastWindowActionTick, nowTick));
+                    int untilDeadline = ROBLOX_IDLE_KICK_TIME - IDLE_KICK_SAFETY_MARGIN - (int)(std::min)(mostIdle, (uint64_t)ROBLOX_IDLE_KICK_TIME);
+                    if (untilDeadline < userSafeMaxWait) userSafeMaxWait = (std::max)(0, untilDeadline);
+                }
+
+                if (g_userSafeMode.load() > 0 && userSafeMaxWait > 0)
                 {
                     uint64_t startWaitTime = GetTickCount64();
                     bool shownStatus = false;
@@ -27814,7 +27922,7 @@ void main_thread(bool arg_tray)
                             break;
                         }
 
-                        if (elapsedSeconds >= MAX_WAIT_TIME)
+                        if (elapsedSeconds >= (uint64_t)userSafeMaxWait)
                         {
                             break;
                         }
@@ -27826,7 +27934,7 @@ void main_thread(bool arg_tray)
                             break;
                         }
 
-                        int remaining = (int)(MAX_WAIT_TIME - elapsedSeconds);
+                        int remaining = (int)(userSafeMaxWait - (int)elapsedSeconds);
                         wchar_t waitMsg[128];
                         swprintf_s(waitMsg, L"Waiting 3s inactivity • force in %ds", remaining);
                         if (!shownStatus)
@@ -27894,14 +28002,15 @@ void main_thread(bool arg_tray)
 
     bool anyActionPerformed = false;
     bool anySkippedHidden = false;
-    for (size_t i = 0; i < wins.size(); i++)
+    std::vector<HWND> focusFailedWins;
+    for (size_t i = 0; i < cycleWins.size(); i++)
                 {
                     if (g_stopThread.load() || !g_isAfkStarted.load()) {
                         cancelPendingAction = true;
                         break;
                     }
 
-                    HWND w = wins[i];
+                    HWND w = cycleWins[i];
                     if (!IsWindow(w)) continue;
 
                     if (!GetWindowInstanceSetting_AntiAfk(w)) continue;
@@ -27925,14 +28034,16 @@ void main_thread(bool arg_tray)
                     Sleep(g_preActionDelay.load());
 
                     for (int fgAttempt = 0; fgAttempt < 2 && GetForegroundWindow() != w; ++fgAttempt) {
-                        SetForegroundWindow(w);
+                        ForceForegroundWindow(w, fgAttempt > 0);
                         Sleep(g_preActionDelay.load());
                     }
         if (GetForegroundWindow() != w) {
             if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
             if (!IsWindowVisible(w)) anySkippedHidden = true;
+            else focusFailedWins.push_back(w);
             continue;
         }
+                    bool actedOnWindow = false;
 
                     if (g_autoReconnect.load()) {
                         if (CheckForAutoReconnect(w)) {
@@ -27972,6 +28083,7 @@ void main_thread(bool arg_tray)
                             }
                             AntiAFK_Action(w);
                             anyActionPerformed = true;
+                            actedOnWindow = true;
                         }
                     }
 
@@ -27987,6 +28099,7 @@ void main_thread(bool arg_tray)
                                 MacroEngine_ExecuteMacro(macroCopy, w);
                                 lock.lock();
                                 anyActionPerformed = true;
+                                actedOnWindow = true;
                             }
                         }
                     }
@@ -27999,8 +28112,10 @@ void main_thread(bool arg_tray)
                             MacroEngine_ExecuteMacro(am, w);
                             lock.lock();
                             anyActionPerformed = true;
+                            actedOnWindow = true;
                         }
                     }
+                    if (actedOnWindow) lastWindowActionTick[w] = GetTickCount64();
                     if (cancelPendingAction) {
                         if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
                         break;
@@ -28022,7 +28137,7 @@ void main_thread(bool arg_tray)
                     if (wasMinimized)
                         ShowWindow(w, SW_MINIMIZE);
 
-                    if (g_multiInstanceInterval.load() > 0 && i < wins.size() - 1) {
+                    if (g_multiInstanceInterval.load() > 0 && i < cycleWins.size() - 1) {
                         if (g_stopThread.load() || !g_isAfkStarted.load()) {
                             cancelPendingAction = true;
                             break;
@@ -28062,17 +28177,49 @@ void main_thread(bool arg_tray)
                     }
         } else {
             QueueStatusBarHide(false);
-            if (anySkippedHidden && !cancelPendingAction) {
+            if (!focusFailedWins.empty() && !cancelPendingAction) {
+                // Reported below together with the retry delay.
+            } else if (anySkippedHidden && !cancelPendingAction) {
                 QueueStatusBarOverlay(L"Anti-AFK skipped: Roblox window is hidden", 1800, wins.front(), StatusBarEventType::Action);
             } else {
                 QueueStatusBarOverlay(L"Anti-AFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
             }
         }
+
+                // Windows refused to bring these Roblox windows forward, so they got no input this
+                // cycle. A full interval could run past Roblox's 20-minute idle kick: retry soon.
+                if (!cancelPendingAction && !focusFailedWins.empty())
+                {
+                    focusFailStreak++;
+                    focusRetryWins = focusFailedWins;
+                    focusRetryDelaySec = (focusFailStreak <= FOCUS_RETRY_FAST_ATTEMPTS) ? FOCUS_RETRY_DELAY : FOCUS_RETRY_DELAY_SLOW;
+                    wchar_t retryMsg[128];
+                    swprintf_s(retryMsg, L"Couldn't switch to Roblox • retrying in %d sec", focusRetryDelaySec);
+                    QueueStatusBarOverlay(retryMsg, 2600, wins.front(), StatusBarEventType::Action);
+
+                    uint64_t nowTick = GetTickCount64();
+                    uint64_t mostIdle = 0;
+                    for (HWND hw : focusFailedWins)
+                        mostIdle = (std::max)(mostIdle, EstimateRobloxIdleSeconds(hw, lastWindowActionTick, nowTick));
+                    if (!focusFailNotified && mostIdle >= (uint64_t)(ROBLOX_IDLE_KICK_TIME - 2 * 60))
+                    {
+                        focusFailNotified = true;
+                        ShowTrayNotification(L"AntiAFK-RBX • Can't reach Roblox",
+                            L"Windows blocked switching to the Roblox window, so the anti-AFK action wasn't sent. Retrying shortly. To be safe, click the Roblox window.");
+                    }
+                }
+                else if (!cancelPendingAction)
+                {
+                    focusFailStreak = 0;
+                    focusFailNotified = false;
+                }
             }
             g_updateInterval = false;
 
             const int focusCheckInterval = 500;
-            const int totalWaitMs = g_selectedTime.load() * 1000;
+            int totalWaitMs = g_selectedTime.load() * 1000;
+            if (!focusRetryWins.empty())
+                totalWaitMs = (std::min)(totalWaitMs, focusRetryDelaySec * 1000);
             DWORD previousActivePid = 0;
             auto waitStart = std::chrono::steady_clock::now();
             while (true) {
