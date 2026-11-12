@@ -97,6 +97,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Localization.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

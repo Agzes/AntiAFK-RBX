@@ -17,6 +17,7 @@ const wchar_t* g_Version = L"v.4.0.0-beta3";
 #include <ShlObj.h>
 #include <strsafe.h>
 #include "resource.h"
+#include "Localization.h"
 #include <tlhelp32.h>
 #include <string>
 #include <thread>
@@ -62,8 +63,8 @@ static const wchar_t* GetReleaseChannelName()
 {
     int releaseType = (currentVersion / 100) % 10;
     if (releaseType == ALPHA || releaseType == BETA || releaseType == RC)
-        return L"Preview";
-    return L"Stable";
+        return TR(L"Preview");
+    return TR(L"Stable");
 }
 
 static void FormatVersionReadable(int version, wchar_t* out, size_t outLen)
@@ -148,6 +149,8 @@ using namespace std::chrono_literals;
 #define ID_USER_SAFE_OFF 304
 #define ID_USER_SAFE_LEGACY 305
 #define ID_USER_SAFE_BETA 306
+#define ID_LANGUAGE_ENGLISH 4801
+#define ID_LANGUAGE_RUSSIAN 4802
 #define ID_AUTO_START_AFK 307
 #define ID_RESET_SETTINGS 308
 #define ID_AUTO_RECONNECT 309
@@ -1147,7 +1150,7 @@ void ShowHelp()
 
     if (attachedToParentConsole || allocatedConsole)
     {
-        const wchar_t* helpText = L""
+        const wchar_t* helpText = TR(L""
             L"AntiAFK-RBX v.4.0.0\r\n"
             L"MIT License, by Agzes\r\n"
             L"\r\n"
@@ -1252,7 +1255,7 @@ void ShowHelp()
             L"\r\n"
             L"Notes: features marked * in the UI are experimental.\r\n"
             L"       All settings changes via CLI persist to the registry / settings file.\r\n"
-            L"\r\n";
+            L"\r\n");
 
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
         if (hOut != INVALID_HANDLE_VALUE && hOut != NULL)
@@ -1783,7 +1786,7 @@ void Splash_Paint_DrawFooter(HDC hdc, const RECT& clientRect, HFONT hFont10, HFO
     sfLeftBottom.SetAlignment(StringAlignmentNear);
     sfLeftBottom.SetLineAlignment(StringAlignmentFar);
     RectF byRectF((REAL)by_rect.left, (REAL)by_rect.top, (REAL)(by_rect.right - by_rect.left), (REAL)(by_rect.bottom - by_rect.top));
-    g.DrawString(L"by Agzes", -1, &font10, byRectF, &sfLeftBottom, &grayBrush);
+    g.DrawString(TR(L"by Agzes"), -1, &font10, byRectF, &sfLeftBottom, &grayBrush);
 
     RECT version_rect = { clientRect.left, clientRect.top, clientRect.right - 10, clientRect.bottom - 7 };
     StringFormat sfRightBottom;
@@ -1995,6 +1998,7 @@ void UpdateSplashStatus(const wchar_t* status)
 }
 void CreateSplashScreen(HINSTANCE hInstance)
 {
+    lstrcpynW(g_splashStatus, TR(L"Initializing..."), _countof(g_splashStatus));
     const wchar_t SPLASH_CLASS_NAME[] = L"AntiAFK-RBX-Splash";
     WNDCLASS wc = { 0 };
     wc.lpfnWndProc = SplashWndProc;
@@ -2045,7 +2049,7 @@ struct AboutData {
     bool isHoveringUpdate = false;
     HCURSOR hCursorHand = NULL;
     HCURSOR hCursorArrow = NULL;
-    std::wstring updateButtonText = L"Check for Updates";
+    std::wstring updateButtonText = TR(L"Check for Updates");
     int updateCheckState = 0; // 0: idle, 1: checking, 2: found, 3: not found, 4: error
     COLORREF updateButtonCurrentColor = RGB(160, 160, 160);
     UINT_PTR uTimerId = 0;
@@ -2163,11 +2167,11 @@ void About_Paint_DrawContent(HDC hdc, const RECT& clientRect, HFONT hFont28, HFO
     Font font12_c(hdc, hFont12);
     SolidBrush textBrush(Color(255, 220, 220, 220));
     RectF descRectF((REAL)20, (REAL)contentY, (REAL)(clientRect.right - 20), (REAL)50);
-    g.DrawString(L"The program for Anti-AFK and Multi-Instance in Roblox.", -1, &font12_c, descRectF, NULL, &textBrush);
+    g.DrawString(TR(L"The program for Anti-AFK and Multi-Instance in Roblox."), -1, &font12_c, descRectF, NULL, &textBrush);
 
     Font font12b_c(hdc, hFont12b);
     RectF authorRectF((REAL)20, (REAL)contentY + 60, (REAL)(clientRect.right - 20), (REAL)100);
-    g.DrawString(L"Developed with ❤ by Agzes\nLicensed under the MIT License", -1, &font12_c, authorRectF, NULL, &grayBrush);
+    g.DrawString(TR(L"Developed with ❤ by Agzes\nLicensed under the MIT License"), -1, &font12_c, authorRectF, NULL, &grayBrush);
 }
 void About_Animation_TimerProc(HWND hwnd, AboutData* pData) {
     if (!pData) return;
@@ -2271,7 +2275,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_APP + 3:
         if (pData) {
             pData->updateCheckState = static_cast<int>(wParam);
-            pData->updateButtonText = (wParam == 2) ? L"Update Found!" : ((wParam == 4) ? L"Failed to check" : L"You are up to date!");
+            pData->updateButtonText = (wParam == 2) ? TR(L"Update Found!") : ((wParam == 4) ? TR(L"Failed to check") : TR(L"You are up to date!"));
             About_StartAnimTimer(hwnd, pData);
             InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
         }
@@ -2370,7 +2374,7 @@ LRESULT CALLBACK AboutWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX", NULL, NULL, SW_SHOWNORMAL);
             } else if (pData->updateCheckState != 1) {
                 pData->updateCheckState = 1;
-                pData->updateButtonText = L"Checking...";
+                pData->updateButtonText = TR(L"Checking...");
                 InvalidateRect(hwnd, &pData->updateButtonRect, FALSE);
 
                 std::thread([hwnd]() {
@@ -2540,23 +2544,23 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
     g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
-        Popup_DrawChrome(&g, memDC, cr, d->closeButtonRect, d->hFontText, L"AntiAFK-RBX • Multi-Instance Mutex", d->hCloseX);
+        Popup_DrawChrome(&g, memDC, cr, d->closeButtonRect, d->hFontText, TR(L"AntiAFK-RBX • Multi-Instance Mutex"), d->hCloseX);
 
         Font textFont(memDC, d->hFontText);
         SolidBrush textBrush(Color(255, 220, 220, 220));
         StringFormat sf; sf.SetAlignment(StringAlignmentNear); sf.SetLineAlignment(StringAlignmentNear); sf.SetTrimming(StringTrimmingWord);
         const wchar_t* lines[] = {
-            L"This mutex prevents Roblox from enforcing its",
-            L"single-instance limit, allowing you to run",
-            L"multiple Roblox windows simultaneously.",
+            TR(L"This mutex prevents Roblox from enforcing its"),
+            TR(L"single-instance limit, allowing you to run"),
+            TR(L"multiple Roblox windows simultaneously."),
             L"",
-            L"Possible reasons for failure:",
-            L"• Roblox was started before AntiAFK-RBX",
-            L"• Another app holds the mutex",
+            TR(L"Possible reasons for failure:"),
+            TR(L"• Roblox was started before AntiAFK-RBX"),
+            TR(L"• Another app holds the mutex"),
             L"  (FishStrap, VoidStrap, Roblox Account Manager)",
             L"",
-            L"Note: Anti-AFK will still work on all open",
-            L"Roblox windows even if the mutex fails."
+            TR(L"Note: Anti-AFK will still work on all open"),
+            TR(L"Roblox windows even if the mutex fails.")
         };
         for (int i = 0; i < 11; i++) {
             RectF r((REAL)20, (REAL)(46 + i * 16), (REAL)(cr.right - 40), (REAL)18);
@@ -2569,8 +2573,8 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             g.DrawString(d->statusText.c_str(), -1, &textFont, statusRect, &sf, &statusBrush);
         }
 
-        Popup_DrawActionButton(&g, memDC, d->tryBtnRect, d->hFontText, L"Try Again", d->hTry, false);
-        Popup_DrawActionButton(&g, memDC, d->fullBtnRect, d->hFontText, L"Close Roblox & Try Again", d->hFull, true);
+        Popup_DrawActionButton(&g, memDC, d->tryBtnRect, d->hFontText, TR(L"Try Again"), d->hTry, false);
+        Popup_DrawActionButton(&g, memDC, d->fullBtnRect, d->hFontText, TR(L"Close Roblox & Try Again"), d->hFull, true);
         {
             Color ignoreFill(d->hIgnore ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
             Color closeFill(d->hClose ? Color(70, 60, 60, 60) : Color(50, 50, 50, 50));
@@ -2598,8 +2602,8 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             StringFormat sfI; sfI.SetAlignment(StringAlignmentCenter); sfI.SetLineAlignment(StringAlignmentCenter);
             RectF ignoreRF((REAL)d->ignoreBtnRect.left, (REAL)d->ignoreBtnRect.top, (REAL)(d->ignoreBtnRect.right - d->ignoreBtnRect.left), (REAL)(d->ignoreBtnRect.bottom - d->ignoreBtnRect.top));
             RectF closeRF((REAL)d->closeBtnRect.left, (REAL)d->closeBtnRect.top, (REAL)(d->closeBtnRect.right - d->closeBtnRect.left), (REAL)(d->closeBtnRect.bottom - d->closeBtnRect.top));
-            g.DrawString(L"Ignore", -1, &textFont, ignoreRF, &sfI, &textBr);
-            g.DrawString(L"Close", -1, &textFont, closeRF, &sfI, &textBr);
+            g.DrawString(TR(L"Ignore"), -1, &textFont, ignoreRF, &sfI, &textBr);
+            g.DrawString(TR(L"Close"), -1, &textFont, closeRF, &sfI, &textBr);
         }
 
         BitBlt(hdc, 0, 0, cr.right, cr.bottom, memDC, 0, 0, SRCCOPY);
@@ -2636,13 +2640,13 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             wchar_t buf[128];
             MutexCreateResult rr = EnableMultiInstanceSupport();
             if (rr == MUTEX_CREATED || rr == MUTEX_ALREADY_EXISTS) {
-                d->statusText = L"Mutex registered successfully!";
+                d->statusText = TR(L"Mutex registered successfully!");
                 d->statusSuccess = true;
                 InvalidateRect(hwnd, NULL, FALSE);
                 s_mutexDialogResult = 1;
                 DestroyWindow(hwnd);
             } else {
-                swprintf_s(buf, L"(%d) Mutex registration failed - try again", d->tryCount);
+                swprintf_s(buf, TR(L"(%d) Mutex registration failed - try again"), d->tryCount);
                 d->statusText = buf;
                 d->statusSuccess = false;
                 InvalidateRect(hwnd, NULL, FALSE);
@@ -2650,13 +2654,13 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
         }
         else if (PtInRect(&d->fullBtnRect, pt)) {
             int confirm =             ShowDarkMessageBox(hwnd,
-                L"Close all Roblox windows and try again?\n\nAll running Roblox instances will be closed.",
-                L"AntiAFK-RBX • Close All Roblox",
+                TR(L"Close all Roblox windows and try again?\n\nAll running Roblox instances will be closed."),
+                TR(L"AntiAFK-RBX • Close All Roblox"),
                 MB_YESNO | MB_DEFBUTTON2);
             if (confirm == IDYES) {
                 d->tryCount++;
                 wchar_t buf[128];
-                d->statusText = L"Closing Roblox instances...";
+                d->statusText = TR(L"Closing Roblox instances...");
                 d->statusSuccess = false;
                 InvalidateRect(hwnd, NULL, FALSE);
                 UpdateWindow(hwnd);
@@ -2664,13 +2668,13 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
                 Sleep(500);
                 MutexCreateResult rr = EnableMultiInstanceSupport();
                 if (rr == MUTEX_CREATED || rr == MUTEX_ALREADY_EXISTS) {
-                    d->statusText = L"Mutex registered successfully!";
+                    d->statusText = TR(L"Mutex registered successfully!");
                     d->statusSuccess = true;
                     InvalidateRect(hwnd, NULL, FALSE);
                     s_mutexDialogResult = 3;
                     DestroyWindow(hwnd);
                 } else {
-                    swprintf_s(buf, L"(%d) Mutex registration failed - try again", d->tryCount);
+                    swprintf_s(buf, TR(L"(%d) Mutex registration failed - try again"), d->tryCount);
                     d->statusText = buf;
                     d->statusSuccess = false;
                     InvalidateRect(hwnd, NULL, FALSE);
@@ -2712,7 +2716,7 @@ int ShowMutexErrorDialog(HWND owner)
     int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
     int dlgW = 380, dlgH = 370;
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, DLG_CLASS,
-        L"AntiAFK-RBX • Multi-Instance Mutex", WS_POPUP,
+        TR(L"AntiAFK-RBX • Multi-Instance Mutex"), WS_POPUP,
         (screenW - dlgW) / 2, (screenH - dlgH) / 2, dlgW, dlgH,
         owner, NULL, g_hInst, NULL);
     if (!h) return 0;
@@ -2761,7 +2765,7 @@ void ShowAboutDialog(HWND owner)
     int x = (screenW - winW) / 2, y = (screenH - winH) / 2;
 
     HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, ABOUT_CLASS_NAME,
-        L"AntiAFK-RBX • About", WS_POPUP,
+        TR(L"AntiAFK-RBX • About"), WS_POPUP,
         x, y, winW, winH, owner, NULL, g_hInst, NULL);
 
     if (h)
@@ -3478,10 +3482,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         }
 
         if (PtInRect(&pData->minimizeButtonRect, pt)) {
-            ShowDarkMessageBox(hwnd, L"Instance Manager allows you to configure per-instance overrides for each running Roblox client.\n\n"
+            ShowDarkMessageBox(hwnd, TR(L"Instance Manager allows you to configure per-instance overrides for each running Roblox client.\n\n"
                 L"You can change AFK, Mute, Opacity, Hide, FPS Cap, Reconnect, and Reset settings independently per window.\n\n"
                 L"Use Ctrl+Click to select multiple windows and apply settings to all of them at once.\n\n"
-                L"Presets allow you to save and quickly apply different configurations.",                 L"AntiAFK-RBX • About Instance Manager", MB_OK);
+                L"Presets allow you to save and quickly apply different configurations."),                 TR(L"AntiAFK-RBX • About Instance Manager"), MB_OK);
             return 0;
         }
 
@@ -3606,11 +3610,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 {
                     std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
                     for (size_t i = 0; i < g_instancePresets.size(); i++) {
-                        AppendMenu(hMenu, MF_STRING | (_wcsicmp(g_instancePresets[i].name.c_str(), s.presetName.c_str()) == 0 ? MF_CHECKED : 0), 2000 + i, g_instancePresets[i].name.c_str());
+                        AppendMenu(hMenu, MF_STRING | (_wcsicmp(g_instancePresets[i].name.c_str(), s.presetName.c_str()) == 0 ? MF_CHECKED : 0), 2000 + i, InstancePresetDisplayName(g_instancePresets[i].name));
                     }
                 }
                 AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hMenu, MF_STRING, 5000, L"Create New Preset...");
+                AppendMenu(hMenu, MF_STRING, 5000, TR(L"Create New Preset..."));
                 POINT menuPt = { pData->presetRect.left, pData->presetRect.bottom };
                 ClientToScreen(hwnd, &menuPt);
                 int selected = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
@@ -3752,7 +3756,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 bool canSelect = (s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
                 if (canSelect) {
                     HMENU hMenu = CreatePopupMenu();
-                    AppendMenu(hMenu, MF_STRING, 7000, L"None (Default)");
+                    AppendMenu(hMenu, MF_STRING, 7000, TR(L"None (Default)"));
                     size_t macroCount = 0;
                     {
                         std::lock_guard<std::mutex> macroLock(g_macrosMutex);
@@ -3821,7 +3825,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 bool canSelect = s.overrideMacro ? s.enableMacro : presetMacroEnabled;
                 if (canSelect) {
                     HMENU hMenu = CreatePopupMenu();
-                    AppendMenu(hMenu, MF_STRING, 6000, L"None (Default)");
+                    AppendMenu(hMenu, MF_STRING, 6000, TR(L"None (Default)"));
                     size_t macroCount = 0;
                     {
                         std::lock_guard<std::mutex> macroLock(g_macrosMutex);
@@ -3900,7 +3904,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 bool canSelect = (s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros()) && (_wcsicmp(s.presetName.c_str(), L"Default") != 0);
                 if (!canSelect) return 0;
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenu(hMenu, MF_STRING, 8000, L"None (Default)");
+                AppendMenu(hMenu, MF_STRING, 8000, TR(L"None (Default)"));
                 size_t macroCount = 0;
                 {
                     std::lock_guard<std::mutex> macroLock(g_macrosMutex);
@@ -3921,9 +3925,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                         std::wstring item = g_macros[i].name;
                         if (g_macros[i].intervalSec > 0) {
-                            item += L" - " + std::to_wstring(g_macros[i].intervalSec) + L"s";
+                            item += L" - " + std::to_wstring(g_macros[i].intervalSec) + TR(L"s");
                         } else {
-                            item += L" - (interval not set)";
+                            item += TR(L" - (interval not set)");
                         }
                         AppendMenu(hMenu, flags, 8001 + i, item.c_str());
                     }
@@ -4000,9 +4004,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 auto tgts = BuildTargets();
                 if (tgts.empty()) { return 0; }
                 std::wstring msg = (tgts.size() == 1)
-                    ? L"Are you sure you want to close this Roblox client?"
-                    : L"Are you sure you want to close these " + std::to_wstring((int)tgts.size()) + L" Roblox clients?";
-                int res = ShowDarkMessageBox(hwnd, msg.c_str(), L"AntiAFK-RBX • Close Roblox Client", MB_YESNO);
+                    ? TR(L"Are you sure you want to close this Roblox client?")
+                    : TR(L"Are you sure you want to close these ") + std::to_wstring((int)tgts.size()) + TR(L" Roblox clients?");
+                int res = ShowDarkMessageBox(hwnd, msg.c_str(), TR(L"AntiAFK-RBX • Close Roblox Client"), MB_YESNO);
                 if (res == IDYES) {
                     for (HWND tWnd : tgts) {
                         if (IsWindow(tWnd)) PostMessage(tWnd, WM_CLOSE, 0, 0);
@@ -4063,7 +4067,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 int releaseType = (currentVersion / 100) % 10;
                 if (releaseType != STABLE && releaseType != 0) {
                     float bh = 13.0f;
-                    MainUI_Paint_DrawBadge(gfx, 40.0f, 15.0f - bh / 2.0f, bh, L"PREVIEW");
+                    MainUI_Paint_DrawBadge(gfx, 40.0f, 15.0f - bh / 2.0f, bh, TR(L"PREVIEW"));
                 }
                 Gdiplus::SolidBrush headerLineBrush(Gdiplus::Color(180, 56, 56, 56));
                 Gdiplus::PixelOffsetMode oldMode = gfx.GetPixelOffsetMode();
@@ -4079,7 +4083,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 sf.SetAlignment(Gdiplus::StringAlignmentCenter);
                 sf.SetLineAlignment(Gdiplus::StringAlignmentCenter);
                 Gdiplus::RectF titleRect(0.0f, 0.0f, (REAL)cr.right, 30.0f);
-                gfx.DrawString(L"AntiAFK-RBX • Instance Manager", -1, &popupTitleFont, titleRect, &sf, &titleBrush);
+                gfx.DrawString(TR(L"AntiAFK-RBX • Instance Manager"), -1, &popupTitleFont, titleRect, &sf, &titleBrush);
                 MainUI_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
                 {
                     RECT& minBtn = pData->minimizeButtonRect;
@@ -4111,7 +4115,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 sfLeft.SetAlignment(Gdiplus::StringAlignmentNear);
                 sfLeft.SetLineAlignment(Gdiplus::StringAlignmentCenter);
                 Gdiplus::RectF headerLabelRect(8.0f, 30.0f, 160.0f, 35.0f);
-                gfx.DrawString(L"Roblox Clients", -1, &clientHeaderFont, headerLabelRect, &sfLeft, &clientHeaderBrush);
+                gfx.DrawString(TR(L"Roblox Clients"), -1, &clientHeaderFont, headerLabelRect, &sfLeft, &clientHeaderBrush);
 
                 Gdiplus::SolidBrush refreshBrush(pData->isHoveringRefresh ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(150, 200, 200, 200));
                 Gdiplus::Font* pIconFontG = new Gdiplus::Font(L"Segoe MDL2 Assets", 11.0f);
@@ -4209,7 +4213,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 gfx.DrawString(displayText, -1, &labelFont, Gdiplus::PointF((REAL)(rowRect.left + 12), (REAL)(rowRect.top + 3)), &textBrush);
 
                 wchar_t presetLabel[128];
-                swprintf_s(presetLabel, L"Preset: %s", prName.c_str());
+                swprintf_s(presetLabel, TR(L"Preset: %s"), InstancePresetDisplayName(prName));
                 gfx.DrawString(presetLabel, -1, &presetFont, Gdiplus::PointF((REAL)(rowRect.left + 12), (REAL)(rowRect.top + 19)), &presetBrush);
 
                 {
@@ -4228,7 +4232,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             if (pData->isHoveringFocusBtn && pData->focusBtnRow >= 0) {
                 int rowTop = 66 - pData->scrollOffset + pData->focusBtnRow * 40;
                 RECT fTip = { 215 - 30, rowTop + 8, 215 - 6, rowTop + 32 };
-                MainUI_Paint_DrawHoverTooltip(memDC, fTip, pData->hFont10, L"Focus window", false);
+                MainUI_Paint_DrawHoverTooltip(memDC, fTip, pData->hFont10, TR(L"Focus window"), false);
             }
 
             {
@@ -4236,7 +4240,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 int total = (int)pData->robloxWins.size();
                 int selCount = (int)pData->selectedWindows.size();
                 if (selCount == 0 && pData->selectedIndex >= 0) selCount = 1;
-                swprintf_s(counterText, L"Total: %d  |  Selected: %d", total, selCount);
+                swprintf_s(counterText, TR(L"Total: %d  |  Selected: %d"), total, selCount);
                 Gdiplus::Font cntFont(memDC, pData->hFont10);
                 Gdiplus::RectF cntRect(0.0f, (REAL)(cr.bottom - 22), 215.0f, 22.0f);
                 Gdiplus::SolidBrush cntBg(Gdiplus::Color(80, 35, 35, 35));
@@ -4349,7 +4353,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     }
                 }
 
-                MainUI_Paint_DrawDropdown(memDC, pData->presetRect, pData->hFont12, L"", s.presetName.c_str(), pData->isHoveringPreset, true, nullptr, true);
+                MainUI_Paint_DrawDropdown(memDC, pData->presetRect, pData->hFont12, L"", InstancePresetDisplayName(s.presetName), pData->isHoveringPreset, true, nullptr, true);
                 {
                     RECT& plusBtnRect = pData->createPresetRect;
                     Gdiplus::SolidBrush btnFillBrush(pData->isHoveringCreatePreset ? Gdiplus::Color(140, 80, 80, 80) : Gdiplus::Color(140, 55, 55, 55));
@@ -4378,19 +4382,19 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     gfx.DrawString(L"\uE710", -1, &plusIconFont, plusRect, &formatCent, &plusIconBrush);
                 }
 
-                MainUI_Paint_DrawToggle(memDC, pData->antiAfkRect, pData->hFont12, L"Anti-AFK", s.overrideAntiAfk ? s.enableAntiAfk : g_isAfkStarted.load(), pData->isHoveringAntiAfk, pData->animAntiAfk, false, L"\uE768", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->antiAfkRect, pData->hFont12, TR(L"Anti-AFK"), s.overrideAntiAfk ? s.enableAntiAfk : g_isAfkStarted.load(), pData->isHoveringAntiAfk, pData->animAntiAfk, false, L"\uE768", !isDefaultPreset, nullptr, true, 10);
 
-                MainUI_Paint_DrawToggle(memDC, pData->resetRect, pData->hFont12, L"Auto Reset", s.overrideReset ? s.enableReset : g_autoReset.load(), pData->isHoveringReset, pData->animReset, false, L"\uE81C", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->resetRect, pData->hFont12, TR(L"Auto Reset"), s.overrideReset ? s.enableReset : g_autoReset.load(), pData->isHoveringReset, pData->animReset, false, L"\uE81C", !isDefaultPreset, nullptr, true, 10);
 
-                MainUI_Paint_DrawToggle(memDC, pData->muteRect, pData->hFont12, L"Mute", s.overrideMute ? s.enableMute : g_autoMute.load(), pData->isHoveringMute, pData->animMute, false, L"\uE74F", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->muteRect, pData->hFont12, TR(L"Mute"), s.overrideMute ? s.enableMute : g_autoMute.load(), pData->isHoveringMute, pData->animMute, false, L"\uE74F", !isDefaultPreset, nullptr, true, 10);
 
-                MainUI_Paint_DrawToggle(memDC, pData->opacityRect, pData->hFont12, L"Opacity", s.overrideOpacity ? s.enableOpacity : g_autoOpacity.load(), pData->isHoveringOpacity, pData->animOpacity, false, L"\uE727", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->opacityRect, pData->hFont12, TR(L"Opacity"), s.overrideOpacity ? s.enableOpacity : g_autoOpacity.load(), pData->isHoveringOpacity, pData->animOpacity, false, L"\uE727", !isDefaultPreset, nullptr, true, 10);
 
-                MainUI_Paint_DrawToggle(memDC, pData->hideRect, pData->hFont12, L"Auto Hide", s.overrideHide ? s.enableHide : g_autoHideRoblox.load(), pData->isHoveringHide, pData->animHide, false, L"\uEE47", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->hideRect, pData->hFont12, TR(L"Auto Hide"), s.overrideHide ? s.enableHide : g_autoHideRoblox.load(), pData->isHoveringHide, pData->animHide, false, L"\uEE47", !isDefaultPreset, nullptr, true, 10);
 
-                MainUI_Paint_DrawToggle(memDC, pData->fpsLimitRect, pData->hFont12, L"FPS Cap", s.overrideFpsLimit ? s.enableFpsLimit : (g_fpsLimit > 0), pData->isHoveringFpsLimit, pData->animFpsLimit, false, L"\uE950", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->fpsLimitRect, pData->hFont12, TR(L"FPS Cap"), s.overrideFpsLimit ? s.enableFpsLimit : (g_fpsLimit > 0), pData->isHoveringFpsLimit, pData->animFpsLimit, false, L"\uE950", !isDefaultPreset, nullptr, true, 10);
 
-                std::wstring currentReconnectMacroName = L"None";
+                std::wstring currentReconnectMacroName = TR(L"None");
                 if (s.overrideMacro) {
                     if (!s.reconnectMacroNames.empty()) {
                         currentReconnectMacroName = std::to_wstring((int)s.reconnectMacroNames.size());
@@ -4408,11 +4412,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                     }
                 }
-                if (currentReconnectMacroName.empty()) currentReconnectMacroName = L"None (Default)";
+                if (currentReconnectMacroName.empty()) currentReconnectMacroName = TR(L"None (Default)");
 
-                MainUI_Paint_DrawToggle(memDC, pData->reconnectRect, pData->hFont12, L"Reconnect", s.overrideReconnect ? s.enableReconnect : g_autoReconnect.load(), pData->isHoveringReconnect, pData->animReconnect, false, L"\uE8AF", !isDefaultPreset, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->reconnectRect, pData->hFont12, TR(L"Reconnect"), s.overrideReconnect ? s.enableReconnect : g_autoReconnect.load(), pData->isHoveringReconnect, pData->animReconnect, false, L"\uE8AF", !isDefaultPreset, nullptr, true, 10);
 
-                std::wstring currentMacroName = L"None";
+                std::wstring currentMacroName = TR(L"None");
                 if (s.overrideMacro) {
                     if (s.enableMacro && !s.macroNames.empty()) {
                         currentMacroName = std::to_wstring((int)s.macroNames.size());
@@ -4430,14 +4434,14 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                     }
                 }
-                if (currentMacroName.empty()) currentMacroName = L"None (Default)";
+                if (currentMacroName.empty()) currentMacroName = TR(L"None (Default)");
 
                 bool actionMacroEnabled = s.overrideMacro ? s.enableMacro : presetMacroEnabled;
                 bool reconnectMacroToggle = s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros();
                 bool intervalMacroToggle = s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros();
                 bool macroControlsEnabled = !isDefaultPreset;
 
-                MainUI_Paint_DrawToggle(memDC, pData->macroRect, pData->hFont12, L"Custom afk action macro", actionMacroEnabled, pData->isHoveringMacro, pData->animMacro, false, L"\uE7C9", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->macroRect, pData->hFont12, TR(L"Custom afk action macro"), actionMacroEnabled, pData->isHoveringMacro, pData->animMacro, false, L"\uE7C9", macroControlsEnabled, nullptr, true, 10);
                 MainUI_Paint_DrawDropdown(memDC, pData->macroSelectRect, pData->hFont12, L"", currentMacroName.c_str(), pData->isHoveringMacroSelect, false, nullptr, actionMacroEnabled && macroControlsEnabled);
                 auto drawSeqBtn = [&](RECT& sr, bool hovered, bool enabled) {
                     Gdiplus::SolidBrush seqBg(enabled ? (hovered ? Gdiplus::Color(150, 80, 80, 80) : Gdiplus::Color(140, 45, 45, 45)) : Gdiplus::Color(100, 40, 40, 40));
@@ -4458,11 +4462,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 };
                 drawSeqBtn(pData->macroSeqRect, pData->isHoveringMacroSeq, actionMacroEnabled && macroControlsEnabled);
 
-                MainUI_Paint_DrawToggle(memDC, pData->reconnectMacroRect, pData->hFont12, L"Reconnect Macro", reconnectMacroToggle, pData->isHoveringReconnectMacro, pData->animReconnectMacro, false, L"\uE8AF", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->reconnectMacroRect, pData->hFont12, TR(L"Reconnect Macro"), reconnectMacroToggle, pData->isHoveringReconnectMacro, pData->animReconnectMacro, false, L"\uE8AF", macroControlsEnabled, nullptr, true, 10);
                 MainUI_Paint_DrawDropdown(memDC, pData->reconnectSelectRect, pData->hFont12, L"", currentReconnectMacroName.c_str(), pData->isHoveringReconnectSelect, false, nullptr, reconnectMacroToggle && macroControlsEnabled);
                 drawSeqBtn(pData->reconnectSeqRect, pData->isHoveringReconnectSeq, reconnectMacroToggle && macroControlsEnabled);
 
-                std::wstring currentIntervalMacroName = L"None";
+                std::wstring currentIntervalMacroName = TR(L"None");
                 if (s.overrideMacro) {
                     if (!s.intervalMacroNames.empty()) {
                         currentIntervalMacroName = std::to_wstring((int)s.intervalMacroNames.size());
@@ -4480,9 +4484,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                     }
                 }
-                if (currentIntervalMacroName.empty()) currentIntervalMacroName = L"None (Default)";
+                if (currentIntervalMacroName.empty()) currentIntervalMacroName = TR(L"None (Default)");
 
-                MainUI_Paint_DrawToggle(memDC, pData->intervalMacroRect, pData->hFont12, L"Custom interval macro", intervalMacroToggle, pData->isHoveringIntervalMacro, pData->animIntervalMacro, false, L"\uE916", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->intervalMacroRect, pData->hFont12, TR(L"Custom interval macro"), intervalMacroToggle, pData->isHoveringIntervalMacro, pData->animIntervalMacro, false, L"\uE916", macroControlsEnabled, nullptr, true, 10);
                 MainUI_Paint_DrawDropdown(memDC, pData->intervalMacroSelectRect, pData->hFont12, L"", currentIntervalMacroName.c_str(), pData->isHoveringIntervalMacroSelect, false, nullptr, intervalMacroToggle && macroControlsEnabled);
                 drawSeqBtn(pData->intervalMacroSeqRect, pData->isHoveringIntervalMacroSeq, intervalMacroToggle && macroControlsEnabled);
 
@@ -4499,21 +4503,21 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     else if (pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq) tipRect = pData->reconnectMacroRect;
                     else if (pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq) tipRect = pData->intervalMacroRect;
                     if (tipRect.left != 0) {
-                        MainUI_Paint_DrawHoverTooltip(memDC, tipRect, pData->hFont10, L"Settings are inherited from main settings, click to switch", false);
+                        MainUI_Paint_DrawHoverTooltip(memDC, tipRect, pData->hFont10, TR(L"Settings are inherited from main settings, click to switch"), false);
                     }
                 } else if (pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq) {
-                    MainUI_Paint_DrawHoverTooltip(memDC, pData->macroRect, pData->hFont10, L"Replaces the anti-AFK action for this instance with the selected macro", false);
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->macroRect, pData->hFont10, TR(L"Replaces the anti-AFK action for this instance with the selected macro"), false);
                 } else if (pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq) {
-                    MainUI_Paint_DrawHoverTooltip(memDC, pData->reconnectMacroRect, pData->hFont10, L"Macro executed when this instance reconnects", false);
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->reconnectMacroRect, pData->hFont10, TR(L"Macro executed when this instance reconnects"), false);
                 } else if (pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq) {
-                    MainUI_Paint_DrawHoverTooltip(memDC, pData->intervalMacroRect, pData->hFont10, L"Macro repeated on the interval timer set in Macros", false);
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->intervalMacroRect, pData->hFont10, TR(L"Macro repeated on the interval timer set in Macros"), false);
                 }
 
                 bool visible = IsWindowVisible(selWnd) != 0;
-                MainUI_Paint_DrawActionButton(memDC, pData->btnShowHideRect, pData->hFont12, visible ? L"Hide" : L"Show", pData->isHoveringShowHide, true);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnGeometryRect, pData->hFont12, L"Geometry", pData->isHoveringGeometry, false, false);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnRenameRect, pData->hFont12, L"Rename", pData->isHoveringRename, false, false);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnCloseClientRect, pData->hFont12, L"Close", pData->isHoveringCloseClient, false, false);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnShowHideRect, pData->hFont12, visible ? TR(L"Hide") : TR(L"Show"), pData->isHoveringShowHide, true);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnGeometryRect, pData->hFont12, TR(L"Geometry"), pData->isHoveringGeometry, false, false);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnRenameRect, pData->hFont12, TR(L"Rename"), pData->isHoveringRename, false, false);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnCloseClientRect, pData->hFont12, TR(L"Close"), pData->isHoveringCloseClient, false, false);
             } else {
                 Gdiplus::SolidBrush textBrush(Gdiplus::Color(140, 150, 150, 150));
                 Gdiplus::Font placeholderFont(memDC, pData->hFont12);
@@ -4521,7 +4525,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 format.SetAlignment(Gdiplus::StringAlignmentCenter);
                 format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
                 Gdiplus::RectF bounds(244.0f, 40.0f, (REAL)(cr.right - 260), (REAL)(cr.bottom - 60));
-                gfx.DrawString(L"No active Roblox client selected.\n\nSelect a Roblox instance from the list on the left to configure custom overrides and profile presets.", -1, &placeholderFont, bounds, &format, &textBrush);
+                gfx.DrawString(TR(L"No active Roblox client selected.\n\nSelect a Roblox instance from the list on the left to configure custom overrides and profile presets."), -1, &placeholderFont, bounds, &format, &textBrush);
             }
         }
 
@@ -4562,7 +4566,7 @@ void ShowInstanceManagerWindow(HWND owner) {
     int y = (screenH - winH) / 2;
 
     HWND h = CreateWindowEx(WS_EX_APPWINDOW, INST_CLASS_NAME,
-        L"AntiAFK-RBX • Instance Manager", WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
+        TR(L"AntiAFK-RBX • Instance Manager"), WS_POPUP, x, y, winW, winH, owner, NULL, g_hInst, NULL);
 
     if (h) {
         g_hInstanceManagerDlg = h;
@@ -6283,8 +6287,8 @@ if (g_stopThread.load() || !g_isAfkStarted.load()) break;
     }
     MacroEngine_RunPendingReconnectMacros();
     if (reconnectTriggered) {
-        QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered (interval check).", false);
-        QueueStatusBarOverlay(L"Auto-Reconnect triggered", 2000, wins.front(), StatusBarEventType::Reconnect);
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, TR(L"Reconnect triggered (interval check)."), false);
+        QueueStatusBarOverlay(TR(L"Auto-Reconnect triggered"), 2000, wins.front(), StatusBarEventType::Reconnect);
     }
 }
 
@@ -6889,7 +6893,7 @@ static bool MacroEngine_ExportMacroToFile(HWND parent, int macroIndex) {
         macroName = g_macros[macroIndex].name;
     }
 
-    wchar_t filter[] = L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    const wchar_t* filter = TR(L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0");
     wchar_t fileName[MAX_PATH] = {0};
     for (auto& c : macroName) { if (c == L'/' || c == L'\\' || c == L':' || c == L'*' || c == L'?' || c == L'\"' || c == L'<' || c == L'>' || c == L'|') c = L'_'; }
     wcscpy_s(fileName, macroName.c_str());
@@ -6914,7 +6918,7 @@ static bool MacroEngine_ExportMacroToFile(HWND parent, int macroIndex) {
 }
 
 static bool MacroEngine_ImportMacroFromFile(HWND parent) {
-    wchar_t filter[] = L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    const wchar_t* filter = TR(L"Macro JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0");
     wchar_t fileName[MAX_PATH] = {0};
     OPENFILENAMEW ofn = {};
     ofn.lStructSize = sizeof(ofn);
@@ -7093,7 +7097,7 @@ if (m.name.size() > 63) m.name.resize(63);
 
     Macro imported = parseMacroJson(content);
     if (imported.name.empty() && imported.actions.empty()) {
-        QueueStatusBarOverlay(L"Invalid macro file", 2000, parent, StatusBarEventType::Macro);
+        QueueStatusBarOverlay(TR(L"Invalid macro file"), 2000, parent, StatusBarEventType::Macro);
         return false;
     }
 
@@ -7114,9 +7118,9 @@ if (m.name.size() > 63) m.name.resize(63);
         g_selectedAction = 4;
     }
     if (!MacroEngine_SaveMacros()) {
-        ShowDarkMessageBox(parent, L"Failed to save macros. The macros file may be read-only or locked.", L"Import Macro", MB_OK);
+        ShowDarkMessageBox(parent, TR(L"Failed to save macros. The macros file may be read-only or locked."), TR(L"Import Macro"), MB_OK);
     }
-    QueueStatusBarOverlay(L"Imported: " + imported.name, 2000, parent, StatusBarEventType::Macro);
+    QueueStatusBarOverlay(TR(L"Imported: ") + imported.name, 2000, parent, StatusBarEventType::Macro);
     return true;
 }
 
@@ -7581,7 +7585,7 @@ macroEngineEnd:
         wchar_t winTitle[128] = L"";
         GetWindowTextW(hwnd, winTitle, 128);
         wchar_t summary[256];
-        swprintf_s(summary, L"Macro \"%s\" on %s", macro.name.c_str(), (wcslen(winTitle) > 0) ? winTitle : L"Roblox window");
+        swprintf_s(summary, TR(L"Macro \"%s\" on %s"), macro.name.c_str(), (wcslen(winTitle) > 0) ? winTitle : TR(L"Roblox window"));
         QueueDiscordWebhookEvent(DiscordWebhookEvent::Macro, summary, false);
     }
 }
@@ -8080,7 +8084,7 @@ static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         Font textFont(memDC, hFontText);
         SolidBrush textBrush(Color(255, GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
 
-        const wchar_t* message = L"Click here to stop recording";
+        const wchar_t* message = TR(L"Click here to stop recording");
 
         StringFormat sfStatus;
         sfStatus.SetAlignment(StringAlignmentNear);
@@ -8150,7 +8154,7 @@ static void ShowRecordingOverlayWindow(HWND targetHwnd)
 
     HDC hdc = GetDC(NULL);
     HFONT textFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-    int messageWidth = MeasureTextWidth(hdc, textFont, L"Click here to stop recording");
+    int messageWidth = MeasureTextWidth(hdc, textFont, TR(L"Click here to stop recording"));
     DeleteObject(textFont);
     ReleaseDC(NULL, hdc);
 
@@ -8163,7 +8167,7 @@ static void ShowRecordingOverlayWindow(HWND targetHwnd)
     g_recordingOverlayWnd = CreateWindowEx(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
         RECORD_OVERLAY_CLASS,
-        L"AntiAFK-RBX Stop Recording",
+        TR(L"AntiAFK-RBX Stop Recording"),
         WS_POPUP | WS_VISIBLE,
         x, y, width, height,
         NULL, NULL, g_hInst, NULL);
@@ -8250,10 +8254,10 @@ void MacroEngine_StopRecording() {
             }
         }
         if (!replaced) {
-            QueueStatusBarOverlay(L"Original macro was deleted - recording discarded", 2500, nullptr, StatusBarEventType::Macro);
+            QueueStatusBarOverlay(TR(L"Original macro was deleted - recording discarded"), 2500, nullptr, StatusBarEventType::Macro);
         }
         if (!MacroEngine_SaveMacros())
-            QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, nullptr, StatusBarEventType::Macro);
+            QueueStatusBarOverlay(TR(L"Failed to save macro - file locked or corrupt"), 3000, nullptr, StatusBarEventType::Macro);
         g_macroWizardActive = false;
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
@@ -8275,12 +8279,12 @@ void MacroEngine_StopRecording() {
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
         }
-        QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, nullptr, StatusBarEventType::Macro);
+        QueueStatusBarOverlay(macroSaved ? (TR(L"Macro saved: ") + g_wizardMacro.name) : std::wstring(TR(L"Failed to save macro - file locked or corrupt")), 2000, nullptr, StatusBarEventType::Macro);
     }
     g_macroWizardStep = 3;
 
     QueueStatusBarHide(true);
-    QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr, StatusBarEventType::Macro);
+    QueueStatusBarOverlay(TR(L"Recording stopped"), 2000, nullptr, StatusBarEventType::Macro);
     QueueRefreshTrayMenu(g_isAfkStarted.load());
 }
 
@@ -8323,7 +8327,7 @@ static void MacroEngine_CancelRecording() {
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
         PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
     }
-    QueueStatusBarOverlay(L"Recording cancelled", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : nullptr, StatusBarEventType::Macro);
+    QueueStatusBarOverlay(TR(L"Recording cancelled"), 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : nullptr, StatusBarEventType::Macro);
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
@@ -8421,7 +8425,7 @@ static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macr
     });
 
     ShowRecordingOverlayWindow(targetHwnd);
-    ShowStatusBarOverlayPersistent(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop", targetHwnd, StatusBarEventType::Macro);
+    ShowStatusBarOverlayPersistent(TR(L"Recording macro... Click floating button or press Ctrl+Shift+R to stop"), targetHwnd, StatusBarEventType::Macro);
 
     CreateTrayMenu(g_isAfkStarted.load());
     return true;
@@ -8452,11 +8456,11 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
                     mg, 90, cw - mg * 2, 200, hwnd, (HMENU)1002, g_hInst, NULL);
 
-                CreateWindowW(L"BUTTON", L"Next →",
+                CreateWindowW(L"BUTTON", TR(L"Next →"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
 
-                CreateWindowW(L"BUTTON", L"Cancel",
+                CreateWindowW(L"BUTTON", TR(L"Cancel"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg, btnY, btnW, btnH, hwnd, (HMENU)IDCANCEL, g_hInst, NULL);
 
@@ -8474,26 +8478,26 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         SendMessage(combo, CB_SETCURSEL, 0, 0);
                 }
             } else if (g_macroWizardStep == 3) {
-                CreateWindowW(L"BUTTON", L"Next →",
+                CreateWindowW(L"BUTTON", TR(L"Next →"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"← Re-record",
+                CreateWindowW(L"BUTTON", TR(L"← Re-record"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg, btnY, 100, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"Test Run",
+                CreateWindowW(L"BUTTON", TR(L"Test Run"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg + 110, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_TEST_RUN, g_hInst, NULL);
             } else if (g_macroWizardStep == 4) {
-                CreateWindowW(L"BUTTON", L"Run on AFK cooldown",
+                CreateWindowW(L"BUTTON", TR(L"Run on AFK cooldown"),
                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                     mg, 50, 200, 24, hwnd, (HMENU)1003, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"Run on reconnect",
+                CreateWindowW(L"BUTTON", TR(L"Run on reconnect"),
                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                     mg, 80, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"← Back",
+                CreateWindowW(L"BUTTON", TR(L"← Back"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     mg, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                CreateWindowW(L"BUTTON", L"✓ Finish",
+                CreateWindowW(L"BUTTON", TR(L"✓ Finish"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     cw - mg - btnW, btnY, btnW, btnH, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
                 Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
@@ -8520,34 +8524,34 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
             g.FillRectangle(&bgBrush, (INT)rc.left, (INT)rc.top, (INT)(rc.right - rc.left), (INT)(rc.bottom - rc.top));
 
             if (g_macroWizardStep == 1) {
-                g.DrawString(L"Step 1/5 - Name Your Macro", -1, &titleFont,
+                g.DrawString(TR(L"Step 1/5 - Name Your Macro"), -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
-                g.DrawString(L"Give your macro a name and select the target Roblox window.", -1, &stepFont,
+                g.DrawString(TR(L"Give your macro a name and select the target Roblox window."), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
-                g.DrawString(L"Macro Name:", -1, &smallFont,
+                g.DrawString(TR(L"Macro Name:"), -1, &smallFont,
                     Gdiplus::PointF(20.0f, 82.0f), &textBrush);
-                g.DrawString(L"Target Window:", -1, &smallFont,
+                g.DrawString(TR(L"Target Window:"), -1, &smallFont,
                     Gdiplus::PointF(20.0f, 132.0f), &textBrush);
             } else if (g_macroWizardStep == 2) {
-                g.DrawString(L"Step 2/5 - Ready to Record", -1, &titleFont,
+                g.DrawString(TR(L"Step 2/5 - Ready to Record"), -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
-                g.DrawString(L"AntiAFK-RBX will resize your game to 800x600", -1, &stepFont,
+                g.DrawString(TR(L"AntiAFK-RBX will resize your game to 800x600"), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 65.0f), &textBrush);
-                g.DrawString(L"and start recording your actions.", -1, &stepFont,
+                g.DrawString(TR(L"and start recording your actions."), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 88.0f), &textBrush);
-                g.DrawString(L"Press Ctrl+Shift+R or click Stop to finish.", -1, &stepFont,
+                g.DrawString(TR(L"Press Ctrl+Shift+R or click Stop to finish."), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 120.0f), &textBrush);
                 {
-                    std::wstring macroLabel = L"Macro: " + g_wizardMacro.name;
+                    std::wstring macroLabel = TR(L"Macro: ") + g_wizardMacro.name;
                     g.DrawString(macroLabel.c_str(), -1, &smallFont,
                         Gdiplus::PointF(20.0f, 170.0f), &textBrush);
                 }
             } else if (g_macroWizardStep == 3) {
                 int stepCount = (int)g_wizardMacro.actions.size();
-                g.DrawString(L"Step 3/5 - Review Actions", -1, &titleFont,
+                g.DrawString(TR(L"Step 3/5 - Review Actions"), -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 wchar_t countMsg[64];
-                swprintf_s(countMsg, L"Recorded %d actions. Review below:", stepCount);
+                swprintf_s(countMsg, TR(L"Recorded %d actions. Review below:"), stepCount);
                 g.DrawString(countMsg, -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
 
@@ -8555,49 +8559,49 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 int maxShow = min(stepCount, 8);
                 for (int i = 0; i < maxShow; i++) {
                     const auto& a = g_wizardMacro.actions[i];
-                    const wchar_t* typeStr = L"Click";
+                    const wchar_t* typeStr = TR(L"Click");
                     switch (a.type) {
-                        case MacroStepType::ImageClick: typeStr = L"Click"; break;
-                        case MacroStepType::KeyPress: typeStr = L"KeyPress"; break;
-                        case MacroStepType::KeyDown: typeStr = L"KeyDown"; break;
-                        case MacroStepType::KeyUp: typeStr = L"KeyUp"; break;
-                        case MacroStepType::MouseMove: typeStr = L"Move"; break;
-                        case MacroStepType::MouseClick: typeStr = L"Click"; break;
-                        case MacroStepType::Sleep: typeStr = L"Sleep"; break;
-                        case MacroStepType::RandomSleep: typeStr = L"RandSleep"; break;
+                        case MacroStepType::ImageClick: typeStr = TR(L"Click"); break;
+                        case MacroStepType::KeyPress: typeStr = TR(L"KeyPress"); break;
+                        case MacroStepType::KeyDown: typeStr = TR(L"KeyDown"); break;
+                        case MacroStepType::KeyUp: typeStr = TR(L"KeyUp"); break;
+                        case MacroStepType::MouseMove: typeStr = TR(L"Move"); break;
+                        case MacroStepType::MouseClick: typeStr = TR(L"Click"); break;
+                        case MacroStepType::Sleep: typeStr = TR(L"Sleep"); break;
+                        case MacroStepType::RandomSleep: typeStr = TR(L"RandSleep"); break;
                     }
                     wchar_t line[128];
                     if (a.type == MacroStepType::ImageClick || a.type == MacroStepType::MouseClick) {
-                        swprintf_s(line, L"  %d. %s (%d,%d) +%dms", i + 1, typeStr, a.x, a.y, a.delayBeforeMs);
+                        swprintf_s(line, TR(L"  %d. %s (%d,%d) +%dms"), i + 1, typeStr, a.x, a.y, a.delayBeforeMs);
                     } else if (a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyUp || a.type == MacroStepType::KeyPress) {
-                        swprintf_s(line, L"  %d. %s [0x%02X] +%dms", i + 1, typeStr, a.vkCode, a.delayBeforeMs);
+                        swprintf_s(line, TR(L"  %d. %s [0x%02X] +%dms"), i + 1, typeStr, a.vkCode, a.delayBeforeMs);
                     } else if (a.type == MacroStepType::MouseMove) {
-                        swprintf_s(line, L"  %d. Move (%d pts) +%dms", i + 1, (int)a.path.size(), a.delayBeforeMs);
+                        swprintf_s(line, TR(L"  %d. Move (%d pts) +%dms"), i + 1, (int)a.path.size(), a.delayBeforeMs);
                     } else {
-                        swprintf_s(line, L"  %d. %s +%dms", i + 1, typeStr, a.delayBeforeMs);
+                        swprintf_s(line, TR(L"  %d. %s +%dms"), i + 1, typeStr, a.delayBeforeMs);
                     }
                     g.DrawString(line, -1, &smallFont,
                         Gdiplus::PointF(20.0f, (REAL)(listY + i * 22)), &textBrush);
                 }
                 if (stepCount > maxShow) {
                     wchar_t more[32];
-                    swprintf_s(more, L"  ... and %d more", stepCount - maxShow);
+                    swprintf_s(more, TR(L"  ... and %d more"), stepCount - maxShow);
                     g.DrawString(more, -1, &smallFont,
                         Gdiplus::PointF(20.0f, (REAL)(listY + maxShow * 22)), &textBrush);
                 }
             } else if (g_macroWizardStep == 4) {
-                g.DrawString(L"Step 4/5 - Configure Triggers", -1, &titleFont,
+                g.DrawString(TR(L"Step 4/5 - Configure Triggers"), -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
-                g.DrawString(L"Configure when this macro should run:", -1, &stepFont,
+                g.DrawString(TR(L"Configure when this macro should run:"), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
             } else if (g_macroWizardStep == 5) {
-                g.DrawString(L"Step 5/5 - Done!", -1, &titleFont,
+                g.DrawString(TR(L"Step 5/5 - Done!"), -1, &titleFont,
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
-                g.DrawString(L"Your macro is ready to use.", -1, &stepFont,
+                g.DrawString(TR(L"Your macro is ready to use."), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
-                g.DrawString(L"Select Custom Macro* from the Action menu", -1, &stepFont,
+                g.DrawString(TR(L"Select Custom Macro* from the Action menu"), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 80.0f), &textBrush);
-                g.DrawString(L"to enable it in the Anti-AFK cycle.", -1, &stepFont,
+                g.DrawString(TR(L"to enable it in the Anti-AFK cycle."), -1, &stepFont,
                     Gdiplus::PointF(20.0f, 103.0f), &textBrush);
             }
 
@@ -8632,14 +8636,14 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     wchar_t name[128] = { 0 };
                     GetDlgItemTextW(hwnd, 1001, name, 128);
                     if (name[0] == 0) {
-                        ShowStatusBarOverlay(L"Enter a macro name first", 2000, hwnd, StatusBarEventType::Macro);
+                        ShowStatusBarOverlay(TR(L"Enter a macro name first"), 2000, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
 
 HWND combo = GetDlgItem(hwnd, 1002);
 int sel = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
 if (sel == CB_ERR) {
-ShowStatusBarOverlay(L"Select a target window", 2000, hwnd, StatusBarEventType::Macro);
+ShowStatusBarOverlay(TR(L"Select a target window"), 2000, hwnd, StatusBarEventType::Macro);
 return 0;
 }
 
@@ -8658,10 +8662,10 @@ g_wizardMacro = Macro();
                     DestroyWindow(GetDlgItem(hwnd, 1002));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_NEXT));
 
-                    CreateWindowW(L"BUTTON", L"▶ Record",
+                    CreateWindowW(L"BUTTON", TR(L"▶ Record"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"← Back",
+                    CreateWindowW(L"BUTTON", TR(L"← Back"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
 
@@ -8676,16 +8680,16 @@ g_wizardMacro = Macro();
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_TEST_RUN));
 
-                    CreateWindowW(L"BUTTON", L"Run on AFK cooldown",
+                    CreateWindowW(L"BUTTON", TR(L"Run on AFK cooldown"),
                         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                         20, 90, 200, 24, hwnd, (HMENU)1003, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"Run on reconnect",
+                    CreateWindowW(L"BUTTON", TR(L"Run on reconnect"),
                         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                         20, 120, 200, 24, hwnd, (HMENU)1004, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"← Back",
+                    CreateWindowW(L"BUTTON", TR(L"← Back"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"✓ Finish",
+                    CreateWindowW(L"BUTTON", TR(L"✓ Finish"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_FINISH, g_hInst, NULL);
                     Button_SetCheck(GetDlgItem(hwnd, 1003), BST_CHECKED);
@@ -8709,7 +8713,7 @@ g_wizardMacro = Macro();
                         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
                         20, 150, 360, 200, hwnd, (HMENU)1002, g_hInst, NULL);
 
-                    CreateWindowW(L"BUTTON", L"Next →",
+                    CreateWindowW(L"BUTTON", TR(L"Next →"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
 
@@ -8733,10 +8737,10 @@ g_wizardMacro = Macro();
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_TEST_RUN));
 
-                    CreateWindowW(L"BUTTON", L"▶ Record",
+                    CreateWindowW(L"BUTTON", TR(L"▶ Record"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"← Back",
+                    CreateWindowW(L"BUTTON", TR(L"← Back"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
 
@@ -8749,13 +8753,13 @@ g_wizardMacro = Macro();
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_BACK));
                     DestroyWindow(GetDlgItem(hwnd, ID_MACROS_WIZARD_FINISH));
 
-                    CreateWindowW(L"BUTTON", L"Next →",
+                    CreateWindowW(L"BUTTON", TR(L"Next →"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         300, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_NEXT, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"← Re-record",
+                    CreateWindowW(L"BUTTON", TR(L"← Re-record"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         20, 340, 100, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
-                    CreateWindowW(L"BUTTON", L"Test Run",
+                    CreateWindowW(L"BUTTON", TR(L"Test Run"),
                         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                         130, 340, 80, 28, hwnd, (HMENU)ID_MACROS_TEST_RUN, g_hInst, NULL);
 
@@ -8784,14 +8788,14 @@ if (!targetHwnd && g_wizardTargetHwnd && IsWindow(g_wizardTargetHwnd)) {
 if (!targetHwnd) {
     auto wins = FindAllRobloxWindows(true);
     if (wins.empty()) {
-        ShowStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
+        ShowStatusBarOverlay(TR(L"No Roblox window found"), 2000, hwnd, StatusBarEventType::Macro);
         return 0;
     }
     targetHwnd = wins[0];
 }
 
 if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
-                    ShowStatusBarOverlay(L"Failed to start recording", 2500, hwnd, StatusBarEventType::Macro);
+                    ShowStatusBarOverlay(TR(L"Failed to start recording"), 2500, hwnd, StatusBarEventType::Macro);
                     return 0;
                 }
                 DestroyWindow(hwnd);
@@ -8811,7 +8815,7 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                     g_selectedAction = 4;
                 }
                 if (!MacroEngine_SaveMacros()) {
-                    ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Save Macro", MB_OK);
+                    ShowDarkMessageBox(hwnd, TR(L"Failed to save macros. The macros file may be read-only or locked."), TR(L"Save Macro"), MB_OK);
                 }
                 g_macroWizardActive = false;
                 HWND parentWnd = GetParent(hwnd);
@@ -8822,7 +8826,7 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                     PostMessage(parentWnd, WM_APP_SHOW_MACROS, 0, 0);
                     InvalidateRect(parentWnd, NULL, TRUE);
                 }
-                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"Macro saved: ") + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
                 return 0;
             }
             if (id == ID_MACROS_TEST_RUN) {
@@ -8849,10 +8853,10 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
         case WM_TIMER: {
             if (wParam == 1) {
                 KillTimer(hwnd, 1);
-                HWND hBtnRecord = CreateWindowW(L"BUTTON", L"▶ Record",
+                HWND hBtnRecord = CreateWindowW(L"BUTTON", TR(L"▶ Record"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     140, 200, 120, 36, hwnd, (HMENU)ID_MACROS_WIZARD_RECORD, g_hInst, NULL);
-                HWND hBtnBack = CreateWindowW(L"BUTTON", L"← Back",
+                HWND hBtnBack = CreateWindowW(L"BUTTON", TR(L"← Back"),
                     WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                     20, 340, 80, 28, hwnd, (HMENU)ID_MACROS_WIZARD_BACK, g_hInst, NULL);
                 InvalidateRect(hwnd, NULL, TRUE);
@@ -8915,7 +8919,7 @@ void MacroEngine_ShowWizard(HWND parent, int startStep) {
 
     g_macroWizardHwnd = CreateWindowEx(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-        MACRO_WIZARD_CLASS, L"AntiAFK-RBX • New Macro",
+        MACRO_WIZARD_CLASS, TR(L"AntiAFK-RBX • New Macro"),
         WS_POPUP | WS_CAPTION | WS_SYSMENU,
         x, y, w, h, parent, NULL, g_hInst, NULL);
 
@@ -9036,7 +9040,7 @@ std::string GetSelfExePath() {
 void UpdateBloxstrapIntegration(bool enable) {
 std::string settingsPath = GetBloxstrapSettingsPath();
 if (settingsPath.empty()) {
-ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find launcher installation path in registry.");
+ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Could not find launcher installation path in registry."));
 g_bloxstrapIntegration = false;
 return;
 }
@@ -9054,7 +9058,7 @@ settingsPathW = wbuf;
 
 std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
     if (!inFile.is_open()) {
-        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find/open the launcher settings file.");
+        ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Could not find/open the launcher settings file."));
         g_bloxstrapIntegration = false;
         return;
     }
@@ -9074,7 +9078,7 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
 
         std::string selfPath = EscapeJsonStringUtf8(GetSelfExePath());
         if (selfPath.empty()) {
-            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not determine the application path.");
+            ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Could not determine the application path."));
             g_bloxstrapIntegration = false;
             return;
         }
@@ -9083,7 +9087,7 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
 
         size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
         if (integrationsArrayPos == std::string::npos) {
-            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find 'CustomIntegrations' array in the launcher settings file.");
+            ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Could not find 'CustomIntegrations' array in the launcher settings file."));
             g_bloxstrapIntegration = false;
             return;
         }
@@ -9091,7 +9095,7 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
         size_t openingBracket = content.find('[', integrationsArrayPos);
         size_t closingBracket = (openingBracket == std::string::npos) ? std::string::npos : FindUnquotedJsonChar(content, openingBracket + 1, ']');
         if (openingBracket == std::string::npos || closingBracket == std::string::npos) {
-            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Could not find 'CustomIntegrations' array bounds in the launcher settings file.");
+            ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Could not find 'CustomIntegrations' array bounds in the launcher settings file."));
             g_bloxstrapIntegration = false;
             return;
         }
@@ -9146,14 +9150,14 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
             outFile << content;
             outFile.close();
         } else {
-            ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
+            ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Failed to write to the launcher settings file. Check permissions."));
             g_bloxstrapIntegration = false;
             return;
         }
     }
     if (!MoveFileExW(tmpPathW.c_str(), settingsPathW.c_str(), MOVEFILE_REPLACE_EXISTING)) {
         DeleteFileW(tmpPathW.c_str());
-        ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
+        ShowTrayNotification(TR(L"AntiAFK-RBX • Integration Error"), TR(L"Failed to write to the launcher settings file. Check permissions."));
         g_bloxstrapIntegration = false;
     }
 }
@@ -9257,7 +9261,7 @@ void RamCleanerThread()
             lastCleanTime = GetTickCount64();
             if (cleanedCount > 0) {
                 wchar_t ramSummary[96];
-                swprintf_s(ramSummary, L"RAM Cleaner optimized %d Roblox process(es)", cleanedCount);
+                swprintf_s(ramSummary, TR(L"RAM Cleaner optimized %d Roblox process(es)"), cleanedCount);
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::UtilityRam, ramSummary, false);
             }
         }
@@ -9751,8 +9755,8 @@ static void AppendStatusLabel(HMENU hMenu, bool afk)
 {
     wchar_t statusText[128];
     const wchar_t* status = afk
-        ? (g_multiSupport.load() ? L"Running (Multi)" : L"Running")
-        : L"Stopped";
+        ? (g_multiSupport.load() ? TR(L"Running (Multi)") : TR(L"Running"))
+        : TR(L"Stopped");
     swprintf_s(statusText, L"%s • %s", status, g_Version);
     AppendMenuLabelWithTrayStateIcon(hMenu, statusText, afk);
 }
@@ -10149,13 +10153,13 @@ void MonitorUserActivity()
 
                 if (anyReminderPending && g_afkReminderState.load() == 0)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX • Reminder", L"A Roblox window has been inactive for 18 minutes. Starting AFK prevention soon.");
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Reminder"), TR(L"A Roblox window has been inactive for 18 minutes. Starting AFK prevention soon."));
                     g_afkReminderState = 1;
                 }
 
                 if (anyAutoStartPending && g_afkReminderState.load() < 2)
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX • Auto-Started", L"No Roblox activity detected for 19 minutes. Starting AFK prevention.");
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Auto-Started"), TR(L"No Roblox activity detected for 19 minutes. Starting AFK prevention."));
                     g_afkStartTime = GetTickCount64();
                     g_isAfkStarted = true;
                     {
@@ -10169,8 +10173,8 @@ void MonitorUserActivity()
                     g_cv.notify_all();
                     ApplyAutoUtilsStartEffects();
 
-                    QueueStatusBarOverlay(L"Auto-started after inactivity", 2200, wins.front(), StatusBarEventType::Session);
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started after inactivity.", false);
+                    QueueStatusBarOverlay(TR(L"Auto-started after inactivity"), 2200, wins.front(), StatusBarEventType::Session);
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, TR(L"Started after inactivity."), false);
                 }
             }
         }
@@ -10439,7 +10443,7 @@ static int NormalizeMultiInstanceIntervalValue(int value)
 
 std::wstring GetWin32ErrorText(DWORD error)
 {
-    if (error == 0) return L"Unknown error.";
+    if (error == 0) return TR(L"Unknown error.");
 
     LPWSTR buffer = NULL;
     DWORD length = FormatMessageW(
@@ -10451,7 +10455,7 @@ std::wstring GetWin32ErrorText(DWORD error)
         0,
         NULL);
 
-    std::wstring message = (length > 0 && buffer) ? buffer : L"Unknown error.";
+    std::wstring message = (length > 0 && buffer) ? buffer : TR(L"Unknown error.");
     if (buffer)
     {
         LocalFree(buffer);
@@ -10468,20 +10472,20 @@ std::wstring GetDiscordEventLabel(DiscordWebhookEvent eventType)
 {
     switch (eventType)
     {
-    case DiscordWebhookEvent::Test: return L"Test";
-    case DiscordWebhookEvent::Started: return L"Started";
-    case DiscordWebhookEvent::Stopped: return L"Stopped";
-    case DiscordWebhookEvent::Action: return L"AFK Action";
-    case DiscordWebhookEvent::AutoReconnect: return L"Auto Reconnect";
-    case DiscordWebhookEvent::AutoReset: return L"Auto Reset";
-    case DiscordWebhookEvent::Error: return L"Error";
-    case DiscordWebhookEvent::Macro: return L"Macro";
-    case DiscordWebhookEvent::IntervalMacrosStarted: return L"Interval Macros Started";
-    case DiscordWebhookEvent::IntervalMacrosStopped: return L"Interval Macros Stopped";
-    case DiscordWebhookEvent::Heartbeat: return L"Heartbeat";
-    case DiscordWebhookEvent::UtilityRam: return L"RAM Cleaner";
+    case DiscordWebhookEvent::Test: return TR(L"Test");
+    case DiscordWebhookEvent::Started: return TR(L"Started");
+    case DiscordWebhookEvent::Stopped: return TR(L"Stopped");
+    case DiscordWebhookEvent::Action: return TR(L"AFK Action");
+    case DiscordWebhookEvent::AutoReconnect: return TR(L"Auto Reconnect");
+    case DiscordWebhookEvent::AutoReset: return TR(L"Auto Reset");
+    case DiscordWebhookEvent::Error: return TR(L"Error");
+    case DiscordWebhookEvent::Macro: return TR(L"Macro");
+    case DiscordWebhookEvent::IntervalMacrosStarted: return TR(L"Interval Macros Started");
+    case DiscordWebhookEvent::IntervalMacrosStopped: return TR(L"Interval Macros Stopped");
+    case DiscordWebhookEvent::Heartbeat: return TR(L"Heartbeat");
+    case DiscordWebhookEvent::UtilityRam: return TR(L"RAM Cleaner");
     }
-    return L"Unknown";
+    return TR(L"Unknown");
 }
 
 DWORD GetDiscordEventColor(DiscordWebhookEvent eventType)
@@ -10527,14 +10531,14 @@ std::wstring GetDiscordActionCompactLabel()
     std::wstring baseName;
     switch (g_lastActionKind.load())
     {
-    case 0: baseName = L"Jump"; break;
+    case 0: baseName = TR(L"Jump"); break;
     case 1: baseName = L"W/S"; break;
-    case 2: baseName = L"Zoom"; break;
-    default: baseName = L"Action"; break;
+    case 2: baseName = TR(L"Zoom"); break;
+    default: baseName = TR(L"Action"); break;
     }
     if (g_selectedAction.load() == 3)
     {
-        return L"Random (" + baseName + L")";
+        return TR(L"Random (") + baseName + L")";
     }
     return baseName;
 }
@@ -10544,11 +10548,11 @@ std::wstring GetDiscordIntervalCompactLabel()
     wchar_t buffer[32];
     if (g_selectedTime.load() % 60 == 0)
     {
-        swprintf_s(buffer, L"%d min", g_selectedTime.load() / 60);
+        swprintf_s(buffer, TR(L"%d min"), g_selectedTime.load() / 60);
     }
     else
     {
-        swprintf_s(buffer, L"%d sec", g_selectedTime.load());
+        swprintf_s(buffer, TR(L"%d sec"), g_selectedTime.load());
     }
     return buffer;
 }
@@ -10561,19 +10565,19 @@ std::wstring BuildDiscordStartedDetailsLine()
 
     if (g_autoReconnect.load())
     {
-        line += L" • **Reconnect**";
+        line += TR(L" • **Reconnect**");
     }
     if (g_autoReset.load())
     {
-        line += L" • **Reset**";
+        line += TR(L" • **Reset**");
     }
     if (g_doNotSleep.load())
     {
-        line += L" • **Do Not Sleep**";
+        line += TR(L" • **Do Not Sleep**");
     }
     if (g_fpsLimit > 0)
     {
-        line += L" • **FPS Capper (CPU Limiter)**";
+        line += TR(L" • **FPS Capper (CPU Limiter)**");
     }
 
     return line;
@@ -10603,18 +10607,18 @@ std::wstring BuildDiscordStartedInstancesLine()
     size_t count = uniquePids.size();
 
     wchar_t buffer[96];
-    swprintf_s(buffer, L"Started • Found %zu %s", count, count == 1 ? L"Window" : L"Windows");
+    swprintf_s(buffer, TR(L"Started • Found %zu %s"), count, WindowsCountWord(count));
     return buffer;
 }
 
 std::wstring BuildDiscordStartedCompactInstancesLabel()
 {
     std::wstring fullLabel = BuildDiscordStartedInstancesLine();
-    const std::wstring prefix = L"Started • Found ";
+    const std::wstring prefix = TR(L"Started • Found ");
     if (fullLabel.rfind(prefix, 0) == 0)
     {
         std::wstring suffix = fullLabel.substr(prefix.size());
-        return suffix + L" found";
+        return FoundCountLabel(suffix);
     }
     return fullLabel;
 }
@@ -10641,81 +10645,81 @@ std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const s
         appendLine(BuildDiscordTotalStatsLine());
         break;
     case DiscordWebhookEvent::Stopped:
-        if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
+        if (summary.find(TR(L"manual")) != std::wstring::npos || summary.find(TR(L"Manual")) != std::wstring::npos)
         {
-            appendLine(L"Stopped • Manual stop");
+            appendLine(TR(L"Stopped • Manual stop"));
         }
-        else if (summary.find(L"Roblox not found") != std::wstring::npos)
+        else if (summary.find(TR(L"Roblox not found")) != std::wstring::npos)
         {
-            appendLine(L"Stopped • Roblox not found");
+            appendLine(TR(L"Stopped • Roblox not found"));
         }
         else if (!summary.empty())
         {
-            appendLine(std::wstring(L"Stopped • ") + summary);
+            appendLine(std::wstring(TR(L"Stopped • ")) + summary);
         }
         else
         {
-            appendLine(L"Stopped");
+            appendLine(TR(L"Stopped"));
         }
         appendLine(BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load()));
         break;
     case DiscordWebhookEvent::Error:
-        if (summary.find(L"Roblox not found") != std::wstring::npos)
+        if (summary.find(TR(L"Roblox not found")) != std::wstring::npos)
         {
-            appendLine(L"Error • Roblox not found");
+            appendLine(TR(L"Error • Roblox not found"));
         }
         else if (!summary.empty())
         {
-            appendLine(std::wstring(L"Error • ") + summary);
+            appendLine(std::wstring(TR(L"Error • ")) + summary);
         }
         else
         {
-            appendLine(L"Error");
+            appendLine(TR(L"Error"));
         }
         break;
     case DiscordWebhookEvent::AutoReconnect:
-        appendLine(L"Reconnected • Roblox");
+        appendLine(TR(L"Reconnected • Roblox"));
         break;
     case DiscordWebhookEvent::Action:
-        appendLine(std::wstring(L"Action • ") + GetDiscordActionCompactLabel() + L" • Next in " + GetDiscordIntervalCompactLabel());
-        if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
+        appendLine(std::wstring(TR(L"Action • ")) + GetDiscordActionCompactLabel() + TR(L" • Next in ") + GetDiscordIntervalCompactLabel());
+        if (summary.find(TR(L"macro")) != std::wstring::npos || summary.find(TR(L"Macro")) != std::wstring::npos)
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::Test:
-        appendLine(L"Test • Webhook connected");
+        appendLine(TR(L"Test • Webhook connected"));
         break;
     case DiscordWebhookEvent::AutoReset:
-        appendLine(L"Reset");
+        appendLine(TR(L"Reset"));
         if (!summary.empty())
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::Macro:
-        appendLine(L"Macro executed");
+        appendLine(TR(L"Macro executed"));
         if (!summary.empty())
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::IntervalMacrosStarted:
-        appendLine(L"Interval macros enabled");
+        appendLine(TR(L"Interval macros enabled"));
         if (!summary.empty())
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::IntervalMacrosStopped:
-        appendLine(L"Interval macros disabled");
+        appendLine(TR(L"Interval macros disabled"));
         if (!summary.empty())
         {
             appendLine(summary);
         }
         break;
     case DiscordWebhookEvent::Heartbeat:
-        appendLine(L"Heartbeat");
+        appendLine(TR(L"Heartbeat"));
         if (!summary.empty())
         {
             appendLine(summary);
@@ -10768,20 +10772,20 @@ std::wstring BuildDiscordEmbedTitle(DiscordWebhookEvent eventType)
 {
     switch (eventType)
     {
-    case DiscordWebhookEvent::Started: return L"Anti-AFK Started";
-    case DiscordWebhookEvent::Stopped: return L"Anti-AFK Stopped";
-    case DiscordWebhookEvent::Action: return L"Anti-AFK Action";
-    case DiscordWebhookEvent::AutoReconnect: return L"Anti-AFK Reconnect";
-    case DiscordWebhookEvent::AutoReset: return L"Anti-AFK Reset";
-    case DiscordWebhookEvent::Error: return L"Anti-AFK Error";
-    case DiscordWebhookEvent::Test: return L"Anti-AFK Test";
-    case DiscordWebhookEvent::Macro: return L"Anti-AFK Macro";
-    case DiscordWebhookEvent::IntervalMacrosStarted: return L"Interval Macros Started";
-    case DiscordWebhookEvent::IntervalMacrosStopped: return L"Interval Macros Stopped";
-    case DiscordWebhookEvent::Heartbeat: return L"Anti-AFK Heartbeat";
-    case DiscordWebhookEvent::UtilityRam: return L"Anti-AFK RAM Cleaner";
+    case DiscordWebhookEvent::Started: return TR(L"Anti-AFK Started");
+    case DiscordWebhookEvent::Stopped: return TR(L"Anti-AFK Stopped");
+    case DiscordWebhookEvent::Action: return TR(L"Anti-AFK Action");
+    case DiscordWebhookEvent::AutoReconnect: return TR(L"Anti-AFK Reconnect");
+    case DiscordWebhookEvent::AutoReset: return TR(L"Anti-AFK Reset");
+    case DiscordWebhookEvent::Error: return TR(L"Anti-AFK Error");
+    case DiscordWebhookEvent::Test: return TR(L"Anti-AFK Test");
+    case DiscordWebhookEvent::Macro: return TR(L"Anti-AFK Macro");
+    case DiscordWebhookEvent::IntervalMacrosStarted: return TR(L"Interval Macros Started");
+    case DiscordWebhookEvent::IntervalMacrosStopped: return TR(L"Interval Macros Stopped");
+    case DiscordWebhookEvent::Heartbeat: return TR(L"Anti-AFK Heartbeat");
+    case DiscordWebhookEvent::UtilityRam: return TR(L"Anti-AFK RAM Cleaner");
     }
-    return L"Anti-AFK Update";
+    return TR(L"Anti-AFK Update");
 }
 
 std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const std::wstring& summary)
@@ -10793,47 +10797,47 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
     case DiscordWebhookEvent::Stopped:
         {
             std::wstring base;
-            if (summary.find(L"manual") != std::wstring::npos || summary.find(L"Manual") != std::wstring::npos)
+            if (summary.find(TR(L"manual")) != std::wstring::npos || summary.find(TR(L"Manual")) != std::wstring::npos)
             {
-                base = L"Manual stop";
+                base = TR(L"Manual stop");
             }
-            else if (summary.find(L"Roblox not found") != std::wstring::npos)
+            else if (summary.find(TR(L"Roblox not found")) != std::wstring::npos)
             {
-                base = L"Roblox not found";
+                base = TR(L"Roblox not found");
             }
             else
             {
-                base = summary.empty() ? L"Stopped" : summary;
+                base = summary.empty() ? TR(L"Stopped") : summary;
             }
             return base + L"\n" + BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load());
         }
     case DiscordWebhookEvent::Error:
-        if (summary.find(L"Roblox not found") != std::wstring::npos)
+        if (summary.find(TR(L"Roblox not found")) != std::wstring::npos)
         {
-            return L"Roblox not found";
+            return TR(L"Roblox not found");
         }
-        return summary.empty() ? L"Unknown error" : summary;
+        return summary.empty() ? TR(L"Unknown error") : summary;
     case DiscordWebhookEvent::AutoReconnect:
-        return summary.empty() ? L"Reconnect triggered" : summary;
+        return summary.empty() ? TR(L"Reconnect triggered") : summary;
     case DiscordWebhookEvent::Action:
         {
-            std::wstring line = GetDiscordActionCompactLabel() + L" • Next in " + GetDiscordIntervalCompactLabel();
-            if (summary.find(L"macro") != std::wstring::npos || summary.find(L"Macro") != std::wstring::npos)
+            std::wstring line = GetDiscordActionCompactLabel() + TR(L" • Next in ") + GetDiscordIntervalCompactLabel();
+            if (summary.find(TR(L"macro")) != std::wstring::npos || summary.find(TR(L"Macro")) != std::wstring::npos)
             {
                 line += L" • " + summary;
             }
             return line;
         }
     case DiscordWebhookEvent::Test:
-        return L"Webhook connected";
+        return TR(L"Webhook connected");
     case DiscordWebhookEvent::AutoReset:
-        return summary.empty() ? L"Reset triggered" : summary;
+        return summary.empty() ? TR(L"Reset triggered") : summary;
     case DiscordWebhookEvent::Macro:
-        return summary.empty() ? L"Macro executed" : summary;
+        return summary.empty() ? TR(L"Macro executed") : summary;
     case DiscordWebhookEvent::IntervalMacrosStarted:
-        return summary.empty() ? L"Interval macros enabled" : summary;
+        return summary.empty() ? TR(L"Interval macros enabled") : summary;
     case DiscordWebhookEvent::IntervalMacrosStopped:
-        return summary.empty() ? L"Interval macros disabled" : summary;
+        return summary.empty() ? TR(L"Interval macros disabled") : summary;
     case DiscordWebhookEvent::Heartbeat:
         {
             std::wstring line = BuildDiscordSessionStatsLine(g_lastSessionDurationSeconds.load());
@@ -10842,16 +10846,16 @@ std::wstring BuildDiscordEmbedDescription(DiscordWebhookEvent eventType, const s
                 uint64_t sessionSec = (now - g_afkStartTime.load()) / 1000;
                 uint64_t sinceAction = g_lastAfkActionTimestamp.load() > 0 ? (now - g_lastAfkActionTimestamp.load()) / 1000 : 0;
                 uint64_t nextSec = sinceAction < (uint64_t)g_selectedTime.load() ? (uint64_t)g_selectedTime.load() - sinceAction : 0;
-                wchar_t buf[96];
-                swprintf_s(buf, L"Running • Session: %s • Next action in %llu sec", FormatDurationShort(sessionSec).c_str(), (unsigned long long)nextSec);
+                wchar_t buf[160];
+                swprintf_s(buf, TR(L"Running • Session: %s • Next action in %llu sec"), FormatDurationShort(sessionSec).c_str(), (unsigned long long)nextSec);
                 line = std::wstring(buf) + L"\n" + line;
             } else {
-                line = L"Idle • No active session\n" + line;
+                line = TR(L"Idle • No active session\n") + line;
             }
             return line;
         }
     case DiscordWebhookEvent::UtilityRam:
-        return summary.empty() ? L"Utility event" : summary;
+        return summary.empty() ? TR(L"Utility event") : summary;
     default:
         return summary.empty() ? GetDiscordEventLabel(eventType) : summary;
     }
@@ -10878,7 +10882,7 @@ std::wstring BuildDiscordPlainContentLine(DiscordWebhookEvent eventType, const s
 {
     if (eventType == DiscordWebhookEvent::Started)
     {
-        return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" • Started • " + BuildDiscordStartedCompactInstancesLabel();
+        return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + TR(L" • Started • ") + BuildDiscordStartedCompactInstancesLabel();
     }
 
     std::wstring content = BuildDiscordAsciiDescription(eventType, summary);
@@ -11028,14 +11032,14 @@ std::wstring FormatDurationShort(uint64_t totalSeconds)
     uint64_t minutes = (totalSeconds % 3600) / 60;
 
     wchar_t buffer[64];
-    swprintf_s(buffer, L"%llu h %llu min", hours, minutes);
+    swprintf_s(buffer, TR(L"%llu h %llu min"), hours, minutes);
     return buffer;
 }
 
 std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
 {
     wchar_t buffer[224];
-    swprintf_s(buffer, L"Session: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
+    swprintf_s(buffer, TR(L"Session: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu"),
         FormatDurationShort(lastSessionSeconds).c_str(),
         (unsigned long long)g_afkActionsPerformed.load(),
         (unsigned long long)g_autoReconnectsPerformed.load(),
@@ -11046,7 +11050,7 @@ std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
 std::wstring BuildDiscordTotalStatsLine()
 {
     wchar_t buffer[224];
-    swprintf_s(buffer, L"Total time: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
+    swprintf_s(buffer, TR(L"Total time: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu"),
         FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
         (unsigned long long)g_afkActionsPerformed.load(),
         (unsigned long long)g_autoReconnectsPerformed.load(),
@@ -11163,7 +11167,7 @@ bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEve
     std::wstring normalizedUrl = NormalizeDiscordWebhookUrl(webhookUrl);
     if (!IsDiscordWebhookUrl(normalizedUrl))
     {
-        if (errorOut) *errorOut = L"Webhook URL is empty or invalid.";
+        if (errorOut) *errorOut = TR(L"Webhook URL is empty or invalid.");
         return false;
     }
 
@@ -11275,7 +11279,7 @@ bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEve
         if (errorOut)
         {
             std::wstringstream errorStream;
-            errorStream << L"Discord returned HTTP " << statusCode;
+            errorStream << TR(L"Discord returned HTTP ") << statusCode;
             if (!responseBody.empty())
             {
                 std::wstring bodyText = Utf8ToWide(responseBody);
@@ -11302,14 +11306,14 @@ static void QueueWebhookTestAsync(const std::wstring& webhookUrl, const std::wst
         bool sent = SendDiscordWebhookRequest(
             webhookUrl,
             DiscordWebhookEvent::Test,
-            L"Manual test message from " + sourceNote + L".",
+            TR(L"Manual test message from ") + sourceNote + L".",
             &errorText,
             &statusCode);
         std::wstring body;
         if (sent) {
-            body = L"Test message sent successfully (HTTP " + std::to_wstring(statusCode) + L").";
+            body = TR(L"Test message sent successfully (HTTP ") + std::to_wstring(statusCode) + L").";
         } else {
-            body = errorText.empty() ? std::wstring(L"Failed to send the test webhook.") : errorText;
+            body = errorText.empty() ? std::wstring(TR(L"Failed to send the test webhook.")) : errorText;
         }
         std::wstring* payload = new std::wstring(body);
         HWND target = (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) ? g_hMainUiWnd : g_hwnd;
@@ -13257,7 +13261,7 @@ static bool ExportSettingsToFile(HWND owner)
     wchar_t fileName[MAX_PATH] = L"AntiAFK-RBX-settings.json";
     OPENFILENAME ofn = { sizeof(ofn) };
     ofn.hwndOwner = owner;
-    ofn.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+    ofn.lpstrFilter = TR(L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0");
     ofn.lpstrFile = fileName;
     ofn.nMaxFile = MAX_PATH;
     ofn.lpstrDefExt = L"json";
@@ -13265,12 +13269,12 @@ static bool ExportSettingsToFile(HWND owner)
     if (!GetSaveFileName(&ofn)) return false;
     if (!SaveTextFileUtf8(fileName, BuildSettingsJson(CaptureSettingsSnapshot()))) return false;
 
-    int exportMacros = ShowDarkMessageBox(owner, L"Also export macros?", L"AntiAFK-RBX • Export Settings", MB_YESNO);
+    int exportMacros = ShowDarkMessageBox(owner, TR(L"Also export macros?"), TR(L"AntiAFK-RBX • Export Settings"), MB_YESNO);
     if (exportMacros == IDYES) {
         wchar_t macroFile[MAX_PATH] = L"AntiAFK-RBX-macros.json";
         OPENFILENAME ofn2 = { sizeof(ofn2) };
         ofn2.hwndOwner = owner;
-        ofn2.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+        ofn2.lpstrFilter = TR(L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0");
         ofn2.lpstrFile = macroFile;
         ofn2.nMaxFile = MAX_PATH;
         ofn2.lpstrDefExt = L"json";
@@ -13281,7 +13285,7 @@ static bool ExportSettingsToFile(HWND owner)
             if (attrs != INVALID_FILE_ATTRIBUTES) {
                 CopyFileW(macrosSrc.c_str(), macroFile, FALSE);
             } else {
-                ShowDarkMessageBox(owner, L"Macros file not found - nothing to export.", L"AntiAFK-RBX • Export Settings", MB_OK);
+                ShowDarkMessageBox(owner, TR(L"Macros file not found - nothing to export."), TR(L"AntiAFK-RBX • Export Settings"), MB_OK);
             }
         }
     }
@@ -13293,7 +13297,7 @@ static bool ImportSettingsFromFile(HWND owner)
     wchar_t fileName[MAX_PATH] = L"";
     OPENFILENAME ofn = { sizeof(ofn) };
     ofn.hwndOwner = owner;
-    ofn.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+    ofn.lpstrFilter = TR(L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0");
     ofn.lpstrFile = fileName;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
@@ -13397,9 +13401,9 @@ static bool ImportSettingsFromFile(HWND owner)
                 std::wstring currentUrl = GetDiscordWebhookUrlCopy();
                 if (importedUrl != currentUrl) {
                     ShowDarkMessageBox(owner,
-                        L"The imported settings contain a Discord webhook URL.\n\n"
-                        L"Do you want to keep the imported webhook URL?",
-                        L"AntiAFK-RBX • Import Settings", MB_YESNO) == IDYES
+                        TR(L"The imported settings contain a Discord webhook URL.\n\n"
+                        L"Do you want to keep the imported webhook URL?"),
+                        TR(L"AntiAFK-RBX • Import Settings"), MB_YESNO) == IDYES
                         ? (s.discordWebhookUrl = importedUrl)
                         : (s.discordWebhookUrl = currentUrl);
                 } else {
@@ -13475,12 +13479,12 @@ static bool ImportSettingsFromFile(HWND owner)
         }
     }
 
-    int importMacros = ShowDarkMessageBox(owner, L"Also import macros?", L"AntiAFK-RBX • Import Settings", MB_YESNO);
+    int importMacros = ShowDarkMessageBox(owner, TR(L"Also import macros?"), TR(L"AntiAFK-RBX • Import Settings"), MB_YESNO);
     if (importMacros == IDYES) {
         wchar_t macroFile[MAX_PATH] = L"";
         OPENFILENAME ofn2 = { sizeof(ofn2) };
         ofn2.hwndOwner = owner;
-        ofn2.lpstrFilter = L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0";
+        ofn2.lpstrFilter = TR(L"JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0");
         ofn2.lpstrFile = macroFile;
         ofn2.nMaxFile = MAX_PATH;
         ofn2.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
@@ -13501,7 +13505,7 @@ static bool ImportSettingsFromFile(HWND owner)
                 }
             }
             if (!validMacrosFile) {
-                ShowDarkMessageBox(owner, L"The selected file is not a valid macros file.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                ShowDarkMessageBox(owner, TR(L"The selected file is not a valid macros file."), TR(L"AntiAFK-RBX • Import Settings"), MB_OK);
             } else {
                 std::wstring macrosPath = MacroEngine_GetMacrosPath();
                 std::wstring backupPath = macrosPath + L".import-bak";
@@ -13517,12 +13521,12 @@ static bool ImportSettingsFromFile(HWND owner)
                         }
                         if (restored) {
                             DeleteFileW(backupPath.c_str());
-                            ShowDarkMessageBox(owner, L"The imported macros file could not be parsed. Your previous macros were restored.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                            ShowDarkMessageBox(owner, TR(L"The imported macros file could not be parsed. Your previous macros were restored."), TR(L"AntiAFK-RBX • Import Settings"), MB_OK);
                         } else {
                             DeleteFileW(macrosPath.c_str());
                             DeleteFileW(backupPath.c_str());
                             MacroEngine_LoadMacros();
-                            ShowDarkMessageBox(owner, L"The imported macros file could not be parsed and no previous valid macros file existed - macros were reset.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                            ShowDarkMessageBox(owner, TR(L"The imported macros file could not be parsed and no previous valid macros file existed - macros were reset."), TR(L"AntiAFK-RBX • Import Settings"), MB_OK);
                         }
                     } else {
                         DeleteFileW(backupPath.c_str());
@@ -13531,7 +13535,7 @@ static bool ImportSettingsFromFile(HWND owner)
                         InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                     }
                 } else {
-                    ShowDarkMessageBox(owner, L"Failed to import macros. The file may be locked or the destination is not writable.", L"AntiAFK-RBX • Import Settings", MB_OK);
+                    ShowDarkMessageBox(owner, TR(L"Failed to import macros. The file may be locked or the destination is not writable."), TR(L"AntiAFK-RBX • Import Settings"), MB_OK);
                 }
             }
         }
@@ -13556,13 +13560,13 @@ void CreateTrayMenu(bool afk)
     AnnouncementInfo announcement = GetAnnouncementCopy();
 
     HMENU InfoMenu = CreatePopupMenu();
-    AppendMenu(InfoMenu, MF_STRING, ID_ABOUT_MENU, L"About AntiAFK-RBX");
-    AppendMenu(InfoMenu, MF_STRING, ID_SHOW_TUTORIAL, L"Show First Welcome");
-    AppendMenu(InfoMenu, MF_STRING, ID_LINKTTU, L"[Link] - TipsToUse");
-    AppendMenu(InfoMenu, MF_STRING, ID_LINKWIKI, L"[Link] - Wiki");
-    AppendMenu(InfoMenu, MF_STRING, ID_LINKGITHUB, L"[Link] - GitHub");
-    AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, L"[Link] - SourceForge");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)InfoMenu, L"AntiAFK-RBX by Agzes");
+    AppendMenu(InfoMenu, MF_STRING, ID_ABOUT_MENU, TR(L"About AntiAFK-RBX"));
+    AppendMenu(InfoMenu, MF_STRING, ID_SHOW_TUTORIAL, TR(L"Show First Welcome"));
+    AppendMenu(InfoMenu, MF_STRING, ID_LINKTTU, TR(L"[Link] - TipsToUse"));
+    AppendMenu(InfoMenu, MF_STRING, ID_LINKWIKI, TR(L"[Link] - Wiki"));
+    AppendMenu(InfoMenu, MF_STRING, ID_LINKGITHUB, TR(L"[Link] - GitHub"));
+    AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, TR(L"[Link] - SourceForge"));
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)InfoMenu, TR(L"AntiAFK-RBX by Agzes"));
     {
         HBITMAP hAppBmp = CreateMenuIconFromAppIcon();
         g_menuIconBitmaps.push_back(hAppBmp);
@@ -13578,37 +13582,37 @@ void CreateTrayMenu(bool afk)
             SetAnnouncementMenuIcon(g_hMenu, ID_OPEN_ANNOUNCEMENT, announcement);
         }
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
-        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
+        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, TR(L"Start Anti-AFK"));
+        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, TR(L"Stop Anti-AFK"));
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         if (!g_simpleMode.load()) {
-            AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
-            AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
-            AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
-            AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
+            AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, TR(L"Show Roblox"));
+            AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, TR(L"Hide Roblox"));
+            AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, TR(L"Window Opacity (70%)"));
+            AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, TR(L"Grid Snap Roblox*"));
             AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         }
-        AppendMenu(g_hMenu, MF_STRING, ID_OPEN_UI, L"Open AntiAFK-RBX");
+        AppendMenu(g_hMenu, MF_STRING, ID_OPEN_UI, TR(L"Open AntiAFK-RBX"));
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         {
             wchar_t hkStatus[128];
             std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
-            swprintf_s(hkStatus, L"Hotkey: %s [%s]", hkStr.c_str(), g_hotkeyEnabled.load() ? L"On" : L"Off");
+            swprintf_s(hkStatus, TR(L"Hotkey: %s [%s]"), hkStr.c_str(), g_hotkeyEnabled.load() ? TR(L"On") : TR(L"Off"));
             AppendMenu(g_hMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, hkStatus);
         }
-        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"Change Hotkey...");
+        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_HOTKEY, TR(L"Change Hotkey..."));
         {
             wchar_t gkStatus[128];
             std::wstring gkStr = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
-            swprintf_s(gkStatus, L"Grid Hotkey: %s [%s]", gkStr.c_str(), g_hotkeyGridEnabled.load() ? L"On" : L"Off");
+            swprintf_s(gkStatus, TR(L"Grid Hotkey: %s [%s]"), gkStr.c_str(), g_hotkeyGridEnabled.load() ? TR(L"On") : TR(L"Off"));
             AppendMenu(g_hMenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, gkStatus);
         }
-        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"Change Grid Hotkey...");
+        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, TR(L"Change Grid Hotkey..."));
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
+        AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, TR(L"Use Legacy UI (Tray)"));
         if (g_updateFound)
-            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[?] \x2022 Update Available");
-        AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
+            AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, TR(L"[?] \x2022 Update Available"));
+        AppendMenu(g_hMenu, MF_STRING, ID_EXIT, TR(L"Exit"));
         ApplyMenuIconsRecursive(g_hMenu);
         return;
     }
@@ -13630,171 +13634,171 @@ void CreateTrayMenu(bool afk)
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     }
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(g_hMenu, MF_STRING, ID_TEST_ACTION, L"Test Anti-AFK move");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
+    AppendMenu(g_hMenu, MF_STRING, ID_TEST_ACTION, TR(L"Test Anti-AFK move"));
+    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, TR(L"Start Anti-AFK"));
+    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, TR(L"Stop Anti-AFK"));
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
 
     HMENU hTimeSubmenu = CreatePopupMenu();
-    AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, L"Custom interval...");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, L"3 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, L"6 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, L"9 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 11 * 60 ? MF_CHECKED : 0), ID_TIME_11, L"11 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 13 * 60 ? MF_CHECKED : 0), ID_TIME_13, L"13 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 15 * 60 ? MF_CHECKED : 0), ID_TIME_15, L"15 minutes");
-    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 18 * 60 ? MF_CHECKED : 0), ID_TIME_18, L"18 minutes");
-    wchar_t timeLabel[32];
+    AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, TR(L"Custom interval..."));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, TR(L"3 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, TR(L"6 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, TR(L"9 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 11 * 60 ? MF_CHECKED : 0), ID_TIME_11, TR(L"11 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 13 * 60 ? MF_CHECKED : 0), ID_TIME_13, TR(L"13 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 15 * 60 ? MF_CHECKED : 0), ID_TIME_15, TR(L"15 minutes"));
+    AppendMenu(hTimeSubmenu, MF_STRING | (g_selectedTime.load() == 18 * 60 ? MF_CHECKED : 0), ID_TIME_18, TR(L"18 minutes"));
+    wchar_t timeLabel[64];
     if (g_selectedTime.load() < 60)
-        swprintf_s(timeLabel, L"Set Interval • %d sec", g_selectedTime.load());
+        swprintf_s(timeLabel, TR(L"Set Interval • %d sec"), g_selectedTime.load());
     else
-        swprintf_s(timeLabel, L"Set Interval • %d min", g_selectedTime.load() / 60);
+        swprintf_s(timeLabel, TR(L"Set Interval • %d min"), g_selectedTime.load() / 60);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hTimeSubmenu, timeLabel);
     SetMenuIconPopup(g_hMenu, hTimeSubmenu, 0xE916);
 
     HMENU hActionSubmenu = CreatePopupMenu();
-    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, TR(L"Space (Jump)"));
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
-    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
-    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, TR(L"Zoom (I/O)"));
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, TR(L"Random*"));
     AppendMenu(hActionSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
-    wchar_t actionLabel[32];
-        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
-    swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, TR(L"Macros Only"));
+    wchar_t actionLabel[64];
+        const wchar_t* actionNames[] = { TR(L"Space (Jump)"), L"W/S", TR(L"Zoom (I/O)"), TR(L"Random*"), TR(L"Macros Only") };
+    swprintf_s(actionLabel, TR(L"Set Action • %s"), actionNames[g_selectedAction.load()]);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
     SetMenuIconPopup(g_hMenu, hActionSubmenu, 0xE7C9);
-    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : 0) | (g_intervalMacroEnabled.load() ? MF_CHECKED : 0), ID_INTERVAL_MACRO_TOGGLE, L"Interval Macros");
-    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_IMPORT, L"Import Macro...");
+    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, TR(L"Macros..."));
+    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : 0) | (g_intervalMacroEnabled.load() ? MF_CHECKED : 0), ID_INTERVAL_MACRO_TOGGLE, TR(L"Interval Macros"));
+    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_IMPORT, TR(L"Import Macro..."));
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (!g_simpleMode.load()) {
-        AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
-        AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
-        AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
-        AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
+        AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, TR(L"Show Roblox"));
+        AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, TR(L"Hide Roblox"));
+        AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, TR(L"Window Opacity (70%)"));
+        AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, TR(L"Grid Snap Roblox*"));
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     }
     HMENU hSettingsSubmenu = CreatePopupMenu();
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, L"├ Status Bar: Primary Monitor");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"├ Status Bar: Position Bottom");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, TR(L"Update/Announcement Checker"));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, TR(L"Status Bar*"));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, TR(L"├ Status Bar: Primary Monitor"));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, TR(L"├ Status Bar: Position Bottom"));
     {
         HMENU hSbContentSubmenu = CreatePopupMenu();
-        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowIcon.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_ICON, L"App icon");
-        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowBrand.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_BRAND, L"Program name");
-        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbContentSubmenu, L"├ Status Bar: Content");
+        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowIcon.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_ICON, TR(L"App icon"));
+        AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowBrand.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_BRAND, TR(L"Program name"));
+        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbContentSubmenu, TR(L"├ Status Bar: Content"));
 
         HMENU hSbEventsSubmenu = CreatePopupMenu();
-        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventSession.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_SESSION, L"Start && Stop");
-        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventAction.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_ACTION, L"Actions");
-        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventReconnect.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_RECONNECT, L"Auto-Reconnect");
-        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventMacro.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_MACRO, L"Macros");
-        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventUi.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_UI, L"Interface feedback");
-        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbEventsSubmenu, L"╰ Status Bar: Events");
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventSession.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_SESSION, TR(L"Start && Stop"));
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventAction.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_ACTION, TR(L"Actions"));
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventReconnect.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_RECONNECT, TR(L"Auto-Reconnect"));
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventMacro.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_MACRO, TR(L"Macros"));
+        AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventUi.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_UI, TR(L"Interface feedback"));
+        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbEventsSubmenu, TR(L"╰ Status Bar: Events"));
 
         SetMenuIconPopup(hSettingsSubmenu, hSbContentSubmenu, 0xE7F4);
         SetMenuIconPopup(hSettingsSubmenu, hSbEventsSubmenu, 0xE916);
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start Anti-AFK");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, TR(L"Auto-Start Anti-AFK"));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, TR(L"Auto Reconnect*"));
     if (!g_simpleMode.load()) {
         HMENU hReconnectIntervalSubmenu = CreatePopupMenu();
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, L"Off (with main cycle)");
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, L"Every 30 sec");
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, L"Every 1 min");
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, L"Every 2 min");
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, L"Every 5 min");
-        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, L"Every 10 min");
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, TR(L"Off (with main cycle)"));
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, TR(L"Every 30 sec"));
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, TR(L"Every 1 min"));
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, TR(L"Every 2 min"));
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, TR(L"Every 5 min"));
+        AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, TR(L"Every 10 min"));
         AppendMenu(hReconnectIntervalSubmenu, MF_SEPARATOR, 0, NULL);
         {
             wchar_t customLabel[64];
             int cv = g_reconnectCheckInterval.load();
-            const wchar_t* riIntervalLabels[] = { NULL, L"Every 30 sec", L"Every 1 min", L"Every 2 min", L"Every 5 min", L"Every 10 min" };
+            const wchar_t* riIntervalLabels[] = { NULL, TR(L"Every 30 sec"), TR(L"Every 1 min"), TR(L"Every 2 min"), TR(L"Every 5 min"), TR(L"Every 10 min") };
             const int riIntervalValues[] = { 0, 30, 60, 120, 300, 600 };
             bool isPreset = false;
             for (int k = 1; k < 6; ++k) { if (cv == riIntervalValues[k]) { isPreset = true; break; } }
             if (!isPreset && cv > 0) {
-                if (cv < 60) swprintf_s(customLabel, L"Custom (%d sec)", cv);
-                else swprintf_s(customLabel, L"Custom (%d min)", cv / 60);
+                if (cv < 60) swprintf_s(customLabel, TR(L"Custom (%d sec)"), cv);
+                else swprintf_s(customLabel, TR(L"Custom (%d min)"), cv / 60);
             } else {
-                wcscpy_s(customLabel, L"Custom...");
+                wcscpy_s(customLabel, TR(L"Custom..."));
             }
             AppendMenu(hReconnectIntervalSubmenu, MF_STRING, ID_RECONNECT_INTERVAL_CUSTOM, customLabel);
         }
         wchar_t reconnectIntervalLabel[64];
         int intervalVal = g_reconnectCheckInterval.load();
-        if (intervalVal <= 0) swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • Off");
-        else if (intervalVal < 60) swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • %d sec", intervalVal);
-        else swprintf_s(reconnectIntervalLabel, L"├ Reconnect Interval • %d min", intervalVal / 60);
+        if (intervalVal <= 0) swprintf_s(reconnectIntervalLabel, TR(L"├ Reconnect Interval • Off"));
+        else if (intervalVal < 60) swprintf_s(reconnectIntervalLabel, TR(L"├ Reconnect Interval • %d sec"), intervalVal);
+        else swprintf_s(reconnectIntervalLabel, TR(L"├ Reconnect Interval • %d min"), intervalVal / 60);
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hReconnectIntervalSubmenu, reconnectIntervalLabel);
         SetMenuIconPopup(hSettingsSubmenu, hReconnectIntervalSubmenu, 0xE8AF);
         {
             wchar_t reconnectMacroDelayLabel[64];
             int rmdVal = g_reconnectMacroDelaySec.load();
-            swprintf_s(reconnectMacroDelayLabel, L"╰ Reconnect Macro Delay • %d sec", rmdVal);
+            swprintf_s(reconnectMacroDelayLabel, TR(L"╰ Reconnect Macro Delay • %d sec"), rmdVal);
             AppendMenu(hSettingsSubmenu, MF_STRING, ID_RECONNECT_MACRO_DELAY, reconnectMacroDelayLabel);
         }
     }
     if (!g_simpleMode.load()) {
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"╰ Manual Reconnect Check*");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, L"Auto Opacity (70%)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox*");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid Settings...");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance Manager");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I Can Forget (Smart Auto-Start)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip Active");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"AutoMute Roblox");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on Focus");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, TR(L"╰ Manual Reconnect Check*"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, TR(L"Auto Reset (Esc+R+Enter)"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, TR(L"Auto-Hide Roblox"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, TR(L"Auto Opacity (70%)"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, TR(L"Auto Grid Roblox*"));
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, TR(L"╰ Grid Settings..."));
+        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, TR(L"Instance Manager"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, TR(L"Fish/Void/Bloxstrap Integration"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, TR(L"I Can Forget (Smart Auto-Start)"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, TR(L"Skip Active"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, TR(L"AutoMute Roblox"));
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, TR(L"Unmute on Focus"));
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_fpsLimit > 0 ? 0 : MF_GRAYED) | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS on Focus");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, L"Do Not Sleep");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_fpsLimit > 0 ? 0 : MF_GRAYED) | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, TR(L"Unlock FPS on Focus"));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, TR(L"Do Not Sleep"));
 
     HMENU hUserSafeSubmenu = CreatePopupMenu();
-    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
-    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, L"Legacy (Keys/Clicks)");
-    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, L"Beta (All Input)");
-    const wchar_t* userSafeNames[] = { L"Off", L"Legacy", L"Beta" };
-    wchar_t userSafeLabel[48];
-    swprintf_s(userSafeLabel, L"User-Safe Mode • %s", userSafeNames[g_userSafeMode.load()]);
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, TR(L"Off"));
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, TR(L"Legacy (Keys/Clicks)"));
+    AppendMenu(hUserSafeSubmenu, MF_STRING | (g_userSafeMode.load() == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, TR(L"Beta (All Input)"));
+    const wchar_t* userSafeNames[] = { TR(L"Off"), TR(L"Legacy"), TR(L"Beta") };
+    wchar_t userSafeLabel[96];
+    swprintf_s(userSafeLabel, TR(L"User-Safe Mode • %s"), userSafeNames[g_userSafeMode.load()]);
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
     SetMenuIconPopup(hSettingsSubmenu, hUserSafeSubmenu, 0xE72E);
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
 
     if (!g_simpleMode.load()) {
         HMENU hRestoreSubmenu = CreatePopupMenu();
-        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, L"Off");
+        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, TR(L"Off"));
         AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 1 ? MF_CHECKED : 0), ID_RESTORE_FOREGROUND, L"SetForeground");
-        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, L"Alt+Tab (Legacy) - single tab");
-        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 3 ? MF_CHECKED : 0), ID_RESTORE_SMART_ALTTAB, L"Smart Alt+Tab - skip all Roblox");
-        const wchar_t* restoreNames[] = { L"Off", L"SetFor.", L"Alt+Tab", L"Smart" };
-        wchar_t restoreLabel[48];
-        swprintf_s(restoreLabel, L"Restore Window Method • %s", restoreNames[g_restoreMethod.load()]);
+        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, TR(L"Alt+Tab (Legacy) - single tab"));
+        AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 3 ? MF_CHECKED : 0), ID_RESTORE_SMART_ALTTAB, TR(L"Smart Alt+Tab - skip all Roblox"));
+        const wchar_t* restoreNames[] = { TR(L"Off"), L"SetFor.", L"Alt+Tab", TR(L"Smart") };
+        wchar_t restoreLabel[96];
+        swprintf_s(restoreLabel, TR(L"Restore Window Method • %s"), restoreNames[g_restoreMethod.load()]);
         AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRestoreSubmenu, restoreLabel);
         SetMenuIconPopup(hSettingsSubmenu, hRestoreSubmenu, 0xE73F);
         AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
     }
 
     HMENU hFpsCapperSubmenu = CreatePopupMenu();
-    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLimit > 0 ? MF_CHECKED : 0), ID_FPS_CAP_TOGGLE, L"Enabled");
+    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLimit > 0 ? MF_CHECKED : 0), ID_FPS_CAP_TOGGLE, TR(L"Enabled"));
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_CPU_LIMIT_MODE_TOGGLE, L"FPS Capper (CPU Limiter) % Mode (BES-style)");
-    AppendMenu(hFpsCapperSubmenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_FPS_PRESETS_MODE, L"FPS Presets Mode");
+    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_CPU_LIMIT_MODE_TOGGLE, TR(L"FPS Capper (CPU Limiter) % Mode (BES-style)"));
+    AppendMenu(hFpsCapperSubmenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_FPS_PRESETS_MODE, TR(L"FPS Presets Mode"));
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
 
     if (g_cpuLimitMode.load()) {
         wchar_t percentStr[64];
-        swprintf_s(percentStr, L"Set CPU Limit: %d%%", g_cpuLimitPercent.load());
+        swprintf_s(percentStr, TR(L"Set CPU Limit: %d%%"), g_cpuLimitPercent.load());
         AppendMenu(hFpsCapperSubmenu, MF_STRING, ID_CPU_LIMIT_PERCENT_CUSTOM, percentStr);
         wchar_t periodStr[64];
-        swprintf_s(periodStr, L"Set Cycle Period: %d ms", g_cpuLimitPeriod.load());
+        swprintf_s(periodStr, TR(L"Set Cycle Period: %d ms"), g_cpuLimitPeriod.load());
         AppendMenu(hFpsCapperSubmenu, MF_STRING, ID_CPU_LIMIT_PERIOD_CUSTOM, periodStr);
     } else {
-        AppendMenu(hFpsCapperSubmenu, MF_STRING, ID_FPS_CAP_CUSTOM, L"Custom FPS limit...");
+        AppendMenu(hFpsCapperSubmenu, MF_STRING, ID_FPS_CAP_CUSTOM, TR(L"Custom FPS limit..."));
         AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLastActiveLimit == 3 ? MF_CHECKED : 0), ID_FPS_CAP_3, L"3 FPS");
         AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLastActiveLimit == 5 ? MF_CHECKED : 0), ID_FPS_CAP_5, L"5 FPS");
         AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLastActiveLimit == 7 ? MF_CHECKED : 0), ID_FPS_CAP_7, L"7 FPS");
@@ -13802,36 +13806,36 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLastActiveLimit == 15 ? MF_CHECKED : 0), ID_FPS_CAP_15, L"15 FPS");
     }
 
-    wchar_t fpsLabel[64];
-    if (g_fpsLimit == 0) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • Disabled");
-    else if (g_cpuLimitMode.load()) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d%% Limit (%dms)", g_cpuLimitPercent.load(), g_cpuLimitPeriod.load());
-    else swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d FPS", g_fpsLimit.load());
+    wchar_t fpsLabel[96];
+    if (g_fpsLimit == 0) swprintf_s(fpsLabel, TR(L"FPS Capper (CPU Limiter)* • Disabled"));
+    else if (g_cpuLimitMode.load()) swprintf_s(fpsLabel, TR(L"FPS Capper (CPU Limiter)* • %d%% Limit (%dms)"), g_cpuLimitPercent.load(), g_cpuLimitPeriod.load());
+    else swprintf_s(fpsLabel, TR(L"FPS Capper (CPU Limiter)* • %d FPS"), g_fpsLimit.load());
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
     SetMenuIconPopup(hSettingsSubmenu, hFpsCapperSubmenu, 0xE950);
 
     HMENU hRamCleanerSubmenu = CreatePopupMenu();
-    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerEnabled.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_RUNTIME_TOGGLE, L"Enabled");
-    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerAutoStart.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_TOGGLE, L"Auto-start with Anti-AFK");
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerEnabled.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_RUNTIME_TOGGLE, TR(L"Enabled"));
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerAutoStart.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_TOGGLE, TR(L"Auto-start with Anti-AFK"));
     AppendMenu(hRamCleanerSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Smart Clean");
-    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Time Cycle");
-    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, L"Hybrid");
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, TR(L"Smart Clean"));
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, TR(L"Time Cycle"));
+    AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, TR(L"Hybrid"));
     AppendMenu(hRamCleanerSubmenu, MF_SEPARATOR, 0, NULL);
     wchar_t cycleValueText[64];
-    swprintf_s(cycleValueText, L"Interval: %d sec", g_ramCleanerInterval.load());
+    swprintf_s(cycleValueText, TR(L"Interval: %d sec"), g_ramCleanerInterval.load());
     AppendMenuLabelWithIcon(hRamCleanerSubmenu, cycleValueText, 0xE916);
-    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, L"╰ Set Interval...");
+    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, TR(L"╰ Set Interval..."));
     wchar_t limitValueText[64];
-    swprintf_s(limitValueText, L"Limit: %d MB", g_ramCleanerLimit.load());
+    swprintf_s(limitValueText, TR(L"Limit: %d MB"), g_ramCleanerLimit.load());
     AppendMenuLabelWithIcon(hRamCleanerSubmenu, limitValueText, 0xE964);
-    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, L"╰ Set Limit...");
+    AppendMenu(hRamCleanerSubmenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, TR(L"╰ Set Limit..."));
     wchar_t ramCleanerLabel[64];
-    if (!g_ramCleanerEnabled.load()) swprintf_s(ramCleanerLabel, L"RAM Cleaner • Disabled");
+    if (!g_ramCleanerEnabled.load()) swprintf_s(ramCleanerLabel, TR(L"RAM Cleaner • Disabled"));
     else {
-        const wchar_t* modeNames[] = { L"Time Cycle", L"Smart Clean", L"Hybrid" };
+        const wchar_t* modeNames[] = { TR(L"Time Cycle"), TR(L"Smart Clean"), TR(L"Hybrid") };
         int modeVal = g_ramCleanerMode.load();
         if (modeVal < 0 || modeVal > 2) modeVal = 0;
-        swprintf_s(ramCleanerLabel, L"RAM Cleaner • %s", modeNames[modeVal]);
+        swprintf_s(ramCleanerLabel, TR(L"RAM Cleaner • %s"), modeNames[modeVal]);
     }
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRamCleanerSubmenu, ramCleanerLabel);
     SetMenuIconPopup(hSettingsSubmenu, hRamCleanerSubmenu, 0xE964);
@@ -13840,30 +13844,30 @@ void CreateTrayMenu(bool afk)
         HMENU hActionDelaysSubmenu = CreatePopupMenu();
         {
             HMENU hPresetSubmenu = CreatePopupMenu();
-            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 0 ? MF_CHECKED : 0), ID_ACTION_PRESET_STANDARD, L"Default");
-            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 1 ? MF_CHECKED : 0), ID_ACTION_PRESET_SLOW, L"Safe");
-            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 2 ? MF_CHECKED : 0), ID_ACTION_PRESET_CUSTOM, L"Custom");
-            const wchar_t* presetNames[] = { L"Default", L"Safe", L"Custom" };
+            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 0 ? MF_CHECKED : 0), ID_ACTION_PRESET_STANDARD, TR(L"Default"));
+            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 1 ? MF_CHECKED : 0), ID_ACTION_PRESET_SLOW, TR(L"Safe"));
+            AppendMenu(hPresetSubmenu, MF_STRING | (g_actionPreset.load() == 2 ? MF_CHECKED : 0), ID_ACTION_PRESET_CUSTOM, TR(L"Custom"));
+            const wchar_t* presetNames[] = { TR(L"Default"), TR(L"Safe"), TR(L"Custom") };
             wchar_t presetLabel[64];
-            swprintf_s(presetLabel, L"Action Preset • %s", presetNames[g_actionPreset.load() < 0 || g_actionPreset.load() > 2 ? 0 : g_actionPreset.load()]);
+            swprintf_s(presetLabel, TR(L"Action Preset • %s"), presetNames[g_actionPreset.load() < 0 || g_actionPreset.load() > 2 ? 0 : g_actionPreset.load()]);
             AppendMenu(hActionDelaysSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hPresetSubmenu, presetLabel);
             SetMenuIconPopup(hActionDelaysSubmenu, hPresetSubmenu, 0xE838);
         }
         {
             wchar_t preText[64];
-            swprintf_s(preText, L"Delay Before Action... (%d ms)", g_preActionDelay.load());
+            swprintf_s(preText, TR(L"Delay Before Action... (%d ms)"), g_preActionDelay.load());
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_PRE, preText);
             wchar_t pressText[64];
-            swprintf_s(pressText, L"Key Press Delay... (%d ms)", g_keyPressDelay.load());
+            swprintf_s(pressText, TR(L"Key Press Delay... (%d ms)"), g_keyPressDelay.load());
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_KEY, pressText);
             wchar_t postText[64];
-            swprintf_s(postText, L"Delay After Action... (%d ms)", g_postActionDelay.load());
+            swprintf_s(postText, TR(L"Delay After Action... (%d ms)"), g_postActionDelay.load());
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_POST, postText);
             wchar_t repeatText[64];
-            swprintf_s(repeatText, L"Action Repeat Count... (%d)", g_actionRepeatCount.load());
+            swprintf_s(repeatText, TR(L"Action Repeat Count... (%d)"), g_actionRepeatCount.load());
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_REPEAT, repeatText);
         }
-        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hActionDelaysSubmenu, L"Action Delays & Repeats");
+        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hActionDelaysSubmenu, TR(L"Action Delays & Repeats"));
         SetMenuIconPopup(hSettingsSubmenu, hActionDelaysSubmenu, 0xE713);
     }
 
@@ -13874,99 +13878,107 @@ void CreateTrayMenu(bool afk)
             {
                 std::lock_guard<std::mutex> lock(g_customProcessNamesMutex);
                 std::wstring preview = g_customProcessNames;
-                if (preview.empty()) preview = L"(none)";
+                if (preview.empty()) preview = TR(L"(none)");
                 if (preview.size() > 40) preview = preview.substr(0, 37) + L"...";
-                swprintf_s(cpStatusText, L"Custom Process Search • %s • %s",
-                    g_useCustomProcessSearch.load() ? L"On" : L"Off",
+                swprintf_s(cpStatusText, TR(L"Custom Process Search • %s • %s"),
+                    g_useCustomProcessSearch.load() ? TR(L"On") : TR(L"Off"),
                     preview.c_str());
             }
             AppendMenuLabelWithIcon(hCustomProcessSubmenu, cpStatusText, 0xE721);
-            AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_useCustomProcessSearch.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_TOGGLE, L"Enable");
-            AppendMenu(hCustomProcessSubmenu, MF_STRING | MF_STRING, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, L"Set Process Names...");
-            AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_excludeBuiltinNames.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_EXCLUDE, L"Exclude Built-in Names");
+            AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_useCustomProcessSearch.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_TOGGLE, TR(L"Enable"));
+            AppendMenu(hCustomProcessSubmenu, MF_STRING | MF_STRING, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, TR(L"Set Process Names..."));
+            AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_excludeBuiltinNames.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_EXCLUDE, TR(L"Exclude Built-in Names"));
         }
-        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hCustomProcessSubmenu, L"Custom Process Search");
+        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hCustomProcessSubmenu, TR(L"Custom Process Search"));
         SetMenuIconPopup(hSettingsSubmenu, hCustomProcessSubmenu, 0xE721);
     }
 
     HMENU hScreenSaverSubmenu = CreatePopupMenu();
     {
         AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_screenSaverActive.load() ? MF_CHECKED : 0), ID_SCREEN_SAVER,
-            g_screenSaverActive.load() ? L"Stop Screen Saver" : L"Start Screen Saver");
-        AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowExitUI.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_EXIT, L"Always show Exit");
+            g_screenSaverActive.load() ? TR(L"Stop Screen Saver") : TR(L"Start Screen Saver"));
+        AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowExitUI.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_EXIT, TR(L"Always show Exit"));
     }
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hScreenSaverSubmenu,
-        g_screenSaverActive.load() ? L"Screen Saver \x2022 Active" : L"Screen Saver");
+        g_screenSaverActive.load() ? TR(L"Screen Saver \x2022 Active") : TR(L"Screen Saver"));
     SetMenuIconPopup(hSettingsSubmenu, hScreenSaverSubmenu, 0xE708);
 
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RETRY_MULTI_INSTANCE, L"Retry Multi-Instance");
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, TR(L"Import Settings..."));
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, TR(L"Export Settings..."));
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, TR(L"Reset Settings"));
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RETRY_MULTI_INSTANCE, TR(L"Retry Multi-Instance"));
     AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
     {
         wchar_t hkStatus[128];
         std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
-        swprintf_s(hkStatus, L"Hotkey • %s • %s", g_hotkeyEnabled.load() ? L"On" : L"Off", hkStr.c_str());
+        swprintf_s(hkStatus, TR(L"Hotkey • %s • %s"), g_hotkeyEnabled.load() ? TR(L"On") : TR(L"Off"), hkStr.c_str());
         AppendMenuLabelWithIcon(hSettingsSubmenu, hkStatus, 0xE765);
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"├ Enable Hotkey");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"╰ Change Hotkey...");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, L"├ Enable Grid Hotkey");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"╰ Change Grid Hotkey...");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, TR(L"├ Enable Hotkey"));
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, TR(L"╰ Change Hotkey..."));
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, TR(L"├ Enable Grid Hotkey"));
+    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, TR(L"╰ Change Grid Hotkey..."));
+    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    {
+        HMENU hLanguageSubmenu = CreatePopupMenu();
+        AppendMenu(hLanguageSubmenu, MF_STRING | (!IsRussianUi() ? MF_CHECKED : 0), ID_LANGUAGE_ENGLISH, kLanguageNameEnglish);
+        AppendMenu(hLanguageSubmenu, MF_STRING | (IsRussianUi() ? MF_CHECKED : 0), ID_LANGUAGE_RUSSIAN, kLanguageNameRussian);
+        AppendMenu(hSettingsSubmenu, MF_STRING | MF_POPUP, (UINT_PTR)hLanguageSubmenu, kLanguageSettingTitle);
+        SetMenuIconPopup(hSettingsSubmenu, hLanguageSubmenu, 0xE774);
+    }
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, TR(L"Settings"));
     SetMenuIconPopup(g_hMenu, hSettingsSubmenu, 0xE713);
 
     HMENU hUtilsSubmenu = CreatePopupMenu();
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_SHOW_ALL, L"Show All Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_HIDE_ALL, L"Hide All Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
-    AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsWindowOpacityEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_WINDOW_OPACITY, L"Session Window Opacity");
-    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldMuteRobloxNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_MUTE, L"Session Mute Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldRunFpsCapperNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_FPS, L"Session FPS Capper (CPU Limiter)*");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_RAM_CLEAN_SWEEP, L"Clean Roblox RAM Now");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_SHOW_ALL, TR(L"Show All Roblox"));
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_HIDE_ALL, TR(L"Hide All Roblox"));
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_GRID_SNAP, TR(L"Grid Snap Roblox*"));
+    AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsWindowOpacityEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_WINDOW_OPACITY, TR(L"Session Window Opacity"));
+    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldMuteRobloxNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_MUTE, TR(L"Session Mute Roblox"));
+    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldRunFpsCapperNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_FPS, TR(L"Session FPS Capper (CPU Limiter)*"));
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_RAM_CLEAN_SWEEP, TR(L"Clean Roblox RAM Now"));
     AppendMenu(hUtilsSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_TEST_ACTION, L"Test Anti-AFK Action");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_RESET_ALL, L"Reset All Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_CLOSE_ALL, L"Close All Roblox");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, L"Utils");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_TEST_ACTION, TR(L"Test Anti-AFK Action"));
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_RESET_ALL, TR(L"Reset All Roblox"));
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_CLOSE_ALL, TR(L"Close All Roblox"));
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, TR(L"Utils"));
     SetMenuIconPopup(g_hMenu, hUtilsSubmenu, 0xE945);
 
     HMENU hStatsSubmenu = CreatePopupMenu();
     {
         wchar_t statText[128];
         std::wstring totalAfk = FormatDurationShort(g_totalAfkTimeSeconds.load());
-        swprintf_s(statText, L"Total AFK Time • %s", totalAfk.c_str());
+        swprintf_s(statText, TR(L"Total AFK Time • %s"), totalAfk.c_str());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE916);
-        swprintf_s(statText, L"AFK Actions • %llu", g_afkActionsPerformed.load());
+        swprintf_s(statText, TR(L"AFK Actions • %llu"), g_afkActionsPerformed.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE8EE);
-        swprintf_s(statText, L"Auto Reconnects • %llu", g_autoReconnectsPerformed.load());
+        swprintf_s(statText, TR(L"Auto Reconnects • %llu"), g_autoReconnectsPerformed.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7FC);
-        swprintf_s(statText, L"Webhook Events • %llu", g_discordWebhooksSent.load());
+        swprintf_s(statText, TR(L"Webhook Events • %llu"), g_discordWebhooksSent.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE715);
-        swprintf_s(statText, L"Sessions Completed • %llu", g_afkSessionsCompleted.load());
+        swprintf_s(statText, TR(L"Sessions Completed • %llu"), g_afkSessionsCompleted.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE121);
-        swprintf_s(statText, L"Program Launches • %llu", g_programLaunches.load());
+        swprintf_s(statText, TR(L"Program Launches • %llu"), g_programLaunches.load());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE7E8);
         std::wstring longestAfk = FormatDurationShort(g_longestAfkSessionSeconds.load());
-        swprintf_s(statText, L"Longest Session • %s", longestAfk.c_str());
+        swprintf_s(statText, TR(L"Longest Session • %s"), longestAfk.c_str());
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE823);
         uint64_t lastActionTs = g_lastAfkActionTimestamp.load();
         if (lastActionTs > 0) {
             uint64_t elapsed = (GetTickCount64() - lastActionTs) / 1000;
-            if (elapsed < 60) swprintf_s(statText, L"Last Action • %llu sec ago", elapsed);
-            else if (elapsed < 3600) swprintf_s(statText, L"Last Action • %llu min ago", elapsed / 60);
-            else swprintf_s(statText, L"Last Action • %llu h ago", elapsed / 3600);
+            if (elapsed < 60) swprintf_s(statText, TR(L"Last Action • %llu sec ago"), elapsed);
+            else if (elapsed < 3600) swprintf_s(statText, TR(L"Last Action • %llu min ago"), elapsed / 60);
+            else swprintf_s(statText, TR(L"Last Action • %llu h ago"), elapsed / 3600);
         } else {
-            wcscpy_s(statText, L"Last Action • Never");
+            wcscpy_s(statText, TR(L"Last Action • Never"));
         }
         AppendMenuLabelWithIcon(hStatsSubmenu, statText, 0xE787);
     }
     AppendMenu(hStatsSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hStatsSubmenu, MF_STRING, ID_TIMINGS_INFO, L"Current Timings...");
-    AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, L"Reset Statistics");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
+    AppendMenu(hStatsSubmenu, MF_STRING, ID_TIMINGS_INFO, TR(L"Current Timings..."));
+    AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, TR(L"Reset Statistics"));
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, TR(L"Statistics"));
     SetMenuIconPopup(g_hMenu, hStatsSubmenu, 0xE9D2);
 
     HMENU hDiscordSubmenu = CreatePopupMenu();
@@ -13975,68 +13987,68 @@ void CreateTrayMenu(bool afk)
         const bool webhookConfigured = IsDiscordWebhookUrl(webhookUrl);
         const bool webhookEnabled = g_discordWebhookEnabled.load();
         const UINT webhookDependentState = webhookEnabled ? 0 : MF_GRAYED;
-        AppendMenuLabelWithIcon(hDiscordSubmenu, webhookConfigured ? L"Webhook URL • Configured" : L"Webhook URL • Not set", 0xE8BD);
+        AppendMenuLabelWithIcon(hDiscordSubmenu, webhookConfigured ? TR(L"Webhook URL • Configured") : TR(L"Webhook URL • Not set"), 0xE8BD);
         AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(hDiscordSubmenu, MF_STRING | (webhookEnabled ? MF_CHECKED : 0), ID_DISCORD_WEBHOOK_ENABLE, L"Enable Webhook");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyStart.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_START, L"Notify Start / Stop");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyAction.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ACTION, L"Notify Action");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyReconnect.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RECONNECT, L"Notify Reconnect");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyErrors.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ERRORS, L"Notify Errors");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyMacro.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_MACRO, L"Notify Macros");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyIntervalMacros.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_INTERVAL_MACROS, L"Notify Interval Macros");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordDisableEmbed.load() ? MF_CHECKED : 0), ID_DISCORD_DISABLE_EMBED, L"Disable Embed");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordMentionOnErrors.load() ? MF_CHECKED : 0), ID_DISCORD_MENTION_ON_ERRORS, L"Mention on Errors");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_MENTION_TARGET, L"Set Mention Target...");
+        AppendMenu(hDiscordSubmenu, MF_STRING | (webhookEnabled ? MF_CHECKED : 0), ID_DISCORD_WEBHOOK_ENABLE, TR(L"Enable Webhook"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyStart.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_START, TR(L"Notify Start / Stop"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyAction.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ACTION, TR(L"Notify Action"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyReconnect.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RECONNECT, TR(L"Notify Reconnect"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyErrors.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ERRORS, TR(L"Notify Errors"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyMacro.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_MACRO, TR(L"Notify Macros"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyIntervalMacros.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_INTERVAL_MACROS, TR(L"Notify Interval Macros"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordDisableEmbed.load() ? MF_CHECKED : 0), ID_DISCORD_DISABLE_EMBED, TR(L"Disable Embed"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordMentionOnErrors.load() ? MF_CHECKED : 0), ID_DISCORD_MENTION_ON_ERRORS, TR(L"Mention on Errors"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_MENTION_TARGET, TR(L"Set Mention Target..."));
         AppendMenu(hDiscordSubmenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_WEBHOOK_PASTE, L"Paste URL from Clipboard");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_URL, L"Set Webhook URL...");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultName.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_NAME, L"Use Webhook Default Name");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultAvatar.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_AVATAR, L"Use Webhook Default Avatar");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseTimestamp.load() ? MF_CHECKED : 0), ID_DISCORD_USE_TIMESTAMP, L"Include Timestamp");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyHeartbeat.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_HEARTBEAT, L"Notify Heartbeat");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_DISCORD_WEBHOOK_PASTE, TR(L"Paste URL from Clipboard"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_URL, TR(L"Set Webhook URL..."));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultName.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_NAME, TR(L"Use Webhook Default Name"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseDefaultAvatar.load() ? MF_CHECKED : 0), ID_DISCORD_USE_DEFAULT_AVATAR, TR(L"Use Webhook Default Avatar"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordUseTimestamp.load() ? MF_CHECKED : 0), ID_DISCORD_USE_TIMESTAMP, TR(L"Include Timestamp"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyHeartbeat.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_HEARTBEAT, TR(L"Notify Heartbeat"));
         {
             wchar_t hbLabel[64];
-            swprintf_s(hbLabel, L"Heartbeat Interval • %d min", g_discordHeartbeatIntervalMin.load());
+            swprintf_s(hbLabel, TR(L"Heartbeat Interval • %d min"), g_discordHeartbeatIntervalMin.load());
             AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState, ID_WEBHOOK_SET_HEARTBEAT, hbLabel);
         }
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyUtilsRam.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_UTILS_RAM, L"Notify RAM Cleaner");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookUrl.empty() ? MF_GRAYED : 0), ID_DISCORD_WEBHOOK_CLEAR, L"Clear Webhook URL");
-        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, L"Send Test Webhook");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyUtilsRam.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_UTILS_RAM, TR(L"Notify RAM Cleaner"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookUrl.empty() ? MF_GRAYED : 0), ID_DISCORD_WEBHOOK_CLEAR, TR(L"Clear Webhook URL"));
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, TR(L"Send Test Webhook"));
     }
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, L"Discord Webhook");
+    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, TR(L"Discord Webhook"));
     SetMenuIconPopup(g_hMenu, hDiscordSubmenu, 0xE8BD);
 
-    AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
-    AppendMenu(g_hMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
+    AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, TR(L"Use Legacy UI (Tray)"));
+    AppendMenu(g_hMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, TR(L"Simple Mode"));
     if (g_simpleMode.load())
-        AppendMenuLabelWithIcon(g_hMenu, L"╰ (some options hidden)", 0xE946);
-    AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance bypass");
+        AppendMenuLabelWithIcon(g_hMenu, TR(L"╰ (some options hidden)"), 0xE946);
+    AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, TR(L"Multi-Instance bypass"));
 
     HMENU hMiIntervalSubmenu = CreatePopupMenu();
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, TR(L"Minimum (0)"));
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, TR(L"1 sec"));
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, TR(L"3 sec"));
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, TR(L"5 sec"));
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, TR(L"10 sec"));
     AppendMenu(hMiIntervalSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
-    wchar_t miIntervalLabel[48];
+    AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, TR(L"Custom delay..."));
+    wchar_t miIntervalLabel[96];
     wchar_t miLabelV[48];
     int miVal = g_multiInstanceInterval.load();
-    if (miVal == 0) wcscpy_s(miLabelV, L"Min");
-    else if (miVal == 1000) wcscpy_s(miLabelV, L"1s");
-    else if (miVal == 3000) wcscpy_s(miLabelV, L"3s");
-    else if (miVal == 5000) wcscpy_s(miLabelV, L"5s");
-    else if (miVal == 10000) wcscpy_s(miLabelV, L"10s");
-    else swprintf_s(miLabelV, L"%d ms", miVal);
-    swprintf_s(miIntervalLabel, L"Multi-Instance Delay • %s", miLabelV);
+    if (miVal == 0) wcscpy_s(miLabelV, TR(L"Min"));
+    else if (miVal == 1000) wcscpy_s(miLabelV, TR(L"1s"));
+    else if (miVal == 3000) wcscpy_s(miLabelV, TR(L"3s"));
+    else if (miVal == 5000) wcscpy_s(miLabelV, TR(L"5s"));
+    else if (miVal == 10000) wcscpy_s(miLabelV, TR(L"10s"));
+    else swprintf_s(miLabelV, TR(L"%d ms"), miVal);
+    swprintf_s(miIntervalLabel, TR(L"Multi-Instance Delay • %s"), miLabelV);
     AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
     SetMenuIconPopup(g_hMenu, hMiIntervalSubmenu, 0xE916);
 
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
-        AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, L"[?] • Update Available");
-    AppendMenu(g_hMenu, MF_STRING, ID_EXIT, L"Exit");
+        AppendMenu(g_hMenu, MF_STRING, ID_UPDATE_AVAILABLE, TR(L"[?] • Update Available"));
+    AppendMenu(g_hMenu, MF_STRING, ID_EXIT, TR(L"Exit"));
     ApplyMenuIconsRecursive(g_hMenu);
 }
 void UpdateTrayIcon()
@@ -14120,8 +14132,8 @@ bool CheckForUpdates(bool showNotification = true)
                 g_updateServerVersion = serverVersion;
                 if (showNotification) {
                     wchar_t msg[128];
-                    swprintf_s(msg, L"New version available! Download at: https://github.com/Agzes/AntiAFK-RBX");
-                    ShowTrayNotification(L"AntiAFK-RBX • Update Available", msg);
+                    swprintf_s(msg, TR(L"New version available! Download at: https://github.com/Agzes/AntiAFK-RBX"));
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Update Available"), msg);
                 }
                 if (g_hwnd) {
                     QueueRefreshTrayMenu(g_isAfkStarted.load());
@@ -14171,12 +14183,12 @@ struct CustomInputDialogData {
 };
 
 std::wstring CustomInputDialog_GetMacroRenameTitle() {
-    std::wstring title = L"AntiAFK-RBX • Rename Macro";
+    std::wstring title = TR(L"AntiAFK-RBX • Rename Macro");
     int sel = g_selectedMacroIndex.load();
     if (sel >= 0) {
         std::lock_guard<std::mutex> lock(g_macrosMutex);
         if (sel < (int)g_macros.size()) {
-            title = L"AntiAFK-RBX • Rename Macro: " + g_macros[sel].name;
+            title = TR(L"AntiAFK-RBX • Rename Macro: ") + g_macros[sel].name;
         }
     }
     return title;
@@ -14277,8 +14289,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else if (pData->type == CustomInputDialogType::GridModeValue) {
             int mode = g_gridMode.load();
             if (mode == 1) {
-                wcscpy_s(pData->inputLabels[0], L"Width (px)");
-                wcscpy_s(pData->inputLabels[1], L"Height (px)");
+                wcscpy_s(pData->inputLabels[0], TR(L"Width (px)"));
+                wcscpy_s(pData->inputLabels[1], TR(L"Height (px)"));
                 _itow_s(g_gridFixedWinW.load(), pData->inputText[0], 10);
                 _itow_s(g_gridFixedWinH.load(), pData->inputText[1], 10);
             } else if (mode == 2) {
@@ -14321,10 +14333,10 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
             _itow_s(g_cpuLimitPeriod.load(), pData->inputText[0], 10);
         } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
-            wcscpy_s(pData->inputLabels[0], L"X (left)");
-            wcscpy_s(pData->inputLabels[1], L"Y (top)");
-            wcscpy_s(pData->inputLabels[2], L"Width");
-            wcscpy_s(pData->inputLabels[3], L"Height");
+            wcscpy_s(pData->inputLabels[0], TR(L"X (left)"));
+            wcscpy_s(pData->inputLabels[1], TR(L"Y (top)"));
+            wcscpy_s(pData->inputLabels[2], TR(L"Width"));
+            wcscpy_s(pData->inputLabels[3], TR(L"Height"));
             RECT r = {0};
             if (g_geometryTargetHwnd && IsWindow(g_geometryTargetHwnd)) {
                 GetWindowRect(g_geometryTargetHwnd, &r);
@@ -14717,7 +14729,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         g_instancePresets.push_back(newPreset);
                         SaveSettings();
                         } else {
-                            ShowDarkMessageBox(hwnd, L"Preset limit reached (32). Delete an existing preset first.", L"Instance Presets", MB_OK);
+                            ShowDarkMessageBox(hwnd, TR(L"Preset limit reached (32). Delete an existing preset first."), TR(L"Instance Presets"), MB_OK);
                         }
                         }
                     }
@@ -14755,11 +14767,11 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                         }
                     }
                     if (collision) {
-                        ShowDarkMessageBox(hwnd, L"A macro with this name already exists. Choose a different name.", L"Rename Macro", MB_OK);
+                        ShowDarkMessageBox(hwnd, TR(L"A macro with this name already exists. Choose a different name."), TR(L"Rename Macro"), MB_OK);
                     }
                     if (saveNeeded) {
                         if (!MacroEngine_SaveMacros()) {
-                            ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Rename Macro", MB_OK);
+                            ShowDarkMessageBox(hwnd, TR(L"Failed to save macros. The macros file may be read-only or locked."), TR(L"Rename Macro"), MB_OK);
                         }
                         SaveSettings();
                         HWND owner = GetWindow(hwnd, GW_OWNER);
@@ -14795,7 +14807,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 }
                 if (saveNeeded) {
                     if (!MacroEngine_SaveMacros())
-                        QueueStatusBarOverlay(L"Failed to save macro settings - file locked or corrupt", 3000, GetWindow(hwnd, GW_OWNER), StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"Failed to save macro settings - file locked or corrupt"), 3000, GetWindow(hwnd, GW_OWNER), StatusBarEventType::Macro);
                 }
             }
             HWND owner = GetWindow(hwnd, GW_OWNER);
@@ -15046,38 +15058,38 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
-        std::wstring macroRenameTitlePaint = L"AntiAFK-RBX • Rename Macro";
+        std::wstring macroRenameTitlePaint = TR(L"AntiAFK-RBX • Rename Macro");
         if (pData->type == CustomInputDialogType::MacroRename) {
             macroRenameTitlePaint = CustomInputDialog_GetMacroRenameTitle();
         }
 
-        const wchar_t* titleText = (pData->type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX • Set Custom Interval" :
-                                   (pData->type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX • Set FPS Limit" :
-                                   (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX • Set CPU Limit %" :
-                                   (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX • Set Cycle Period (ms)" :
-                                   (pData->type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX • Set Custom Search Names" :
-                                   (pData->type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX • Grid Mode Value" :
-                                   (pData->type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX • Spacing Between Windows" :
-                                   (pData->type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX • Spacing From Borders" :
-                                   (pData->type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX • Set Cycle Time" :
-                                   (pData->type == CustomInputDialogType::RamCleanLimit) ? L"AntiAFK-RBX • Set RAM Limit" :
-                                   (pData->type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX • Delay Before Action (ms)" :
-                                   (pData->type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX • Key Press Delay (ms)" :
-                                   (pData->type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX • Delay After Action (ms)" :
-                                   (pData->type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
-                                   (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
-                                   (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
-                                   (pData->type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX • Custom AFK Timer (Instance)" :
-                                   (pData->type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
+        const wchar_t* titleText = (pData->type == CustomInputDialogType::Interval) ? TR(L"AntiAFK-RBX • Set Custom Interval") :
+                                   (pData->type == CustomInputDialogType::FpsLimit) ? TR(L"AntiAFK-RBX • Set FPS Limit") :
+                                   (pData->type == CustomInputDialogType::CpuLimitPercent) ? TR(L"AntiAFK-RBX • Set CPU Limit %") :
+                                   (pData->type == CustomInputDialogType::CpuLimitPeriod) ? TR(L"AntiAFK-RBX • Set Cycle Period (ms)") :
+                                   (pData->type == CustomInputDialogType::ProcessNames) ? TR(L"AntiAFK-RBX • Set Custom Search Names") :
+                                   (pData->type == CustomInputDialogType::GridModeValue) ? TR(L"AntiAFK-RBX • Grid Mode Value") :
+                                   (pData->type == CustomInputDialogType::GridSpacingBetween) ? TR(L"AntiAFK-RBX • Spacing Between Windows") :
+                                   (pData->type == CustomInputDialogType::GridSpacingBorders) ? TR(L"AntiAFK-RBX • Spacing From Borders") :
+                                   (pData->type == CustomInputDialogType::RamCleanInterval) ? TR(L"AntiAFK-RBX • Set Cycle Time") :
+                                   (pData->type == CustomInputDialogType::RamCleanLimit) ? TR(L"AntiAFK-RBX • Set RAM Limit") :
+                                   (pData->type == CustomInputDialogType::PreActionDelay) ? TR(L"AntiAFK-RBX • Delay Before Action (ms)") :
+                                   (pData->type == CustomInputDialogType::KeyPressDelay) ? TR(L"AntiAFK-RBX • Key Press Delay (ms)") :
+                                   (pData->type == CustomInputDialogType::PostActionDelay) ? TR(L"AntiAFK-RBX • Delay After Action (ms)") :
+                                   (pData->type == CustomInputDialogType::InstanceGeometry) ? TR(L"AntiAFK-RBX • Change Window Geometry") :
+                                   (pData->type == CustomInputDialogType::InstanceTitle) ? TR(L"AntiAFK-RBX • Rename Roblox Window") :
+                                   (pData->type == CustomInputDialogType::PresetName) ? TR(L"AntiAFK-RBX • Create New Preset") :
+                                   (pData->type == CustomInputDialogType::InstanceTimer) ? TR(L"AntiAFK-RBX • Custom AFK Timer (Instance)") :
+                                   (pData->type == CustomInputDialogType::MacroName) ? TR(L"AntiAFK-RBX • Enter Macro Name") :
                                    (pData->type == CustomInputDialogType::MacroRename) ? macroRenameTitlePaint.c_str() :
-                                   (pData->type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" :
-                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX • Action Repeat Count" :
-                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX • Reconnect Check Interval (sec)" :
-                                    (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX • Reconnect Macro Delay (sec)" :
-                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"AntiAFK-RBX • Set Webhook URL" :
-                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"AntiAFK-RBX • Heartbeat Interval (min)" :
-                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? L"AntiAFK-RBX • Multi-Instance Delay (ms)" :
-                                    (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX • Configure Mention Target" : L"AntiAFK-RBX • Custom Input";
+                                   (pData->type == CustomInputDialogType::MacroInterval) ? TR(L"AntiAFK-RBX • Set Macro Interval") :
+                                    (pData->type == CustomInputDialogType::ActionRepeatCount) ? TR(L"AntiAFK-RBX • Action Repeat Count") :
+                                    (pData->type == CustomInputDialogType::ReconnectInterval) ? TR(L"AntiAFK-RBX • Reconnect Check Interval (sec)") :
+                                    (pData->type == CustomInputDialogType::ReconnectMacroDelay) ? TR(L"AntiAFK-RBX • Reconnect Macro Delay (sec)") :
+                                    (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? TR(L"AntiAFK-RBX • Set Webhook URL") :
+                                    (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? TR(L"AntiAFK-RBX • Heartbeat Interval (min)") :
+                                    (pData->type == CustomInputDialogType::MultiInstanceInterval) ? TR(L"AntiAFK-RBX • Multi-Instance Delay (ms)") :
+                                    (pData->type == CustomInputDialogType::DiscordMentionTarget) ? TR(L"AntiAFK-RBX • Configure Mention Target") : TR(L"AntiAFK-RBX • Custom Input");
         Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, titleText, pData->isHoveringClose);
 
         RECT infoRect = { 0, 30, clientRect.right, 53 };
@@ -15111,72 +15123,72 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         wchar_t dynamicBannerText[256] = { 0 };
         const wchar_t* bannerText = dynamicBannerText;
         if (pData->type == CustomInputDialogType::Interval) {
-            bannerText = L"Enter interval in seconds. Maximum value is 1200.";
+            bannerText = TR(L"Enter interval in seconds. Maximum value is 1200.");
         } else if (pData->type == CustomInputDialogType::InstanceTimer) {
-            bannerText = L"Enter AFK action interval in seconds for selected instance(s).";
+            bannerText = TR(L"Enter AFK action interval in seconds for selected instance(s).");
         } else if (pData->type == CustomInputDialogType::FpsLimit) {
-            bannerText = L"Set FPS cap from 0 to 60. Use 0 to turn it off.";
+            bannerText = TR(L"Set FPS cap from 0 to 60. Use 0 to turn it off.");
         } else if (pData->type == CustomInputDialogType::ProcessNames) {
-            bannerText = L"Process names or window title substrings separated by semicolons (;)";
+            bannerText = TR(L"Process names or window title substrings separated by semicolons (;)");
         } else if (pData->type == CustomInputDialogType::GridModeValue) {
             int mode = g_gridMode.load();
             if (mode == 1) {
-                bannerText = L"Enter custom window size in pixels (100 to 4000).";
+                bannerText = TR(L"Enter custom window size in pixels (100 to 4000).");
             } else if (mode == 2) {
-                bannerText = L"Enter columns count (1 to 20).";
+                bannerText = TR(L"Enter columns count (1 to 20).");
             } else if (mode == 3) {
-                bannerText = L"Enter rows count (1 to 20).";
+                bannerText = TR(L"Enter rows count (1 to 20).");
             } else if (mode == 4) {
-                bannerText = L"Enter window width in pixels (100 to 4000).";
+                bannerText = TR(L"Enter window width in pixels (100 to 4000).");
             } else if (mode == 5) {
-                bannerText = L"Enter window height in pixels (100 to 4000).";
+                bannerText = TR(L"Enter window height in pixels (100 to 4000).");
             } else {
-                bannerText = L"Enter value for Grid Mode.";
+                bannerText = TR(L"Enter value for Grid Mode.");
             }
         } else if (pData->type == CustomInputDialogType::GridSpacingBetween) {
-            bannerText = L"Enter space between windows in pixels (0 to 200).";
+            bannerText = TR(L"Enter space between windows in pixels (0 to 200).");
         } else if (pData->type == CustomInputDialogType::GridSpacingBorders) {
-            bannerText = L"Enter space from screen borders in pixels (0 to 200).";
+            bannerText = TR(L"Enter space from screen borders in pixels (0 to 200).");
         } else if (pData->type == CustomInputDialogType::RamCleanInterval) {
-            bannerText = L"Enter cycle time in seconds. Default is 120.";
+            bannerText = TR(L"Enter cycle time in seconds. Default is 120.");
         } else if (pData->type == CustomInputDialogType::RamCleanLimit) {
-            bannerText = L"Enter RAM limit threshold in MB. Default is 500.";
+            bannerText = TR(L"Enter RAM limit threshold in MB. Default is 500.");
         } else if (pData->type == CustomInputDialogType::PreActionDelay) {
-            bannerText = L"Enter delay before each action in milliseconds (0 to 10000).";
+            bannerText = TR(L"Enter delay before each action in milliseconds (0 to 10000).");
         } else if (pData->type == CustomInputDialogType::KeyPressDelay) {
-            bannerText = L"Enter key press duration in milliseconds (1 to 5000).";
+            bannerText = TR(L"Enter key press duration in milliseconds (1 to 5000).");
         } else if (pData->type == CustomInputDialogType::PostActionDelay) {
-            bannerText = L"Enter delay after each action in milliseconds (0 to 10000).";
+            bannerText = TR(L"Enter delay after each action in milliseconds (0 to 10000).");
         } else if (pData->type == CustomInputDialogType::ActionRepeatCount) {
-            bannerText = L"Enter how many times to repeat the action per cycle (1 to 100).";
+            bannerText = TR(L"Enter how many times to repeat the action per cycle (1 to 100).");
         } else if (pData->type == CustomInputDialogType::ReconnectInterval) {
-            bannerText = L"Independent reconnect check interval in seconds. 0 = only with main cycle.";
+            bannerText = TR(L"Independent reconnect check interval in seconds. 0 = only with main cycle.");
         } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
-            bannerText = L"Delay before reconnect macros run (0-3600 sec).";
+            bannerText = TR(L"Delay before reconnect macros run (0-3600 sec).");
         } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
-            bannerText = L"Enter target CPU Limit percentage (1 to 99).";
+            bannerText = TR(L"Enter target CPU Limit percentage (1 to 99).");
         } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
-            bannerText = L"Enter limiter cycle duration in milliseconds (10 to 200).";
+            bannerText = TR(L"Enter limiter cycle duration in milliseconds (10 to 200).");
         } else if (pData->type == CustomInputDialogType::DiscordMentionTarget) {
-            bannerText = L"Usage examples: <@USER_ID> / <@&ROLE_ID> / @everyone";
+            bannerText = TR(L"Usage examples: <@USER_ID> / <@&ROLE_ID> / @everyone");
         } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
-            bannerText = L"Enter geometry: X (left), Y (top), Width, Height in pixels.";
+            bannerText = TR(L"Enter geometry: X (left), Y (top), Width, Height in pixels.");
         } else if (pData->type == CustomInputDialogType::InstanceTitle) {
-            bannerText = L"Enter new title for this Roblox client window.";
+            bannerText = TR(L"Enter new title for this Roblox client window.");
         } else if (pData->type == CustomInputDialogType::PresetName) {
-            bannerText = L"Enter a name for the new preset.";
+            bannerText = TR(L"Enter a name for the new preset.");
         } else if (pData->type == CustomInputDialogType::MacroName) {
-            bannerText = L"Enter a descriptive name for your custom macro.";
+            bannerText = TR(L"Enter a descriptive name for your custom macro.");
         } else if (pData->type == CustomInputDialogType::MacroRename) {
-            bannerText = L"Enter a new name for this macro.";
+            bannerText = TR(L"Enter a new name for this macro.");
         } else if (pData->type == CustomInputDialogType::MacroInterval) {
-            bannerText = L"Interval in seconds for this macro.";
+            bannerText = TR(L"Interval in seconds for this macro.");
         } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
-            bannerText = L"Paste or type a Discord webhook URL.";
+            bannerText = TR(L"Paste or type a Discord webhook URL.");
         } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
-            bannerText = L"How often to send a status ping while Anti-AFK is running (5 to 1440 minutes).";
+            bannerText = TR(L"How often to send a status ping while Anti-AFK is running (5 to 1440 minutes).");
         } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
-            bannerText = L"Delay between Roblox windows in milliseconds (50 to 60000).";
+            bannerText = TR(L"Delay between Roblox windows in milliseconds (50 to 60000).");
         }
 
         const wchar_t* placeholders[4] = { L"", L"", L"", L"" };
@@ -15189,9 +15201,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                           (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"90" :
                           (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"100" :
                           (pData->type == CustomInputDialogType::InstanceTitle) ? L"Roblox Client" :
-                          (pData->type == CustomInputDialogType::PresetName) ? L"My Preset" :
-                          (pData->type == CustomInputDialogType::MacroName) ? L"My Macro" :
-                          (pData->type == CustomInputDialogType::MacroRename) ? L"My Macro" :
+                          (pData->type == CustomInputDialogType::PresetName) ? TR(L"My Preset") :
+                          (pData->type == CustomInputDialogType::MacroName) ? TR(L"My Macro") :
+                          (pData->type == CustomInputDialogType::MacroRename) ? TR(L"My Macro") :
                           (pData->type == CustomInputDialogType::MacroInterval) ? L"30" :
                           (pData->type == CustomInputDialogType::DiscordWebhookUrl) ? L"https://..." :
                           (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"60" :
@@ -15265,8 +15277,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
              SetCaretPos(caretX, caretY);
         }
 
-        Popup_DrawActionButton(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
-        Popup_DrawActionButton(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
+        Popup_DrawActionButton(&g, memDC, pData->cancelButtonRect, pData->hFontText, TR(L"Cancel"), pData->isHoveringCancel, false);
+        Popup_DrawActionButton(&g, memDC, pData->okButtonRect, pData->hFontText, TR(L"Apply"), pData->isHoveringOk, true);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -15443,33 +15455,33 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
         y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - dlgH) / 2;
     }
 
-    std::wstring macroRenameTitle = L"AntiAFK-RBX • Rename Macro";
+    std::wstring macroRenameTitle = TR(L"AntiAFK-RBX • Rename Macro");
     if (type == CustomInputDialogType::MacroRename) {
         macroRenameTitle = CustomInputDialog_GetMacroRenameTitle();
     }
 
-    const wchar_t* titleStr = (type == CustomInputDialogType::Interval) ? L"AntiAFK-RBX • Set Custom Interval" :
-                              (type == CustomInputDialogType::FpsLimit) ? L"AntiAFK-RBX • Set FPS Limit" :
-                              (type == CustomInputDialogType::ProcessNames) ? L"AntiAFK-RBX • Set Custom Search Names" :
-                              (type == CustomInputDialogType::GridModeValue) ? L"AntiAFK-RBX • Grid Mode Value" :
-                              (type == CustomInputDialogType::GridSpacingBetween) ? L"AntiAFK-RBX • Spacing Between Windows" :
-                              (type == CustomInputDialogType::GridSpacingBorders) ? L"AntiAFK-RBX • Spacing From Borders" :
-                              (type == CustomInputDialogType::RamCleanInterval) ? L"AntiAFK-RBX • Set Cycle Time" :
-                              (type == CustomInputDialogType::DiscordMentionTarget) ? L"AntiAFK-RBX • Configure Mention Target" :
-                              (type == CustomInputDialogType::PreActionDelay) ? L"AntiAFK-RBX • Delay Before Action (ms)" :
-                              (type == CustomInputDialogType::KeyPressDelay) ? L"AntiAFK-RBX • Key Press Delay (ms)" :
-                              (type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX • Delay After Action (ms)" :
-                              (type == CustomInputDialogType::ActionRepeatCount) ? L"AntiAFK-RBX • Action Repeat Count" :
-                              (type == CustomInputDialogType::ReconnectInterval) ? L"AntiAFK-RBX • Reconnect Check Interval (sec)" :
-                              (type == CustomInputDialogType::ReconnectMacroDelay) ? L"AntiAFK-RBX • Reconnect Macro Delay (sec)" :
-                              (type == CustomInputDialogType::CpuLimitPercent) ? L"AntiAFK-RBX • Set CPU Limit %" :
-                              (type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX • Set Cycle Period (ms)" :
-                              (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
-                              (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
-                              (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
-                              (type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
+    const wchar_t* titleStr = (type == CustomInputDialogType::Interval) ? TR(L"AntiAFK-RBX • Set Custom Interval") :
+                              (type == CustomInputDialogType::FpsLimit) ? TR(L"AntiAFK-RBX • Set FPS Limit") :
+                              (type == CustomInputDialogType::ProcessNames) ? TR(L"AntiAFK-RBX • Set Custom Search Names") :
+                              (type == CustomInputDialogType::GridModeValue) ? TR(L"AntiAFK-RBX • Grid Mode Value") :
+                              (type == CustomInputDialogType::GridSpacingBetween) ? TR(L"AntiAFK-RBX • Spacing Between Windows") :
+                              (type == CustomInputDialogType::GridSpacingBorders) ? TR(L"AntiAFK-RBX • Spacing From Borders") :
+                              (type == CustomInputDialogType::RamCleanInterval) ? TR(L"AntiAFK-RBX • Set Cycle Time") :
+                              (type == CustomInputDialogType::DiscordMentionTarget) ? TR(L"AntiAFK-RBX • Configure Mention Target") :
+                              (type == CustomInputDialogType::PreActionDelay) ? TR(L"AntiAFK-RBX • Delay Before Action (ms)") :
+                              (type == CustomInputDialogType::KeyPressDelay) ? TR(L"AntiAFK-RBX • Key Press Delay (ms)") :
+                              (type == CustomInputDialogType::PostActionDelay) ? TR(L"AntiAFK-RBX • Delay After Action (ms)") :
+                              (type == CustomInputDialogType::ActionRepeatCount) ? TR(L"AntiAFK-RBX • Action Repeat Count") :
+                              (type == CustomInputDialogType::ReconnectInterval) ? TR(L"AntiAFK-RBX • Reconnect Check Interval (sec)") :
+                              (type == CustomInputDialogType::ReconnectMacroDelay) ? TR(L"AntiAFK-RBX • Reconnect Macro Delay (sec)") :
+                              (type == CustomInputDialogType::CpuLimitPercent) ? TR(L"AntiAFK-RBX • Set CPU Limit %") :
+                              (type == CustomInputDialogType::CpuLimitPeriod) ? TR(L"AntiAFK-RBX • Set Cycle Period (ms)") :
+                              (type == CustomInputDialogType::InstanceGeometry) ? TR(L"AntiAFK-RBX • Change Window Geometry") :
+                              (type == CustomInputDialogType::InstanceTitle) ? TR(L"AntiAFK-RBX • Rename Roblox Window") :
+                              (type == CustomInputDialogType::PresetName) ? TR(L"AntiAFK-RBX • Create New Preset") :
+                              (type == CustomInputDialogType::MacroName) ? TR(L"AntiAFK-RBX • Enter Macro Name") :
                               (type == CustomInputDialogType::MacroRename) ? macroRenameTitle.c_str() :
-                              (type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" : L"AntiAFK-RBX • Set RAM Limit";
+                              (type == CustomInputDialogType::MacroInterval) ? TR(L"AntiAFK-RBX • Set Macro Interval") : TR(L"AntiAFK-RBX • Set RAM Limit");
 
     if (!pGlobalWnd) return;
 
@@ -15507,9 +15519,9 @@ static std::vector<std::wstring> g_macroOrderNames;
 
 static const wchar_t* MacroOrder_TitleText(MacroOrderListType t) {
     switch (t) {
-        case MacroOrderListType::AfkAction: return L"AntiAFK-RBX • Macro Order: AFK Action";
-        case MacroOrderListType::Reconnect: return L"AntiAFK-RBX • Macro Order: Reconnect";
-        default: return L"AntiAFK-RBX • Macro Order: Interval";
+        case MacroOrderListType::AfkAction: return TR(L"AntiAFK-RBX • Macro Order: AFK Action");
+        case MacroOrderListType::Reconnect: return TR(L"AntiAFK-RBX • Macro Order: Reconnect");
+        default: return TR(L"AntiAFK-RBX • Macro Order: Interval");
     }
 }
 
@@ -15576,7 +15588,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         if (PtInRect(&pData->okButtonRect, pt)) {
             if (g_macroOrderNames.empty()) {
-                QueueStatusBarOverlay(L"No macros available for this order", 2000, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"No macros available for this order"), 2000, hwnd, StatusBarEventType::Macro);
                 return 0;
             }
             {
@@ -15672,7 +15684,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         if (PtInRect(&pData->okButtonRect, pt)) {
             if (g_macroOrderNames.empty()) {
-                QueueStatusBarOverlay(L"No macros available for this order", 2000, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"No macros available for this order"), 2000, hwnd, StatusBarEventType::Macro);
                 return 0;
             }
             {
@@ -15740,8 +15752,8 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         const wchar_t* bannerIcon = (g_macroOrderListType == MacroOrderListType::AfkAction) ? L"\uE7C9"
             : (g_macroOrderListType == MacroOrderListType::Reconnect) ? L"\uE8AF" : L"\uE916";
         const wchar_t* bannerText = (g_macroOrderListType == MacroOrderListType::Interval)
-            ? L"Click a macro to change its interval time."
-            : L"Drag rows to reorder the execution sequence.";
+            ? TR(L"Click a macro to change its interval time.")
+            : TR(L"Drag rows to reorder the execution sequence.");
         Popup_DrawInfoBannerNoBottomBorder(&g, memDC, infoRect, pData->hFontText, bannerIcon, RGB(0, 122, 204), bannerText);
         {
             Gdiplus::SolidBrush sepB(Gdiplus::Color(180, 56, 56, 56));
@@ -15766,7 +15778,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
         if (g_macroOrderNames.empty()) {
             Gdiplus::SolidBrush emptyBrush(Gdiplus::Color(255, 130, 130, 130));
             Gdiplus::RectF emptyR((REAL)(pData->listRect.left + 12), (REAL)pData->listRect.top, (REAL)(pData->listRect.right - pData->listRect.left - 24), 30.0f);
-            g.DrawString(L"No macros assigned yet. Select them in the instance settings.", -1, &rowFont, emptyR, &sfL, &emptyBrush);
+            g.DrawString(TR(L"No macros assigned yet. Select them in the instance settings."), -1, &rowFont, emptyR, &sfL, &emptyBrush);
         }
 
         for (size_t i = 0; i < g_macroOrderNames.size(); i++) {
@@ -15809,8 +15821,8 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                     }
                 }
                 wchar_t tbuf[32];
-                if (sec > 0) swprintf_s(tbuf, L"%ds", sec);
-                else wcscpy_s(tbuf, L"not set");
+                if (sec > 0) swprintf_s(tbuf, TR(L"%ds"), sec);
+                else wcscpy_s(tbuf, TR(L"not set"));
                 Gdiplus::SolidBrush timeBrush(sec > 0 ? Gdiplus::Color(255, 0, 180, 255) : Gdiplus::Color(200, 120, 120, 120));
                 Gdiplus::RectF timeR((REAL)(rowRc.right - 100), (REAL)rowRc.top, 68.0f, (REAL)(rowRc.bottom - rowRc.top));
                 g.DrawString(tbuf, -1, &rowFont, timeR, &sfR, &timeBrush);
@@ -15834,8 +15846,8 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
             g.SetSmoothingMode(oldSmooth);
         }
 
-        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, L"Cancel", pData->isHoveringCancel, false);
-        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, L"Apply", pData->isHoveringOk, true);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->cancelButtonRect, pData->hFontText, TR(L"Cancel"), pData->isHoveringCancel, false);
+        Popup_DrawActionButtonWithoutTopBorder(&g, memDC, pData->okButtonRect, pData->hFontText, TR(L"Apply"), pData->isHoveringOk, true);
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBMP);
@@ -16095,7 +16107,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             return 0;
         }
         if (PtInRect(&pData->helpDemoRect, pt)) {
-            ShowDarkMessageBox(hwnd, L"These are contextual help buttons placed next to settings in the main window.\n\nClick any ? to get a quick explanation of what that option does, without leaving the app.", L"AntiAFK-RBX • What are ? buttons?", MB_OK);
+            ShowDarkMessageBox(hwnd, TR(L"These are contextual help buttons placed next to settings in the main window.\n\nClick any ? to get a quick explanation of what that option does, without leaving the app."), TR(L"AntiAFK-RBX • What are ? buttons?"), MB_OK);
             return 0;
         }
 
@@ -16170,7 +16182,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetPixelOffsetMode(PixelOffsetModeHalf);
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
-        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, L"AntiAFK-RBX • First Welcome", pData->isHoveringClose);
+        Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, TR(L"AntiAFK-RBX • First Welcome"), pData->isHoveringClose);
 
         {
             Region oldClip;
@@ -16220,7 +16232,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             typographicWrap.SetFormatFlags(typographicWrap.GetFormatFlags() & ~StringFormatFlagsNoWrap);
 
             int y_welcome = 46;
-            g.DrawString(L"Welcome to", -1, &font11, PointF((REAL)margin + 4.0f, (REAL)y_welcome), typographic, &grayBrush);
+            g.DrawString(TR(L"Welcome to"), -1, &font11, PointF((REAL)margin + 4.0f, (REAL)y_welcome), typographic, &grayBrush);
 
             const wchar_t* p1 = L"AntiAFK-";
             const wchar_t* p2 = L"RBX";
@@ -16247,19 +16259,19 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             int y_desc = 92;
             RectF rSub((REAL)margin + 1.0f, (REAL)y_desc, (REAL)colW, 22.0f);
             g.DrawString(
-                L"Best utility and Anti-AFK for Roblox.",
+                TR(L"Best utility and Anti-AFK for Roblox."),
                 -1, &font11, rSub, &typographicWrap, &textBrush);
 
             int y_launch_title = 146;
-            g.DrawString(L"How to Use", -1, &font20, PointF((REAL)margin, (REAL)y_launch_title), typographic, &whiteBrush);
+            g.DrawString(TR(L"How to Use"), -1, &font20, PointF((REAL)margin, (REAL)y_launch_title), typographic, &whiteBrush);
 
             int y_launch_steps = 188;
             RectF rSteps((REAL)margin, (REAL)y_launch_steps, (REAL)colW, 100.0f);
             g.DrawString(
-                L"1. Open AntiAFK-RBX.\n"
+                TR(L"1. Open AntiAFK-RBX.\n"
                 L"2. Configure the settings.\n"
                 L"3. Open Roblox.\n"
-                L"4. Press Start.",
+                L"4. Press Start."),
                 -1, &font13, rSteps, &typographicWrap, &bodyBrush);
 
             const int rightColX = 304;
@@ -16267,7 +16279,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             sfCenter.SetAlignment(StringAlignmentCenter);
 
             RectF rTrayTitle((REAL)rightColX, (REAL)(y_welcome - 6), (REAL)colW, 22.0f);
-            g.DrawString(L"Tray Icons:", -1, &font11, rTrayTitle, &sfCenter, &whiteBrush);
+            g.DrawString(TR(L"Tray Icons:"), -1, &font11, rTrayTitle, &sfCenter, &whiteBrush);
 
             int iconsY = 64;
             int iconSize = 26;
@@ -16287,20 +16299,20 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 
             Font labelFont(memDC, pData->hFont11);
             SolidBrush labelBrush(Color(255, 170, 170, 170));
-            const wchar_t* labels[] = { L"ON", L"OFF", L"MULTI" };
+            const wchar_t* labels[] = { TR(L"ON"), TR(L"OFF"), TR(L"MULTI") };
             for (int i = 0; i < 3; ++i)
             {
                 REAL iconCenterX = (REAL)(startX + i * (iconSize + gap) + iconSize / 2.0f);
-                RectF labelRect(iconCenterX - 30.0f, (REAL)(iconsY + iconSize + 4), 60.0f, 22.0f);
+                RectF labelRect(iconCenterX - 40.0f, (REAL)(iconsY + iconSize + 4), 80.0f, 22.0f);
                 g.DrawString(labels[i], -1, &labelFont, labelRect, &sfCenter, &labelBrush);
             }
 
-            g.DrawString(L"Need Help?", -1, &font20, PointF((REAL)rightColX, (REAL)y_launch_title), typographic, &whiteBrush);
+            g.DrawString(TR(L"Need Help?"), -1, &font20, PointF((REAL)rightColX, (REAL)y_launch_title), typographic, &whiteBrush);
 
             int y_launch_steps_right = 172;
-            const wchar_t* part1 = L"Use the";
-            const wchar_t* part2 = L" buttons to read what";
-            const wchar_t* part3 = L"each option does. Also you can...";
+            const wchar_t* part1 = TR(L"Use the");
+            const wchar_t* part2 = TR(L" buttons to read what");
+            const wchar_t* part3 = TR(L"each option does. Also you can...");
 
             g.DrawString(part1, -1, &font13, PointF((REAL)rightColX, (REAL)y_launch_steps_right), &typographicWrap, &bodyBrush);
 
@@ -16341,9 +16353,9 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             g.DrawString(part2, -1, &font13, PointF(btnHelpX + 18, (REAL)y_launch_steps_right), &typographicWrap, &bodyBrush);
             g.DrawString(part3, -1, &font13, PointF((REAL)rightColX, (REAL)(y_launch_steps_right + 18)), &typographicWrap, &bodyBrush);
 
-            const wchar_t* discordText = L"Join our Discord server";
-            const wchar_t* orText = L"or";
-            const wchar_t* githubText = L"Create issue on GitHub";
+            const wchar_t* discordText = TR(L"Join our Discord server");
+            const wchar_t* orText = TR(L"or");
+            const wchar_t* githubText = TR(L"Create issue on GitHub");
             Font smallFont(memDC, pData->hFont11);
             SolidBrush orBrush(Color(255, 160, 160, 160));
 
@@ -16382,16 +16394,16 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SolidBrush starBrush(Color(255, 255, 210, 80));
             Font warnFont(memDC, pData->hFont11);
             RectF rWarn((REAL)0, (REAL)(btnTop - 48), (REAL)clientRect.right, 22.0f);
-            g.DrawString(L"⚠ No official website. Download only from official source.", -1, &warnFont, rWarn, &sfCenter, &warnBrush);
+            g.DrawString(TR(L"⚠ No official website. Download only from official source."), -1, &warnFont, rWarn, &sfCenter, &warnBrush);
             RectF rStar((REAL)0, (REAL)(btnTop - 31), (REAL)clientRect.right, 22.0f);
-            g.DrawString(L"★ If you like this project, please consider starring it on GitHub.", -1, &warnFont, rStar, &sfCenter, &starBrush);
+            g.DrawString(TR(L"★ If you like this project, please consider starring it on GitHub."), -1, &warnFont, rStar, &sfCenter, &starBrush);
         }
 
         auto drawBtn = [&](const RECT& r, const wchar_t* txt, bool hover, bool primary) {
             Popup_DrawActionButton(&g, memDC, r, pData->hFont13, txt, hover, primary);
         };
 
-        drawBtn(pData->nextButtonRect, L"Continue", pData->isHoveringNext, true);
+        drawBtn(pData->nextButtonRect, TR(L"Continue"), pData->isHoveringNext, true);
 
         {
             Graphics gInner(memDC);
@@ -16460,7 +16472,7 @@ void ShowTutorialDialog(HWND owner)
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         registered = RegisterClass(&wc) != 0;
     }
-    HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-Tutorial", L"AntiAFK-RBX • First Welcome", WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 560, 370, owner, NULL, g_hInst, NULL);
+    HWND h = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, L"AntiAFK-RBX-Tutorial", TR(L"AntiAFK-RBX • First Welcome"), WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 560, 370, owner, NULL, g_hInst, NULL);
     if (h) { g_tutorialWnd = h; ShowWindow(h, SW_SHOW); UpdateWindow(h); }
 }
 // ==========
@@ -16577,6 +16589,8 @@ struct MainUIData {
     RECT autoGridToggleRect = { 0 };
     RECT bloxstrapIntegrationToggleRect = { 0 };
     RECT userSafeDropdownRect = { 0 };
+    RECT languageDropdownRect = { 0 };
+    RECT hotkeyRowRect = { 0 };
     RECT resetStatsButtonRect = { 0 };
     RECT statRowRects[4] = { 0 };
     RECT backupMessageRect = { 0 };
@@ -16744,6 +16758,7 @@ bool isHoveringUiSettings = false;
     bool isHoveringInterval = false;
     bool isHoveringAction = false;
     bool isHoveringUserSafe = false;
+    bool isHoveringLanguage = false;
     bool isHoveringRestore = false;
     bool isHoveringFpsCapper = false;
     bool isHoveringRamCleanerDropdown = false;
@@ -17233,7 +17248,7 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                     int bCol = (int)(255 * std::fabs(std::sin((h + 240) * 3.14159265f / 180.0f)));
 
                     Font textFont(hdcMem, g_ssMainFont);
-                    std::wstring ssText = L"AntiAFK-RBX • Screen Saver";
+                    std::wstring ssText = TR(L"AntiAFK-RBX • Screen Saver");
 
                     if (g_ssTextW <= 0.0f) {
                         RectF textBounds;
@@ -17254,8 +17269,8 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 if (g_ssShowExitUI && g_ssHintFont && g_ssHintSmallFont) {
                     Font hintFont(hdcMem, g_ssHintFont);
                     Font hintSmallFont(hdcMem, g_ssHintSmallFont);
-                    std::wstring hintMain = L"Press X in the top-right corner to close\nor press Esc or Win key to close";
-                    std::wstring hintSub = L"This hint auto-hides after inactivity";
+                    std::wstring hintMain = TR(L"Press X in the top-right corner to close\nor press Esc or Win key to close");
+                    std::wstring hintSub = TR(L"This hint auto-hides after inactivity");
 
                     RectF mainBounds, subBounds;
                     g.MeasureString(hintMain.c_str(), -1, &hintFont, PointF(0, 0), &mainBounds);
@@ -17446,7 +17461,7 @@ void ScreenSaver_Start(HWND owner)
             HWND h = CreateWindowEx(
                 WS_EX_TOPMOST | WS_EX_APPWINDOW | WS_EX_NOACTIVATE,
                 L"AntiAFK-RBX-ScreenSaver",
-                L"AntiAFK-RBX • Screen Saver",
+                TR(L"AntiAFK-RBX • Screen Saver"),
                 WS_POPUP | WS_VISIBLE,
                 mi.rcMonitor.left, mi.rcMonitor.top, W, H,
                 NULL, NULL, p->hInst, NULL);
@@ -17498,7 +17513,7 @@ HFONT hFontBrand = NULL;
 HFONT hFontText = NULL;
 int fontDpi = 0;
 HICON hIcon = NULL;
-std::wstring message = L"Ready";
+std::wstring message = TR(L"Ready");
 RECT targetBounds = { 0 };
 BYTE currentAlpha = 0;
 BYTE targetAlpha = 0;
@@ -18579,7 +18594,7 @@ float MainUI_Paint_DrawBadge(Graphics& g, float x, float y, float badgeH, const 
     g.DrawString(badgeText, -1, &badgeFont, badgeRectF, &sfText, &badgeTextColor);
     return badgeW;
 }
-void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isRowHovering, bool isButtonHovering, const wchar_t* icon = nullptr, bool thin = false, const RECT* clickBtnRect = nullptr, const wchar_t* btnLabel = L"click", bool isEnabled = true, const wchar_t* badge = nullptr) {
+void MainUI_Paint_DrawListActionRow(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isRowHovering, bool isButtonHovering, const wchar_t* icon = nullptr, bool thin = false, const RECT* clickBtnRect = nullptr, const wchar_t* btnLabel = TR(L"click"), bool isEnabled = true, const wchar_t* badge = nullptr) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeNone);
     g.SetPixelOffsetMode(PixelOffsetModeHalf);
@@ -18793,26 +18808,26 @@ void MainUI_Paint_DrawBackupButtonsRow(HDC hdc, const RECT& importRect, const RE
 
     {
         RectF textBounds;
-        g.MeasureString(L"Import settings", -1, &textFont, PointF(0, 0), &sfText, &textBounds);
+        g.MeasureString(TR(L"Import settings"), -1, &textFont, PointF(0, 0), &sfText, &textBounds);
         float iconW = 14.0f;
         float totalW = iconW + 4.0f + textBounds.Width;
         float startX = (REAL)importRect.left + ((REAL)(importRect.right - importRect.left) - totalW) / 2.0f;
         RectF iconRectF(startX, (REAL)importRect.top, iconW, (REAL)(importRect.bottom - importRect.top));
         g.DrawString(L"\uE896", -1, &iconFont, iconRectF, &sfIcon, &iconBrush);
         RectF txtRectF(startX + iconW + 4.0f, (REAL)importRect.top, textBounds.Width, (REAL)(importRect.bottom - importRect.top));
-        g.DrawString(L"Import settings", -1, &textFont, txtRectF, &sfText, &textBrush);
+        g.DrawString(TR(L"Import settings"), -1, &textFont, txtRectF, &sfText, &textBrush);
     }
 
     {
         RectF textBounds;
-        g.MeasureString(L"Export settings", -1, &textFont, PointF(0, 0), &sfText, &textBounds);
+        g.MeasureString(TR(L"Export settings"), -1, &textFont, PointF(0, 0), &sfText, &textBounds);
         float iconW = 14.0f;
         float totalW = iconW + 4.0f + textBounds.Width;
         float startX = (REAL)exportRect.left + ((REAL)(exportRect.right - exportRect.left) - totalW) / 2.0f;
         RectF iconRectF(startX, (REAL)exportRect.top, iconW, (REAL)(exportRect.bottom - exportRect.top));
         g.DrawString(L"\uE898", -1, &iconFont, iconRectF, &sfIcon, &iconBrush);
         RectF txtRectF(startX + iconW + 4.0f, (REAL)exportRect.top, textBounds.Width, (REAL)(exportRect.bottom - exportRect.top));
-        g.DrawString(L"Export settings", -1, &textFont, txtRectF, &sfText, &textBrush);
+        g.DrawString(TR(L"Export settings"), -1, &textFont, txtRectF, &sfText, &textBrush);
     }
 
     DeleteObject(iconFontH);
@@ -18944,7 +18959,7 @@ void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFON
         }
     }
 
-    const wchar_t* effectivePlaceholder = placeholder ? placeholder : L"Enter webhook URL...";
+    const wchar_t* effectivePlaceholder = placeholder ? placeholder : TR(L"Enter webhook URL...");
     std::wstring displayText = value.empty() ? effectivePlaceholder : visibleValue;
     SolidBrush textBrush(value.empty() ? Color(isEnabled ? 255 : 110, 130, 130, 130) : Color(isEnabled ? 255 : 120, 255, 255, 255));
     StringFormat sf;
@@ -19045,26 +19060,26 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
 
         for (int i = 0; i < 5; ++i) {
             if (pData->actionDelaysHelpButtonRects[i].left != 0 && PtInRect(&pData->actionDelaysHelpButtonRects[i], pt)) {
-                const wchar_t* title = L"Help";
+                const wchar_t* title = TR(L"Help");
                 const wchar_t* text = L"";
                 if (i == 0) {
-                    title = L"Action Preset";
-                    text = L"Select a speed profile for performing AFK actions:\n\n"
+                    title = TR(L"Action Preset");
+                    text = TR(L"Select a speed profile for performing AFK actions:\n\n"
                            L" Default: 55ms pre/post delays, 25ms key press, 3 repeat counts. Balanced for most use cases.\n"
                            L" Safe: 100ms pre/post delays, 50ms key press, 5 repeat counts. Use if you have a lot of Roblox instances open or if you have a slow computer.\n"
-                           L" Custom: Allows you to manually define custom millisecond values. Use it if you know what you're doing and don't forget to test.";
+                           L" Custom: Allows you to manually define custom millisecond values. Use it if you know what you're doing and don't forget to test.");
                 } else if (i == 1) {
-                    title = L"Delay Before Action";
-                    text = L"The amount of time (in milliseconds) the program waits after bringing the Roblox window to the foreground and before executing the keyboard/mouse inputs.";
+                    title = TR(L"Delay Before Action");
+                    text = TR(L"The amount of time (in milliseconds) the program waits after bringing the Roblox window to the foreground and before executing the keyboard/mouse inputs.");
                 } else if (i == 2) {
-                    title = L"Key Press Delay";
-                    text = L"The duration (in milliseconds) that the simulated key or mouse button is held down.";
+                    title = TR(L"Key Press Delay");
+                    text = TR(L"The duration (in milliseconds) that the simulated key or mouse button is held down.");
                 } else if (i == 3) {
-                    title = L"Delay After Action";
-                    text = L"The cooling-down time (in milliseconds) the program waits after releasing the key/mouse inputs and before switching to another Roblox client or restoring focus.";
+                    title = TR(L"Delay After Action");
+                    text = TR(L"The cooling-down time (in milliseconds) the program waits after releasing the key/mouse inputs and before switching to another Roblox client or restoring focus.");
                 } else if (i == 4) {
-                    title = L"Action Repeat Count";
-                    text = L"The number of times the simulated action is sequentially repeated per client per AFK cycle.";
+                    title = TR(L"Action Repeat Count");
+                    text = TR(L"The number of times the simulated action is sequentially repeated per client per AFK cycle.");
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -19073,9 +19088,9 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
 
         if (PtInRect(&pData->actionDelaysPresetDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 0 ? MF_CHECKED : 0), ID_ACTION_PRESET_STANDARD, L"Default");
-            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 1 ? MF_CHECKED : 0), ID_ACTION_PRESET_SLOW, L"Safe");
-            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 2 ? MF_CHECKED : 0), ID_ACTION_PRESET_CUSTOM, L"Custom");
+            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 0 ? MF_CHECKED : 0), ID_ACTION_PRESET_STANDARD, TR(L"Default"));
+            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 1 ? MF_CHECKED : 0), ID_ACTION_PRESET_SLOW, TR(L"Safe"));
+            AppendMenu(hMenu, MF_STRING | (g_actionPreset.load() == 2 ? MF_CHECKED : 0), ID_ACTION_PRESET_CUSTOM, TR(L"Custom"));
             POINT menuPt;
             menuPt.x = pData->actionDelaysPresetDropdownRect.left;
             menuPt.y = pData->actionDelaysPresetDropdownRect.bottom;
@@ -19122,29 +19137,29 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
 
         for (int i = 0; i < 5; ++i) {
             if (pData->fpsCapperSettingsHelpButtonRects[i].left != 0 && PtInRect(&pData->fpsCapperSettingsHelpButtonRects[i], pt)) {
-                const wchar_t* title = L"Help";
+                const wchar_t* title = TR(L"Help");
                 const wchar_t* text = L"";
                 if (i == 0) {
-                    title = L"Capper Mode";
-                    text = L"Select capper technique:\n\n"
+                    title = TR(L"Capper Mode");
+                    text = TR(L"Select capper technique:\n\n"
                            L" Legacy (FPS target): Limits Roblox frame rates to decrease CPU and GPU load.\n"
-                           L" Beta (CPU limit %): Suspends Roblox execution threads for a percentage of time to lower CPU utilization.";
+                           L" Beta (CPU limit %): Suspends Roblox execution threads for a percentage of time to lower CPU utilization.");
                 } else if (i == 1) {
                     if (g_cpuLimitMode.load()) {
-title = L"CPU Limit %";
-                text = L"The percentage of execution time to deny the Roblox threads (1% to 99%). Higher values mean less CPU used by Roblox.";
+title = TR(L"CPU Limit %");
+                text = TR(L"The percentage of execution time to deny the Roblox threads (1% to 99%). Higher values mean less CPU used by Roblox.");
                     } else {
-                        title = L"FPS Limit Preset";
-                        text = L"Select FPS Target limit for the Legacy capper mode. Choose 'Custom...' to type in a custom integer.";
+                        title = TR(L"FPS Limit Preset");
+                        text = TR(L"Select FPS Target limit for the Legacy capper mode. Choose 'Custom...' to type in a custom integer.");
                     }
                 } else if (i == 2) {
                     if (g_cpuLimitMode.load()) {
-                        title = L"Cycle Period (ms)";
-                        text = L"The interval window (in milliseconds) used to evaluate and sleep the Roblox threads. Default is 100ms.";
+                        title = TR(L"Cycle Period (ms)");
+                        text = TR(L"The interval window (in milliseconds) used to evaluate and sleep the Roblox threads. Default is 100ms.");
                     }
                 } else if (i == 4) {
-                    title = L"Unlock FPS on Focus";
-                    text = L"Temporarily disables the frame rate target limiter when a Roblox window is brought to the foreground, restoring high FPS.";
+                    title = TR(L"Unlock FPS on Focus");
+                    text = TR(L"Temporarily disables the frame rate target limiter when a Roblox window is brought to the foreground, restoring high FPS.");
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -19153,8 +19168,8 @@ title = L"CPU Limit %";
 
         if (PtInRect(&pData->fpsCapperModeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), 2001, L"Legacy (FPS Target)");
-            AppendMenu(hMenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), 2002, L"Beta (CPU Limit %)");
+            AppendMenu(hMenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), 2001, TR(L"Legacy (FPS Target)"));
+            AppendMenu(hMenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), 2002, TR(L"Beta (CPU Limit %)"));
             POINT menuPt;
             menuPt.x = pData->fpsCapperModeDropdownRect.left;
             menuPt.y = pData->fpsCapperModeDropdownRect.bottom;
@@ -19179,7 +19194,7 @@ title = L"CPU Limit %";
 
         if (!g_cpuLimitMode.load() && PtInRect(&pData->fpsCapperLimitDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING, ID_FPS_CAP_CUSTOM, L"Custom...");
+            AppendMenu(hMenu, MF_STRING, ID_FPS_CAP_CUSTOM, TR(L"Custom..."));
             AppendMenu(hMenu, MF_STRING | (g_fpsLastActiveLimit == 3 ? MF_CHECKED : 0), ID_FPS_CAP_3, L"3 FPS");
             AppendMenu(hMenu, MF_STRING | (g_fpsLastActiveLimit == 5 ? MF_CHECKED : 0), ID_FPS_CAP_5, L"5 FPS");
             AppendMenu(hMenu, MF_STRING | (g_fpsLastActiveLimit == 7 ? MF_CHECKED : 0), ID_FPS_CAP_7, L"7 FPS");
@@ -19278,7 +19293,7 @@ title = L"CPU Limit %";
 
         if (PtInRect(&pData->macrosBackIconRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"Recording in progress • press Ctrl+Shift+R to stop"), 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (pData->macrosViewMode > 0) {
@@ -19299,7 +19314,7 @@ title = L"CPU Limit %";
         }
         if (PtInRect(&pData->macrosOkButtonRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"Recording in progress • press Ctrl+Shift+R to stop"), 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (g_mainUiOpenedForMacros.load()) {
@@ -19326,7 +19341,7 @@ title = L"CPU Limit %";
                     std::wstring cmd = L"/select,\"" + macroPath + L"\"";
                     ShellExecuteW(NULL, L"open", L"explorer.exe", cmd.c_str(), NULL, SW_SHOWNORMAL);
                 } else {
-                    QueueStatusBarOverlay(L"Macros file not found - it will be created on first save", 2500, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(TR(L"Macros file not found - it will be created on first save"), 2500, hwnd, StatusBarEventType::Macro);
                     std::wstring dir = macroPath.substr(0, macroPath.find_last_of(L'\\'));
                     ShellExecuteW(NULL, L"open", dir.c_str(), NULL, NULL, SW_SHOWNORMAL);
                 }
@@ -19379,22 +19394,22 @@ title = L"CPU Limit %";
                             }
                         }
                         if (testCopy.name.empty()) {
-                            QueueStatusBarOverlay(L"Macro not found", 2000, hwnd, StatusBarEventType::Macro);
+                            QueueStatusBarOverlay(TR(L"Macro not found"), 2000, hwnd, StatusBarEventType::Macro);
                             return;
                         }
                         g_macroTestTargetWnd.store(targetHwnd);
                         g_macroTestRunning = true;
-                        QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"Test run: ") + testCopy.name + L"...", 3000, hwnd, StatusBarEventType::Macro);
                         std::thread([testCopy, targetHwnd, hwnd]() {
                             MacroEngine_ExecuteMacro(testCopy, targetHwnd, true);
                             g_macroTestTargetWnd.store(nullptr);
                             g_macroTestRunning = false;
                             if (hwnd && IsWindow(hwnd)) {
-                                QueueStatusBarOverlay(L"Test run complete", 1500, hwnd, StatusBarEventType::Macro);
+                                QueueStatusBarOverlay(TR(L"Test run complete"), 1500, hwnd, StatusBarEventType::Macro);
                             }
                         }).detach();
                     } else {
-                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"No Roblox window found"), 2000, hwnd, StatusBarEventType::Macro);
                     }
                 }
                 return;
@@ -19420,7 +19435,7 @@ title = L"CPU Limit %";
                         pData->macrosViewMode = 2;
                         InvalidateRect(hwnd, NULL, FALSE);
                     } else {
-                        QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"No Roblox window found"), 2000, hwnd, StatusBarEventType::Macro);
                     }
                 }
                 return;
@@ -19497,15 +19512,15 @@ title = L"CPU Limit %";
                 }
                 if (needExport) {
                     MacroEngine_ExportMacroToFile(hwnd, itemIdx);
-                    QueueStatusBarOverlay(L"Macro exported", 1500, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(TR(L"Macro exported"), 1500, hwnd, StatusBarEventType::Macro);
                 }
                 if (needSave) {
                     if (!MacroEngine_SaveMacros())
-                        QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"Failed to save macro - file locked or corrupt"), 3000, hwnd, StatusBarEventType::Macro);
                 }
                 if (deleted) {
                     bool macroSaved = MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(macroSaved ? std::wstring(L"Macro deleted") : std::wstring(L"Failed to save macro - file locked or corrupt"), 1500, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(macroSaved ? std::wstring(TR(L"Macro deleted")) : std::wstring(TR(L"Failed to save macro - file locked or corrupt")), 1500, hwnd, StatusBarEventType::Macro);
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
@@ -19536,7 +19551,7 @@ title = L"CPU Limit %";
             }
             if (PtInRect(&pData->macrosBtnRectNext, pt)) {
                 if (pData->macrosWizardName.empty()) {
-                    QueueStatusBarOverlay(L"Enter a macro name", 1500, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(TR(L"Enter a macro name"), 1500, hwnd, StatusBarEventType::Macro);
                 } else {
                     g_wizardMacro.name = pData->macrosWizardName;
                     g_macroWizardStep = 2;
@@ -19569,10 +19584,10 @@ title = L"CPU Limit %";
                         pData->macrosViewMode = 1;
                         KillTimer(hwnd, 1003);
                         InvalidateRect(hwnd, NULL, FALSE);
-                        QueueStatusBarOverlay(L"Could not start recording", 2000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"Could not start recording"), 2000, hwnd, StatusBarEventType::Macro);
                     }
                 } else {
-                    QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(TR(L"No Roblox window found"), 2000, hwnd, StatusBarEventType::Macro);
                 }
                 return;
             }
@@ -19593,7 +19608,7 @@ title = L"CPU Limit %";
                 return;
             }
             if (pData->macrosHelpBtnRect.left != 0 && PtInRect(&pData->macrosHelpBtnRect, pt)) {
-                ShowDarkMessageBox(hwnd, L"While the mouse button is held, AntiAFK-RBX also records the cursor movement path for more realistic playback.\n\nDisable this option to record only clicks and key presses.", L"Record Mouse Movements", MB_OK);
+                ShowDarkMessageBox(hwnd, TR(L"While the mouse button is held, AntiAFK-RBX also records the cursor movement path for more realistic playback.\n\nDisable this option to record only clicks and key presses."), TR(L"Record Mouse Movements"), MB_OK);
                 return;
             }
         } else if (pData->macrosViewMode == 3) {
@@ -19625,7 +19640,7 @@ title = L"CPU Limit %";
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
                     for (auto& m : g_macros) {
                         if (_wcsicmp(m.name.c_str(), pData->macrosWizardName.c_str()) == 0) {
-                            QueueStatusBarOverlay(L"Macro name already exists", 2000, hwnd, StatusBarEventType::Macro);
+                            QueueStatusBarOverlay(TR(L"Macro name already exists"), 2000, hwnd, StatusBarEventType::Macro);
                             InvalidateRect(hwnd, NULL, FALSE);
                             return;
                         }
@@ -19638,7 +19653,7 @@ title = L"CPU Limit %";
                 pData->macrosViewMode = 0;
                 g_macroWizardActive = false;
                 InvalidateRect(hwnd, NULL, FALSE);
-                QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(macroSaved ? (TR(L"Macro saved: ") + g_wizardMacro.name) : std::wstring(TR(L"Failed to save macro - file locked or corrupt")), 2000, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (PtInRect(&pData->macrosBtnRectBack, pt)) {
@@ -19671,25 +19686,25 @@ title = L"CPU Limit %";
         }
         for (int i = 0; i < 6; ++i) {
             if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
-                const wchar_t* title = L"Help";
-                const wchar_t* text = L"No help text available for this setting.";
+                const wchar_t* title = TR(L"Help");
+                const wchar_t* text = TR(L"No help text available for this setting.");
                 if (pData->settingsSubKind == 1) {
-                    title = L"Multi-Instance Delay";
-                    text = L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC.";
+                    title = TR(L"Multi-Instance Delay");
+                    text = TR(L"Delay between handling each Roblox window in multi-instance mode.\n\nUse 'Minimum' for the fastest switching. Increase if windows are skipped, focus feels unstable, or Roblox doesn't react reliably on your PC.");
                 } else if (pData->settingsSubKind == 2) {
-                    if (i == 0) { title = L"RAM Cleaner Mode"; text = L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions."; }
-                    else if (i == 1) { title = L"Clean Cycle Time"; text = L"Fixed interval (in seconds) used by 'Time Cycle' and 'Hybrid' RAM Cleaner strategies between memory optimizations."; }
-                    else { title = L"RAM Limit"; text = L"Usage threshold (in MB) used by 'Smart Clean' and 'Hybrid' strategies: memory is optimized when a Roblox process exceeds it."; }
+                    if (i == 0) { title = TR(L"RAM Cleaner Mode"); text = TR(L"How and when AntiAFK-RBX optimizes Roblox memory.\n\n- Smart Clean: trims RAM only when usage exceeds your threshold.\n- Time Cycle: cleans at fixed intervals.\n- Hybrid: both, max stability for long multi-instance sessions."); }
+                    else if (i == 1) { title = TR(L"Clean Cycle Time"); text = TR(L"Fixed interval (in seconds) used by 'Time Cycle' and 'Hybrid' RAM Cleaner strategies between memory optimizations."); }
+                    else { title = TR(L"RAM Limit"); text = TR(L"Usage threshold (in MB) used by 'Smart Clean' and 'Hybrid' strategies: memory is optimized when a Roblox process exceeds it."); }
                 } else if (pData->settingsSubKind == 3) {
-                    title = L"Reconnect Interval";
-                    text = L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus.";
+                    title = TR(L"Reconnect Interval");
+                    text = TR(L"How often Auto Reconnect checks for a kick/disconnect dialog independently from the main Anti-AFK cycle.\n\n- Off (main cycle): checks only during each Anti-AFK action cycle.\n- 30 sec / 1 min / 2 min / 5 min / 10 min: independent timer checks more frequently.\n- Custom: enter any value in seconds.\n\nInterval checks run WITHOUT stealing focus from other windows. Only when a kick dialog is detected, the window is briefly focused to click Reconnect.\n\nManual check (button / tray) always works WITH focus.");
                 } else if (pData->settingsSubKind == 4) {
-                    if (i == 0) { title = L"Disable Splash-Screen"; text = L"Skips the animated loading window (and the MainUI startup overlay) when AntiAFK-RBX starts.\n\nThe app still finishes all startup tasks in the background. Turn this off to see loading progress again."; }
-                    else if (i == 1) { title = L"Disable Acrylic Blur"; text = L"Replaces the blurred acrylic window background with a solid dark one (applied immediately).\n\nBlur can hurt readability on busy desktops and costs a little GPU compositing on some setups."; }
-                    else if (i == 2) { title = L"Disable UI Animations"; text = L"Makes all interface transitions instant: page switches, sub-window open/close, toggle knobs and fades.\n\nRecommended on slow machines or if you prefer zero-movement UI."; }
-                    else if (i == 3) { title = L"Disable Tray Notifications"; text = L"Hides balloon notifications shown near the tray icon (start/stop, errors, update found).\n\nThe Status Bar overlay and Discord webhooks are not affected and stay independent."; }
-                    else if (i == 4) { title = L"Keep Window On Top"; text = L"Places the main window above all other windows so it stays visible while you work or game.\n\nCan be toggled at any time; takes effect immediately."; }
-                    else if (i == 5) { title = L"Disable Rounded Corners"; text = L"Draws windows with square corners instead of the rounded Windows 11 style.\n\nApplies to the main window and dialogs; takes effect immediately."; }
+                    if (i == 0) { title = TR(L"Disable Splash-Screen"); text = TR(L"Skips the animated loading window (and the MainUI startup overlay) when AntiAFK-RBX starts.\n\nThe app still finishes all startup tasks in the background. Turn this off to see loading progress again."); }
+                    else if (i == 1) { title = TR(L"Disable Acrylic Blur"); text = TR(L"Replaces the blurred acrylic window background with a solid dark one (applied immediately).\n\nBlur can hurt readability on busy desktops and costs a little GPU compositing on some setups."); }
+                    else if (i == 2) { title = TR(L"Disable UI Animations"); text = TR(L"Makes all interface transitions instant: page switches, sub-window open/close, toggle knobs and fades.\n\nRecommended on slow machines or if you prefer zero-movement UI."); }
+                    else if (i == 3) { title = TR(L"Disable Tray Notifications"); text = TR(L"Hides balloon notifications shown near the tray icon (start/stop, errors, update found).\n\nThe Status Bar overlay and Discord webhooks are not affected and stay independent."); }
+                    else if (i == 4) { title = TR(L"Keep Window On Top"); text = TR(L"Places the main window above all other windows so it stays visible while you work or game.\n\nCan be toggled at any time; takes effect immediately."); }
+                    else if (i == 5) { title = TR(L"Disable Rounded Corners"); text = TR(L"Draws windows with square corners instead of the rounded Windows 11 style.\n\nApplies to the main window and dialogs; takes effect immediately."); }
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -19714,13 +19729,13 @@ title = L"CPU Limit %";
         }
         if (pData->settingsSubKind == 1 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, L"1 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, L"3 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, L"5 sec");
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, L"10 sec");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, TR(L"Minimum (0)"));
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 1000 ? MF_CHECKED : 0), ID_MI_INTERVAL_1, TR(L"1 sec"));
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 3000 ? MF_CHECKED : 0), ID_MI_INTERVAL_3, TR(L"3 sec"));
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 5000 ? MF_CHECKED : 0), ID_MI_INTERVAL_5, TR(L"5 sec"));
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() == 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_10, TR(L"10 sec"));
             AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, L"Custom delay...");
+            AppendMenu(hMenu, MF_STRING | (g_multiInstanceInterval.load() != 0 && g_multiInstanceInterval.load() != 1000 && g_multiInstanceInterval.load() != 3000 && g_multiInstanceInterval.load() != 5000 && g_multiInstanceInterval.load() != 10000 ? MF_CHECKED : 0), ID_MI_INTERVAL_CUSTOM, TR(L"Custom delay..."));
             POINT menuPt;
             menuPt.x = pData->settingsSubDropdownRect.left;
             menuPt.y = pData->settingsSubDropdownRect.bottom;
@@ -19732,9 +19747,9 @@ title = L"CPU Limit %";
         }
         if (pData->settingsSubKind == 2 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Smart Clean");
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Time Cycle");
-            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, L"Hybrid");
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, TR(L"Smart Clean"));
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, TR(L"Time Cycle"));
+            AppendMenu(hMenu, MF_STRING | (g_ramCleanerMode.load() == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, TR(L"Hybrid"));
             POINT menuPt;
             menuPt.x = pData->settingsSubDropdownRect.left;
             menuPt.y = pData->settingsSubDropdownRect.bottom;
@@ -19757,14 +19772,14 @@ title = L"CPU Limit %";
         }
         if (pData->settingsSubKind == 3 && PtInRect(&pData->settingsSubDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, L"Off (main cycle)");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, L"Every 30 sec");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, L"Every 1 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, L"Every 2 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, L"Every 5 min");
-            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, L"Every 10 min");
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, TR(L"Off (main cycle)"));
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 30 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_30, TR(L"Every 30 sec"));
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 60 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_60, TR(L"Every 1 min"));
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 120 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_120, TR(L"Every 2 min"));
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 300 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_300, TR(L"Every 5 min"));
+            AppendMenu(hMenu, MF_STRING | (g_reconnectCheckInterval.load() == 600 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_600, TR(L"Every 10 min"));
             AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING, ID_RECONNECT_INTERVAL_CUSTOM, L"Custom...");
+            AppendMenu(hMenu, MF_STRING, ID_RECONNECT_INTERVAL_CUSTOM, TR(L"Custom..."));
             POINT menuPt;
             menuPt.x = pData->settingsSubDropdownRect.left;
             menuPt.y = pData->settingsSubDropdownRect.bottom;
@@ -19803,38 +19818,38 @@ title = L"CPU Limit %";
 
         for (int i = 0; i < 8; ++i) {
             if (pData->gridHelpButtonRects[i].left != 0 && PtInRect(&pData->gridHelpButtonRects[i], pt)) {
-                const wchar_t* title = L"Help";
+                const wchar_t* title = TR(L"Help");
                 const wchar_t* text = L"";
                 if (i == 0) {
-                    title = L"Force Small Window";
-                    text = L"Forces Roblox windows displayed in a grid to absolute sizes (no limits, can be any, even 10x10) to fit windows tightly on the monitor.";
+                    title = TR(L"Force Small Window");
+                    text = TR(L"Forces Roblox windows displayed in a grid to absolute sizes (no limits, can be any, even 10x10) to fit windows tightly on the monitor.");
                 } else if (i == 1) {
-                    title = L"Use All Monitors";
-                    text = L"Spreads the gridded Roblox windows across all active monitors instead of stacking them only on the active display (the display where the cursor is located when Grid Snap starts).";
+                    title = TR(L"Use All Monitors");
+                    text = TR(L"Spreads the gridded Roblox windows across all active monitors instead of stacking them only on the active display (the display where the cursor is located when Grid Snap starts).");
                 } else if (i == 2) {
-                    title = L"Keep 4:3 Aspect Ratio";
-                    text = L"Keeps the standard 4:3 aspect ratio of Roblox windows when fitting them into the grid. If disabled, windows will stretch to fill the screen space as much as possible.";
+                    title = TR(L"Keep 4:3 Aspect Ratio");
+                    text = TR(L"Keeps the standard 4:3 aspect ratio of Roblox windows when fitting them into the grid. If disabled, windows will stretch to fill the screen space as much as possible.");
                 } else if (i == 3) {
-                    title = L"Grid Mode";
-                    text = L"Determines how gridded Roblox windows are sized and placed:\n\n"
+                    title = TR(L"Grid Mode");
+                    text = TR(L"Determines how gridded Roblox windows are sized and placed:\n\n"
                            L" Auto: Automatically fits and resizes all windows to fill the screen.\n"
                            L" Fixed window size: Resizes windows to the exact width and height specified.\n"
                            L" Fixed columns: Fits windows into a specified number of columns.\n"
                            L" Fixed rows: Fits windows into a specified number of rows.\n"
                            L" Fixed window width: Fits windows with a fixed width, calculating height automatically.\n"
-                           L" Fixed window height: Fits windows with a fixed height, calculating width automatically.";
+                           L" Fixed window height: Fits windows with a fixed height, calculating width automatically.");
                 } else if (i == 4) {
-                    title = L"Grid Mode Value";
-                    text = L"Defines the numeric parameter for the active Grid Mode (e.g. column/row counts or window width/height in pixels).";
+                    title = TR(L"Grid Mode Value");
+                    text = TR(L"Defines the numeric parameter for the active Grid Mode (e.g. column/row counts or window width/height in pixels).");
                 } else if (i == 5) {
-                    title = L"Spacing Between";
-                    text = L"Sets the outer gap (in pixels) between gridded windows.";
+                    title = TR(L"Spacing Between");
+                    text = TR(L"Sets the outer gap (in pixels) between gridded windows.");
                 } else if (i == 6) {
-                    title = L"Spacing From Borders";
-                    text = L"Sets the outer margin (in pixels) around the edges of the screen.";
+                    title = TR(L"Spacing From Borders");
+                    text = TR(L"Sets the outer margin (in pixels) around the edges of the screen.");
                 } else if (i == 7) {
-                    title = L"Grid Hotkey";
-                    text = L"Global hotkey to apply the window grid layout to all Roblox windows instantly.\n\nSame effect as Grid Snap Roblox*. Click the pencil to record a new key combination.";
+                    title = TR(L"Grid Hotkey");
+                    text = TR(L"Global hotkey to apply the window grid layout to all Roblox windows instantly.\n\nSame effect as Grid Snap Roblox*. Click the pencil to record a new key combination.");
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -19866,12 +19881,12 @@ title = L"CPU Limit %";
 
         if (PtInRect(&pData->gridModeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 0 ? MF_CHECKED : 0), 1001, L"Auto (fit to screen)");
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 1 ? MF_CHECKED : 0), 1002, L"Fixed window size");
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 2 ? MF_CHECKED : 0), 1003, L"Fixed columns");
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 3 ? MF_CHECKED : 0), 1004, L"Fixed rows");
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 4 ? MF_CHECKED : 0), 1005, L"Fixed window width");
-            AppendMenu(hMenu, MF_STRING | (g_gridMode == 5 ? MF_CHECKED : 0), 1006, L"Fixed window height");
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 0 ? MF_CHECKED : 0), 1001, TR(L"Auto (fit to screen)"));
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 1 ? MF_CHECKED : 0), 1002, TR(L"Fixed window size"));
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 2 ? MF_CHECKED : 0), 1003, TR(L"Fixed columns"));
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 3 ? MF_CHECKED : 0), 1004, TR(L"Fixed rows"));
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 4 ? MF_CHECKED : 0), 1005, TR(L"Fixed window width"));
+            AppendMenu(hMenu, MF_STRING | (g_gridMode == 5 ? MF_CHECKED : 0), 1006, TR(L"Fixed window height"));
 
             POINT menuPt = { pData->gridModeDropdownRect.left, pData->gridModeDropdownRect.bottom };
             ClientToScreen(hwnd, &menuPt);
@@ -19936,29 +19951,29 @@ title = L"CPU Limit %";
 
         for (int i = 0; i < 7; ++i) {
             if (pData->statusBarSettingsHelpButtonRects[i].left != 0 && PtInRect(&pData->statusBarSettingsHelpButtonRects[i], pt)) {
-                const wchar_t* title = L"Help";
+                const wchar_t* title = TR(L"Help");
                 const wchar_t* text = L"";
                 if (i == 0) {
-                    title = L"App icon";
-                    text = L"Shows the AntiAFK-RBX logo on the left side of the Status Bar overlay.\n\nTurn off for a more minimal look.";
+                    title = TR(L"App icon");
+                    text = TR(L"Shows the AntiAFK-RBX logo on the left side of the Status Bar overlay.\n\nTurn off for a more minimal look.");
                 } else if (i == 1) {
-                    title = L"Program name";
-                    text = L"Shows the AntiAFK-RBX name inside the Status Bar overlay.\n\nTurn it off if you want the overlay to show only the event text (useful for screen recordings and streams).";
+                    title = TR(L"Program name");
+                    text = TR(L"Shows the AntiAFK-RBX name inside the Status Bar overlay.\n\nTurn it off if you want the overlay to show only the event text (useful for screen recordings and streams).");
                 } else if (i == 2) {
-                    title = L"Events: Start & Stop";
-                    text = L"Session lifecycle messages:\n\n- Anti-AFK started / stopped manually\n- Auto-started when Roblox opens or after inactivity\n- Auto-stopped when Roblox closes or window is not found";
+                    title = TR(L"Events: Start & Stop");
+                    text = TR(L"Session lifecycle messages:\n\n- Anti-AFK started / stopped manually\n- Auto-started when Roblox opens or after inactivity\n- Auto-stopped when Roblox closes or window is not found");
                 } else if (i == 3) {
-                    title = L"Events: Actions";
-                    text = L"Messages around each anti-AFK action cycle:\n\n- Waiting countdown while User-Safe mode holds the action\n- Performing anti-AFK action\n- Action cancelled\n\nTurn off if you only care about session events.";
+                    title = TR(L"Events: Actions");
+                    text = TR(L"Messages around each anti-AFK action cycle:\n\n- Waiting countdown while User-Safe mode holds the action\n- Performing anti-AFK action\n- Action cancelled\n\nTurn off if you only care about session events.");
                 } else if (i == 4) {
-                    title = L"Events: Auto-Reconnect";
-                    text = L"Shown when Auto Reconnect detects a kick/disconnect dialog and presses the Reconnect button, and when a manual reconnect check runs.";
+                    title = TR(L"Events: Auto-Reconnect");
+                    text = TR(L"Shown when Auto Reconnect detects a kick/disconnect dialog and presses the Reconnect button, and when a manual reconnect check runs.");
                 } else if (i == 5) {
-                    title = L"Events: Macros";
-                    text = L"Everything macro-related: recording progress, macro saved/deleted/exported/imported, test runs and wizard validation messages.";
+                    title = TR(L"Events: Macros");
+                    text = TR(L"Everything macro-related: recording progress, macro saved/deleted/exported/imported, test runs and wizard validation messages.");
                 } else if (i == 6) {
-                    title = L"Events: Interface feedback";
-                    text = L"Reactions to your button clicks and setting changes: Roblox window found/hidden/shown/muted, FPS capped, hotkey recorded, settings imported/exported, webhook toggled and similar messages.";
+                    title = TR(L"Events: Interface feedback");
+                    text = TR(L"Reactions to your button clicks and setting changes: Roblox window found/hidden/shown/muted, FPS capped, hotkey recorded, settings imported/exported, webhook toggled and similar messages.");
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -20045,7 +20060,7 @@ title = L"CPU Limit %";
         if (webhookEnabled && PtInRect(&pData->discordWebhookPasteRect, pt)) {
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(hwnd, clipboardText)) {
-                ShowDarkMessageBox(hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, TR(L"Clipboard does not contain Unicode text right now."), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
                 return;
             }
 
@@ -20073,12 +20088,12 @@ title = L"CPU Limit %";
         if (webhookEnabled && PtInRect(&pData->discordWebhookTestRect, pt)) {
             std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
             if (!IsDiscordWebhookUrl(webhookUrl)) {
-                ShowDarkMessageBox(hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, TR(L"Enter a valid Discord webhook URL first."), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
                 return;
             }
 
-            QueueStatusBarOverlay(L"Sending test webhook...", 2500, hwnd, StatusBarEventType::Ui);
-            QueueWebhookTestAsync(webhookUrl, L"the Discord tab");
+            QueueStatusBarOverlay(TR(L"Sending test webhook..."), 2500, hwnd, StatusBarEventType::Ui);
+            QueueWebhookTestAsync(webhookUrl, TR(L"the Discord tab"));
             return;
         }
 
@@ -20126,57 +20141,58 @@ title = L"CPU Limit %";
 
     for (int i = 0; i < pData->helpButtonRects.size(); ++i) {
         if (PtInRect(&pData->helpButtonRects[i], pt)) {
-            const wchar_t* title = L"Help";
-            const wchar_t* text = L"No help text available for this setting.";
+            const wchar_t* title = TR(L"Help");
+            const wchar_t* text = TR(L"No help text available for this setting.");
             if (pData->currentPage == 0) { // General
-                if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so the interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
-                if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
-                if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
-                if (i == 3) { title = L"Macros"; text = L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Custom Macro*' in the Action menu."; }
-                if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance Anti-AFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for multi-instance setups."; }
-                if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
-                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farming and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
+                if (i == 0) { title = TR(L"Interval"); text = TR(L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so the interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."); }
+                if (i == 1) { title = TR(L"Action"); text = TR(L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"); }
+                if (i == 2) { title = TR(L"Multi-Instance bypass"); text = TR(L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."); }
+                if (i == 3) { title = TR(L"Macros"); text = TR(L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Custom Macro*' in the Action menu."); }
+                if (i == 4) { title = TR(L"Instance Manager (Beta)"); text = TR(L"Per-instance Anti-AFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for multi-instance setups."); }
+                if (i == 5) { title = TR(L"Timings"); text = TR(L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."); }
+                if (i == 6) { title = TR(L"Simple Mode"); text = TR(L"Simplifies the interface by hiding farming and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."); }
             } else if (pData->currentPage == 1) { // Auto+Utils
-                if (i == 0) { title = L"Auto-Start Anti-AFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."; }
-                if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
-                if (i == 2) { title = L"Reset in all"; text = L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/. Use only in games where respawning is harmless (obby, simulator, etc.)."; }
-                if (i == 3) { title = L"Hide/Show Roblox"; text = L"Hides Roblox windows (not minimizes) when Anti-AFK starts, so they run in the background without stealing focus or cluttering the taskbar.\n\nShow them again from the tray menu or the Show Roblox button. Windows are not closed - they keep running."; }
-                if (i == 4) { title = L"Enable Opacity"; text = L"Applies 70% opacity to all current and future Roblox windows during the Anti-AFK session.\n\nVisual reminder that AntiAFK-RBX is in control. New Roblox windows opened later automatically match, so you don't have to toggle it manually each time.\n\nWarning: when combined with Auto-Reconnect, the kick-dialog screen-grabber may mis-read the dark transparent window as the kick dialog and skip the reconnect. If Reconnect stops working reliably, disable Opacity first."; }
-                if (i == 5) { title = L"Grid Roblox*"; text = L"Experimental: auto-arranges Roblox windows in a grid layout whenever the set of detected windows changes (a window opens, closes, or moves).\n\nEspecially helpful for multi-instance setups. Click the gear icon to choose columns, screen, padding, and which monitor to use."; }
-                if (i == 6) { title = L"Mute Roblox"; text = L"Mutes every detected Roblox window when Anti-AFK starts, restores audio when it stops."; }
-                if (i == 7) { title = L"FPS Capper (CPU Limiter)"; text = L"Lowers Roblox's CPU usage by suspending threads in a duty cycle (like BES), capping the FPS to reduce heat.\n\nPresets: 3, 5, 7, 10, 15 FPS or a custom value (0-60). Works by influencing process timing, so the actual FPS may fluctuate around the cap."; }
-                if (i == 8) { title = L"RAM Cleaner"; text = L"Automatically optimizes Roblox's RAM usage to keep clients low-RAM during long sessions.\n\nChoose the strategy and thresholds in Advanced > RAM Cleaner Mode. Smart Clean reacts to RAM spikes, Time Cycle runs on a fixed timer, Hybrid does both."; };
+                if (i == 0) { title = TR(L"Auto-Start Anti-AFK"); text = TR(L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."); }
+                if (i == 1) { title = TR(L"Auto Reconnect*"); text = TR(L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."); }
+                if (i == 2) { title = TR(L"Reset in all"); text = TR(L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/. Use only in games where respawning is harmless (obby, simulator, etc.)."); }
+                if (i == 3) { title = TR(L"Hide/Show Roblox"); text = TR(L"Hides Roblox windows (not minimizes) when Anti-AFK starts, so they run in the background without stealing focus or cluttering the taskbar.\n\nShow them again from the tray menu or the Show Roblox button. Windows are not closed - they keep running."); }
+                if (i == 4) { title = TR(L"Enable Opacity"); text = TR(L"Applies 70% opacity to all current and future Roblox windows during the Anti-AFK session.\n\nVisual reminder that AntiAFK-RBX is in control. New Roblox windows opened later automatically match, so you don't have to toggle it manually each time.\n\nWarning: when combined with Auto-Reconnect, the kick-dialog screen-grabber may mis-read the dark transparent window as the kick dialog and skip the reconnect. If Reconnect stops working reliably, disable Opacity first."); }
+                if (i == 5) { title = TR(L"Grid Roblox*"); text = TR(L"Experimental: auto-arranges Roblox windows in a grid layout whenever the set of detected windows changes (a window opens, closes, or moves).\n\nEspecially helpful for multi-instance setups. Click the gear icon to choose columns, screen, padding, and which monitor to use."); }
+                if (i == 6) { title = TR(L"Mute Roblox"); text = TR(L"Mutes every detected Roblox window when Anti-AFK starts, restores audio when it stops."); }
+                if (i == 7) { title = TR(L"FPS Capper (CPU Limiter)"); text = TR(L"Lowers Roblox's CPU usage by suspending threads in a duty cycle (like BES), capping the FPS to reduce heat.\n\nPresets: 3, 5, 7, 10, 15 FPS or a custom value (0-60). Works by influencing process timing, so the actual FPS may fluctuate around the cap."); }
+                if (i == 8) { title = TR(L"RAM Cleaner"); text = TR(L"Automatically optimizes Roblox's RAM usage to keep clients low-RAM during long sessions.\n\nChoose the strategy and thresholds in Advanced > RAM Cleaner Mode. Smart Clean reacts to RAM spikes, Time Cycle runs on a fixed timer, Hybrid does both."); };
             } else if (pData->currentPage == 2) { // Misc
-                if (i == 0) { title = L"Update/Announcement Checker"; text = L"Checks for AntiAFK-RBX updates and announcements on startup.\n\nManual check is still available from About window. Disable only if you're on a restricted/offline setup - disabling means you won't get critical bug-fix or security notices."; }
-                if (i == 1) { title = L"Close All Roblox"; text = L"Closes every running Roblox window at once.\n\nSends a normal close request first, then force-terminates any that ignore it."; }
-                if (i == 2) { title = L"Do Not Sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."; }
-                if (i == 3) { title = L"I Can Forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start Anti-AFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."; }
-                if (i == 4) { title = L"Skip Active"; text = L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
-                if (i == 5) { title = L"Fish/Void/Bloxstrap Integration"; text = L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."; }
-                if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
-                if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
+                if (i == 0) { title = TR(L"Update/Announcement Checker"); text = TR(L"Checks for AntiAFK-RBX updates and announcements on startup.\n\nManual check is still available from About window. Disable only if you're on a restricted/offline setup - disabling means you won't get critical bug-fix or security notices."); }
+                if (i == 1) { title = TR(L"Close All Roblox"); text = TR(L"Closes every running Roblox window at once.\n\nSends a normal close request first, then force-terminates any that ignore it."); }
+                if (i == 2) { title = TR(L"Do Not Sleep"); text = TR(L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."); }
+                if (i == 3) { title = TR(L"I Can Forget"); text = TR(L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start Anti-AFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."); }
+                if (i == 4) { title = TR(L"Skip Active"); text = TR(L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."); }
+                if (i == 5) { title = TR(L"Fish/Void/Bloxstrap Integration"); text = TR(L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."); }
+                if (i == 6) { title = TR(L"Restore Window"); text = TR(L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."); }
+                if (i == 7) { title = TR(L"Screen Saver"); text = TR(L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."); }
             } else if (pData->currentPage == 3) { // Advanced
-                if (i == 0) { title = L"User Interface"; text = L"Interface preferences that don't affect Anti-AFK behaviour.\n\n- Disable Splash-Screen: skip the startup loading window.\n- Disable Acrylic Blur: solid window background instead of the acrylic blur effect (applied immediately).\n- Disable UI Animations: all interface transitions become instant.\n- Disable Tray Notifications: no balloon tips near the tray icon.\n- Keep Window On Top: keep the main window above all other windows.\n- Disable Rounded Corners: square window corners instead of the rounded Windows 11 style."; }
-                if (i == 1) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
-                if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
-                if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
-                if (i == 4) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
-                if (i == 5) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
+                if (i == 0) { title = TR(L"User Interface"); text = TR(L"Interface preferences that don't affect Anti-AFK behaviour.\n\n- Disable Splash-Screen: skip the startup loading window.\n- Disable Acrylic Blur: solid window background instead of the acrylic blur effect (applied immediately).\n- Disable UI Animations: all interface transitions become instant.\n- Disable Tray Notifications: no balloon tips near the tray icon.\n- Keep Window On Top: keep the main window above all other windows.\n- Disable Rounded Corners: square window corners instead of the rounded Windows 11 style."); }
+                if (i == 1) { title = TR(L"Status Bar*"); text = TR(L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."); }
+                if (i == 2) { title = TR(L"Custom Process Search"); text = TR(L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."); }
+                if (i == 3) { title = TR(L"User-Safe Mode"); text = TR(L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."); }
+                if (i == 4) { title = TR(L"Action Delays & Repeats"); text = TR(L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."); }
+                if (i == 5) { title = TR(L"Hotkey"); text = TR(L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."); }
+                if (i == 6) { title = kLanguageSettingTitle; text = TR(L"Switches the interface language between English and Russian. The change applies instantly.\n\nRussian translation by x0doit."); }
             } else if (pData->currentPage == 5) { // Discord
-                if (i == 0) { title = L"Enable webhook"; text = L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."; }
-                if (i == 1) { title = L"Start / Stop"; text = L"Notifies Discord when Anti-AFK starts and stops.\n\nGood for basic remote monitoring - 2 messages per session, no spam."; }
-                if (i == 2) { title = L"Action"; text = L"Notifies Discord after every Anti-AFK cycle.\n\nProvides a detailed activity log. Can be noisy with short intervals (e.g. 1 message every 60 sec)."; }
-                if (i == 3) { title = L"Reconnect"; text = L"Notifies Discord when Auto Reconnect tries to press the reconnect button.\n\nUseful to see when Roblox needed recovery while you were away."; }
-                if (i == 4) { title = L"Errors"; text = L"Notifies Discord about important problems (Roblox not found, feature failures).\n\nRecommended for unattended setups, you'll be alerted only when something actually needs attention."; }
-                if (i == 5) { title = L"Macros"; text = L"Notifies Discord every time a macro is executed (cooldown, reconnect, or interval trigger).\n\nThe message includes the macro name and the Roblox window title."; }
-                if (i == 6) { title = L"Interval Macros"; text = L"Notifies Discord when interval macro mode is enabled or disabled (manually, or automatically with Anti-AFK start/stop)."; }
-                if (i == 7) { title = L"Disable embed"; text = L"Sends webhook messages as plain text instead of rich embeds.\n\nUse for simple log channels, mobile previews, or destinations where embeds are filtered or look too large."; }
-                if (i == 8) { title = L"Mention on errors"; text = L"Adds an @everyone (or whatever you add) mention for Error and Reconnect events. You can change @everyone to anything you want via the Configure mention target button to the right of the toggle."; }
-                if (i == 9) { title = L"Default name"; text = L"Omits the app username from webhook messages, so Discord shows the webhook's own name configured in Discord.\n\nOff: messages are posted as AntiAFK-RBX."; }
-                if (i == 10) { title = L"Default avatar"; text = L"Omits the app avatar from webhook messages, so Discord shows the webhook's own avatar configured in Discord.\n\nOff: messages use the AntiAFK-RBX icon."; }
-                if (i == 11) { title = L"Timestamp"; text = L"Adds a Discord timestamp (UTC) to embed messages, shown next to the event.\n\nOff: messages have no timestamp."; }
-                if (i == 12) { title = L"Heartbeat"; text = L"Sends a periodic status ping while Anti-AFK is running: session time, next action countdown and statistics.\n\nUseful to monitor that the app is alive. Set the interval with the clock button (5 to 1440 minutes). The first ping is sent after one full interval."; }
-                if (i == 13) { title = L"RAM Cleaner"; text = L"Notifies when the RAM Cleaner optimizes Roblox processes, including how many were cleaned."; }
+                if (i == 0) { title = TR(L"Enable webhook"); text = TR(L"Master switch for all Discord webhook sending.\n\nTurn off to keep the URL and options saved, but stop all webhook traffic. The per-event toggles below only work when this is on."); }
+                if (i == 1) { title = TR(L"Start / Stop"); text = TR(L"Notifies Discord when Anti-AFK starts and stops.\n\nGood for basic remote monitoring - 2 messages per session, no spam."); }
+                if (i == 2) { title = TR(L"Action"); text = TR(L"Notifies Discord after every Anti-AFK cycle.\n\nProvides a detailed activity log. Can be noisy with short intervals (e.g. 1 message every 60 sec)."); }
+                if (i == 3) { title = TR(L"Reconnect"); text = TR(L"Notifies Discord when Auto Reconnect tries to press the reconnect button.\n\nUseful to see when Roblox needed recovery while you were away."); }
+                if (i == 4) { title = TR(L"Errors"); text = TR(L"Notifies Discord about important problems (Roblox not found, feature failures).\n\nRecommended for unattended setups, you'll be alerted only when something actually needs attention."); }
+                if (i == 5) { title = TR(L"Macros"); text = TR(L"Notifies Discord every time a macro is executed (cooldown, reconnect, or interval trigger).\n\nThe message includes the macro name and the Roblox window title."); }
+                if (i == 6) { title = TR(L"Interval Macros"); text = TR(L"Notifies Discord when interval macro mode is enabled or disabled (manually, or automatically with Anti-AFK start/stop)."); }
+                if (i == 7) { title = TR(L"Disable embed"); text = TR(L"Sends webhook messages as plain text instead of rich embeds.\n\nUse for simple log channels, mobile previews, or destinations where embeds are filtered or look too large."); }
+                if (i == 8) { title = TR(L"Mention on errors"); text = TR(L"Adds an @everyone (or whatever you add) mention for Error and Reconnect events. You can change @everyone to anything you want via the Configure mention target button to the right of the toggle."); }
+                if (i == 9) { title = TR(L"Default name"); text = TR(L"Omits the app username from webhook messages, so Discord shows the webhook's own name configured in Discord.\n\nOff: messages are posted as AntiAFK-RBX."); }
+                if (i == 10) { title = TR(L"Default avatar"); text = TR(L"Omits the app avatar from webhook messages, so Discord shows the webhook's own avatar configured in Discord.\n\nOff: messages use the AntiAFK-RBX icon."); }
+                if (i == 11) { title = TR(L"Timestamp"); text = TR(L"Adds a Discord timestamp (UTC) to embed messages, shown next to the event.\n\nOff: messages have no timestamp."); }
+                if (i == 12) { title = TR(L"Heartbeat"); text = TR(L"Sends a periodic status ping while Anti-AFK is running: session time, next action countdown and statistics.\n\nUseful to monitor that the app is alive. Set the interval with the clock button (5 to 1440 minutes). The first ping is sent after one full interval."); }
+                if (i == 13) { title = TR(L"RAM Cleaner"); text = TR(L"Notifies when the RAM Cleaner optimizes Roblox processes, including how many were cleaned."); }
             }
             ShowDarkMessageBox(hwnd, text, title, MB_OK);
             return;
@@ -20269,10 +20285,10 @@ title = L"CPU Limit %";
         if (PtInRect(&pData->restoreMethodDropdownRect, pt)) {
             if (smRedirectPage2()) return;
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, L"Off");
+            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, TR(L"Off"));
             AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 1 ? MF_CHECKED : 0), ID_RESTORE_FOREGROUND, L"SetForeground");
-            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, L"Alt+Tab (Legacy) - single tab");
-            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 3 ? MF_CHECKED : 0), ID_RESTORE_SMART_ALTTAB, L"Smart Alt+Tab - skip all Roblox");
+            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, TR(L"Alt+Tab (Legacy) - single tab"));
+            AppendMenu(hMenu, MF_STRING | (g_restoreMethod.load() == 3 ? MF_CHECKED : 0), ID_RESTORE_SMART_ALTTAB, TR(L"Smart Alt+Tab - skip all Roblox"));
             POINT menuPt;
             menuPt.x = pData->restoreMethodDropdownRect.left;
             menuPt.y = pData->restoreMethodDropdownRect.bottom;
@@ -20338,15 +20354,15 @@ title = L"CPU Limit %";
     if (pData->currentPage == 0) {
         if (PtInRect(&pData->intervalDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING, ID_TIME_CUSTOM, L"Custom interval...");
+            AppendMenu(hMenu, MF_STRING, ID_TIME_CUSTOM, TR(L"Custom interval..."));
             AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, L"3 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, L"6 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, L"9 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 11 * 60 ? MF_CHECKED : 0), ID_TIME_11, L"11 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 13 * 60 ? MF_CHECKED : 0), ID_TIME_13, L"13 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 15 * 60 ? MF_CHECKED : 0), ID_TIME_15, L"15 minutes");
-            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 18 * 60 ? MF_CHECKED : 0), ID_TIME_18, L"18 minutes");
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, TR(L"3 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, TR(L"6 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, TR(L"9 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 11 * 60 ? MF_CHECKED : 0), ID_TIME_11, TR(L"11 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 13 * 60 ? MF_CHECKED : 0), ID_TIME_13, TR(L"13 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 15 * 60 ? MF_CHECKED : 0), ID_TIME_15, TR(L"15 minutes"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 18 * 60 ? MF_CHECKED : 0), ID_TIME_18, TR(L"18 minutes"));
             POINT menuPt;
             menuPt.x = pData->intervalDropdownRect.left;
             menuPt.y = pData->intervalDropdownRect.bottom;
@@ -20358,12 +20374,12 @@ title = L"CPU Limit %";
         }
         if (PtInRect(&pData->actionDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, TR(L"Space (Jump)"));
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
-            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
-            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, TR(L"Zoom (I/O)"));
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, TR(L"Random*"));
             AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, TR(L"Macros Only"));
             POINT menuPt;
             menuPt.x = pData->actionDropdownRect.left;
             menuPt.y = pData->actionDropdownRect.bottom;
@@ -20387,7 +20403,7 @@ title = L"CPU Limit %";
                 ClearMutexBanner();
                 MutexCreateResult retryResult = EnableMultiInstanceSupport();
                 if (retryResult != MUTEX_CREATED && retryResult != MUTEX_ALREADY_EXISTS) {
-                    ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
+                    ShowMutexBanner(TR(L"Mutex registration failed"), TR(L"Could not register the singleton mutex"), false);
                 }
             } else {
                 bool hasError = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
@@ -20402,7 +20418,7 @@ title = L"CPU Limit %";
                 } else {
                     MutexCreateResult retryResult = EnableMultiInstanceSupport();
                     if (retryResult != MUTEX_CREATED && retryResult != MUTEX_ALREADY_EXISTS) {
-                        ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
+                        ShowMutexBanner(TR(L"Mutex registration failed"), TR(L"Could not register the singleton mutex"), false);
                     }
                 }
             }
@@ -20462,11 +20478,25 @@ title = L"CPU Limit %";
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
+        if (PtInRect(&pData->languageDropdownRect, pt)) {
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING | (!IsRussianUi() ? MF_CHECKED : 0), ID_LANGUAGE_ENGLISH, kLanguageNameEnglish);
+            AppendMenu(hMenu, MF_STRING | (IsRussianUi() ? MF_CHECKED : 0), ID_LANGUAGE_RUSSIAN, kLanguageNameRussian);
+            POINT menuPt;
+            menuPt.x = pData->languageDropdownRect.left;
+            menuPt.y = pData->languageDropdownRect.bottom;
+            ClientToScreen(hwnd, &menuPt);
+            TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+            PostMessage(g_hwnd, WM_NULL, 0, 0);
+            DestroyMenu(hMenu);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return;
+        }
         if (PtInRect(&pData->userSafeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
-            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, L"Beta");
-            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, L"Legacy");
+            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, TR(L"Off"));
+            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, TR(L"Beta"));
+            AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, TR(L"Legacy"));
             POINT menuPt;
             menuPt.x = pData->userSafeDropdownRect.left;
             menuPt.y = pData->userSafeDropdownRect.bottom;
@@ -20641,7 +20671,7 @@ static void MainUI_Paint_DrawGridHotkeyRow(HDC hdc, MainUIData* pData, Gdiplus::
     bool gkEn = g_hotkeyGridEnabled.load();
     bool recording = g_hotkeyCaptureActive.load() && g_hotkeyCaptureIsGrid.load();
 
-    MainUI_Paint_DrawToggle(hdc, pData->gridHotkeyToggleRect, pData->hFontText, L"Grid Hotkey", gkEn, pData->isHoveringGridHotkeyToggle, pData->gridHotkeyAnim, false, L"\uE80A", true, pG);
+    MainUI_Paint_DrawToggle(hdc, pData->gridHotkeyToggleRect, pData->hFontText, TR(L"Grid Hotkey"), gkEn, pData->isHoveringGridHotkeyToggle, pData->gridHotkeyAnim, false, L"\uE80A", true, pG);
 
     {
         RECT btn = pData->gridHotkeyChangeBtnRect;
@@ -21138,48 +21168,48 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         if (gridAnim > 0.0f) {
             SolidBrush textBrushGrid(Color((BYTE)(255 * gridAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX • Grid Settings", -1, &gdiFont, titleRect, &sf, &textBrushGrid);
+            g.DrawString(TR(L"AntiAFK-RBX • Grid Settings"), -1, &gdiFont, titleRect, &sf, &textBrushGrid);
         }
         if (settingsSubAnim > 0.0f) {
-            const wchar_t* settingsSubTitle = L"AntiAFK-RBX • Settings";
-            if (pData->settingsSubKind == 1) settingsSubTitle = L"AntiAFK-RBX • Multi-Instance Delay";
-            else if (pData->settingsSubKind == 2) settingsSubTitle = L"AntiAFK-RBX • RAM Cleaner";
-            else if (pData->settingsSubKind == 3) settingsSubTitle = L"AntiAFK-RBX • Reconnect Interval";
-            else if (pData->settingsSubKind == 4) settingsSubTitle = L"AntiAFK-RBX • User Interface";
+            const wchar_t* settingsSubTitle = TR(L"AntiAFK-RBX • Settings");
+            if (pData->settingsSubKind == 1) settingsSubTitle = TR(L"AntiAFK-RBX • Multi-Instance Delay");
+            else if (pData->settingsSubKind == 2) settingsSubTitle = TR(L"AntiAFK-RBX • RAM Cleaner");
+            else if (pData->settingsSubKind == 3) settingsSubTitle = TR(L"AntiAFK-RBX • Reconnect Interval");
+            else if (pData->settingsSubKind == 4) settingsSubTitle = TR(L"AntiAFK-RBX • User Interface");
             SolidBrush textBrushSub(Color((BYTE)(255 * settingsSubAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(settingsSubTitle, -1, &gdiFont, titleRect, &sf, &textBrushSub);
         }
         if (statusBarSettingsAnim > 0.0f) {
             SolidBrush textBrushSb(Color((BYTE)(255 * statusBarSettingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX • Status Bar Settings", -1, &gdiFont, titleRect, &sf, &textBrushSb);
+            g.DrawString(TR(L"AntiAFK-RBX • Status Bar Settings"), -1, &gdiFont, titleRect, &sf, &textBrushSb);
         }
         if (actionDelaysAnim > 0.0f) {
             SolidBrush textBrushDelays(Color((BYTE)(255 * actionDelaysAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX • Action Delays & Repeats", -1, &gdiFont, titleRect, &sf, &textBrushDelays);
+            g.DrawString(TR(L"AntiAFK-RBX • Action Delays & Repeats"), -1, &gdiFont, titleRect, &sf, &textBrushDelays);
         }
         if (fpsCapperSettingsAnim > 0.0f) {
             SolidBrush textBrushFps(Color((BYTE)(255 * fpsCapperSettingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX • FPS Capper (CPU Limiter)", -1, &gdiFont, titleRect, &sf, &textBrushFps);
+            g.DrawString(TR(L"AntiAFK-RBX • FPS Capper (CPU Limiter)"), -1, &gdiFont, titleRect, &sf, &textBrushFps);
         }
         if (alphaInfoAnim > 0.0f) {
             SolidBrush textBrushAlpha(Color((BYTE)(255 * alphaInfoAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             wchar_t aboutTitle[64];
-            swprintf_s(aboutTitle, L"AntiAFK-RBX • About • %ls", GetReleaseChannelName());
+            swprintf_s(aboutTitle, TR(L"AntiAFK-RBX • About • %ls"), GetReleaseChannelName());
             g.DrawString(aboutTitle, -1, &gdiFont, titleRect, &sf, &textBrushAlpha);
         }
         if (timingsAnim > 0.0f) {
             SolidBrush textBrushTimings(Color((BYTE)(255 * timingsAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            g.DrawString(L"AntiAFK-RBX • Timings", -1, &gdiFont, titleRect, &sf, &textBrushTimings);
+            g.DrawString(TR(L"AntiAFK-RBX • Timings"), -1, &gdiFont, titleRect, &sf, &textBrushTimings);
         }
         float macrosAnim = pData->macrosViewAnim;
         if (macrosAnim > 0.0f) {
             SolidBrush textBrushMacros(Color((BYTE)(255 * macrosAnim), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
-            const wchar_t* titleText = L"AntiAFK-RBX • Macros";
-            if (pData->macrosViewMode == 1) titleText = L"AntiAFK-RBX • New Macro: Name";
-            else if (pData->macrosViewMode == 2) titleText = g_macroReRecording ? L"AntiAFK-RBX • Re-record Macro" : L"AntiAFK-RBX • New Macro: Record";
-            else if (pData->macrosViewMode == 3) titleText = L"AntiAFK-RBX • New Macro: Review";
-            else if (pData->macrosViewMode == 4) titleText = L"AntiAFK-RBX • New Macro: Triggers";
-            else if (pData->macrosViewMode == 5) titleText = L"AntiAFK-RBX • Recording...";
+            const wchar_t* titleText = TR(L"AntiAFK-RBX • Macros");
+            if (pData->macrosViewMode == 1) titleText = TR(L"AntiAFK-RBX • New Macro: Name");
+            else if (pData->macrosViewMode == 2) titleText = g_macroReRecording ? TR(L"AntiAFK-RBX • Re-record Macro") : TR(L"AntiAFK-RBX • New Macro: Record");
+            else if (pData->macrosViewMode == 3) titleText = TR(L"AntiAFK-RBX • New Macro: Review");
+            else if (pData->macrosViewMode == 4) titleText = TR(L"AntiAFK-RBX • New Macro: Triggers");
+            else if (pData->macrosViewMode == 5) titleText = TR(L"AntiAFK-RBX • Recording...");
             g.DrawString(titleText, -1, &gdiFont, titleRect, &sf, &textBrushMacros);
         }
         float badgeAnim = pData->badgeRevealAnim;
@@ -21198,7 +21228,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             sfBadgeText.SetLineAlignment(StringAlignmentCenter);
             sfBadgeText.SetFormatFlags(StringFormatFlagsNoClip);
             RectF measureRect;
-            g.MeasureString(L"PREVIEW", -1, &badgeFont, PointF(0, 0), &sfBadgeText, &measureRect);
+            g.MeasureString(TR(L"PREVIEW"), -1, &badgeFont, PointF(0, 0), &sfBadgeText, &measureRect);
 
             float badgeH = 14.0f;
             float badgeW = measureRect.Width + 3.0f;
@@ -21206,7 +21236,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             float badgeX = cx - badgeW / 2.0f;
             float badgeY = 14.0f - badgeH / 2;
 
-            MainUI_Paint_DrawBadge(g, badgeX, badgeY, badgeH, L"PREVIEW", (int)(220 * badgeAnim));
+            MainUI_Paint_DrawBadge(g, badgeX, badgeY, badgeH, TR(L"PREVIEW"), (int)(220 * badgeAnim));
         }
 
         SelectObject(hdc, oldFont);
@@ -21216,8 +21246,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
     bool isStarted = g_isAfkStarted.load();
 
-    const wchar_t* startText = isStarted ? L"Stop" : L"Start";
-    const wchar_t* prevText = pData->previousAfkStartedState ? L"Stop" : L"Start";
+    const wchar_t* startText = isStarted ? TR(L"Stop") : TR(L"Start");
+    const wchar_t* prevText = pData->previousAfkStartedState ? TR(L"Stop") : TR(L"Start");
     COLORREF startColor_normal = isStarted ? RGB(200, 30, 30) : RGB(0, 122, 204);
     COLORREF startHoverColor_normal = isStarted ? RGB(230, 40, 40) : RGB(20, 142, 224);
     COLORREF currentStartColor_normal = pData->isHoveringStart ? startHoverColor_normal : startColor_normal;
@@ -21261,7 +21291,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     Font gdiSectionFont2(hdc, pData->hFontSection);
 
     if (overlayAnim > 0.0f) {
-        const wchar_t* overlayBtnText = isContinueBtn ? L"continue" : L"BACK";
+        const wchar_t* overlayBtnText = isContinueBtn ? TR(L"continue") : TR(L"BACK");
         SolidBrush overlayBrush(Color((BYTE)(255 * overlayAnim * (1.0f - progress)), 255, 255, 255));
         if (isContinueBtn) {
             HFONT hContinueFont = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
@@ -21360,7 +21390,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         {
-            int macrosBtnW = 58, macrosBtnH = 24;
+            int macrosBtnW = IsRussianUi() ? 84 : 58, macrosBtnH = 24;
             pData->macrosBtnRect = { clientRect.right - help_btn_size - 20 - macrosBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + macrosBtnH };
             int mCtrlTop = y + (rowH - help_btn_size) / 2 + 4;
             pData->macrosIntervalToggleCompactRect = { pData->macrosBtnRect.left - inlineGap - help_btn_size, mCtrlTop, pData->macrosBtnRect.left - inlineGap, mCtrlTop + help_btn_size };
@@ -21370,7 +21400,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         {
-            int instBtnW = 58, instBtnH = 24;
+            int instBtnW = IsRussianUi() ? 84 : 58, instBtnH = 24;
             pData->instanceManagerBtnRect = { clientRect.right - help_btn_size - 20 - instBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + instBtnH };
             pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         }
@@ -21378,7 +21408,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         {
-            int timingsBtnW = 58, timingsBtnH = 24;
+            int timingsBtnW = IsRussianUi() ? 84 : 58, timingsBtnH = 24;
             pData->timingsBtnRect = { clientRect.right - help_btn_size - 20 - timingsBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + timingsBtnH };
             pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         }
@@ -21498,7 +21528,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->closeAllRobloxRect = { 0, y, clientRect.right, y + rowH + vGap };
-        int closeBtnW = 58;
+        int closeBtnW = IsRussianUi() ? 84 : 58;
         int closeBtnH = 24;
         int closeGap = 0;
         pData->closeAllRobloxButtonRect = { clientRect.right - help_btn_size - 20 - closeGap - closeBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20 - closeGap, y + (rowH - help_btn_size) / 2 + 4 + closeBtnH };
@@ -21553,7 +21583,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->uiSettingsRowRect = { 0, y, clientRect.right, y + rowH + vGap };
-        pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - 58, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
+        pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - (IsRussianUi() ? 84 : 58), y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
         pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
@@ -21587,7 +21617,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->actionDelaysRowRect = { 0, y, clientRect.right, y + rowH + vGap };
-        pData->actionDelaysEditButtonRect = { clientRect.right - help_btn_size - 20 - 50, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
+        pData->actionDelaysEditButtonRect = { clientRect.right - help_btn_size - 20 - (IsRussianUi() ? 88 : 50), y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
         pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
 
@@ -21601,6 +21631,15 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             pData->helpButtonRects.push_back({ toggleX_rightEdge, y + (rowH - help_btn_size) / 2 + 4, toggleX_rightEdge + help_btn_size, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
         }
+
+        pData->hotkeyRowRect = pData->rowRects.back();
+
+        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+        controlTop = y + (rowH - help_btn_size) / 2 + 4;
+        controlBottom = controlTop + help_btn_size;
+        pData->languageDropdownRect = { ctrlEndX - 150 - help_btn_size, controlTop, ctrlEndX - help_btn_size, controlBottom };
+        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+        y += rowH + vGap;
 
 pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
 } else if (pData->currentPage == 4) { // Statistics
@@ -21716,7 +21755,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
     }
 
     const int total_nav_w = clientRect.right;
-    const int collapsed_w = 48;
+    const int collapsed_w = IsRussianUi() ? 40 : 48;
 
     const bool isHoveringAnotherTab = pData->hoveringNavItem != -1 && pData->hoveringNavItem != pData->currentPage;
     auto shouldExpandNavItem = [&](size_t index) {
@@ -21795,7 +21834,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             StringFormat sfText;
             sfText.SetAlignment(StringAlignmentNear);
             sfText.SetLineAlignment(StringAlignmentCenter);
-            g.DrawString(pData->navItems[i].title.c_str(), -1, &navFont, textRect, &sfText, &navBrushInner);
+            g.DrawString(TR(pData->navItems[i].title.c_str()), -1, &navFont, textRect, &sfText, &navBrushInner);
         } else {
             g.DrawString(pData->navItems[i].icon.c_str(), -1, &navIconFont, navItemRect, &sfIcon, &navBrushInner);
         }
@@ -21902,20 +21941,20 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            const wchar_t* presetLabels[] = { L"Default", L"Safe", L"Custom" };
-            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPresetDropdownRect, pData->hFontText, L"Action Preset", presetLabels[g_actionPreset.load()], pData->isHoveringPresetDropdown, true, L"\uE838", true, useOffsetG ? &dg : nullptr, 1);
+            const wchar_t* presetLabels[] = { TR(L"Default"), TR(L"Safe"), TR(L"Custom") };
+            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPresetDropdownRect, pData->hFontText, TR(L"Action Preset"), presetLabels[g_actionPreset.load()], pData->isHoveringPresetDropdown, true, L"\uE838", true, useOffsetG ? &dg : nullptr, 1);
 
-            wchar_t preText[64]; swprintf_s(preText, L"%d ms", g_preActionDelay.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPreActionDelayDropdownRect, pData->hFontText, L"Delay Before Action", preText, pData->isHoveringPreActionDelayDropdown, true, L"\uE7A7", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+            wchar_t preText[64]; swprintf_s(preText, TR(L"%d ms"), g_preActionDelay.load());
+            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPreActionDelayDropdownRect, pData->hFontText, TR(L"Delay Before Action"), preText, pData->isHoveringPreActionDelayDropdown, true, L"\uE7A7", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
 
-            wchar_t pressText[64]; swprintf_s(pressText, L"%d ms", g_keyPressDelay.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysKeyPressDelayDropdownRect, pData->hFontText, L"Key Press Delay", pressText, pData->isHoveringKeyPressDelayDropdown, true, L"\uE765", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+            wchar_t pressText[64]; swprintf_s(pressText, TR(L"%d ms"), g_keyPressDelay.load());
+            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysKeyPressDelayDropdownRect, pData->hFontText, TR(L"Key Press Delay"), pressText, pData->isHoveringKeyPressDelayDropdown, true, L"\uE765", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
 
-            wchar_t postText[64]; swprintf_s(postText, L"%d ms", g_postActionDelay.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPostActionDelayDropdownRect, pData->hFontText, L"Delay After Action", postText, pData->isHoveringPostActionDelayDropdown, true, L"\uE7A6", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+            wchar_t postText[64]; swprintf_s(postText, TR(L"%d ms"), g_postActionDelay.load());
+            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysPostActionDelayDropdownRect, pData->hFontText, TR(L"Delay After Action"), postText, pData->isHoveringPostActionDelayDropdown, true, L"\uE7A6", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
 
-            wchar_t repeatText[64]; swprintf_s(repeatText, L"%d times", g_actionRepeatCount.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysActionRepeatCountDropdownRect, pData->hFontText, L"Action Repeat Count", repeatText, pData->isHoveringActionRepeatCountDropdown, true, L"\uE9F3", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+            wchar_t repeatText[64]; swprintf_s(repeatText, TR(L"%d times"), g_actionRepeatCount.load());
+            MainUI_Paint_DrawDropdown(hdc, pData->actionDelaysActionRepeatCountDropdownRect, pData->hFontText, TR(L"Action Repeat Count"), repeatText, pData->isHoveringActionRepeatCountDropdown, true, L"\uE9F3", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
 
             for (int i = 0; i < 5; ++i) {
                 if (pData->actionDelaysHelpButtonRects[i].left != 0) {
@@ -22038,22 +22077,22 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            const wchar_t* modeLabel = g_cpuLimitMode.load() ? L"Beta (CPU Limit %)" : L"Legacy (FPS Target)";
-            MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperModeDropdownRect, pData->hFontText, L"Capper Mode", modeLabel, pData->isHoveringFpsCapperModeDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
+            const wchar_t* modeLabel = g_cpuLimitMode.load() ? TR(L"Beta (CPU Limit %)") : TR(L"Legacy (FPS Target)");
+            MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperModeDropdownRect, pData->hFontText, TR(L"Capper Mode"), modeLabel, pData->isHoveringFpsCapperModeDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
 
             if (g_cpuLimitMode.load()) {
                 wchar_t percentText[64]; swprintf_s(percentText, L"%d%%", g_cpuLimitPercent.load());
-                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperCpuPercentDropdownRect, pData->hFontText, L"CPU Limit %", percentText, pData->isHoveringFpsCapperCpuPercentDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperCpuPercentDropdownRect, pData->hFontText, TR(L"CPU Limit %"), percentText, pData->isHoveringFpsCapperCpuPercentDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
 
-                wchar_t periodText[64]; swprintf_s(periodText, L"%d ms", g_cpuLimitPeriod.load());
-                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperCpuPeriodDropdownRect, pData->hFontText, L"Cycle Period (ms)", periodText, pData->isHoveringFpsCapperCpuPeriodDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
+                wchar_t periodText[64]; swprintf_s(periodText, TR(L"%d ms"), g_cpuLimitPeriod.load());
+                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperCpuPeriodDropdownRect, pData->hFontText, TR(L"Cycle Period (ms)"), periodText, pData->isHoveringFpsCapperCpuPeriodDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1, 0, L"\uE70F");
             } else {
                 wchar_t limitText[64];
                 swprintf_s(limitText, L"%d FPS", g_fpsLimit > 0 ? g_fpsLimit.load() : g_fpsLastActiveLimit.load());
-                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperLimitDropdownRect, pData->hFontText, L"FPS Limit Preset", limitText, pData->isHoveringFpsCapperLimitDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
+                MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperLimitDropdownRect, pData->hFontText, TR(L"FPS Limit Preset"), limitText, pData->isHoveringFpsCapperLimitDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->fpsCapperUnlockFocusToggleRect, pData->hFontText, L"Unlock FPS on Focus", g_unlockFpsOnFocus.load(), pData->isHoveringFpsCapperUnlockFocusToggle, pData->fpsCapperUnlockFocusAnim, true, L"\uE950", true, useOffsetG ? &dg : nullptr);
+            MainUI_Paint_DrawToggle(hdc, pData->fpsCapperUnlockFocusToggleRect, pData->hFontText, TR(L"Unlock FPS on Focus"), g_unlockFpsOnFocus.load(), pData->isHoveringFpsCapperUnlockFocusToggle, pData->fpsCapperUnlockFocusAnim, true, L"\uE950", true, useOffsetG ? &dg : nullptr);
 
             for (int i = 0; i < 5; ++i) {
                 if (pData->fpsCapperSettingsHelpButtonRects[i].left != 0) {
@@ -22148,13 +22187,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->sbIconToggleRect, pData->hFontText, L"App icon", g_statusBarShowIcon.load(), pData->isHoveringSbIcon, pData->sbIconAnim, false, L"\uE7F4", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbBrandToggleRect, pData->hFontText, L"Program name", g_statusBarShowBrand.load(), pData->isHoveringSbBrand, pData->sbBrandAnim, false, L"\uE8AC", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbSessionToggleRect, pData->hFontText, L"Events: Start & Stop", g_statusBarEventSession.load(), pData->isHoveringSbSession, pData->sbSessionAnim, false, L"\uE768", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbActionToggleRect, pData->hFontText, L"Events: Actions", g_statusBarEventAction.load(), pData->isHoveringSbAction, pData->sbActionAnim, false, L"\uE765", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbReconnectToggleRect, pData->hFontText, L"Events: Auto-Reconnect", g_statusBarEventReconnect.load(), pData->isHoveringSbReconnect, pData->sbReconnectAnim, false, L"\uE8AF", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbMacroToggleRect, pData->hFontText, L"Events: Macros", g_statusBarEventMacro.load(), pData->isHoveringSbMacro, pData->sbMacroAnim, false, L"\uE7C9", true, &sbg);
-            MainUI_Paint_DrawToggle(hdc, pData->sbUiToggleRect, pData->hFontText, L"Events: Interface feedback", g_statusBarEventUi.load(), pData->isHoveringSbUi, pData->sbUiAnim, false, L"\uE713", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbIconToggleRect, pData->hFontText, TR(L"App icon"), g_statusBarShowIcon.load(), pData->isHoveringSbIcon, pData->sbIconAnim, false, L"\uE7F4", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbBrandToggleRect, pData->hFontText, TR(L"Program name"), g_statusBarShowBrand.load(), pData->isHoveringSbBrand, pData->sbBrandAnim, false, L"\uE8AC", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbSessionToggleRect, pData->hFontText, TR(L"Events: Start & Stop"), g_statusBarEventSession.load(), pData->isHoveringSbSession, pData->sbSessionAnim, false, L"\uE768", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbActionToggleRect, pData->hFontText, TR(L"Events: Actions"), g_statusBarEventAction.load(), pData->isHoveringSbAction, pData->sbActionAnim, false, L"\uE765", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbReconnectToggleRect, pData->hFontText, TR(L"Events: Auto-Reconnect"), g_statusBarEventReconnect.load(), pData->isHoveringSbReconnect, pData->sbReconnectAnim, false, L"\uE8AF", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbMacroToggleRect, pData->hFontText, TR(L"Events: Macros"), g_statusBarEventMacro.load(), pData->isHoveringSbMacro, pData->sbMacroAnim, false, L"\uE7C9", true, &sbg);
+            MainUI_Paint_DrawToggle(hdc, pData->sbUiToggleRect, pData->hFontText, TR(L"Events: Interface feedback"), g_statusBarEventUi.load(), pData->isHoveringSbUi, pData->sbUiAnim, false, L"\uE713", true, &sbg);
 
             for (int i = 0; i < 7; ++i) {
                 if (pData->statusBarSettingsHelpButtonRects[i].left != 0) {
@@ -22304,19 +22343,19 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, L"Force small window", g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F", true, &gridG);
-            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, L"Use all monitors", g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E", true, &gridG);
-            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, L"Keep 4:3 aspect ratio", g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799", true, &gridG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, TR(L"Force small window"), g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F", true, &gridG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, TR(L"Use all monitors"), g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E", true, &gridG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, TR(L"Keep 4:3 aspect ratio"), g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799", true, &gridG);
 
             const wchar_t* modeLabels[6] = {
-                L"Auto (fit to screen)",
-                L"Fixed window size",
-                L"Fixed columns",
-                L"Fixed rows",
-                L"Fixed window width",
-                L"Fixed window height"
+                TR(L"Auto (fit to screen)"),
+                TR(L"Fixed window size"),
+                TR(L"Fixed columns"),
+                TR(L"Fixed rows"),
+                TR(L"Fixed window width"),
+                TR(L"Fixed window height")
             };
-            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, L"Grid Mode", modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, &gridG, 1);
+            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, TR(L"Grid Mode"), modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, &gridG, 1);
 
             if (currentMode > 0) {
                 wchar_t valText[64] = {0};
@@ -22326,21 +22365,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 else if (currentMode == 4) swprintf_s(valText, L"%d", g_gridFixedWinW.load());
                 else if (currentMode == 5) swprintf_s(valText, L"%d", g_gridFixedWinH.load());
 
-                const wchar_t* valLabel = L"Value";
-                if (currentMode == 1) valLabel = L"Window Size";
-                else if (currentMode == 2) valLabel = L"Columns Count";
-                else if (currentMode == 3) valLabel = L"Rows Count";
-                else if (currentMode == 4) valLabel = L"Window Width";
-                else if (currentMode == 5) valLabel = L"Window Height";
+                const wchar_t* valLabel = TR(L"Value");
+                if (currentMode == 1) valLabel = TR(L"Window Size");
+                else if (currentMode == 2) valLabel = TR(L"Columns Count");
+                else if (currentMode == 3) valLabel = TR(L"Rows Count");
+                else if (currentMode == 4) valLabel = TR(L"Window Width");
+                else if (currentMode == 5) valLabel = TR(L"Window Height");
 
                 MainUI_Paint_DrawDropdown(hdc, pData->gridModeValueDropdownRect, pData->hFontText, valLabel, valText, pData->isHoveringGridModeValue, true, L"\uE75D", true, &gridG, 1, 0, L"\uE70F");
             }
 
             wchar_t betweenText[32]; swprintf_s(betweenText, L"%d px", g_gridSpacingBetween.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, L"Spacing between", betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, &gridG, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, TR(L"Spacing between"), betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, &gridG, 1, 0, L"\uE70F");
 
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &gridG, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, TR(L"Spacing from borders"), bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &gridG, 1, 0, L"\uE70F");
 
             MainUI_Paint_DrawGridHotkeyRow(hdc, pData, &gridG);
 
@@ -22394,19 +22433,19 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, L"Force small window", g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F");
-            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, L"Use all monitors", g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E");
-            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, L"Keep 4:3 aspect ratio", g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799");
+            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, TR(L"Force small window"), g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F");
+            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, TR(L"Use all monitors"), g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E");
+            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, TR(L"Keep 4:3 aspect ratio"), g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799");
 
             const wchar_t* modeLabels[6] = {
-                L"Auto (fit to screen)",
-                L"Fixed window size",
-                L"Fixed columns",
-                L"Fixed rows",
-                L"Fixed window width",
-                L"Fixed window height"
+                TR(L"Auto (fit to screen)"),
+                TR(L"Fixed window size"),
+                TR(L"Fixed columns"),
+                TR(L"Fixed rows"),
+                TR(L"Fixed window width"),
+                TR(L"Fixed window height")
             };
-            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, L"Grid Mode", modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, nullptr, 1);
+            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, TR(L"Grid Mode"), modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, nullptr, 1);
 
             if (currentMode > 0) {
                 wchar_t valText[64] = {0};
@@ -22416,21 +22455,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 else if (currentMode == 4) swprintf_s(valText, L"%d", g_gridFixedWinW.load());
                 else if (currentMode == 5) swprintf_s(valText, L"%d", g_gridFixedWinH.load());
 
-                const wchar_t* valLabel = L"Value";
-                if (currentMode == 1) valLabel = L"Window Size";
-                else if (currentMode == 2) valLabel = L"Columns Count";
-                else if (currentMode == 3) valLabel = L"Rows Count";
-                else if (currentMode == 4) valLabel = L"Window Width";
-                else if (currentMode == 5) valLabel = L"Window Height";
+                const wchar_t* valLabel = TR(L"Value");
+                if (currentMode == 1) valLabel = TR(L"Window Size");
+                else if (currentMode == 2) valLabel = TR(L"Columns Count");
+                else if (currentMode == 3) valLabel = TR(L"Rows Count");
+                else if (currentMode == 4) valLabel = TR(L"Window Width");
+                else if (currentMode == 5) valLabel = TR(L"Window Height");
 
                 MainUI_Paint_DrawDropdown(hdc, pData->gridModeValueDropdownRect, pData->hFontText, valLabel, valText, pData->isHoveringGridModeValue, true, L"\uE75D", true, nullptr, 1, 0, L"\uE70F");
             }
 
             wchar_t betweenText[32]; swprintf_s(betweenText, L"%d px", g_gridSpacingBetween.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, L"Spacing between", betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, nullptr, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, TR(L"Spacing between"), betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, nullptr, 1, 0, L"\uE70F");
 
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, nullptr, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, TR(L"Spacing from borders"), bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, nullptr, 1, 0, L"\uE70F");
 
             {
                 Gdiplus::Graphics gHk(hdc);
@@ -22538,28 +22577,28 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
 
             if (pData->settingsSubKind == 1) {
-                const wchar_t* miNames[] = { L"Minimum (0)", L"1 sec", L"3 sec", L"5 sec", L"10 sec" };
+                const wchar_t* miNames[] = { TR(L"Minimum (0)"), TR(L"1 sec"), TR(L"3 sec"), TR(L"5 sec"), TR(L"10 sec") };
                 const int miValues[] = { 0, 1000, 3000, 5000, 10000 };
                 int miIdx = -1;
                 int miCur = g_multiInstanceInterval.load();
                 for (int k = 0; k < 5; ++k) { if (miCur == miValues[k]) { miIdx = k; break; } }
                 wchar_t miCustom[48] = { 0 };
                 const wchar_t* miDisp = (miIdx >= 0) ? miNames[miIdx] : miCustom;
-                if (miIdx < 0) swprintf_s(miCustom, L"Custom (%d ms)", miCur);
-                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Multi-Instance Delay", miDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE916", true, &dg, 1);
+                if (miIdx < 0) swprintf_s(miCustom, TR(L"Custom (%d ms)"), miCur);
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, TR(L"Multi-Instance Delay"), miDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE916", true, &dg, 1);
             } else if (pData->settingsSubKind == 2) {
-                const wchar_t* ssModeNames[] = { L"Time Cycle", L"Smart Clean", L"Hybrid" };
+                const wchar_t* ssModeNames[] = { TR(L"Time Cycle"), TR(L"Smart Clean"), TR(L"Hybrid") };
                 int ssModeVal = g_ramCleanerMode.load();
                 if (ssModeVal < 0 || ssModeVal > 2) ssModeVal = 0;
-                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"RAM Cleaner Mode", ssModeNames[ssModeVal], pData->isHoveringSettingsSubDropdown, true, L"\uE964", true, &dg, 1);
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, TR(L"RAM Cleaner Mode"), ssModeNames[ssModeVal], pData->isHoveringSettingsSubDropdown, true, L"\uE964", true, &dg, 1);
                 wchar_t ssCycleText[48];
-                swprintf_s(ssCycleText, L"%d sec", g_ramCleanerInterval.load());
-                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubIntervalRect, pData->hFontText, L"Clean Cycle Time", ssCycleText, pData->isHoveringSettingsSubInterval, true, L"\uE787", true, &dg, 1, 0, L"\uE70F");
+                swprintf_s(ssCycleText, TR(L"%d sec"), g_ramCleanerInterval.load());
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubIntervalRect, pData->hFontText, TR(L"Clean Cycle Time"), ssCycleText, pData->isHoveringSettingsSubInterval, true, L"\uE787", true, &dg, 1, 0, L"\uE70F");
                 wchar_t ssLimitText[48];
-                swprintf_s(ssLimitText, L"%d MB", g_ramCleanerLimit.load());
-                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubLimitRect, pData->hFontText, L"RAM Limit", ssLimitText, pData->isHoveringSettingsSubLimit, true, L"\uE950", true, &dg, 1, 0, L"\uE70F");
+                swprintf_s(ssLimitText, TR(L"%d MB"), g_ramCleanerLimit.load());
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubLimitRect, pData->hFontText, TR(L"RAM Limit"), ssLimitText, pData->isHoveringSettingsSubLimit, true, L"\uE950", true, &dg, 1, 0, L"\uE70F");
             } else if (pData->settingsSubKind == 3) {
-                const wchar_t* riLabels[] = { L"Off (main cycle)", L"30 sec", L"1 min", L"2 min", L"5 min", L"10 min" };
+                const wchar_t* riLabels[] = { TR(L"Off (main cycle)"), TR(L"30 sec"), TR(L"1 min"), TR(L"2 min"), TR(L"5 min"), TR(L"10 min") };
                 const int riValues[] = { 0, 30, 60, 120, 300, 600 };
                 int riIdx = -1;
                 int riCur = g_reconnectCheckInterval.load();
@@ -22567,12 +22606,12 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 wchar_t riCustom[32] = { 0 };
                 const wchar_t* riDisp = (riIdx >= 0) ? riLabels[riIdx] : riCustom;
                 if (riIdx < 0) {
-                    if (riCur < 60) swprintf_s(riCustom, L"%d sec", riCur);
-                    else swprintf_s(riCustom, L"%d min", riCur / 60);
+                    if (riCur < 60) swprintf_s(riCustom, TR(L"%d sec"), riCur);
+                    else swprintf_s(riCustom, TR(L"%d min"), riCur / 60);
                 }
-                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Reconnect Interval", riDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE8AF", true, &dg, 1);
+                MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, TR(L"Reconnect Interval"), riDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE8AF", true, &dg, 1);
             } else if (pData->settingsSubKind == 4) {
-                const wchar_t* uiLabels[6] = { L"Disable Splash-Screen", L"Disable Acrylic Blur", L"Disable UI Animations", L"Disable Tray Notifications", L"Keep Window On Top", L"Disable Rounded Corners" };
+                const wchar_t* uiLabels[6] = { TR(L"Disable Splash-Screen"), TR(L"Disable Acrylic Blur"), TR(L"Disable UI Animations"), TR(L"Disable Tray Notifications"), TR(L"Keep Window On Top"), TR(L"Disable Rounded Corners") };
                 const wchar_t* uiIcons[6] = { L"\uE823", L"\uE727", L"\uE916", L"\uEA8F", L"\uE718", L"\uE72E" };
                 const bool uiValues[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
                 for (int k = 0; k < 6; ++k) {
@@ -22632,17 +22671,17 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         wchar_t buffer[64];
-        swprintf_s(buffer, L"%d sec (%d min)", g_selectedTime.load(), g_selectedTime.load() / 60);
+        swprintf_s(buffer, TR(L"%d sec (%d min)"), g_selectedTime.load(), g_selectedTime.load() / 60);
         MainUI_Paint_DrawCompactButton(hdc, pData->testActionButtonRect, pData->hFontText, L"\uE768", pData->isHoveringTestAction, L"\uE768", false);
-        MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval, true, L"\uE916", true, nullptr, 1, -1);
+        MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, TR(L"Interval"), buffer, pData->isHoveringInterval, true, L"\uE916", true, nullptr, 1, -1);
 
-    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
+    const wchar_t* actionNames[] = { TR(L"Space (Jump)"), L"W/S", TR(L"Zoom (I/O)"), TR(L"Random*"), TR(L"Macros Only") };
         int curAction = g_selectedAction.load();
         if (curAction < 0 || curAction > 4) curAction = 0;
-        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[curAction], pData->isHoveringAction, true, L"\uE7C9");
+        MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, TR(L"Action"), actionNames[curAction], pData->isHoveringAction, true, L"\uE7C9");
         MainUI_Paint_DrawCompactButton(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringActionDelaysSettingsCompact, L"\uE713", false);
 
-        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance bypass", g_multiSupport.load(), pData->isHoveringMultiInstanceToggle, pData->multiInstanceAnim, true, L"\uE81E");
+        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, TR(L"Multi-Instance bypass"), g_multiSupport.load(), pData->isHoveringMultiInstanceToggle, pData->multiInstanceAnim, true, L"\uE81E");
 
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedMultiInstanceLink, L"\uE713", false);
 
@@ -22697,13 +22736,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
             DeleteObject(iconFontH);
         }
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, L"Macros", false, pData->isHoveringMacros, L"\uE7C9", false, &pData->macrosBtnRect, L"open", true, L"PREVIEW");
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, TR(L"Macros"), false, pData->isHoveringMacros, L"\uE7C9", false, &pData->macrosBtnRect, TR(L"open"), true, TR(L"PREVIEW"));
         if (pData->macrosIntervalToggleCompactRect.left != 0) {
             MainUI_Paint_DrawCompactOptionButton(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontText, L"\uE916", g_intervalMacroEnabled.load(), pData->isHoveringMacrosIntervalToggle && !g_isAfkStarted.load(), pData->macrosIntervalToggleAnim, true);
         }
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, L"Instance Manager", false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, L"open", !g_simpleMode.load(), L"PREVIEW");
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
-        MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, L"Simple Mode", g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, TR(L"Instance Manager"), false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, TR(L"open"), !g_simpleMode.load(), TR(L"PREVIEW"));
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, TR(L"Timings"), false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, TR(L"open"));
+        MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, TR(L"Simple Mode"), g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
             bool isButtonElement = false;
@@ -22748,7 +22787,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             sfUpdateBannerText.SetAlignment(StringAlignmentNear);
             sfUpdateBannerText.SetLineAlignment(checkFailed ? StringAlignmentCenter : StringAlignmentFar);
             sfUpdateBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
-            g.DrawString(checkFailed ? L"Failed to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
+            g.DrawString(checkFailed ? TR(L"Failed to check updates") : TR(L"Update Available"), -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
 
             if (!checkFailed) {
                 Font updateBannerDescFont(hdc, pData->hFontSmall);
@@ -22887,7 +22926,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         sfDiscordText.SetAlignment(StringAlignmentNear);
         sfDiscordText.SetLineAlignment(announcement.enabled && !announcement.description.empty() ? StringAlignmentFar : StringAlignmentCenter);
         sfDiscordText.SetTrimming(StringTrimmingEllipsisCharacter);
-        g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
+        g.DrawString(announcement.enabled ? announcement.title.c_str() : TR(L"Join our Discord"), -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
 
         if (announcement.enabled && !announcement.description.empty()) {
             Font discordDescriptionFont(hdc, pData->hFontSmall);
@@ -22914,17 +22953,17 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         g.DrawString(L"\uE76C", -1, &discordArrowFont, discordArrowRect, &sfDiscordArrow, &discordArrowBrush);
         DeleteObject(discordArrowFontH);
 
-        if (pData->isHoveringAdvancedMultiInstanceLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontSmall, L"Configure multi-instance", false);
+        if (pData->isHoveringAdvancedMultiInstanceLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontSmall, TR(L"Configure multi-instance"), false);
         if (pData->isHoveringMutexStatus && pData->mutexStatusAnim > 0.01f) {
             bool mutexOk = IsMultiInstanceMutexValid();
             bool hasError = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
             bool ignored = g_mutexIgnored && !mutexOk;
-            const wchar_t* statusText = hasError ? L"Mutex registration failed • Click to retry" : (ignored ? L"Mutex ignored • Click to reset" : (mutexOk ? L"Mutex active • Multi-Instance active" : L"Mutex invalid"));
+            const wchar_t* statusText = hasError ? TR(L"Mutex registration failed • Click to retry") : (ignored ? TR(L"Mutex ignored • Click to reset") : (mutexOk ? TR(L"Mutex active • Multi-Instance active") : TR(L"Mutex invalid")));
             MainUI_Paint_DrawHoverTooltip(hdc, pData->mutexStatusRect, pData->hFontSmall, statusText, false);
         }
-        if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, L"Configure custom action delays & repeats", false);
-        if (pData->isHoveringTestAction) MainUI_Paint_DrawHoverTooltip(hdc, pData->testActionButtonRect, pData->hFontSmall, L"Test Anti-AFK action on Roblox windows", false);
-        if (pData->isHoveringMacrosIntervalToggle) MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontSmall, g_isAfkStarted.load() ? L"Locked while Anti-AFK is running" : (g_intervalMacroEnabled.load() ? L"Interval Macros: running" : L"Start Interval Macros (work without Anti-AFK)"), false);
+        if (pData->isHoveringActionDelaysSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontSmall, TR(L"Configure custom action delays & repeats"), false);
+        if (pData->isHoveringTestAction) MainUI_Paint_DrawHoverTooltip(hdc, pData->testActionButtonRect, pData->hFontSmall, TR(L"Test Anti-AFK action on Roblox windows"), false);
+        if (pData->isHoveringMacrosIntervalToggle) MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontSmall, g_isAfkStarted.load() ? TR(L"Locked while Anti-AFK is running") : (g_intervalMacroEnabled.load() ? TR(L"Interval Macros: running") : TR(L"Start Interval Macros (work without Anti-AFK)")), false);
     }
     else if (pData->currentPage == 1) { // Auto+Utils
         int rowCount = (int)pData->rowRects.size();
@@ -22947,34 +22986,34 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
         }
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, L"Auto-start Anti-AFK", g_autoStartAfk.load(), pData->isHoveringAutoStartToggle, pData->autoStartAnim, true, L"\uE768");
-        MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, L"Auto-Reconnect", g_autoReconnect.load(), pData->isHoveringAutoReconnectToggle, pData->autoReconnectAnim, true, L"\uE8AF");
+        MainUI_Paint_DrawToggle(hdc, pData->autoStartToggleRect, pData->hFontText, TR(L"Auto-start Anti-AFK"), g_autoStartAfk.load(), pData->isHoveringAutoStartToggle, pData->autoStartAnim, true, L"\uE768");
+        MainUI_Paint_DrawToggle(hdc, pData->autoReconnectToggleRect, pData->hFontText, TR(L"Auto-Reconnect"), g_autoReconnect.load(), pData->isHoveringAutoReconnectToggle, pData->autoReconnectAnim, true, L"\uE8AF");
         MainUI_Paint_DrawCompactButton(hdc, pData->reconnectManualCheckCompactRect, pData->hFontText, L"\uE72C", pData->isHoveringReconnectManualCheck, L"\uE72C", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedReconnectLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedReconnectLink, L"\uE713", false);
         bool simpleModeHidden = g_simpleMode.load();
-        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Reset in all (Esc+R+Enter)", g_autoReset.load(), pData->isHoveringAutoResetToggle, pData->autoResetAnim, true, L"\uE81C", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, TR(L"Reset in all (Esc+R+Enter)"), g_autoReset.load(), pData->isHoveringAutoResetToggle, pData->autoResetAnim, true, L"\uE81C", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->resetAllCompactRect, pData->hFontText, L"\uE81C", pData->isHoveringResetAllCompact, L"\uE81C", false, 0, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoHideToggleRect, pData->hFontText, L"Hide/Show Roblox", g_autoHideRoblox.load(), pData->isHoveringAutoHideToggle, pData->autoHideAnim, true, L"\uEE47", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoHideToggleRect, pData->hFontText, TR(L"Hide/Show Roblox"), g_autoHideRoblox.load(), pData->isHoveringAutoHideToggle, pData->autoHideAnim, true, L"\uEE47", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->showRobloxCompactRect, pData->hFontText, L"\uF19D", pData->isHoveringShowRobloxCompact, L"\uF19D", g_autoHideRoblox.load() && g_isAfkStarted.load(), 0, !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->hideRobloxCompactRect, pData->hFontText, L"\uEE47", pData->isHoveringHideRobloxCompact, L"\uEE47", g_autoHideRoblox.load() && g_isAfkStarted.load(), 0, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoOpacityToggleRect, pData->hFontText, L"Enable Opacity (70%)", g_autoOpacity.load(), pData->isHoveringAutoOpacityToggle, pData->autoOpacityAnim, true, L"\uE727", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoOpacityToggleRect, pData->hFontText, TR(L"Enable Opacity (70%)"), g_autoOpacity.load(), pData->isHoveringAutoOpacityToggle, pData->autoOpacityAnim, true, L"\uE727", !simpleModeHidden);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->opacityCompactRect, pData->hFontText, L"\uE727", IsUtilsWindowOpacityEnabled(), pData->isHoveringOpacityCompact, pData->utilsWindowOpacityAnim, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoGridToggleRect, pData->hFontText, L"Grid Roblox*", g_autoGrid.load(), pData->isHoveringAutoGridToggle, pData->autoGridAnim, true, L"\uE80A", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoGridToggleRect, pData->hFontText, TR(L"Grid Roblox*"), g_autoGrid.load(), pData->isHoveringAutoGridToggle, pData->autoGridAnim, true, L"\uE80A", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->gridSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringGridSettingsCompact, L"\uE713", false, 0, !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->gridRobloxCompactRect, pData->hFontText, L"\uE80A", pData->isHoveringGridRobloxCompact, L"\uE80A", false, 0, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoMuteToggleRect, pData->hFontText, L"Mute Roblox", g_autoMute.load(), pData->isHoveringAutoMuteToggle, pData->autoMuteAnim, true, L"\uE74F", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoMuteToggleRect, pData->hFontText, TR(L"Mute Roblox"), g_autoMute.load(), pData->isHoveringAutoMuteToggle, pData->autoMuteAnim, true, L"\uE74F", !simpleModeHidden);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->muteRobloxSubCompactRect, pData->hFontText, L"\uE7ED", g_unmuteOnFocus.load(), pData->isHoveringMuteRobloxSubCompact, pData->unmuteOnFocusAnim, simpleModeHidden ? false : g_autoMute.load());
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->muteRobloxCompactRect, pData->hFontText, L"\uE74F", ShouldMuteRobloxNow(), pData->isHoveringMuteRobloxCompact, pData->utilsMuteAnim, !simpleModeHidden, 1);
 
-        MainUI_Paint_DrawToggle(hdc, pData->fpsCapperToggleRect, pData->hFontText, L"FPS Capper (CPU Limiter)", (g_fpsLimit > 0), pData->isHoveringFpsCapperToggle, pData->fpsCapperAnim, true, L"\uE950");
+        MainUI_Paint_DrawToggle(hdc, pData->fpsCapperToggleRect, pData->hFontText, TR(L"FPS Capper (CPU Limiter)"), (g_fpsLimit > 0), pData->isHoveringFpsCapperToggle, pData->fpsCapperAnim, true, L"\uE950");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->fpsCapperCompactRect, pData->hFontText, L"\uE950", ShouldRunFpsCapperNow(), pData->isHoveringFpsCapperCompact, pData->utilsFpsAnim, true);
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedFpsCapperLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedFpsCapperLink, L"\uE713", false);
 
-        MainUI_Paint_DrawToggle(hdc, pData->ramCleanerToggleRect, pData->hFontText, L"RAM Cleaner", g_ramCleanerAutoStart.load(), pData->isHoveringRamCleanerToggle, pData->ramCleanerAnim, true, L"\uE964");
+        MainUI_Paint_DrawToggle(hdc, pData->ramCleanerToggleRect, pData->hFontText, TR(L"RAM Cleaner"), g_ramCleanerAutoStart.load(), pData->isHoveringRamCleanerToggle, pData->ramCleanerAnim, true, L"\uE964");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->ramCleanerToggleCompactRect, pData->hFontText, L"\uE964", g_ramCleanerEnabled.load(), pData->isHoveringRamCleanerToggleCompact, pData->utilsRamCleanerAnim, true);
         MainUI_Paint_DrawCompactButton(hdc, pData->ramCleanerSweepCompactRect, pData->hFontText, L"\uE74D", pData->isHoveringRamCleanerSweepCompact, L"\uE74D", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedRamCleanerLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedRamCleanerLink, L"\uE713", false);
@@ -22994,11 +23033,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             anchor.bottom = anchor.top + toggleH;
             MainUI_Paint_DrawHoverTooltip(hdc, anchor, pData->hFontSmall, msg);
         };
-        drawToggleTooltip(pData->autoStartToggleRect, pData->isHoveringAutoStartToggle, L"Auto-start on launch");
-        drawToggleTooltip(pData->autoReconnectToggleRect, pData->isHoveringAutoReconnectToggle, L"Auto-reconnect on disconnect");
-        if (pData->isHoveringReconnectManualCheck) MainUI_Paint_DrawHoverTooltip(hdc, pData->reconnectManualCheckCompactRect, pData->hFontSmall, L"Manual check (steals focus)", false);
-        if (pData->isHoveringAdvancedReconnectLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedReconnectLinkRect, pData->hFontSmall, L"Configure reconnect interval", false);
-        const wchar_t* simpleModeMsg = L"Simple Mode is on - disable it to use this setting";
+        drawToggleTooltip(pData->autoStartToggleRect, pData->isHoveringAutoStartToggle, TR(L"Auto-start on launch"));
+        drawToggleTooltip(pData->autoReconnectToggleRect, pData->isHoveringAutoReconnectToggle, TR(L"Auto-reconnect on disconnect"));
+        if (pData->isHoveringReconnectManualCheck) MainUI_Paint_DrawHoverTooltip(hdc, pData->reconnectManualCheckCompactRect, pData->hFontSmall, TR(L"Manual check (steals focus)"), false);
+        if (pData->isHoveringAdvancedReconnectLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedReconnectLinkRect, pData->hFontSmall, TR(L"Configure reconnect interval"), false);
+        const wchar_t* simpleModeMsg = TR(L"Simple Mode is on - disable it to use this setting");
         if (g_simpleMode.load()) {
             drawToggleTooltip(pData->autoResetToggleRect, pData->isHoveringAutoResetToggle, simpleModeMsg);
             drawToggleTooltip(pData->autoHideToggleRect, pData->isHoveringAutoHideToggle, simpleModeMsg);
@@ -23006,38 +23045,38 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             drawToggleTooltip(pData->autoGridToggleRect, pData->isHoveringAutoGridToggle, simpleModeMsg);
             drawToggleTooltip(pData->autoMuteToggleRect, pData->isHoveringAutoMuteToggle, simpleModeMsg);
         } else {
-            drawToggleTooltip(pData->autoResetToggleRect, pData->isHoveringAutoResetToggle, L"Auto-reset character");
-            drawToggleTooltip(pData->autoHideToggleRect, pData->isHoveringAutoHideToggle, L"Auto-hide Roblox");
-            drawToggleTooltip(pData->autoOpacityToggleRect, pData->isHoveringAutoOpacityToggle, L"Auto opacity (70%)");
-            drawToggleTooltip(pData->autoGridToggleRect, pData->isHoveringAutoGridToggle, L"Auto grid arrange");
-            drawToggleTooltip(pData->autoMuteToggleRect, pData->isHoveringAutoMuteToggle, L"Auto mute Roblox");
+            drawToggleTooltip(pData->autoResetToggleRect, pData->isHoveringAutoResetToggle, TR(L"Auto-reset character"));
+            drawToggleTooltip(pData->autoHideToggleRect, pData->isHoveringAutoHideToggle, TR(L"Auto-hide Roblox"));
+            drawToggleTooltip(pData->autoOpacityToggleRect, pData->isHoveringAutoOpacityToggle, TR(L"Auto opacity (70%)"));
+            drawToggleTooltip(pData->autoGridToggleRect, pData->isHoveringAutoGridToggle, TR(L"Auto grid arrange"));
+            drawToggleTooltip(pData->autoMuteToggleRect, pData->isHoveringAutoMuteToggle, TR(L"Auto mute Roblox"));
         }
-        drawToggleTooltip(pData->fpsCapperToggleRect, pData->isHoveringFpsCapperToggle, L"Auto FPS Capper (CPU Limiter)");
-        drawToggleTooltip(pData->ramCleanerToggleRect, pData->isHoveringRamCleanerToggle, L"Auto-start RAM Cleaner when Anti-AFK starts");
+        drawToggleTooltip(pData->fpsCapperToggleRect, pData->isHoveringFpsCapperToggle, TR(L"Auto FPS Capper (CPU Limiter)"));
+        drawToggleTooltip(pData->ramCleanerToggleRect, pData->isHoveringRamCleanerToggle, TR(L"Auto-start RAM Cleaner when Anti-AFK starts"));
 
-        const wchar_t* smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Reset now";
+        const wchar_t* smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Reset now");
         if (pData->isHoveringResetAllCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->resetAllCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Show all Roblox";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Show all Roblox");
         if (pData->isHoveringShowRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->showRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Hide all Roblox";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Hide all Roblox");
         if (pData->isHoveringHideRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->hideRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Toggle opacity";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Toggle opacity");
         if (pData->isHoveringOpacityCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->opacityCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Grid snap windows";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Grid snap windows");
         if (pData->isHoveringGridRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->gridRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Grid settings";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Grid settings");
         if (pData->isHoveringGridSettingsCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->gridSettingsCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Toggle mute";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Toggle mute");
         if (pData->isHoveringMuteRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->muteRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
-        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Unmute on focus";
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : TR(L"Unmute on focus");
         if (pData->isHoveringMuteRobloxSubCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->muteRobloxSubCompactRect, pData->hFontSmall, smCompactMsg, false);
-        if (pData->isHoveringFpsCapperCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->fpsCapperCompactRect, pData->hFontSmall, L"Toggle FPS Capper (CPU Limiter)", false);
+        if (pData->isHoveringFpsCapperCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->fpsCapperCompactRect, pData->hFontSmall, TR(L"Toggle FPS Capper (CPU Limiter)"), false);
 
-        if (pData->isHoveringRamCleanerToggleCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->ramCleanerToggleCompactRect, pData->hFontSmall, L"Toggle RAM cleaner", false);
-        if (pData->isHoveringRamCleanerSweepCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->ramCleanerSweepCompactRect, pData->hFontSmall, L"Clean RAM now", false);
+        if (pData->isHoveringRamCleanerToggleCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->ramCleanerToggleCompactRect, pData->hFontSmall, TR(L"Toggle RAM cleaner"), false);
+        if (pData->isHoveringRamCleanerSweepCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->ramCleanerSweepCompactRect, pData->hFontSmall, TR(L"Clean RAM now"), false);
 
-        if (pData->isHoveringAdvancedFpsCapperLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedFpsCapperLinkRect, pData->hFontSmall, L"Open FPS Capper (CPU Limiter) settings", false);
-        if (pData->isHoveringAdvancedRamCleanerLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedRamCleanerLinkRect, pData->hFontSmall, L"Configure RAM cleaner", false);
+        if (pData->isHoveringAdvancedFpsCapperLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedFpsCapperLinkRect, pData->hFontSmall, TR(L"Open FPS Capper (CPU Limiter) settings"), false);
+        if (pData->isHoveringAdvancedRamCleanerLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedRamCleanerLinkRect, pData->hFontSmall, TR(L"Configure RAM cleaner"), false);
     }
     else if (pData->currentPage == 2) { // Misc
         int rowCount = (int)pData->rowRects.size();
@@ -23060,20 +23099,20 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
         }
 
-        MainUI_Paint_DrawToggle(hdc, pData->updateCheckerToggleRect, pData->hFontText, L"Update/Announcement Checker", g_autoUpdate.load(), pData->isHoveringUpdateCheckerToggle, pData->autoUpdateAnim, true, L"\uE777");
-        MainUI_Paint_DrawListActionRow(hdc, pData->closeAllRobloxRect, pData->hFontText, L"Close All Roblox", false, pData->isHoveringCloseAllRoblox, L"\uE711", false, &pData->closeAllRobloxButtonRect, L"close");
-        MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, L"Do not sleep", g_doNotSleep.load(), pData->isHoveringDoNotSleepToggle, pData->doNotSleepAnim, true, L"\uE708");
+        MainUI_Paint_DrawToggle(hdc, pData->updateCheckerToggleRect, pData->hFontText, TR(L"Update/Announcement Checker"), g_autoUpdate.load(), pData->isHoveringUpdateCheckerToggle, pData->autoUpdateAnim, true, L"\uE777");
+        MainUI_Paint_DrawListActionRow(hdc, pData->closeAllRobloxRect, pData->hFontText, TR(L"Close All Roblox"), false, pData->isHoveringCloseAllRoblox, L"\uE711", false, &pData->closeAllRobloxButtonRect, TR(L"close"));
+        MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, TR(L"Do not sleep"), g_doNotSleep.load(), pData->isHoveringDoNotSleepToggle, pData->doNotSleepAnim, true, L"\uE708");
         bool smPage2 = g_simpleMode.load();
-        MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, L"I can forget (smart auto-start)", g_afkReminderEnabled.load(), pData->isHoveringICanForgetToggle, pData->iCanForgetAnim, true, L"\uE916", !smPage2);
-        MainUI_Paint_DrawToggle(hdc, pData->skipActiveToggleRect, pData->hFontText, L"Skip active", g_skipActiveEnabled.load(), pData->isHoveringSkipActiveToggle, pData->skipActiveAnim, true, L"\uE893", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, TR(L"I can forget (smart auto-start)"), g_afkReminderEnabled.load(), pData->isHoveringICanForgetToggle, pData->iCanForgetAnim, true, L"\uE916", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->skipActiveToggleRect, pData->hFontText, TR(L"Skip active"), g_skipActiveEnabled.load(), pData->isHoveringSkipActiveToggle, pData->skipActiveAnim, true, L"\uE893", !smPage2);
 
-        MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Fish/Void/Bloxstrap Integration", g_bloxstrapIntegration.load(), pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationAnim, true, L"\uE71B", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, TR(L"Fish/Void/Bloxstrap Integration"), g_bloxstrapIntegration.load(), pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationAnim, true, L"\uE71B", !smPage2);
 
-        const wchar_t* restoreNames[] = { L"Off", L"SetForeground", L"Alt+Tab (Legacy)", L"Smart Alt+Tab" };
-        MainUI_Paint_DrawDropdown(hdc, pData->restoreMethodDropdownRect, pData->hFontText, L"Restore Window", restoreNames[g_restoreMethod.load()], pData->isHoveringRestore, true, L"\uE73F", !smPage2);
+        const wchar_t* restoreNames[] = { TR(L"Off"), L"SetForeground", TR(L"Alt+Tab (Legacy)"), TR(L"Smart Alt+Tab") };
+        MainUI_Paint_DrawDropdown(hdc, pData->restoreMethodDropdownRect, pData->hFontText, TR(L"Restore Window"), restoreNames[g_restoreMethod.load()], pData->isHoveringRestore, true, L"\uE73F", !smPage2);
 
-        const wchar_t* ssBtnText = g_screenSaverActive.load() ? L"stop" : L"start";
-        MainUI_Paint_DrawListActionRow(hdc, pData->screenSaverRowRect, pData->hFontText, L"Screen Saver", false, pData->isHoveringScreenSaverButton, L"\uE708", false, &pData->screenSaverButtonRect, ssBtnText);
+        const wchar_t* ssBtnText = g_screenSaverActive.load() ? TR(L"stop") : TR(L"start");
+        MainUI_Paint_DrawListActionRow(hdc, pData->screenSaverRowRect, pData->hFontText, TR(L"Screen Saver"), false, pData->isHoveringScreenSaverButton, L"\uE708", false, &pData->screenSaverButtonRect, ssBtnText);
         MainUI_Paint_DrawCompactButton(hdc, pData->ssAlwaysShowButtonRect, pData->hFontText, L"\uED55", pData->isHoveringSsAlwaysShow, L"", g_ssAlwaysShowExitUI.load(), 0, true);
 
         for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
@@ -23081,10 +23120,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
         }
 
-        if (pData->isHoveringSsAlwaysShow) MainUI_Paint_DrawHoverTooltip(hdc, pData->ssAlwaysShowButtonRect, pData->hFontSmall, L"Always show bouncing text in screen saver", false);
+        if (pData->isHoveringSsAlwaysShow) MainUI_Paint_DrawHoverTooltip(hdc, pData->ssAlwaysShowButtonRect, pData->hFontSmall, TR(L"Always show bouncing text in screen saver"), false);
 
         if (g_simpleMode.load()) {
-            const wchar_t* smPage2Msg = L"Simple Mode is on - disable it to use this setting";
+            const wchar_t* smPage2Msg = TR(L"Simple Mode is on - disable it to use this setting");
             auto drawPage2Tooltip = [&](const RECT& rowRect, bool hovered) {
                 if (!hovered) return;
                 const int toggleW = 50, toggleH = 24;
@@ -23124,26 +23163,27 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         bool smAdvanced = g_simpleMode.load();
-        MainUI_Paint_DrawListActionRow(hdc, pData->uiSettingsRowRect, pData->hFontText, L"User Interface", false, pData->isHoveringUiSettings, L"\uE713", false, &pData->uiSettingsBtnRect, L"open", true);
-        MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
+        MainUI_Paint_DrawListActionRow(hdc, pData->uiSettingsRowRect, pData->hFontText, TR(L"User Interface"), false, pData->isHoveringUiSettings, L"\uE713", false, &pData->uiSettingsBtnRect, TR(L"open"), true);
+        MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, TR(L"Status Bar*"), g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true, 1, 1);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarContentCompactRect, pData->hFontText, L"\uE713", pData->isHoveringStatusBarContentCompact, L"\uE713", false);
 
-        MainUI_Paint_DrawToggle(hdc, pData->customProcessSearchToggleRect, pData->hFontText, L"Custom Process Search", g_useCustomProcessSearch.load(), pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchAnim, true, L"\uE721", !smAdvanced);
+        MainUI_Paint_DrawToggle(hdc, pData->customProcessSearchToggleRect, pData->hFontText, TR(L"Custom Process Search"), g_useCustomProcessSearch.load(), pData->isHoveringCustomProcessSearchToggle, pData->customProcessSearchAnim, true, L"\uE721", !smAdvanced);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->customProcessSearchExcludeRect, pData->hFontText, L"\uE711", g_excludeBuiltinNames.load(), pData->isHoveringCustomProcessSearchExclude, pData->customProcessSearchExcludeAnim, smAdvanced ? false : g_useCustomProcessSearch.load());
         MainUI_Paint_DrawCompactButton(hdc, pData->customProcessSearchSettingsRect, pData->hFontText, L"\uE713", pData->isHoveringCustomProcessSearchSettings, L"\uE713", false, 0, !smAdvanced);
 
-        const wchar_t* userSafeModeNames[] = { L"Off", L"Legacy", L"Beta" };
+        const wchar_t* userSafeModeNames[] = { TR(L"Off"), TR(L"Legacy"), TR(L"Beta") };
         int userSafeIdx = g_userSafeMode.load();
         if (userSafeIdx < 0 || userSafeIdx > 2) userSafeIdx = 0;
-        MainUI_Paint_DrawDropdown(hdc, pData->userSafeDropdownRect, pData->hFontText, L"User-Safe Mode", userSafeModeNames[userSafeIdx], pData->isHoveringUserSafe, true, L"\uE72E");
+        MainUI_Paint_DrawDropdown(hdc, pData->userSafeDropdownRect, pData->hFontText, TR(L"User-Safe Mode"), userSafeModeNames[userSafeIdx], pData->isHoveringUserSafe, true, L"\uE72E");
+        MainUI_Paint_DrawDropdown(hdc, pData->languageDropdownRect, pData->hFontText, kLanguageSettingTitle, IsRussianUi() ? kLanguageNameRussianShort : kLanguageNameEnglish, pData->isHoveringLanguage, true, L"\uE774");
 
-        MainUI_Paint_DrawListActionRow(hdc, pData->actionDelaysRowRect, pData->hFontText, L"Action Delays & Repeats", false, pData->isHoveringActionDelaysEdit, L"\uE713", false, &pData->actionDelaysEditButtonRect, L"edit", !g_simpleMode.load());
+        MainUI_Paint_DrawListActionRow(hdc, pData->actionDelaysRowRect, pData->hFontText, TR(L"Action Delays & Repeats"), false, pData->isHoveringActionDelaysEdit, L"\uE713", false, &pData->actionDelaysEditButtonRect, TR(L"edit"), !g_simpleMode.load());
 
         {
             std::wstring hkText = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
-            RECT hkRowR = pData->rowRects.back();
+            RECT hkRowR = pData->hotkeyRowRect;
             bool hkEn = g_hotkeyEnabled.load() && !smAdvanced;
             BYTE hkA = hkEn ? 255 : 100;
 
@@ -23161,7 +23201,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             sfHkLb.SetAlignment(StringAlignmentNear);
             sfHkLb.SetLineAlignment(StringAlignmentCenter);
             RectF hkLbR((REAL)44, (REAL)(hkRowR.top - 1), 100.0f, (REAL)(hkRowR.bottom - hkRowR.top));
-            g.DrawString(L"Hotkey", -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
+            g.DrawString(TR(L"Hotkey"), -1, &gdiHkTextF, hkLbR, &sfHkLb, &hkLabelBr);
             DeleteObject(hkIconF);
 
             bool isRecording = g_hotkeyCaptureActive.load() && !g_hotkeyCaptureIsGrid.load();
@@ -23187,29 +23227,29 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i);
         }
         if (pData->isHoveringActionDelaysEdit) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysEditButtonRect, pData->hFontSmall, g_simpleMode.load() ? L"Simple Mode is on • disable it to use this setting" : L"Configure custom key hold, action intervals and repetition count", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->actionDelaysEditButtonRect, pData->hFontSmall, g_simpleMode.load() ? TR(L"Simple Mode is on • disable it to use this setting") : TR(L"Configure custom key hold, action intervals and repetition count"), false);
         }
         if (pData->isHoveringUiSettings) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->uiSettingsBtnRect, pData->hFontSmall, L"Open User Interface settings", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->uiSettingsBtnRect, pData->hFontSmall, TR(L"Open User Interface settings"), false);
         }
-        if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, L"Click to change hotkey", false);
+        if (pData->isHoveringHotkeyBind) MainUI_Paint_DrawHoverTooltip(hdc, pData->hotkeyChangeBtnRect, pData->hFontSmall, TR(L"Click to change hotkey"), false);
         if (pData->isHoveringCustomProcessSearchExclude) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchExcludeRect, pData->hFontSmall, g_useCustomProcessSearch.load() ? L"Exclude built-in Roblox names" : L"Enable Custom Process Search first", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchExcludeRect, pData->hFontSmall, g_useCustomProcessSearch.load() ? TR(L"Exclude built-in Roblox names") : TR(L"Enable Custom Process Search first"), false);
         }
         if (pData->isHoveringCustomProcessSearchSettings) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchSettingsRect, pData->hFontSmall, L"Configure custom window/process search names", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->customProcessSearchSettingsRect, pData->hFontSmall, TR(L"Configure custom window/process search names"), false);
         }
         if (pData->isHoveringStatusBarPrimaryMonitorCompact) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontSmall, g_statusBarPrimaryMonitor.load() ? L"Status Bar pinned to primary monitor" : L"Status Bar follows cursor monitor", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontSmall, g_statusBarPrimaryMonitor.load() ? TR(L"Status Bar pinned to primary monitor") : TR(L"Status Bar follows cursor monitor"), false);
         }
         if (pData->isHoveringStatusBarPositionBottomCompact) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontSmall, g_statusBarPositionBottom.load() ? L"Status Bar at bottom" : L"Status Bar at top", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontSmall, g_statusBarPositionBottom.load() ? TR(L"Status Bar at bottom") : TR(L"Status Bar at top"), false);
         }
         if (pData->isHoveringStatusBarContentCompact) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarContentCompactRect, pData->hFontSmall, L"Status Bar settings - content and events", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->statusBarContentCompactRect, pData->hFontSmall, TR(L"Status Bar settings - content and events"), false);
         }
         if (g_simpleMode.load()) {
-            const wchar_t* smAdvMsg = L"Simple Mode is on - disable it to use this setting";
+            const wchar_t* smAdvMsg = TR(L"Simple Mode is on - disable it to use this setting");
             auto drawAdvTt = [&](const RECT& r, bool h, const RECT& anchor) {
                 if (!h) return;
                 MainUI_Paint_DrawHoverTooltip(hdc, anchor, pData->hFontSmall, smAdvMsg);
@@ -23253,7 +23293,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         StringFormat sfResetText2;
         sfResetText2.SetAlignment(StringAlignmentNear);
         sfResetText2.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"Reset All Settings", -1, &resetTextFont, resetTextRect2, &sfResetText2, &resetTextBrush);
+        g.DrawString(TR(L"Reset All Settings"), -1, &resetTextFont, resetTextRect2, &sfResetText2, &resetTextBrush);
 
         HFONT resetArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
         Font resetArrowFont(hdc, resetArrowFontH);
@@ -23333,14 +23373,14 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             g.DrawString(text, -1, &labelFont, labelRectF, &sfLabel, &labelBrush);
         };
 
-        drawStatLabel(0, L"Total AFK Time");
-        drawStatLabel(1, L"Actions Performed");
-        drawStatLabel(2, L"Last Action");
-        drawStatLabel(3, L"Auto Reconnects");
-        drawStatLabel(4, L"Longest Session");
-        drawStatLabel(5, L"Webhooks Sent");
-        drawStatLabel(6, L"Program Launches");
-        drawStatLabel(7, L"AFK Sessions");
+        drawStatLabel(0, TR(L"Total AFK Time"));
+        drawStatLabel(1, TR(L"Actions Performed"));
+        drawStatLabel(2, TR(L"Last Action"));
+        drawStatLabel(3, TR(L"Auto Reconnects"));
+        drawStatLabel(4, TR(L"Longest Session"));
+        drawStatLabel(5, TR(L"Webhooks Sent"));
+        drawStatLabel(6, TR(L"Program Launches"));
+        drawStatLabel(7, TR(L"AFK Sessions"));
 
         wchar_t buffer[128];
         HFONT monoFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH, L"Consolas");
@@ -23399,11 +23439,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         uint64_t lastActionTimestamp = g_lastAfkActionTimestamp.load();
         if (lastActionTimestamp > 0) {
             uint64_t elapsed = (GetTickCount64() - lastActionTimestamp) / 1000;
-            if (elapsed < 60) swprintf_s(buffer, L"%llu sec ago", elapsed);
-            else if (elapsed < 3600) swprintf_s(buffer, L"%llu min ago", elapsed / 60);
-            else swprintf_s(buffer, L"%llu h ago", elapsed / 3600);
+            if (elapsed < 60) swprintf_s(buffer, TR(L"%llu sec ago"), elapsed);
+            else if (elapsed < 3600) swprintf_s(buffer, TR(L"%llu min ago"), elapsed / 60);
+            else swprintf_s(buffer, TR(L"%llu h ago"), elapsed / 3600);
         } else {
-            wcscpy_s(buffer, L"Never");
+            wcscpy_s(buffer, TR(L"Never"));
         }
         drawValueBox(2, buffer);
 
@@ -23459,7 +23499,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         StringFormat sfResetText;
         sfResetText.SetAlignment(StringAlignmentNear);
         sfResetText.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"Reset Statistics", -1, &resetTextFont, resetTextRect, &sfResetText, &resetTextBrush);
+        g.DrawString(TR(L"Reset Statistics"), -1, &resetTextFont, resetTextRect, &sfResetText, &resetTextBrush);
 
         HFONT resetArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
         Font resetArrowFont(hdc, resetArrowFontH);
@@ -23507,23 +23547,23 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 drawWebhookRowBg(i, pData->rowRects[i]);
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyStartToggleRect, pData->hFontText, L"Start / Stop", g_discordNotifyStart.load(), pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartAnim, true, L"\uE768", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyActionToggleRect, pData->hFontText, L"Action", g_discordNotifyAction.load(), pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionAnim, true, L"\uE7C9", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyReconnectToggleRect, pData->hFontText, L"Reconnect", g_discordNotifyReconnect.load(), pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectAnim, true, L"\uE8AF", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyErrorsToggleRect, pData->hFontText, L"Errors", g_discordNotifyErrors.load(), pData->isHoveringDiscordNotifyErrorsToggle, pData->discordNotifyErrorsAnim, true, L"\uE7BA", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyMacroToggleRect, pData->hFontText, L"Macros", g_discordNotifyMacro.load(), pData->isHoveringDiscordNotifyMacroToggle, pData->discordNotifyMacroAnim, true, L"\uE7C9", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyIntervalMacrosToggleRect, pData->hFontText, L"Interval Macros", g_discordNotifyIntervalMacros.load(), pData->isHoveringDiscordNotifyIntervalMacrosToggle, pData->discordNotifyIntervalMacrosAnim, true, L"\uE916", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordDisableEmbedToggleRect, pData->hFontText, L"Disable embed", g_discordDisableEmbed.load(), pData->isHoveringDiscordDisableEmbedToggle, pData->discordDisableEmbedAnim, true, L"\uE8FD", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordMentionOnErrorsToggleRect, pData->hFontText, L"Mention on errors", g_discordMentionOnErrors.load(), pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsAnim, true, L"\uE781", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyStartToggleRect, pData->hFontText, TR(L"Start / Stop"), g_discordNotifyStart.load(), pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartAnim, true, L"\uE768", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyActionToggleRect, pData->hFontText, TR(L"Action"), g_discordNotifyAction.load(), pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionAnim, true, L"\uE7C9", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyReconnectToggleRect, pData->hFontText, TR(L"Reconnect"), g_discordNotifyReconnect.load(), pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectAnim, true, L"\uE8AF", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyErrorsToggleRect, pData->hFontText, TR(L"Errors"), g_discordNotifyErrors.load(), pData->isHoveringDiscordNotifyErrorsToggle, pData->discordNotifyErrorsAnim, true, L"\uE7BA", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyMacroToggleRect, pData->hFontText, TR(L"Macros"), g_discordNotifyMacro.load(), pData->isHoveringDiscordNotifyMacroToggle, pData->discordNotifyMacroAnim, true, L"\uE7C9", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyIntervalMacrosToggleRect, pData->hFontText, TR(L"Interval Macros"), g_discordNotifyIntervalMacros.load(), pData->isHoveringDiscordNotifyIntervalMacrosToggle, pData->discordNotifyIntervalMacrosAnim, true, L"\uE916", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordDisableEmbedToggleRect, pData->hFontText, TR(L"Disable embed"), g_discordDisableEmbed.load(), pData->isHoveringDiscordDisableEmbedToggle, pData->discordDisableEmbedAnim, true, L"\uE8FD", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordMentionOnErrorsToggleRect, pData->hFontText, TR(L"Mention on errors"), g_discordMentionOnErrors.load(), pData->isHoveringDiscordMentionOnErrorsToggle, pData->discordMentionOnErrorsAnim, true, L"\uE781", webhookEnabled);
             MainUI_Paint_DrawCompactButton(hdc, pData->discordMentionTargetSettingsRect, pData->hFontText, L"\uE713", pData->isHoveringDiscordMentionTargetSettings, L"\uE713", false, 0, webhookEnabled);
 
-        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultNameToggleRect, pData->hFontText, L"Default name", g_discordUseDefaultName.load(), pData->isHoveringDiscordUseDefaultNameToggle, pData->discordUseDefaultNameAnim, false, L"\uE8AC", webhookEnabled);
-        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultAvatarToggleRect, pData->hFontText, L"Default avatar", g_discordUseDefaultAvatar.load(), pData->isHoveringDiscordUseDefaultAvatarToggle, pData->discordUseDefaultAvatarAnim, false, L"\uE77B", webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordUseTimestampToggleRect, pData->hFontText, L"Timestamp", g_discordUseTimestamp.load(), pData->isHoveringDiscordUseTimestampToggle, pData->discordUseTimestampAnim, false, L"\uE916", webhookEnabled);
+        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultNameToggleRect, pData->hFontText, TR(L"Default name"), g_discordUseDefaultName.load(), pData->isHoveringDiscordUseDefaultNameToggle, pData->discordUseDefaultNameAnim, false, L"\uE8AC", webhookEnabled);
+        MainUI_Paint_DrawToggle(hdc, pData->discordUseDefaultAvatarToggleRect, pData->hFontText, TR(L"Default avatar"), g_discordUseDefaultAvatar.load(), pData->isHoveringDiscordUseDefaultAvatarToggle, pData->discordUseDefaultAvatarAnim, false, L"\uE77B", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordUseTimestampToggleRect, pData->hFontText, TR(L"Timestamp"), g_discordUseTimestamp.load(), pData->isHoveringDiscordUseTimestampToggle, pData->discordUseTimestampAnim, false, L"\uE916", webhookEnabled);
 
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyHeartbeatToggleRect, pData->hFontText, L"Heartbeat", g_discordNotifyHeartbeat.load(), pData->isHoveringDiscordNotifyHeartbeatToggle, pData->discordNotifyHeartbeatAnim, true, L"\uE823", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyHeartbeatToggleRect, pData->hFontText, TR(L"Heartbeat"), g_discordNotifyHeartbeat.load(), pData->isHoveringDiscordNotifyHeartbeatToggle, pData->discordNotifyHeartbeatAnim, true, L"\uE823", webhookEnabled);
             MainUI_Paint_DrawCompactButton(hdc, pData->discordHeartbeatIntervalBtnRect, pData->hFontText, L"\uE916", pData->isHoveringDiscordHeartbeatIntervalBtn, L"\uE916", false, 0, webhookEnabled);
-            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyUtilsRamToggleRect, pData->hFontText, L"RAM Cleaner", g_discordNotifyUtilsRam.load(), pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamAnim, false, L"\uE964", webhookEnabled);
+            MainUI_Paint_DrawToggle(hdc, pData->discordNotifyUtilsRamToggleRect, pData->hFontText, TR(L"RAM Cleaner"), g_discordNotifyUtilsRam.load(), pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamAnim, false, L"\uE964", webhookEnabled);
             RestoreDC(hdc, savedDC);
         }
 
@@ -23558,11 +23598,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         StringFormat sfDiscordInfoText;
         sfDiscordInfoText.SetAlignment(StringAlignmentNear);
         sfDiscordInfoText.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"Discord webhook posts short status updates.", -1, &discordInfoFont, discordInfoTextRect, &sfDiscordInfoText, &discordInfoTextBrush);
+        g.DrawString(TR(L"Discord webhook posts short status updates."), -1, &discordInfoFont, discordInfoTextRect, &sfDiscordInfoText, &discordInfoTextBrush);
 
         std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
-        MainUI_Paint_DrawToggle(hdc, pData->discordWebhookEnableToggleRect, pData->hFontText, L"Enable webhook", webhookEnabled, pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableAnim, true, L"\uE8BD");
-        MainUI_Paint_DrawTextInput(hdc, pData->discordWebhookInputRect, pData->hFontSmall, pData->hFontText, L"", webhookUrl, pData->isHoveringDiscordWebhookInput, pData->isDiscordWebhookInputFocused, &pData->discordWebhookCaretPos, &pData->discordWebhookViewOffset, L"Enter webhook URL...", webhookEnabled);
+        MainUI_Paint_DrawToggle(hdc, pData->discordWebhookEnableToggleRect, pData->hFontText, TR(L"Enable webhook"), webhookEnabled, pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableAnim, true, L"\uE8BD");
+        MainUI_Paint_DrawTextInput(hdc, pData->discordWebhookInputRect, pData->hFontSmall, pData->hFontText, L"", webhookUrl, pData->isHoveringDiscordWebhookInput, pData->isDiscordWebhookInputFocused, &pData->discordWebhookCaretPos, &pData->discordWebhookViewOffset, TR(L"Enter webhook URL..."), webhookEnabled);
 
         MainUI_Paint_DrawTripleActionButtonsRow(
             hdc,
@@ -23570,9 +23610,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             pData->discordWebhookClearRect,
             pData->discordWebhookTestRect,
             pData->hFontText,
-            L"Paste",
-            L"Clear",
-            L"Send Test",
+            TR(L"Paste"),
+            TR(L"Clear"),
+            TR(L"Send Test"),
             pData->isHoveringDiscordWebhookPaste,
             pData->isHoveringDiscordWebhookClear,
             pData->isHoveringDiscordWebhookTest,
@@ -23594,7 +23634,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             RestoreDC(hdc, savedDC);
         }
         if (pData->isHoveringDiscordMentionTargetSettings) {
-            MainUI_Paint_DrawHoverTooltip(hdc, pData->discordMentionTargetSettingsRect, pData->hFontSmall, webhookEnabled ? L"Configure mention target (e.g. @everyone)" : L"Enable webhook first", false);
+            MainUI_Paint_DrawHoverTooltip(hdc, pData->discordMentionTargetSettingsRect, pData->hFontSmall, webhookEnabled ? TR(L"Configure mention target (e.g. @everyone)") : TR(L"Enable webhook first"), false);
         }
         if (!webhookEnabled) {
             const RECT disabledWebhookRects[] = {
@@ -23615,7 +23655,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             };
             for (const RECT& disabledRect : disabledWebhookRects) {
                 if (PtInRect(&disabledRect, pData->hoverPoint)) {
-                    MainUI_Paint_DrawHoverTooltip(hdc, disabledRect, pData->hFontSmall, L"Enable webhook first");
+                    MainUI_Paint_DrawHoverTooltip(hdc, disabledRect, pData->hFontSmall, TR(L"Enable webhook first"));
                     break;
                 }
             }
@@ -23652,7 +23692,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             Graphics tmpG(hdc);
             const wchar_t* ghText = L"GitHub";
             const wchar_t* dcText = L"Discord";
-            const wchar_t* chText = L"Changelog";
+            const wchar_t* chText = TR(L"Changelog");
             StringFormat sf;
             sf.SetFormatFlags(StringFormatFlagsNoClip);
             RectF ghB, dcB, chB;
@@ -23745,7 +23785,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 gTarget.MeasureString(L"AntiAFK-RBX", -1, &fontTitle, PointF(0, 0), &sfMeasure, &titleBounds);
                 gTarget.DrawString(L"AntiAFK-RBX", -1, &fontTitle, PointF((REAL)contentX, (REAL)fixedY), &sfMeasure, &whiteBrush);
 
-                const wchar_t* badgeText = L"PREVIEW";
+                const wchar_t* badgeText = TR(L"PREVIEW");
                 RectF badgeBounds;
                 gTarget.MeasureString(badgeText, -1, &fontBadge, PointF(0, 0), &sfMeasure, &badgeBounds);
                 REAL badgeH = 12.0f;
@@ -23784,13 +23824,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 contentY += 8 + extraGap;
             };
 
-            drawSection(L"About this build", L"Pre-release version with new features still being tested. Some functionality may be incomplete or unstable.", Color(255, 120, 190, 255));
+            drawSection(TR(L"About this build"), TR(L"Pre-release version with new features still being tested. Some functionality may be incomplete or unstable."), Color(255, 120, 190, 255));
 
             {
                 int yStart = contentY;
-                contentY += drawWrapped(&fontSection, L"Known Issues", contentX, contentY, contentW, Color(255, 255, 190, 90)) + 3;
-                contentY += drawBody(L"Information about known issues and planned fixes can be found on the Releases page.", contentY, 10) + 13;
-                contentY += drawLink(L"View known issues on Releases →", contentY, 10, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 120, 185, 250));
+                contentY += drawWrapped(&fontSection, TR(L"Known Issues"), contentX, contentY, contentW, Color(255, 255, 190, 90)) + 3;
+                contentY += drawBody(TR(L"Information about known issues and planned fixes can be found on the Releases page."), contentY, 10) + 13;
+                contentY += drawLink(TR(L"View known issues on Releases →"), contentY, 10, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 120, 185, 250));
                 if (!measureOnly) {
                     PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
                     SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
@@ -23804,13 +23844,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 contentY += 4 + extraGap;
             }
 
-            drawSection(L"Reporting Issues", L"Found a bug? Report it on GitHub or Discord with details and steps to reproduce. (links below)", Color(255, 120, 190, 255));
+            drawSection(TR(L"Reporting Issues"), TR(L"Found a bug? Report it on GitHub or Discord with details and steps to reproduce. (links below)"), Color(255, 120, 190, 255));
 
-            drawSection(L"Stay Updated", L"Follow releases on GitHub to get the latest updates and fixes. Updates will also be displayed in the UI.", Color(255, 120, 190, 255));
+            drawSection(TR(L"Stay Updated"), TR(L"Follow releases on GitHub to get the latest updates and fixes. Updates will also be displayed in the UI."), Color(255, 120, 190, 255));
 
             {
                 int yStart = contentY;
-                const wchar_t* headerText = L"What’s New in v.4.0.0 →";
+                const wchar_t* headerText = TR(L"What’s New in v.4.0.0 →");
                 RectF headerBounds;
                 gTarget.MeasureString(headerText, -1, &fontSection, SizeF((REAL)contentW, 9999.0f), &sfTypo, &headerBounds);
                 int headerH = (int)(headerBounds.Height + 4.0f);
@@ -23861,7 +23901,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
             const wchar_t* ghText = L"GitHub";
             const wchar_t* dcText = L"Discord";
-            const wchar_t* chText = L"Changelog";
+            const wchar_t* chText = TR(L"Changelog");
             int linkGap = 12;
 
             StringFormat sfCenter;
@@ -23989,9 +24029,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 int64_t m = (totalSec / 60) % 60;
                 int64_t s = totalSec % 60;
                 wchar_t buf[32];
-                if (h > 0) swprintf_s(buf, L"%lldh %lldm", (long long)h, (long long)m);
-                else if (m > 0) swprintf_s(buf, L"%lldm %llds", (long long)m, (long long)s);
-                else swprintf_s(buf, L"%llds", (long long)s);
+                if (h > 0) swprintf_s(buf, TR(L"%lldh %lldm"), (long long)h, (long long)m);
+                else if (m > 0) swprintf_s(buf, TR(L"%lldm %llds"), (long long)m, (long long)s);
+                else swprintf_s(buf, TR(L"%llds"), (long long)s);
                 return buf;
             };
 
@@ -24058,21 +24098,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             sfTLabel.SetLineAlignment(StringAlignmentCenter);
             int tIconOffset = tIconSize + 10;
             int tLabelX = 16 + tIconOffset;
-            int tLabelWidth = 180;
+            int tLabelWidth = 210;
 
             auto drawTLabel = [&](int index, const wchar_t* text) {
                 RectF labelRectF((REAL)(tLabelX + 1), (REAL)(tRowRects[index].top - 1), (REAL)tLabelWidth, (REAL)(tRowRects[index].bottom - tRowRects[index].top));
                 gTarget.DrawString(text, -1, &tLabelFont, labelRectF, &sfTLabel, &tLabelBrush);
             };
 
-            drawTLabel(0, L"Status");
-            drawTLabel(1, L"Next action in");
-            drawTLabel(2, L"Last action");
-            drawTLabel(3, L"Session time");
-            drawTLabel(4, L"Actions performed");
-            drawTLabel(5, L"Auto-reconnects");
-            drawTLabel(6, L"Next interval macro in");
-            drawTLabel(7, L"Next interval macro is");
+            drawTLabel(0, TR(L"Status"));
+            drawTLabel(1, TR(L"Next action in"));
+            drawTLabel(2, TR(L"Last action"));
+            drawTLabel(3, TR(L"Session time"));
+            drawTLabel(4, TR(L"Actions performed"));
+            drawTLabel(5, TR(L"Auto-reconnects"));
+            drawTLabel(6, TR(L"Next interval macro in"));
+            drawTLabel(7, TR(L"Next interval macro is"));
 
             HFONT tMonoFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH, L"Consolas");
             Font tValFont(hdc, tMonoFontH);
@@ -24121,12 +24161,12 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             };
 
             wchar_t tbuf[64];
-            const wchar_t* statusText = afkStarted ? L"Running" : L"Stopped";
+            const wchar_t* statusText = afkStarted ? TR(L"Running") : TR(L"Stopped");
             Color statusTextColor = afkStarted ? Color(255, 80, 200, 80) : Color(255, 200, 80, 80);
             drawTValueBox(0, statusText, false, statusTextColor);
             swprintf_s(tbuf, L"%s", afkStarted ? formatHMS(nextActionSec).c_str() : L"—");
             drawTValueBox(1, tbuf, afkStarted);
-            drawTValueBox(2, (afkStarted && sinceActionSec >= 0) ? formatHMS(sinceActionSec).c_str() : (afkStarted ? L"now" : L"—"), false);
+            drawTValueBox(2, (afkStarted && sinceActionSec >= 0) ? formatHMS(sinceActionSec).c_str() : (afkStarted ? TR(L"now") : L"—"), false);
             drawTValueBox(3, afkStarted ? formatHMS(sessionSec).c_str() : L"—", false);
             swprintf_s(tbuf, L"%llu", (unsigned long long)actions);
             drawTValueBox(4, tbuf, false);
@@ -24302,19 +24342,19 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, L"Force small window", g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F", true, &transG);
-            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, L"Use all monitors", g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E", true, &transG);
-            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, L"Keep 4:3 aspect ratio", g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799", true, &transG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridForceSmallToggleRect, pData->hFontText, TR(L"Force small window"), g_gridForceSmall.load(), pData->isHoveringGridForceSmall, pData->gridForceSmallAnim, false, L"\uE73F", true, &transG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridAllMonitorsToggleRect, pData->hFontText, TR(L"Use all monitors"), g_gridAllMonitors.load(), pData->isHoveringGridAllMonitors, pData->gridAllMonitorsAnim, false, L"\uE81E", true, &transG);
+            MainUI_Paint_DrawToggle(hdc, pData->gridKeepAspectRatioToggleRect, pData->hFontText, TR(L"Keep 4:3 aspect ratio"), g_gridKeepAspectRatio.load(), pData->isHoveringGridKeepAspectRatio, pData->gridKeepAspectRatioAnim, false, L"\uE799", true, &transG);
 
             const wchar_t* modeLabels[6] = {
-                L"Auto (fit to screen)",
-                L"Fixed window size",
-                L"Fixed columns",
-                L"Fixed rows",
-                L"Fixed window width",
-                L"Fixed window height"
+                TR(L"Auto (fit to screen)"),
+                TR(L"Fixed window size"),
+                TR(L"Fixed columns"),
+                TR(L"Fixed rows"),
+                TR(L"Fixed window width"),
+                TR(L"Fixed window height")
             };
-            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, L"Grid Mode", modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, &transG, 1);
+            MainUI_Paint_DrawDropdown(hdc, pData->gridModeDropdownRect, pData->hFontText, TR(L"Grid Mode"), modeLabels[currentMode], pData->isHoveringGridModeDropdown, true, L"\uE80A", true, &transG, 1);
 
             if (currentMode > 0) {
                 wchar_t valText[64] = {0};
@@ -24324,21 +24364,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 else if (currentMode == 4) swprintf_s(valText, L"%d", g_gridFixedWinW.load());
                 else if (currentMode == 5) swprintf_s(valText, L"%d", g_gridFixedWinH.load());
 
-                const wchar_t* valLabel = L"Value";
-                if (currentMode == 1) valLabel = L"Window Size";
-                else if (currentMode == 2) valLabel = L"Columns Count";
-                else if (currentMode == 3) valLabel = L"Rows Count";
-                else if (currentMode == 4) valLabel = L"Window Width";
-                else if (currentMode == 5) valLabel = L"Window Height";
+                const wchar_t* valLabel = TR(L"Value");
+                if (currentMode == 1) valLabel = TR(L"Window Size");
+                else if (currentMode == 2) valLabel = TR(L"Columns Count");
+                else if (currentMode == 3) valLabel = TR(L"Rows Count");
+                else if (currentMode == 4) valLabel = TR(L"Window Width");
+                else if (currentMode == 5) valLabel = TR(L"Window Height");
 
                 MainUI_Paint_DrawDropdown(hdc, pData->gridModeValueDropdownRect, pData->hFontText, valLabel, valText, pData->isHoveringGridModeValue, true, L"\uE75D", true, &transG, 1, 0, L"\uE70F");
             }
 
             wchar_t betweenText[32]; swprintf_s(betweenText, L"%d px", g_gridSpacingBetween.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, L"Spacing between", betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, &transG, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBetweenDropdownRect, pData->hFontText, TR(L"Spacing between"), betweenText, pData->isHoveringGridSpacingBetween, true, L"\uE784", true, &transG, 1, 0, L"\uE70F");
 
             wchar_t bordersText[32]; swprintf_s(bordersText, L"%d px", g_gridSpacingBorders.load());
-            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, L"Spacing from borders", bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &transG, 1, 0, L"\uE70F");
+            MainUI_Paint_DrawDropdown(hdc, pData->gridSpacingBordersDropdownRect, pData->hFontText, TR(L"Spacing from borders"), bordersText, pData->isHoveringGridSpacingBorders, true, L"\uE7A8", true, &transG, 1, 0, L"\uE70F");
 
             MainUI_Paint_DrawGridHotkeyRow(hdc, pData, &transG);
 
@@ -24372,31 +24412,31 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         auto getDisclaimerText = [&](int ctx) -> const wchar_t* {
             if (ctx >= 100) {
-                if (ctx == 101) return L"Arrange Roblox windows";
+                if (ctx == 101) return TR(L"Arrange Roblox windows");
             if (ctx == 107) {
-                if (pData->settingsSubKind == 1) return L"Delay between handling each Roblox window";
-                if (pData->settingsSubKind == 2) return L"Configure RAM Cleaner strategy";
-                if (pData->settingsSubKind == 4) return L"Customize interface preferences";
-                return L"Configure Auto Reconnect check interval";
+                if (pData->settingsSubKind == 1) return TR(L"Delay between handling each Roblox window");
+                if (pData->settingsSubKind == 2) return TR(L"Configure RAM Cleaner strategy");
+                if (pData->settingsSubKind == 4) return TR(L"Customize interface preferences");
+                return TR(L"Configure Auto Reconnect check interval");
             }
-                if (ctx == 106) return L"Choose what the Status Bar shows";
-                if (ctx == 102) return L"Configure FPS Capper (CPU Limiter) settings";
-                if (ctx == 104) return L"Live session timings";
-                if (ctx == 105) return L"Create and manage custom macros";
-                return L"Customize action delays";
+                if (ctx == 106) return TR(L"Choose what the Status Bar shows");
+                if (ctx == 102) return TR(L"Configure FPS Capper (CPU Limiter) settings");
+                if (ctx == 104) return TR(L"Live session timings");
+                if (ctx == 105) return TR(L"Create and manage custom macros");
+                return TR(L"Customize action delays");
             }
             switch (ctx) {
-                case 2: case 4: return L"Statistics are saved only when the app is closed correctly.";
-                case 1: return L"Hover over toggle/button for info";
-                case 5: return L"Webhook URL is stored locally in your Windows user profile.";
+                case 2: case 4: return TR(L"Statistics are saved only when the app is closed correctly.");
+                case 1: return TR(L"Hover over toggle/button for info");
+                case 5: return TR(L"Webhook URL is stored locally in your Windows user profile.");
                 default: {
                     int relType = (currentVersion / 100) % 10;
                     if (relType != STABLE && relType != 0) {
                         static wchar_t buildInfo[96];
-                        swprintf_s(buildInfo, L"Pre-release build • %s", g_Version);
+                        swprintf_s(buildInfo, TR(L"Pre-release build • %s"), g_Version);
                         return buildInfo;
                     }
-                    return L"Closing this window minimizes it to the system tray.";
+                    return TR(L"Closing this window minimizes it to the system tray.");
                 }
             }
         };
@@ -24455,7 +24495,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         bool wikiVisible = homeAlpha > 0.001f;
         int showMoreReservedW = 0;
         {
-            const wchar_t* showMoreText = L"preview info";
+            const wchar_t* showMoreText = TR(L"preview info");
             RectF smBounds;
             g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
             showMoreReservedW = (int)smBounds.Width + 22;
@@ -24587,7 +24627,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         if (showMoreVisible) {
-            const wchar_t* showMoreText = L"preview info";
+            const wchar_t* showMoreText = TR(L"preview info");
             RectF smBounds;
             g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
             int smW = (int)smBounds.Width + 22;
@@ -24698,7 +24738,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     gTarget.SetSmoothingMode(oldSmooth);
 
                     RectF textRect((REAL)(margin + 14), (REAL)rowRc.top, (REAL)(mW - 28), (REAL)rowH);
-                    gTarget.DrawString(L"+ Create New Macro", -1, &rowFont, textRect, &sfLeft, &accentColor);
+                    gTarget.DrawString(TR(L"+ Create New Macro"), -1, &rowFont, textRect, &sfLeft, &accentColor);
 
                     Font iconFont(L"Segoe MDL2 Assets", 9.0f);
                     bool isImpHovered = (isHovered && pData->hoverPoint.x > mW - 14 - 22 && pData->hoverPoint.x <= mW - 14);
@@ -24720,7 +24760,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     pData->macrosReconnectDelayBtnRect = { mW - 14 - 66, rowRc.top, mW - 14 - 44, rowRc.bottom };
 
                     wchar_t delayTxt[16];
-                    swprintf_s(delayTxt, L"%ds", g_reconnectMacroDelaySec.load());
+                    swprintf_s(delayTxt, TR(L"%ds"), g_reconnectMacroDelaySec.load());
                     RectF delayTextRect((REAL)(mW - 14 - 108), (REAL)rowRc.top, 38.0f, (REAL)rowH);
                     SolidBrush delayTextBrush(Color(150, 140, 140, 140));
                     gTarget.DrawString(delayTxt, -1, &smallFont, delayTextRect, &sfRight, &delayTextBrush);
@@ -24761,7 +24801,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 gTarget.SetClip(Rect(0, listStartNewY, mW, listVisibleBottom - listStartNewY));
 
                 if (g_macros.empty()) {
-                    gTarget.DrawString(L"No macros saved yet.", -1, &rowFont, PointF((REAL)14, (REAL)(mcy + 8)), &dimColor);
+                    gTarget.DrawString(TR(L"No macros saved yet."), -1, &rowFont, PointF((REAL)14, (REAL)(mcy + 8)), &dimColor);
                 } else {
                     for (size_t i = 0; i < g_macros.size(); i++) {
                         auto& m = g_macros[i];
@@ -24852,7 +24892,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         int gap = 2;
                         int triggerX = rightEdge - (btnW * 3 + gap * 2) - 4;
 
-                        std::wstring timeStr = (m.triggerOnInterval && m.intervalSec > 0) ? (std::to_wstring(m.intervalSec) + L"s") : L"";
+                        std::wstring timeStr = (m.triggerOnInterval && m.intervalSec > 0) ? (std::to_wstring(m.intervalSec) + TR(L"s")) : L"";
                         Font timeFont(L"Segoe UI", 8.0f);
                         SolidBrush timeBrush((m.triggerOnInterval && m.intervalSec > 0) ? Color(255, 0, 180, 255) : Color(140, 140, 140, 140));
                         RectF timeRect((REAL)(triggerX - 44), (REAL)rowRc.top, 40.0f, (REAL)rowH);
@@ -24929,7 +24969,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         pData->macrosBtnRectFocus = focusBtnRc;
                     } else {
                         RectF twTextRect((REAL)14, (REAL)twRc.top, (REAL)(mW - 28), (REAL)(twRc.bottom - twRc.top));
-                        gTarget.DrawString(L"  (no Roblox windows)", -1, &smallFont, twTextRect, &sfLeft, &dimColor);
+                        gTarget.DrawString(TR(L"  (no Roblox windows)"), -1, &smallFont, twTextRect, &sfLeft, &dimColor);
                         pData->macrosBtnRectFocus = {0};
                     }
                     pData->macrosBtnRectTestWin = twRc;
@@ -24948,8 +24988,8 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     int splitX2 = mW / 2;
                     pData->macrosBtnRectTest = { 0, safeBottom, splitX2, safeBottom + btnH };
                     pData->macrosBtnRectEdit = { splitX2, safeBottom, mW, safeBottom + btnH };
-                    drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", pData->macrosHoverRecord, false);
-                    drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", pData->macrosHoverEdit, true);
+                    drawBorderedBtn(pData->macrosBtnRectTest, TR(L"Test Run"), pData->macrosHoverRecord, false);
+                    drawBorderedBtn(pData->macrosBtnRectEdit, TR(L"Re-record"), pData->macrosHoverEdit, true);
                 } else {
                     RECT hintRc = { 0, safeBottom - btnH, mW, safeBottom };
                     SolidBrush hintBg(Color(25, 25, 25, 25));
@@ -24966,13 +25006,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         gTarget.SetSmoothingMode(oldS);
                     }
                     RectF hintRect((REAL)14, (REAL)hintRc.top, (REAL)(mW - 28), (REAL)(hintRc.bottom - hintRc.top));
-                    gTarget.DrawString(L"Select a macro to test or re-record it", -1, &smallFont, hintRect, &sfLeft, &dimColor);
+                    gTarget.DrawString(TR(L"Select a macro to test or re-record it"), -1, &smallFont, hintRect, &sfLeft, &dimColor);
                     pData->macrosBtnRectTestWin = hintRc;
                     pData->macrosBtnRectFocus = {0};
                     pData->macrosBtnRectTest = { 0, safeBottom, splitX, safeBottom + btnH };
                     pData->macrosBtnRectEdit = { splitX, safeBottom, mW, safeBottom + btnH };
-                    drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", false, false, false);
-                    drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", false, true, false);
+                    drawBorderedBtn(pData->macrosBtnRectTest, TR(L"Test Run"), false, false, false);
+                    drawBorderedBtn(pData->macrosBtnRectEdit, TR(L"Re-record"), false, true, false);
                 }
             } else {
                 gTarget.ResetClip();
@@ -25018,7 +25058,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     Font iconFont12(L"Segoe MDL2 Assets", 10.0f);
                     RECT labelRc = { 0, mcy, mW, mcy + 24 };
                     RectF labelTextRect((REAL)28, (REAL)labelRc.top, (REAL)(mW - 42), (REAL)24);
-                    gTarget.DrawString(L"Name:", -1, &rowFont, labelTextRect, &sfLeft, &textColor);
+                    gTarget.DrawString(TR(L"Name:"), -1, &rowFont, labelTextRect, &sfLeft, &textColor);
                     RectF nameIconRect((REAL)8, (REAL)(labelRc.top + 1), 16.0f, 24.0f);
                     gTarget.DrawString(L"\uE8AC", -1, &iconFont12, nameIconRect, &sfCenter, &accentColor);
                     mcy += 24;
@@ -25032,7 +25072,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     std::wstring displayName = pData->macrosWizardName;
                     const Brush& nb = displayName.empty() ? (const Brush&)dimColor : (const Brush&)textColor;
                     RectF textRect((REAL)14, (REAL)editRc.top, (REAL)(mW - 28), 32.0f);
-                    gTarget.DrawString(displayName.empty() ? L"(click to enter name)" : displayName.c_str(),
+                    gTarget.DrawString(displayName.empty() ? TR(L"(click to enter name)") : displayName.c_str(),
                         -1, &rowFont, textRect, &sfLeft, displayName.empty() ? &dimColor : &nb);
 
                     pData->macrosBtnRectNameEdit = editRc;
@@ -25040,7 +25080,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
                     RECT targetLabelRc = { 0, mcy, mW, mcy + 24 };
                     RectF targetLabelTextRect((REAL)30, (REAL)targetLabelRc.top, (REAL)(mW - 44), (REAL)24);
-                    gTarget.DrawString(L"Target Window:", -1, &rowFont, targetLabelTextRect, &sfLeft, &textColor);
+                    gTarget.DrawString(TR(L"Target Window:"), -1, &rowFont, targetLabelTextRect, &sfLeft, &textColor);
                     RectF winIconRect((REAL)10, (REAL)(targetLabelRc.top + 1), 16.0f, 24.0f);
                     gTarget.DrawString(L"\uE7C4", -1, &iconFont12, winIconRect, &sfCenter, &accentColor);
                     mcy += 24;
@@ -25073,13 +25113,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         pData->macrosBtnRectFocus = wizFocusRc;
                     } else {
                         RectF winTextRect((REAL)14, (REAL)winRc.top, (REAL)(mW - 28), 32.0f);
-                        gTarget.DrawString(L"  (no Roblox windows found)", -1, &smallFont, winTextRect, &sfLeft, &dimColor);
+                        gTarget.DrawString(TR(L"  (no Roblox windows found)"), -1, &smallFont, winTextRect, &sfLeft, &dimColor);
                         pData->macrosBtnRectFocus = {0};
                     }
                     pData->macrosBtnRectTestWin = winRc;
 
-                    drawFlushButtons(pData->macrosBtnRectBack, L"Cancel", pData->macrosHoverBack,
-                                     pData->macrosBtnRectNext, L"Next", pData->macrosHoverNext);
+                    drawFlushButtons(pData->macrosBtnRectBack, TR(L"Cancel"), pData->macrosHoverBack,
+                                     pData->macrosBtnRectNext, TR(L"Next"), pData->macrosHoverNext);
                 }
                 else if (pData->macrosViewMode == 2) {
                     bool reRecording = g_macroReRecording;
@@ -25091,7 +25131,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     Font iconFont12(L"Segoe MDL2 Assets", 10.0f);
                     RECT titleRc = { panelX, cy, panelX + panelW, cy + 24 };
                     RectF titleTextRect((REAL)(panelX + 20), (REAL)titleRc.top, (REAL)(panelW - 20), (REAL)24);
-                    gTarget.DrawString(reRecording ? L"Re-record Macro" : L"Ready to Record", -1, &rowFont, titleTextRect, &sfLeft, &accentColor);
+                    gTarget.DrawString(reRecording ? TR(L"Re-record Macro") : TR(L"Ready to Record"), -1, &rowFont, titleTextRect, &sfLeft, &accentColor);
                     RectF titleIconRect((REAL)panelX, (REAL)(titleRc.top + 1), 16.0f, 24.0f);
                     gTarget.DrawString(L"\uE714", -1, &iconFont12, titleIconRect, &sfCenter, &accentColor);
                     cy += 28;
@@ -25117,10 +25157,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     RectF descRect((REAL)(panelX + 2), (REAL)cy, (REAL)(panelW - 4), 18.0f);
                     if (reRecording) {
                         wchar_t descTmp[160];
-                        swprintf_s(descTmp, L"This will replace the %d recorded actions of \"%s\".", (int)g_wizardMacro.actions.size(), g_wizardMacro.name.c_str());
+                        swprintf_s(descTmp, TR(L"This will replace the %d recorded actions of \"%s\"."), (int)g_wizardMacro.actions.size(), g_wizardMacro.name.c_str());
                         gTarget.DrawString(descTmp, -1, &descFont, descRect, &sfWrap, &descCol);
                     } else {
-                        gTarget.DrawString(L"The target Roblox window must be active during recording.", -1, &descFont, descRect, &sfWrap, &descCol);
+                        gTarget.DrawString(TR(L"The target Roblox window must be active during recording."), -1, &descFont, descRect, &sfWrap, &descCol);
                     }
                     cy += 24;
 
@@ -25134,11 +25174,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         RectF textR((REAL)(panelX + 24), (REAL)y, (REAL)(panelW - 28), (REAL)20);
                         gTarget.DrawString(text, -1, &smallFont, textR, &sfLeft, &textColor);
                     };
-                    drawStep(L"1", L"Roblox window will be focused and resized to 800 x 600", cy);
+                    drawStep(L"1", TR(L"Roblox window will be focused and resized to 800 x 600"), cy);
                     cy += 22;
-                    drawStep(L"2", L"Recording starts: clicks, keys and mouse movement", cy);
+                    drawStep(L"2", TR(L"Recording starts: clicks, keys and mouse movement"), cy);
                     cy += 22;
-                    drawStep(L"3", L"Press Ctrl+Shift+R to stop recording", cy);
+                    drawStep(L"3", TR(L"Press Ctrl+Shift+R to stop recording"), cy);
                     cy += 18;
 
                     mcy = cy + 36;
@@ -25149,51 +25189,51 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         int barY = btnY - barH - 9;
                         RECT toggleRowRc = { 14, barY, mW - 14 - 24, barY + barH };
                         pData->macrosRecordMovementsToggleRect = toggleRowRc;
-                        MainUI_Paint_DrawToggle(hdc, toggleRowRc, pData->hFontSmall, L"Record mouse movements", g_recordingMovementsEnabled, pData->macrosHoverRecordMovements, pData->macrosRecordMovementsAnim, false, L"\uE7C3", true, &gTarget);
+                        MainUI_Paint_DrawToggle(hdc, toggleRowRc, pData->hFontSmall, TR(L"Record mouse movements"), g_recordingMovementsEnabled, pData->macrosHoverRecordMovements, pData->macrosRecordMovementsAnim, false, L"\uE7C3", true, &gTarget);
                         int swY = barY + (barH - 24) / 2 + 4;
                         RECT helpRc = { mW - 14 - 24, swY, mW - 14, swY + 24 };
                         pData->macrosHelpBtnRect = helpRc;
                         MainUI_Paint_DrawHelpButton(hdc, helpRc, pData->hFontSmall, pData->macrosHoverFinish, false, &gTarget);
                     }
 
-                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
-                                     pData->macrosBtnRectRecord, L"Record", pData->macrosHoverRecord);
+                    drawFlushButtons(pData->macrosBtnRectBack, TR(L"Back"), pData->macrosHoverBack,
+                                     pData->macrosBtnRectRecord, TR(L"Record"), pData->macrosHoverRecord);
                 }
                 else if (pData->macrosViewMode == 3) {
                     int stepCount = (int)g_wizardMacro.actions.size();
                     wchar_t cntMsg[64];
-                    swprintf_s(cntMsg, L"Recorded %d steps:", stepCount);
+                    swprintf_s(cntMsg, TR(L"Recorded %d steps:"), stepCount);
                     gTarget.DrawString(cntMsg, -1, &rowFont, PointF((REAL)14, (REAL)mcy), &textColor);
                     mcy += 24;
 
                     int maxShow = min(stepCount, 8);
                     for (int i = 0; i < maxShow; i++) {
                         const auto& a = g_wizardMacro.actions[i];
-                        const wchar_t* ts = L"Click";
-                        if (a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyPress) ts = L"Key";
-                        else if (a.type == MacroStepType::KeyUp) ts = L"KeyUp";
-                        else if (a.type == MacroStepType::MouseMove) ts = L"Move";
-                        else if (a.type == MacroStepType::MouseDown) ts = L"MouseDown";
-                        else if (a.type == MacroStepType::MouseUp) ts = L"MouseUp";
-                        else if (a.type == MacroStepType::Sleep) ts = L"Wait";
+                        const wchar_t* ts = TR(L"Click");
+                        if (a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyPress) ts = TR(L"Key");
+                        else if (a.type == MacroStepType::KeyUp) ts = TR(L"KeyUp");
+                        else if (a.type == MacroStepType::MouseMove) ts = TR(L"Move");
+                        else if (a.type == MacroStepType::MouseDown) ts = TR(L"MouseDown");
+                        else if (a.type == MacroStepType::MouseUp) ts = TR(L"MouseUp");
+                        else if (a.type == MacroStepType::Sleep) ts = TR(L"Wait");
                         wchar_t ln[128];
-                        swprintf_s(ln, L"  %d. %s (%dms)", i + 1, ts, a.delayBeforeMs);
+                        swprintf_s(ln, TR(L"  %d. %s (%dms)"), i + 1, ts, a.delayBeforeMs);
                         gTarget.DrawString(ln, -1, &smallFont, PointF((REAL)14, (REAL)mcy), &textColor);
                         mcy += 18;
                     }
                     if (stepCount > maxShow) {
                         wchar_t more[32];
-                        swprintf_s(more, L"  ... +%d more steps", stepCount - maxShow);
+                        swprintf_s(more, TR(L"  ... +%d more steps"), stepCount - maxShow);
                         gTarget.DrawString(more, -1, &smallFont, PointF((REAL)14, (REAL)mcy), &dimColor);
                     }
 
-                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
-                                     pData->macrosBtnRectNext, L"Next", pData->macrosHoverNext);
+                    drawFlushButtons(pData->macrosBtnRectBack, TR(L"Back"), pData->macrosHoverBack,
+                                     pData->macrosBtnRectNext, TR(L"Next"), pData->macrosHoverNext);
                 }
                 else if (pData->macrosViewMode == 4) {
                     RECT qRc = { 0, mcy, mW, mcy + 28 };
                     RectF qTextRect((REAL)14, (REAL)qRc.top, (REAL)(mW - 28), (REAL)28);
-                    gTarget.DrawString(L"When should it run?", -1, &rowFont, qTextRect, &sfLeft, &textColor);
+                    gTarget.DrawString(TR(L"When should it run?"), -1, &rowFont, qTextRect, &sfLeft, &textColor);
                     mcy += 28;
 
                     auto drawCheckbox = [&](RectF rect, bool checked, bool hovered) {
@@ -25219,7 +25259,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         drawCheckbox(chkRect, g_wizardMacro.triggerOnCooldown, isHovered);
 
                         RectF textRect((REAL)38, (REAL)rowRc.top, (REAL)(mW - 38), 30.0f);
-                        gTarget.DrawString(L"Run on AFK cooldown", -1, &smallFont, textRect, &sfLeft, &textColor);
+                        gTarget.DrawString(TR(L"Run on AFK cooldown"), -1, &smallFont, textRect, &sfLeft, &textColor);
 
                         pData->macrosBtnRectCooldown = rowRc;
                         mcy += 30;
@@ -25235,14 +25275,14 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         drawCheckbox(chkRect, g_wizardMacro.triggerOnReconnect, isHovered);
 
                         RectF textRect((REAL)38, (REAL)rowRc.top, (REAL)(mW - 38), 30.0f);
-                        gTarget.DrawString(L"Run on reconnect", -1, &smallFont, textRect, &sfLeft, &textColor);
+                        gTarget.DrawString(TR(L"Run on reconnect"), -1, &smallFont, textRect, &sfLeft, &textColor);
 
                         pData->macrosBtnRectReconnect = rowRc;
                         mcy += 30;
                     }
 
-                    drawFlushButtons(pData->macrosBtnRectBack, L"Back", pData->macrosHoverBack,
-                                     pData->macrosBtnRectFinish, L"Save", pData->macrosHoverFinish);
+                    drawFlushButtons(pData->macrosBtnRectBack, TR(L"Back"), pData->macrosHoverBack,
+                                     pData->macrosBtnRectFinish, TR(L"Save"), pData->macrosHoverFinish);
                 }
                 else if (pData->macrosViewMode == 5) {
                     int panelX = 14;
@@ -25256,7 +25296,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     RectF titleIconRect((REAL)panelX, (REAL)(titleRc.top + 1), 16.0f, 24.0f);
                     gTarget.DrawString(L"\uE714", -1, &iconFont12, titleIconRect, &sfCenter, &recTitleBrush);
                     RectF titleTextRect((REAL)(panelX + 20), (REAL)titleRc.top, (REAL)(panelW - 20), (REAL)24);
-                    gTarget.DrawString(L"Recording...", -1, &rowFont, titleTextRect, &sfLeft, &recTitleBrush);
+                    gTarget.DrawString(TR(L"Recording..."), -1, &rowFont, titleTextRect, &sfLeft, &recTitleBrush);
                     cy += 28;
 
                     {
@@ -25278,7 +25318,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     sfWrap.SetLineAlignment(StringAlignmentNear);
                     sfWrap.SetFormatFlags(StringFormatFlagsNoClip);
                     RectF descRect((REAL)(panelX + 2), (REAL)cy, (REAL)(panelW - 4), 18.0f);
-                    gTarget.DrawString(L"Recording your actions in the Roblox client.", -1, &descFont, descRect, &sfWrap, &descCol);
+                    gTarget.DrawString(TR(L"Recording your actions in the Roblox client."), -1, &descFont, descRect, &sfWrap, &descCol);
                     cy += 24;
 
                     auto drawStep = [&](const wchar_t* stepNum, const wchar_t* text, int y) {
@@ -25291,11 +25331,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         RectF textR((REAL)(panelX + 24), (REAL)y, (REAL)(panelW - 28), (REAL)20);
                         gTarget.DrawString(text, -1, &smallFont, textR, &sfLeft, &textColor);
                     };
-                    drawStep(L"1", L"Recording clicks, keys and mouse movement", cy);
+                    drawStep(L"1", TR(L"Recording clicks, keys and mouse movement"), cy);
                     cy += 22;
-                    drawStep(L"2", L"Press Ctrl+Shift+R to stop recording", cy);
+                    drawStep(L"2", TR(L"Press Ctrl+Shift+R to stop recording"), cy);
                     cy += 22;
-                    drawStep(L"3", L"Roblox window resized to 800 x 600", cy);
+                    drawStep(L"3", TR(L"Roblox window resized to 800 x 600"), cy);
                     cy += 18;
 
                     mcy = cy + 36;
@@ -25304,13 +25344,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         int btnY = mH - 65 - btnH;
                         DWORD elapsed = (g_recordingStartTime > 0) ? (DWORD)((MacroEngine_NowMs() - g_recordingStartTime) / 1000) : 0;
                         wchar_t stats[128];
-                        swprintf_s(stats, L"%d clicks • %d keys • %d wheel • %ds", g_recordingClickCount, g_recordingKeyCount, g_recordingWheelCount, elapsed);
+                        swprintf_s(stats, TR(L"%d clicks • %d keys • %d wheel • %ds"), g_recordingClickCount, g_recordingKeyCount, g_recordingWheelCount, elapsed);
                         RectF statsRect((REAL)0, (REAL)(btnY - 28), (REAL)mW, 24.0f);
                         gTarget.DrawString(stats, -1, &smallFont, statsRect, &sfCenter, &accentColor);
                     }
 
-                    drawFlushButtons(pData->macrosBtnRectBack, L"Cancel", pData->macrosHoverBack,
-                                     pData->macrosBtnRectRecord, L"Stop", pData->macrosHoverRecord);
+                    drawFlushButtons(pData->macrosBtnRectBack, TR(L"Cancel"), pData->macrosHoverBack,
+                                     pData->macrosBtnRectRecord, TR(L"Stop"), pData->macrosHoverRecord);
                 }
             }
         };
@@ -25342,24 +25382,24 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosBtnRectFolder, pData->hFontSmall, MacroEngine_GetMacrosPath().c_str(), false);
             }
             if (pData->macrosBtnRectImport.left != 0 && PtInRect(&pData->macrosBtnRectImport, pData->hoverPoint)) {
-                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosBtnRectImport, pData->hFontSmall, L"Import macro from file", false);
+                MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosBtnRectImport, pData->hFontSmall, TR(L"Import macro from file"), false);
             }
             if (pData->macrosReconnectDelayBtnRect.left != 0 && PtInRect(&pData->macrosReconnectDelayBtnRect, pData->hoverPoint)) {
-                wchar_t delayTip[64];
-                swprintf_s(delayTip, L"Reconnect macro delay: %ds (click to change)", g_reconnectMacroDelaySec.load());
+                wchar_t delayTip[128];
+                swprintf_s(delayTip, TR(L"Reconnect macro delay: %ds (click to change)"), g_reconnectMacroDelaySec.load());
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosReconnectDelayBtnRect, pData->hFontSmall, delayTip, false);
             }
             if (pData->macrosHoveringItem >= 0) {
                 int rowTop = 63 + pData->macrosHoveringItem * 32 - pData->macrosScrollOffset;
                 if (pData->macrosHoverRenameIcon) {
                     RECT iconRc = { 14, rowTop, 34, rowTop + 32 };
-                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Rename macro", true);
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, TR(L"Rename macro"), true);
                 } else if (pData->macrosHoverExportIcon) {
                     RECT iconRc = { mW - 14 - 44, rowTop, mW - 14 - 22, rowTop + 32 };
-                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Export macro to file", false);
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, TR(L"Export macro to file"), false);
                 } else if (pData->macrosHoverDeleteIcon) {
                     RECT iconRc = { mW - 14 - 22, rowTop, mW - 14, rowTop + 32 };
-                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, L"Delete macro", false);
+                    MainUI_Paint_DrawHoverTooltip(hdc, iconRc, pData->hFontSmall, TR(L"Delete macro"), false);
                 }
             }
             auto runPosOf = [&](int idx, int which) -> int {
@@ -25392,16 +25432,16 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             int selIdx = pData->macrosHoveringItem;
             if (pData->macrosHoverCooldown && pData->macrosTriggerRectCd.left != 0) {
                 int pos = runPosOf(selIdx, 0);
-                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" • Run on each AFK action") : L"Run on each AFK action";
+                std::wstring tip = (pos > 0) ? (TR(L"Playback order: ") + std::to_wstring(pos) + TR(L" • Run on each AFK action")) : TR(L"Run on each AFK action");
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectCd, pData->hFontSmall, tip.c_str(), false);
             }
             if (pData->macrosHoverReconnect && pData->macrosTriggerRectRc.left != 0) {
                 int pos = runPosOf(selIdx, 1);
-                std::wstring tip = (pos > 0) ? (L"Playback order: " + std::to_wstring(pos) + L" • Run on reconnect") : L"Run on reconnect";
+                std::wstring tip = (pos > 0) ? (TR(L"Playback order: ") + std::to_wstring(pos) + TR(L" • Run on reconnect")) : TR(L"Run on reconnect");
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectRc, pData->hFontSmall, tip.c_str(), false);
             }
             if (pData->macrosHoverInterval && pData->macrosTriggerRectInt.left != 0) {
-                std::wstring tip = L"Run on interval timer";
+                std::wstring tip = TR(L"Run on interval timer");
                 int sec = 0;
                 {
                     std::lock_guard<std::mutex> lock(g_macrosMutex);
@@ -25410,9 +25450,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     }
                 }
                 int pos = runPosOf(selIdx, 2);
-                if (pos > 0) tip = L"Playback order: " + std::to_wstring(pos) + L" • " + tip;
-                if (sec > 0) tip += L" (" + std::to_wstring(sec) + L"s)";
-                else tip += L" (Not set - Click to set time)";
+                if (pos > 0) tip = TR(L"Playback order: ") + std::to_wstring(pos) + L" • " + tip;
+                if (sec > 0) tip += L" (" + std::to_wstring(sec) + TR(L"s)");
+                else tip += TR(L" (Not set - Click to set time)");
                 MainUI_Paint_DrawHoverTooltip(hdc, pData->macrosTriggerRectInt, pData->hFontSmall, tip.c_str(), false);
             }
         }
@@ -25573,7 +25613,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     {
         std::wstring* msg = reinterpret_cast<std::wstring*>(wParam);
         if (msg) {
-            ShowDarkMessageBox(hwnd, msg->c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
+            ShowDarkMessageBox(hwnd, msg->c_str(), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
             delete msg;
         }
         return 0;
@@ -25609,12 +25649,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             {
                 std::lock_guard<std::mutex> lock(g_macrosMutex);
                 if (delIdx >= 0 && delIdx < (int)g_macros.size()) {
-                    confirmMsg = L"Delete macro \"" + g_macros[delIdx].name + L"\"?\nThis cannot be undone.";
+                    confirmMsg = TR(L"Delete macro \"") + g_macros[delIdx].name + TR(L"\"?\nThis cannot be undone.");
                 }
             }
             if (!confirmMsg.empty()) {
                 EnableWindow(hwnd, FALSE);
-                int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), L"AntiAFK-RBX • Delete Macro", MB_YESNO | MB_DEFBUTTON2);
+                int delResult = ShowDarkMessageBox(hwnd, confirmMsg.c_str(), TR(L"AntiAFK-RBX • Delete Macro"), MB_YESNO | MB_DEFBUTTON2);
                 EnableWindow(hwnd, TRUE);
                 SetForegroundWindow(hwnd);
             if (delResult == IDYES) {
@@ -25634,7 +25674,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                     RemoveMacroReferences(deletedName);
                     SaveSettings();
                 }
-                QueueStatusBarOverlay(L"Macro deleted", 1500, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(TR(L"Macro deleted"), 1500, hwnd, StatusBarEventType::Macro);
             }
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -25754,7 +25794,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             {
-                int macrosBtnW = 58, macrosBtnH = 24;
+                int macrosBtnW = IsRussianUi() ? 84 : 58, macrosBtnH = 24;
                 pData->macrosBtnRect = { clientRect.right - help_btn_size - 20 - macrosBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + macrosBtnH };
                 int mCtrlTop = y + (rowH - help_btn_size) / 2 + 4;
                 pData->macrosIntervalToggleCompactRect = { pData->macrosBtnRect.left - inlineGap - help_btn_size, mCtrlTop, pData->macrosBtnRect.left - inlineGap, mCtrlTop + help_btn_size };
@@ -25882,7 +25922,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
             pData->uiSettingsRowRect = { 0, y, clientRect.right, y + rowH + vGap };
-            pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - 58, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
+            pData->uiSettingsBtnRect = { clientRect.right - help_btn_size - 20 - (IsRussianUi() ? 84 : 58), y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + 24 };
             pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
             y += rowH + vGap;
 
@@ -26024,7 +26064,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     pData->timingsViewDirection = -1;
                 } else if (pData->showingMacros || pData->macrosViewAnim > 0.5f) {
                     if (g_isRecording && pData->macrosViewMode == 5) {
-                        QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(TR(L"Recording in progress • press Ctrl+Shift+R to stop"), 1500, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
                     if (pData->macrosViewMode > 0) {
@@ -26471,6 +26511,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringScreenSaverButton, pData->screenSaverButtonRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringSsAlwaysShow, pData->ssAlwaysShowButtonRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
+            anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringLanguage, pData->languageDropdownRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUiSettings, pData->uiSettingsBtnRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
@@ -26678,6 +26719,7 @@ pData->isHoveringDiscord = false;
         pData->isHoveringRamCleanerDropdown = false;
         pData->isHoveringReconnectIntervalDropdown = false;
         pData->isHoveringUserSafe = false;
+        pData->isHoveringLanguage = false;
         pData->isHoveringActionDelaysEdit = false;
         pData->isHoveringDiscordWebhookInput = false;
         pData->isHoveringDiscordWebhookPaste = false;
@@ -27269,27 +27311,27 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         UINT btnType = pData->params->type & 0x0F;
         std::vector<std::pair<int, const wchar_t*>> buttons;
         if (btnType == MB_OK) {
-            buttons.push_back({ IDOK, L"OK" });
+            buttons.push_back({ IDOK, TR(L"OK") });
         }
         else if (btnType == MB_OKCANCEL)
         {
-            buttons.push_back({ IDOK, L"OK" });
-            buttons.push_back({ IDCANCEL, L"Cancel" });
+            buttons.push_back({ IDOK, TR(L"OK") });
+            buttons.push_back({ IDCANCEL, TR(L"Cancel") });
         }
         else if (btnType == MB_YESNO)
         {
-            buttons.push_back({ IDYES, L"Yes" });
-            buttons.push_back({ IDNO, L"No" });
+            buttons.push_back({ IDYES, TR(L"Yes") });
+            buttons.push_back({ IDNO, TR(L"No") });
         }
         else if (btnType == MB_YESNOCANCEL)
         {
-            buttons.push_back({ IDYES, L"Yes" });
-            buttons.push_back({ IDNO, L"No" });
-            buttons.push_back({ IDCANCEL, L"Cancel" });
+            buttons.push_back({ IDYES, TR(L"Yes") });
+            buttons.push_back({ IDNO, TR(L"No") });
+            buttons.push_back({ IDCANCEL, TR(L"Cancel") });
         }
         else
         {
-            buttons.push_back({ IDOK, L"OK" });
+            buttons.push_back({ IDOK, TR(L"OK") });
         }
 
         const int btnGap = 10;
@@ -27488,10 +27530,10 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
         for (const auto& btn : pData->buttonRects) {
             const wchar_t* text = L"";
-            if (btn.first == IDOK) text = L"OK";
-            else if (btn.first == IDCANCEL) text = L"Cancel";
-            else if (btn.first == IDYES) text = L"Yes";
-            else if (btn.first == IDNO) text = L"No";
+            if (btn.first == IDOK) text = TR(L"OK");
+            else if (btn.first == IDCANCEL) text = TR(L"Cancel");
+            else if (btn.first == IDYES) text = TR(L"Yes");
+            else if (btn.first == IDNO) text = TR(L"No");
 
             bool isPrimary = (btn.first == IDOK || btn.first == IDYES);
             Popup_DrawActionButton(&g, memDC, btn.second, pData->hFontText, text, pData->hoveringButton == btn.first, isPrimary);
@@ -27659,7 +27701,7 @@ void main_thread(bool arg_tray)
 {
     if (g_autoUpdate.load())
     {
-        UpdateSplashStatus(L"Starting background checks...");
+        UpdateSplashStatus(TR(L"Starting background checks..."));
         std::thread([]()
         {
             try
@@ -27683,44 +27725,44 @@ void main_thread(bool arg_tray)
         }).detach();
     }
 
-    UpdateSplashStatus(L"Preparing user-safe mode...");
+    UpdateSplashStatus(TR(L"Preparing user-safe mode..."));
     if (g_userSafeMode.load() > 0 || g_afkReminderEnabled.load() || g_skipActiveEnabled.load())
     {
         StartActivityMonitor();
     }
 
-    UpdateSplashStatus(L"Finalizing setup...");
+    UpdateSplashStatus(TR(L"Finalizing setup..."));
     if (g_autoStartAfk.load())
     {
         auto wins = FindAllRobloxWindows(true);
         wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
         if (!wins.empty())
         {
-            UpdateSplashStatus(L"Auto-starting Anti-AFK...");
+            UpdateSplashStatus(TR(L"Auto-starting Anti-AFK..."));
             g_afkStartTime = GetTickCount64();
             g_isAfkStarted = true;
             QueueRefreshTrayMenu(true);
             UpdateTrayIcon();
             ActivateAutoUtilsOnAfkStart();
-            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started on launch.", false);
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, TR(L"Started on launch."), false);
             ApplyAutoUtilsStartEffects();
         }
         else
         {
-            UpdateSplashStatus(L"Roblox not found for auto-start.");
+            UpdateSplashStatus(TR(L"Roblox not found for auto-start."));
         }
     }
 
     if (GetEffectiveFpsLimit() > 0) {
-        UpdateSplashStatus(L"Starting FPS Capper (CPU Limiter)...");
+        UpdateSplashStatus(TR(L"Starting FPS Capper (CPU Limiter)..."));
         RestartFpsCapperForEffectiveLimit();
     }
 
-    UpdateSplashStatus(L"Starting RAM Cleaner...");
+    UpdateSplashStatus(TR(L"Starting RAM Cleaner..."));
     EnsureRamCleanerThreadStarted();
 
     Sleep(250);
-    UpdateSplashStatus(L"Loaded!");
+    UpdateSplashStatus(TR(L"Loaded!"));
 
     const bool shouldOpenMainUi = !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
     if (shouldOpenMainUi && g_hMainUiWnd && IsWindow(g_hMainUiWnd))
@@ -27729,7 +27771,7 @@ void main_thread(bool arg_tray)
     }
     if (shouldOpenMainUi && g_hSplashWnd)
     {
-        UpdateSplashStatus(L"Opening MainUI...");
+        UpdateSplashStatus(TR(L"Opening MainUI..."));
     }
 
     if (g_hSplashWnd)
@@ -27764,31 +27806,31 @@ void main_thread(bool arg_tray)
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
                     if (g_intervalMacroEnabled.exchange(false)) {
-                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, TR(L"Stopped with Anti-AFK."), false);
                     }
                     ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
-                    QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user, StatusBarEventType::Session);
-                    QueueRefreshTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. Anti-AFK is now off."); continue;
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, TR(L"Stopped: Roblox not found."), false);
+                    QueueStatusBarOverlay(TR(L"Auto-stopped: Roblox not found"), 2200, user, StatusBarEventType::Session);
+                    QueueRefreshTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(TR(L"AntiAFK-RBX • Auto-Stopped"), TR(L"Roblox window not found. Anti-AFK is now off.")); continue;
                 }
                 else
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Roblox not found.", false);
-                    QueueStatusBarOverlay(L"Roblox window not found", 2200, user, StatusBarEventType::Session);
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, TR(L"Roblox not found."), false);
+                    QueueStatusBarOverlay(TR(L"Roblox window not found"), 2200, user, StatusBarEventType::Session);
                     FinalizeAfkSession();
                     g_isAfkStarted = false;
                     if (g_intervalMacroEnabled.exchange(false)) {
-                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, TR(L"Stopped with Anti-AFK."), false);
                     }
                     ResetIcanForgetCounter();
                     DeactivateAutoUtilsOnAfkStop();
                     ApplyAutoUtilsStopEffects();
                     QueueRefreshTrayMenu(false);
                     UpdateTrayIcon();
-                    ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. Anti-AFK is now off.");
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Auto-Stopped"), TR(L"Roblox window not found. Anti-AFK is now off."));
                     continue;
                 }
             }
@@ -27828,7 +27870,7 @@ void main_thread(bool arg_tray)
 
                         int remaining = (int)(MAX_WAIT_TIME - elapsedSeconds);
                         wchar_t waitMsg[128];
-                        swprintf_s(waitMsg, L"Waiting 3s inactivity • force in %ds", remaining);
+                        swprintf_s(waitMsg, TR(L"Waiting 3s inactivity • force in %ds"), remaining);
                         if (!shownStatus)
                         {
                             QueueStatusBarOverlayPersistent(waitMsg, wins.front(), StatusBarEventType::Action);
@@ -27846,7 +27888,7 @@ void main_thread(bool arg_tray)
 
                 FpsCapperPauseGuard fpsCapperGuard;
 
-                QueueStatusBarOverlay(L"Performing anti-AFK action",
+                QueueStatusBarOverlay(TR(L"Performing anti-AFK action"),
                                       STATUS_BAR_ACTION_PENDING_DURATION, wins.front(), StatusBarEventType::Action);
 
                 DWORD statusBarLeadWaited = 0;
@@ -27880,13 +27922,13 @@ void main_thread(bool arg_tray)
                         {
                             if (mutexResult == MUTEX_ALREADY_EXISTS)
                             {
-                                QueueStatusBarOverlay(L"Mutex held by another program. Multi-Instance still works.", 2200, wins.front());
+                                QueueStatusBarOverlay(TR(L"Mutex held by another program. Multi-Instance still works."), 2200, wins.front());
                                 ClearMutexBanner();
                             }
                             else
                             {
-                                QueueStatusBarOverlay(L"Mutex lost. Single-instance mode for this cycle.", 2200, wins.front());
-                                ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
+                                QueueStatusBarOverlay(TR(L"Mutex lost. Single-instance mode for this cycle."), 2200, wins.front());
+                                ShowMutexBanner(TR(L"Mutex registration failed"), TR(L"Could not register the singleton mutex"), false);
                             }
                         }
                     }
@@ -28010,7 +28052,7 @@ void main_thread(bool arg_tray)
                             cancelPendingAction = true;
                         } else {
                             AutoReset_Action(w);
-                            QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Auto reset sent.", false);
+                            QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, TR(L"Auto reset sent."), false);
                         }
                     }
                     if (cancelPendingAction) {
@@ -28053,19 +28095,19 @@ void main_thread(bool arg_tray)
                 }
 
                 if (!cancelPendingAction && anyActionPerformed) {
-                    QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front(), StatusBarEventType::Action);
+                    QueueStatusBarOverlay(TR(L"Performing anti-AFK action"), STATUS_BAR_POST_ACTION_DURATION, wins.front(), StatusBarEventType::Action);
                     g_afkActionsPerformed++;
                     g_lastAfkActionTimestamp = GetTickCount64();
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Action, L"Cycle completed.", false);
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::Action, TR(L"Cycle completed."), false);
                     if (autoReconnectTriggered) {
-                        QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, L"Reconnect triggered.", false);
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReconnect, TR(L"Reconnect triggered."), false);
                     }
         } else {
             QueueStatusBarHide(false);
             if (anySkippedHidden && !cancelPendingAction) {
-                QueueStatusBarOverlay(L"Anti-AFK skipped: Roblox window is hidden", 1800, wins.front(), StatusBarEventType::Action);
+                QueueStatusBarOverlay(TR(L"Anti-AFK skipped: Roblox window is hidden"), 1800, wins.front(), StatusBarEventType::Action);
             } else {
-                QueueStatusBarOverlay(L"Anti-AFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
+                QueueStatusBarOverlay(TR(L"Anti-AFK action cancelled"), 1800, wins.front(), StatusBarEventType::Action);
             }
         }
             }
@@ -28271,8 +28313,8 @@ void main_thread(bool arg_tray)
                             QueueRefreshTrayMenu(true);
                             UpdateTrayIcon();
                             ActivateAutoUtilsOnAfkStart();
-                            QueueStatusBarOverlay(L"Anti-AFK auto-started", 2000, wins.front(), StatusBarEventType::Session);
-                            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started automatically.", false);
+                            QueueStatusBarOverlay(TR(L"Anti-AFK auto-started"), 2000, wins.front(), StatusBarEventType::Session);
+                            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, TR(L"Started automatically."), false);
                             ApplyAutoUtilsStartEffects();
                         }
                         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -28308,7 +28350,7 @@ std::wstring FormatHotkeyString(UINT modifiers, UINT vk)
     if (vk >= 'A' && vk <= 'Z') result += (wchar_t)vk;
     else if (vk >= '0' && vk <= '9') result += (wchar_t)vk;
     else if (vk >= VK_F1 && vk <= VK_F12) { wchar_t buf[8]; swprintf_s(buf, L"F%d", vk - VK_F1 + 1); result += buf; }
-    else if (vk == VK_SPACE) result += L"Space";
+    else if (vk == VK_SPACE) result += TR(L"Space");
     else if (vk == VK_RETURN) result += L"Enter";
     else if (vk == VK_TAB) result += L"Tab";
     else if (vk == VK_ESCAPE) result += L"Esc";
@@ -28319,10 +28361,10 @@ std::wstring FormatHotkeyString(UINT modifiers, UINT vk)
     else if (vk == VK_END) result += L"End";
     else if (vk == VK_PRIOR) result += L"PgUp";
     else if (vk == VK_NEXT) result += L"PgDn";
-    else if (vk == VK_LEFT) result += L"Left";
-    else if (vk == VK_RIGHT) result += L"Right";
-    else if (vk == VK_UP) result += L"Up";
-    else if (vk == VK_DOWN) result += L"Down";
+    else if (vk == VK_LEFT) result += TR(L"Left");
+    else if (vk == VK_RIGHT) result += TR(L"Right");
+    else if (vk == VK_UP) result += TR(L"Up");
+    else if (vk == VK_DOWN) result += TR(L"Down");
     else if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) { wchar_t buf[8]; swprintf_s(buf, L"Num%d", vk - VK_NUMPAD0); result += buf; }
     else if (vk == VK_OEM_1) result += L";:";
     else if (vk == VK_OEM_PLUS) result += L"+";
@@ -28388,6 +28430,32 @@ LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
 }
 
 // Main tray worker & winapi worker
+// Switches the interface language at runtime and refreshes the UI parts that cache text.
+static void SetUiLanguage(int language)
+{
+    if (language != (int)UiLanguage::English && language != (int)UiLanguage::Russian)
+        return;
+    g_uiLanguage = language;
+    SaveUiLanguage(language);
+    {
+        std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
+        StringCchCopyW(g_nid.szTip, _countof(g_nid.szTip), TR(L"AntiAFK-RBX • Click right mouse button for menu"));
+        if (g_nid.hWnd)
+        {
+            NOTIFYICONDATA tipUpdate = {};
+            tipUpdate.cbSize = sizeof(tipUpdate);
+            tipUpdate.hWnd = g_nid.hWnd;
+            tipUpdate.uID = g_nid.uID;
+            tipUpdate.uFlags = NIF_TIP;
+            StringCchCopyW(tipUpdate.szTip, _countof(tipUpdate.szTip), g_nid.szTip);
+            Shell_NotifyIcon(NIM_MODIFY, &tipUpdate);
+        }
+    }
+    CreateTrayMenu(g_isAfkStarted.load());
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
+        InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     static const UINT taskbarRestartMsg = RegisterWindowMessageW(L"TaskbarCreated");
@@ -28410,7 +28478,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
         g_nid.uCallbackMessage = WM_USER + 1;
         g_nid.hIcon = CreateCustomIcon();
-        lstrcpy(g_nid.szTip, L"AntiAFK-RBX • Click right mouse button for menu");
+        lstrcpy(g_nid.szTip, TR(L"AntiAFK-RBX • Click right mouse button for menu"));
         Shell_NotifyIcon(NIM_ADD, &g_nid);
         CreateTrayMenu(g_isAfkStarted.load());
         SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW);
@@ -28459,14 +28527,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         break;
     case WM_APP + 12:
         {
-            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all statistics?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Statistics", MB_YESNO | MB_DEFBUTTON2);
+            int result = ShowDarkMessageBox(hwnd, TR(L"Are you sure you want to reset all statistics?\nThis action cannot be undone."), TR(L"AntiAFK-RBX • Reset Statistics"), MB_YESNO | MB_DEFBUTTON2);
             if (result == IDYES) {
                 ResetStatisticsCounters();
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
                 CreateTrayMenu(g_isAfkStarted.load());
-                ShowStatusBarOverlay(L"Statistics reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Statistics reset"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
         }
         break;
@@ -28517,7 +28585,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             InvalidateRect(g_hMainUiWnd, NULL, TRUE);
         }
         if (hotkeyRegisterFailed) {
-            ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+            ShowStatusBarOverlay(TR(L"Hotkey is in use by another program"), 2500, hwnd);
         } else if (wasGrid) {
             ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 2000, hwnd);
         } else {
@@ -28531,10 +28599,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (payload) {
             bool skip = false;
             if (!g_isAfkStarted.load()) {
-                if (payload->text == L"Performing anti-AFK action" ||
-                    payload->text == L"Waiting for inactivity" ||
-                    payload->text == L"Auto-started after inactivity" ||
-                    payload->text == L"Anti-AFK auto-started") {
+                if (payload->text == TR(L"Performing anti-AFK action") ||
+                    payload->text == TR(L"Waiting for inactivity") ||
+                    payload->text == TR(L"Auto-started after inactivity") ||
+                    payload->text == TR(L"Anti-AFK auto-started")) {
                     skip = true;
                 }
             }
@@ -28551,10 +28619,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (payload) {
             bool skip = false;
             if (!g_isAfkStarted.load()) {
-                if (payload->text == L"Performing anti-AFK action" ||
-                    payload->text == L"Waiting for inactivity" ||
-                    payload->text == L"Auto-started after inactivity" ||
-                    payload->text == L"Anti-AFK auto-started") {
+                if (payload->text == TR(L"Performing anti-AFK action") ||
+                    payload->text == TR(L"Waiting for inactivity") ||
+                    payload->text == TR(L"Auto-started after inactivity") ||
+                    payload->text == TR(L"Anti-AFK auto-started")) {
                     skip = true;
                 }
             }
@@ -28584,7 +28652,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         std::wstring* msg = reinterpret_cast<std::wstring*>(wParam);
         if (msg) {
-            ShowDarkMessageBox(hwnd, msg->c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK);
+            ShowDarkMessageBox(hwnd, msg->c_str(), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
             delete msg;
         }
         return 0;
@@ -28658,7 +28726,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (!g_isAfkStarted.load() && g_selectedAction.load() == 4 && MacroEngine_GetCooldownMacros().empty() && !MacroEngine_AllWindowsHaveInstanceMacros()) {
                     HWND owner = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd;
                     EnableWindow(owner, FALSE);
-                    int res = ShowDarkMessageBox(owner, L"'Macros Only' is selected, but no AFK action macros are enabled.\n\nWithout AFK action macros Anti-AFK will NOT work correctly - nothing will be performed.\n\nStart anyway?\n\nTip: change the action to something else, or add at least 1 macro with the AFK action trigger.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                    int res = ShowDarkMessageBox(owner, TR(L"'Macros Only' is selected, but no AFK action macros are enabled.\n\nWithout AFK action macros Anti-AFK will NOT work correctly - nothing will be performed.\n\nStart anyway?\n\nTip: change the action to something else, or add at least 1 macro with the AFK action trigger."), TR(L"AntiAFK-RBX • Macros Only"), MB_YESNO | MB_DEFBUTTON2);
                     EnableWindow(owner, TRUE);
                     SetForegroundWindow(owner);
                     if (res != IDYES) {
@@ -28672,7 +28740,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 g_isAfkStarted = true;
                 if (!g_intervalMacroEnabled.load()) {
                     g_intervalMacroEnabled = true;
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled with Anti-AFK.", false);
+                    QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, TR(L"Enabled with Anti-AFK."), false);
                 }
                 SpawnIntervalMacroThreadIfNeeded();
                 {
@@ -28704,18 +28772,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     }
                 }).detach();
 
-                ShowStatusBarOverlay(L"Anti-AFK started", 1800, wins.front(), StatusBarEventType::Session);
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started manually.", false);
+                ShowStatusBarOverlay(TR(L"Anti-AFK started"), 1800, wins.front(), StatusBarEventType::Session);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, TR(L"Started manually."), false);
              }
              else
              {
-                 ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                 ShowStatusBarOverlay(L"Roblox window not found", 2200, GetForegroundWindow());
-                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Start failed: Roblox not found.", false);
+                 ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                 ShowStatusBarOverlay(TR(L"Roblox window not found"), 2200, GetForegroundWindow());
+                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, TR(L"Start failed: Roblox not found."), false);
                  if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                      MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
                      if (pData) {
-                        pData->startButtonErrorText = L"Roblox not found";
+                        pData->startButtonErrorText = TR(L"Roblox not found");
                         pData->startButtonErrorTime = GetTickCount64();
                         pData->errorAnimationDirection = 1;
                     }
@@ -28727,7 +28795,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             bool wasRunning = g_isAfkStarted.exchange(false);
             if (g_intervalMacroEnabled.exchange(false)) {
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, TR(L"Stopped with Anti-AFK."), false);
             }
             if (wasRunning && g_afkStartTime.load() > 0) {
                 FinalizeAfkSession();
@@ -28749,7 +28817,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ApplyAutoUtilsStopEffects();
             CreateTrayMenu(false);
             UpdateTrayIcon();
-            ShowStatusBarOverlay(L"Anti-AFK stopped", 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front(), StatusBarEventType::Session);
+            ShowStatusBarOverlay(TR(L"Anti-AFK stopped"), 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front(), StatusBarEventType::Session);
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 MainUIData* pData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
                 if (pData) {
@@ -28761,7 +28829,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
             }
             g_cv.notify_all();
-            QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped manually.", false);
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, TR(L"Stopped manually."), false);
             break;
         }
 
@@ -28770,13 +28838,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                ShowStatusBarOverlay(TR(L"Roblox window not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
             {
                 ShowAllRobloxWindows_Multi();
-                ShowStatusBarOverlay(L"All Roblox windows shown", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : wins.front());
+                ShowStatusBarOverlay(TR(L"All Roblox windows shown"), 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : wins.front());
             }
             break;
         }
@@ -28785,13 +28853,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                ShowStatusBarOverlay(TR(L"Roblox window not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
             {
                 HideAllRobloxWindows();
-                ShowStatusBarOverlay(L"All Roblox windows hidden", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowStatusBarOverlay(TR(L"All Roblox windows hidden"), 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             break;
         }
@@ -28831,12 +28899,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                ShowStatusBarOverlay(TR(L"Roblox window not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
             {
-                ShowStatusBarOverlay(L"Arranging Roblox windows...", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowStatusBarOverlay(TR(L"Arranging Roblox windows..."), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 if (!g_manualGridSnapRunning.exchange(true)) {
                     if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
                     try {
@@ -28852,7 +28920,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         g_manualGridSnapRunning = false;
                     }
                 } else {
-                    ShowStatusBarOverlay(L"Grid snap already running", 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                    ShowStatusBarOverlay(TR(L"Grid snap already running"), 1500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 }
             }
             break;
@@ -28868,12 +28936,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 else if (result == MUTEX_ALREADY_EXISTS)
                 {
-                    ShowStatusBarOverlay(L"Mutex held by another program. Multi-Instance still works.", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                    ShowStatusBarOverlay(TR(L"Mutex held by another program. Multi-Instance still works."), 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                     ClearMutexBanner();
                 }
                 else if (result == MUTEX_CREATE_FAILED)
                 {
-                    ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
+                    ShowMutexBanner(TR(L"Mutex registration failed"), TR(L"Could not register the singleton mutex"), false);
                 }
             }
             else
@@ -28900,7 +28968,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 DestroyWindow(g_hMainUiWnd);
             }
                             if (g_useLegacyUi.load()) {
-                                ShowTrayNotification(L"AntiAFK-RBX • UI Mode Changed", L"Switched to Legacy (Tray) mode.");
+                                ShowTrayNotification(TR(L"AntiAFK-RBX • UI Mode Changed"), TR(L"Switched to Legacy (Tray) mode."));
                             }
             break;
         case ID_TOGGLE_SIMPLE_MODE:
@@ -28910,7 +28978,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
-            ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled, advanced options hidden" : L"Simple Mode disabled, showing all options", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_simpleMode.load() ? TR(L"Simple Mode enabled, advanced options hidden") : TR(L"Simple Mode disabled, showing all options"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_TOGGLE_HOTKEY:
         {
@@ -28918,13 +28986,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hotkeyEnabled.load()) {
                 if (!RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load())) {
                     g_hotkeyEnabled = false;
-                    ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+                    ShowStatusBarOverlay(TR(L"Hotkey is in use by another program"), 2500, hwnd);
                 } else {
                     ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load()).c_str(), 1800, hwnd);
                 }
             } else {
                 UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
-                ShowStatusBarOverlay(L"Hotkey disabled", 1800, hwnd);
+                ShowStatusBarOverlay(TR(L"Hotkey disabled"), 1800, hwnd);
             }
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
@@ -28941,7 +29009,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     g_hotkeyCaptureActive = true;
     if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
     g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
-            ShowStatusBarOverlay(L"Press new hotkey combination...", 5000, hwnd);
+            ShowStatusBarOverlay(TR(L"Press new hotkey combination..."), 5000, hwnd);
             break;
         }
         case ID_TOGGLE_GRID_HOTKEY:
@@ -28950,13 +29018,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hotkeyGridEnabled.load()) {
                 if (!RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load())) {
                     g_hotkeyGridEnabled = false;
-                    ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+                    ShowStatusBarOverlay(TR(L"Hotkey is in use by another program"), 2500, hwnd);
                 } else {
                     ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 1800, hwnd);
                 }
             } else {
                 UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
-                ShowStatusBarOverlay(L"Grid hotkey disabled", 1800, hwnd);
+                ShowStatusBarOverlay(TR(L"Grid hotkey disabled"), 1800, hwnd);
             }
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
@@ -28973,7 +29041,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     g_hotkeyCaptureActive = true;
     if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
     g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
-            ShowStatusBarOverlay(L"Press new grid hotkey combination...", 5000, hwnd);
+            ShowStatusBarOverlay(TR(L"Press new grid hotkey combination..."), 5000, hwnd);
             break;
         }
         case ID_AUTO_UPDATE:
@@ -29007,7 +29075,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_statusBarEnabled.load()) {
-                ShowStatusBarOverlay(L"Status Bar enabled", 1400, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : NULL);
+                ShowStatusBarOverlay(TR(L"Status Bar enabled"), 1400, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : NULL);
             }
             break;
         case ID_STATUS_BAR_PRIMARY_MONITOR:
@@ -29106,7 +29174,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_UNLOCK_FPS_ON_FOCUS:
             if (g_fpsLimit <= 0) {
-                ShowStatusBarOverlay(L"Enable FPS Capper (CPU Limiter) first", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Enable FPS Capper (CPU Limiter) first"), 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
             g_unlockFpsOnFocus = !g_unlockFpsOnFocus.load();
@@ -29124,7 +29192,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_autoReconnect.load() && g_autoOpacity.load()) {
-                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails"), 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         case ID_RECONNECT_INTERVAL_OFF:
@@ -29172,9 +29240,9 @@ case ID_RECONNECT_MANUAL_CHECK:
 if (g_autoReconnect.load()) {
 if (!g_manualReconnectCheckRunning.load() && g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
 if (g_manualReconnectCheckRunning.exchange(true)) {
-QueueStatusBarOverlay(L"Reconnect check already running", 1500, NULL, StatusBarEventType::Reconnect);
+QueueStatusBarOverlay(TR(L"Reconnect check already running"), 1500, NULL, StatusBarEventType::Reconnect);
 } else {
-QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
+QueueStatusBarOverlay(TR(L"Manual reconnect check..."), 2000, NULL, StatusBarEventType::Reconnect);
 try {
 g_manualReconnectCheckThread = std::thread([]() {
 g_reconnectCheckAbort = false;
@@ -29215,7 +29283,7 @@ case ID_AUTO_RESET:
             }
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_autoOpacity.load() && g_autoReconnect.load()) {
-                ShowStatusBarOverlay(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails", 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Opacity + Auto-Reconnect may conflict, disable Opacity if Reconnect fails"), 4000, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         case ID_AUTO_GRID:
@@ -29306,7 +29374,7 @@ case ID_AUTO_RESET:
             break;
         case ID_UNMUTE_ON_FOCUS:
             if (!g_autoMute.load()) {
-                ShowStatusBarOverlay(L"Enable AutoMute first", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Enable AutoMute first"), 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
             g_unmuteOnFocus = !g_unmuteOnFocus.load();
@@ -29329,8 +29397,8 @@ case ID_AUTO_RESET:
             if (!g_useCustomProcessSearch.load())
             {
                 int result = ShowDarkMessageBox(hwnd,
-                    L"Warning: Custom Process Search redirects Anti-AFK clicks, key simulations, FPS cap, and auto-mute actions to your custom-defined processes and windows instead of Roblox.\n\nAre you sure you want to enable this?",
-                    L"AntiAFK-RBX • Enable Custom Process Search",
+                    TR(L"Warning: Custom Process Search redirects Anti-AFK clicks, key simulations, FPS cap, and auto-mute actions to your custom-defined processes and windows instead of Roblox.\n\nAre you sure you want to enable this?"),
+                    TR(L"AntiAFK-RBX • Enable Custom Process Search"),
                     MB_YESNO | MB_DEFBUTTON2);
                 if (result != IDYES)
                 {
@@ -29383,7 +29451,7 @@ case ID_AUTO_RESET:
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
-            ShowStatusBarOverlay(enableOpacity ? L"Session opacity enabled" : L"Session opacity disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            ShowStatusBarOverlay(enableOpacity ? TR(L"Session opacity enabled") : TR(L"Session opacity disabled"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         }
@@ -29391,8 +29459,8 @@ case ID_AUTO_RESET:
         {
             int result = ShowDarkMessageBox(
                 g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
-                L"Close all detected Roblox clients?\n\nAntiAFK-RBX will first ask windows to close, then force-close any remaining Roblox processes.",
-                L"AntiAFK-RBX • Close All Roblox",
+                TR(L"Close all detected Roblox clients?\n\nAntiAFK-RBX will first ask windows to close, then force-close any remaining Roblox processes."),
+                TR(L"AntiAFK-RBX • Close All Roblox"),
                 MB_YESNO | MB_DEFBUTTON2);
 
             if (result == IDYES)
@@ -29404,9 +29472,9 @@ case ID_AUTO_RESET:
                     {
                         int terminatedCount = CloseAllRobloxInstances();
                         if (hadRoblox || terminatedCount > 0) {
-                            QueueStatusBarOverlay(L"Closed all Roblox clients", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                            QueueStatusBarOverlay(TR(L"Closed all Roblox clients"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                         } else {
-                            QueueStatusBarOverlay(L"No Roblox processes found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                            QueueStatusBarOverlay(TR(L"No Roblox processes found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                         }
                     }
                     catch (...)
@@ -29419,27 +29487,27 @@ case ID_AUTO_RESET:
         case ID_UTILS_RESET_ALL:
         {
             if (ExecuteRobloxWindowActionForAll(AutoReset_Action, 1)) {
-                ShowStatusBarOverlay(L"Reset sent to all Roblox windows", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Manual reset sent to all Roblox windows.", false);
+                ShowStatusBarOverlay(TR(L"Reset sent to all Roblox windows"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, TR(L"Manual reset sent to all Roblox windows."), false);
             } else {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                ShowStatusBarOverlay(TR(L"Roblox window not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             break;
         }
         case ID_UTILS_TEST_ACTION: case ID_TEST_ACTION:
         {
             if (!g_isAfkStarted.load()) {
-                ShowTrayNotification(L"AntiAFK-RBX • Info", L"Start Anti-AFK first to test the action.");
-                ShowStatusBarOverlay(L"Start AFK first to test", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Info"), TR(L"Start Anti-AFK first to test the action."));
+                ShowStatusBarOverlay(TR(L"Start AFK first to test"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
                 g_randomCyclePick = -1;
                 if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3, false)) {
                     g_lastAfkActionTimestamp = GetTickCount64();
-                    ShowStatusBarOverlay(L"Test Anti-AFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                    ShowStatusBarOverlay(TR(L"Test Anti-AFK action sent"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 } else {
-                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                    ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox window not found!"));
+                    ShowStatusBarOverlay(TR(L"Roblox window not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 }
             }
             break;
@@ -29448,8 +29516,8 @@ case ID_AUTO_RESET:
         {
             auto pids = FindAllRobloxProcessIds();
             if (pids.empty()) {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox process not found!");
-                ShowStatusBarOverlay(L"Roblox process not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Roblox process not found!"));
+                ShowStatusBarOverlay(TR(L"Roblox process not found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 break;
             }
 
@@ -29462,7 +29530,7 @@ case ID_AUTO_RESET:
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
-            ShowStatusBarOverlay(shouldMute ? L"Roblox muted" : L"Roblox unmuted", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+            ShowStatusBarOverlay(shouldMute ? TR(L"Roblox muted") : TR(L"Roblox unmuted"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         }
@@ -29477,10 +29545,10 @@ case ID_AUTO_RESET:
             }
             if (!isCurrentlyOn) {
                 wchar_t fpsMessage[80];
-                swprintf_s(fpsMessage, L"Session FPS Capper (CPU Limiter) set to %d FPS", sessionFpsLimit);
+                swprintf_s(fpsMessage, TR(L"Session FPS Capper (CPU Limiter) set to %d FPS"), sessionFpsLimit);
                 ShowStatusBarOverlay(fpsMessage, 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
-                ShowStatusBarOverlay(L"Session FPS Capper (CPU Limiter) override disabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                ShowStatusBarOverlay(TR(L"Session FPS Capper (CPU Limiter) override disabled"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             CreateTrayMenu(g_isAfkStarted.load());
             break;
@@ -29489,8 +29557,8 @@ case ID_AUTO_RESET:
         {
             int result = ShowDarkMessageBox(
                 g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd,
-                L"Are you sure you want to reset all statistics?\nThis action cannot be undone.",
-                L"AntiAFK-RBX • Reset Statistics",
+                TR(L"Are you sure you want to reset all statistics?\nThis action cannot be undone."),
+                TR(L"AntiAFK-RBX • Reset Statistics"),
                 MB_YESNO | MB_DEFBUTTON2);
 
             if (result == IDYES)
@@ -29500,7 +29568,7 @@ case ID_AUTO_RESET:
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
                 CreateTrayMenu(g_isAfkStarted.load());
-                ShowStatusBarOverlay(L"Statistics reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Statistics reset"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         }
@@ -29511,7 +29579,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordWebhookEnabled.load() ? L"Discord webhook enabled" : L"Discord webhook disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordWebhookEnabled.load() ? TR(L"Discord webhook enabled") : TR(L"Discord webhook disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_START:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29522,7 +29590,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyStart.load() ? L"Webhook Start / Stop enabled" : L"Webhook Start / Stop disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyStart.load() ? TR(L"Webhook Start / Stop enabled") : TR(L"Webhook Start / Stop disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_ACTION:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29532,7 +29600,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyAction.load() ? L"Webhook Action enabled" : L"Webhook Action disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyAction.load() ? TR(L"Webhook Action enabled") : TR(L"Webhook Action disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_RECONNECT:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29542,7 +29610,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyReconnect.load() ? L"Webhook Reconnect enabled" : L"Webhook Reconnect disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyReconnect.load() ? TR(L"Webhook Reconnect enabled") : TR(L"Webhook Reconnect disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_ERRORS:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29552,7 +29620,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyErrors.load() ? L"Webhook Errors enabled" : L"Webhook Errors disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyErrors.load() ? TR(L"Webhook Errors enabled") : TR(L"Webhook Errors disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_MACRO:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29562,7 +29630,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyMacro.load() ? L"Webhook Macros enabled" : L"Webhook Macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyMacro.load() ? TR(L"Webhook Macros enabled") : TR(L"Webhook Macros disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_INTERVAL_MACROS:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29572,7 +29640,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyIntervalMacros.load() ? L"Webhook Interval Macros enabled" : L"Webhook Interval Macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyIntervalMacros.load() ? TR(L"Webhook Interval Macros enabled") : TR(L"Webhook Interval Macros disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_DISABLE_EMBED:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29582,7 +29650,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordDisableEmbed.load() ? L"Webhook embeds disabled" : L"Webhook embeds enabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordDisableEmbed.load() ? TR(L"Webhook embeds disabled") : TR(L"Webhook embeds enabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_MENTION_ON_ERRORS:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29592,7 +29660,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordMentionOnErrors.load() ? L"Webhook mentions enabled" : L"Webhook mentions disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordMentionOnErrors.load() ? TR(L"Webhook mentions enabled") : TR(L"Webhook mentions disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_MENTION_TARGET:
         {
@@ -29607,8 +29675,8 @@ case ID_AUTO_RESET:
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, clipboardText))
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
-                ShowStatusBarOverlay(L"Clipboard text not available", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, TR(L"Clipboard does not contain Unicode text right now."), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
+                ShowStatusBarOverlay(TR(L"Clipboard text not available"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
 
@@ -29618,7 +29686,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(IsDiscordWebhookUrl(GetDiscordWebhookUrlCopy()) ? L"Webhook URL pasted" : L"Webhook URL pasted, but looks invalid", 1900, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(IsDiscordWebhookUrl(GetDiscordWebhookUrlCopy()) ? TR(L"Webhook URL pasted") : TR(L"Webhook URL pasted, but looks invalid"), 1900, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_DISCORD_WEBHOOK_CLEAR:
@@ -29629,7 +29697,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(L"Webhook URL cleared", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(TR(L"Webhook URL cleared"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_WEBHOOK_SET_URL:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29643,7 +29711,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordUseDefaultName.load() ? L"Webhook default name enabled" : L"Webhook default name disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordUseDefaultName.load() ? TR(L"Webhook default name enabled") : TR(L"Webhook default name disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_USE_DEFAULT_AVATAR:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29653,7 +29721,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordUseDefaultAvatar.load() ? L"Webhook default avatar enabled" : L"Webhook default avatar disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordUseDefaultAvatar.load() ? TR(L"Webhook default avatar enabled") : TR(L"Webhook default avatar disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_USE_TIMESTAMP:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29663,7 +29731,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordUseTimestamp.load() ? L"Webhook timestamp enabled" : L"Webhook timestamp disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordUseTimestamp.load() ? TR(L"Webhook timestamp enabled") : TR(L"Webhook timestamp disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_DISCORD_NOTIFY_HEARTBEAT:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29673,7 +29741,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyHeartbeat.load() ? L"Webhook Heartbeat enabled" : L"Webhook Heartbeat disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyHeartbeat.load() ? TR(L"Webhook Heartbeat enabled") : TR(L"Webhook Heartbeat disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_WEBHOOK_SET_HEARTBEAT:
             if (!g_discordWebhookEnabled.load()) break;
@@ -29687,7 +29755,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_discordNotifyUtilsRam.load() ? L"Webhook RAM Cleaner enabled" : L"Webhook RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_discordNotifyUtilsRam.load() ? TR(L"Webhook RAM Cleaner enabled") : TR(L"Webhook RAM Cleaner disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         case ID_TIMINGS_INFO:
         {
@@ -29698,7 +29766,7 @@ case ID_AUTO_RESET:
                 uint64_t sinceAction = g_lastAfkActionTimestamp.load() > 0 ? (now - g_lastAfkActionTimestamp.load()) / 1000 : 0;
                 uint64_t nextSec = sinceAction < (uint64_t)g_selectedTime.load() ? (uint64_t)g_selectedTime.load() - sinceAction : 0;
                 swprintf_s(timingsBuf,
-                    L"Status: Running\n\nSession time: %s\nNext action in: %llu sec\nLast action: %llu sec ago\nActions performed: %llu\nAuto reconnects: %llu",
+                    TR(L"Status: Running\n\nSession time: %s\nNext action in: %llu sec\nLast action: %llu sec ago\nActions performed: %llu\nAuto reconnects: %llu"),
                     FormatDurationShort(sessionSec).c_str(),
                     (unsigned long long)nextSec,
                     (unsigned long long)sinceAction,
@@ -29706,13 +29774,13 @@ case ID_AUTO_RESET:
                     (unsigned long long)g_autoReconnectsPerformed.load());
             } else {
                 swprintf_s(timingsBuf,
-                    L"Status: Stopped\n\nTotal AFK time: %s\nActions performed: %llu\nAuto reconnects: %llu\nSessions completed: %llu",
+                    TR(L"Status: Stopped\n\nTotal AFK time: %s\nActions performed: %llu\nAuto reconnects: %llu\nSessions completed: %llu"),
                     FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
                     (unsigned long long)g_afkActionsPerformed.load(),
                     (unsigned long long)g_autoReconnectsPerformed.load(),
                     (unsigned long long)g_afkSessionsCompleted.load());
             }
-            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, timingsBuf, L"AntiAFK-RBX • Current Timings", MB_OK);
+            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, timingsBuf, TR(L"AntiAFK-RBX • Current Timings"), MB_OK);
             break;
         }
         case ID_RETRY_MULTI_INSTANCE:
@@ -29720,7 +29788,7 @@ case ID_AUTO_RESET:
             MutexCreateResult result = EnableMultiInstanceSupport();
             if (result == MUTEX_CREATED || result == MUTEX_ALREADY_EXISTS) {
                 ClearMutexBanner();
-                ShowTrayNotification(L"AntiAFK-RBX • Multi-Instance", L"Multi-Instance mutex acquired. Bypass is active.");
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Multi-Instance"), TR(L"Multi-Instance mutex acquired. Bypass is active."));
             } else {
                 ShowMutexErrorDialog(hwnd);
             }
@@ -29733,13 +29801,13 @@ case ID_AUTO_RESET:
             std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
             if (!IsDiscordWebhookUrl(webhookUrl))
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Enter a valid Discord webhook URL first.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
-                ShowStatusBarOverlay(L"Webhook URL is invalid", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, TR(L"Enter a valid Discord webhook URL first."), TR(L"AntiAFK-RBX • Discord Webhook"), MB_OK);
+                ShowStatusBarOverlay(TR(L"Webhook URL is invalid"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
 
-            ShowStatusBarOverlay(L"Sending test webhook...", 2500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
-            QueueWebhookTestAsync(webhookUrl, L"the Legacy UI");
+            ShowStatusBarOverlay(TR(L"Sending test webhook..."), 2500, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            QueueWebhookTestAsync(webhookUrl, TR(L"the Legacy UI"));
             break;
         }
         case ID_FPS_CAP_3:
@@ -29771,7 +29839,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             wchar_t msgBuf[128];
-            swprintf_s(msgBuf, L"FPS Capper (CPU Limiter) configured to %d FPS", newLimit);
+            swprintf_s(msgBuf, TR(L"FPS Capper (CPU Limiter) configured to %d FPS"), newLimit);
             ShowStatusBarOverlay(msgBuf, 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
@@ -29803,7 +29871,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             wchar_t msgBuf[128];
-            swprintf_s(msgBuf, L"Limiter Mode: %s", g_cpuLimitMode.load() ? L"CPU Limit %" : L"FPS Target");
+            swprintf_s(msgBuf, TR(L"Limiter Mode: %s"), g_cpuLimitMode.load() ? TR(L"CPU Limit %") : TR(L"FPS Target"));
             ShowStatusBarOverlay(msgBuf, 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
@@ -29886,27 +29954,27 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_ramCleanerAutoStart.load() ? L"Auto RAM Cleaner enabled" : L"Auto RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_ramCleanerAutoStart.load() ? TR(L"Auto RAM Cleaner enabled") : TR(L"Auto RAM Cleaner disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_INTERVAL_MACRO_TOGGLE:
         {
             if (g_isAfkStarted.load()) {
-                ShowStatusBarOverlay(L"Interval macros are locked while Anti-AFK is running", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Interval macros are locked while Anti-AFK is running"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
             g_intervalMacroEnabled = !g_intervalMacroEnabled.load();
             if (g_intervalMacroEnabled.load()) {
                 SpawnIntervalMacroThreadIfNeeded();
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled manually.", false);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, TR(L"Enabled manually."), false);
             } else {
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Disabled manually.", false);
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, TR(L"Disabled manually."), false);
             }
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_intervalMacroEnabled.load() ? L"Interval macros enabled" : L"Interval macros disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_intervalMacroEnabled.load() ? TR(L"Interval macros enabled") : TR(L"Interval macros disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_RAM_CLEANER_RUNTIME_TOGGLE:
@@ -29919,19 +29987,19 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(g_ramCleanerEnabled.load() ? L"RAM Cleaner enabled" : L"RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_ramCleanerEnabled.load() ? TR(L"RAM Cleaner enabled") : TR(L"RAM Cleaner disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_RAM_CLEAN_SWEEP:
         {
             auto pids = FindAllRobloxProcessIds();
             if (pids.empty()) {
-                ShowStatusBarOverlay(L"No Roblox processes found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"No Roblox processes found"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
             int swept = ClearRobloxMemory();
             wchar_t msgBuf[128];
-            swprintf_s(msgBuf, L"RAM swept: %d clients", swept);
+            swprintf_s(msgBuf, TR(L"RAM swept: %d clients"), swept);
             ShowStatusBarOverlay(msgBuf, 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
@@ -29954,7 +30022,7 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            ShowStatusBarOverlay(L"RAM Cleaner disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(TR(L"RAM Cleaner disabled"), 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
         case ID_RAM_CLEAN_MODE_SMART:
@@ -29972,9 +30040,9 @@ case ID_AUTO_RESET:
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
             CreateTrayMenu(g_isAfkStarted.load());
-            const wchar_t* modeNames[] = { L"Time Cycle", L"Smart Clean", L"Hybrid" };
+            const wchar_t* modeNames[] = { TR(L"Time Cycle"), TR(L"Smart Clean"), TR(L"Hybrid") };
             wchar_t msgBuf[128];
-            swprintf_s(msgBuf, L"RAM Cleaner Mode: %s", modeNames[newMode]);
+            swprintf_s(msgBuf, TR(L"RAM Cleaner Mode: %s"), modeNames[newMode]);
             ShowStatusBarOverlay(msgBuf, 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
         }
@@ -30010,7 +30078,7 @@ case ID_AUTO_RESET:
             break;
         case ID_RESET_SETTINGS:
         {
-            int result = ShowDarkMessageBox(hwnd, L"Are you sure you want to reset all settings to their defaults?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Settings", MB_YESNO | MB_DEFBUTTON2);
+            int result = ShowDarkMessageBox(hwnd, TR(L"Are you sure you want to reset all settings to their defaults?\nThis action cannot be undone."), TR(L"AntiAFK-RBX • Reset Settings"), MB_YESNO | MB_DEFBUTTON2);
             if (result == IDYES)
             {
                 ResetSettings();
@@ -30019,7 +30087,7 @@ case ID_AUTO_RESET:
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
-                ShowStatusBarOverlay(L"Settings reset", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Settings reset"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         }
@@ -30034,22 +30102,22 @@ case ID_AUTO_RESET:
                 if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                     InvalidateRect(g_hMainUiWnd, NULL, TRUE);
                 }
-                ShowStatusBarOverlay(L"Settings imported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Settings imported"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             else {
-                ShowTrayNotification(L"AntiAFK-RBX • Import Failed", L"Could not load settings from the selected file.");
-                ShowStatusBarOverlay(L"Settings import failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Import Failed"), TR(L"Could not load settings from the selected file."));
+                ShowStatusBarOverlay(TR(L"Settings import failed"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         }
         case ID_EXPORT_SETTINGS:
         {
             if (ExportSettingsToFile(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd)) {
-                ShowStatusBarOverlay(L"Settings exported", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(TR(L"Settings exported"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             else {
-                ShowTrayNotification(L"AntiAFK-RBX • Export Failed", L"Could not save settings to the selected file.");
-                ShowStatusBarOverlay(L"Settings export failed", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowTrayNotification(TR(L"AntiAFK-RBX • Export Failed"), TR(L"Could not save settings to the selected file."));
+                ShowStatusBarOverlay(TR(L"Settings export failed"), 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             }
             break;
         }
@@ -30108,7 +30176,7 @@ case ID_AUTO_RESET:
         case ID_ACTION_RANDOM:
         case ID_MACROS_SELECT:
             if (LOWORD(wParam) == ID_MACROS_SELECT && g_selectedAction.load() != 4) {
-                int confirm = ShowDarkMessageBox(hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                int confirm = ShowDarkMessageBox(hwnd, TR(L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle."), TR(L"AntiAFK-RBX • Macros Only"), MB_YESNO | MB_DEFBUTTON2);
                 if (confirm != IDYES) {
                     break;
                 }
@@ -30142,6 +30210,10 @@ case ID_AUTO_RESET:
             }
             break;
         }
+        case ID_LANGUAGE_ENGLISH:
+        case ID_LANGUAGE_RUSSIAN:
+            SetUiLanguage(LOWORD(wParam) == ID_LANGUAGE_RUSSIAN ? (int)UiLanguage::Russian : (int)UiLanguage::English);
+            break;
         case ID_EXIT:
             PostMessage(g_hwnd, WM_CLOSE, 0, 0);
             break;
@@ -30755,7 +30827,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             }
             if (!terminated) {
                 if (hSingleInstanceMutex) { CloseHandle(hSingleInstanceMutex); hSingleInstanceMutex = NULL; }
-                ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running and could not be restarted.\nCheck the system tray or run this command as the same user.", L"AntiAFK-RBX", MB_OK);
+                ShowDarkMessageBox(NULL, TR(L"AntiAFK-RBX is already running and could not be restarted.\nCheck the system tray or run this command as the same user."), L"AntiAFK-RBX", MB_OK);
                 GdiplusShutdown(gdiplusToken);
                 return 0;
             }
@@ -30771,9 +30843,9 @@ if (hExistingWnd) {
 PostMessage(hExistingWnd, WM_COMMAND, ID_OPEN_UI, 0);
 }
 if (arg_force && !hExistingWnd) {
-ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running, but its window could not be located, so it could not be restarted.\nClose the other instance from the system tray and try again.", L"AntiAFK-RBX", MB_OK);
+ShowDarkMessageBox(NULL, TR(L"AntiAFK-RBX is already running, but its window could not be located, so it could not be restarted.\nClose the other instance from the system tray and try again."), L"AntiAFK-RBX", MB_OK);
 } else {
-ShowDarkMessageBox(NULL, L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart.", L"AntiAFK-RBX", MB_OK);
+ShowDarkMessageBox(NULL, TR(L"AntiAFK-RBX is already running.\nCheck the system tray or use --force to restart."), L"AntiAFK-RBX", MB_OK);
 }
 GdiplusShutdown(gdiplusToken);
 return 0;
@@ -30788,10 +30860,10 @@ ApplyAutoRobloxWindowLayout();
 }
 
     if (arg_resetSettingsAndExit) {
-        int result = ShowDarkMessageBox(NULL, L"Are you sure you want to reset all settings to their defaults via command line?\nThis action cannot be undone.", L"AntiAFK-RBX • Reset Settings", MB_YESNO | MB_DEFBUTTON2);
+        int result = ShowDarkMessageBox(NULL, TR(L"Are you sure you want to reset all settings to their defaults via command line?\nThis action cannot be undone."), TR(L"AntiAFK-RBX • Reset Settings"), MB_YESNO | MB_DEFBUTTON2);
         if (result == IDYES) {
             ResetSettings();
-            ShowDarkMessageBox(NULL, L"All settings have been restored to their defaults.", L"AntiAFK-RBX • Settings Reset", MB_OK);
+            ShowDarkMessageBox(NULL, TR(L"All settings have been restored to their defaults."), TR(L"AntiAFK-RBX • Settings Reset"), MB_OK);
         }
         GdiplusShutdown(gdiplusToken);
         return 0;
@@ -30800,7 +30872,7 @@ ApplyAutoRobloxWindowLayout();
     if (arg_checkUpdatesAndExit) {
         SaveSettings();
         CheckForUpdates(false);
-        ShowDarkMessageBox(NULL, g_updateFound ? L"A new version is available." : (g_updateCheckFailed.load() ? L"Failed to check for updates." : L"You are using the latest version."), L"AntiAFK-RBX • Update Check", MB_OK);
+        ShowDarkMessageBox(NULL, g_updateFound ? TR(L"A new version is available.") : (g_updateCheckFailed.load() ? TR(L"Failed to check for updates.") : TR(L"You are using the latest version.")), TR(L"AntiAFK-RBX • Update Check"), MB_OK);
         GdiplusShutdown(gdiplusToken);
         return 0;
     }
@@ -30811,7 +30883,7 @@ ApplyAutoRobloxWindowLayout();
         g_afkStartTime = GetTickCount64();
         ActivateAutoUtilsOnAfkStart();
         ApplyAutoUtilsStartEffects();
-        QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started via CLI.", false);
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, TR(L"Started via CLI."), false);
     }
 
     const bool noSplash = arg_noSplash || g_disableSplash.load();
@@ -30825,7 +30897,7 @@ ApplyAutoRobloxWindowLayout();
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
 
     if (g_useLegacyUi.load() && !arg_tray && !noSplash && g_firstWelcomeShown.load()) {
-        ShowTrayNotification(L"AntiAFK-RBX • Legacy Mode", L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure.");
+        ShowTrayNotification(TR(L"AntiAFK-RBX • Legacy Mode"), TR(L"AntiAFK-RBX is running in legacy mode. Right-click the tray icon to configure."));
     }
 
     if (g_multiSupport.load())
@@ -30841,7 +30913,7 @@ ApplyAutoRobloxWindowLayout();
             }
             if (result == MUTEX_ALREADY_EXISTS)
             {
-                ShowStatusBarOverlay(L"Mutex held by another program. Multi-Instance still works.", 4000, g_hwnd);
+                ShowStatusBarOverlay(TR(L"Mutex held by another program. Multi-Instance still works."), 4000, g_hwnd);
                 ClearMutexBanner();
                 break;
             }
@@ -30850,9 +30922,9 @@ ApplyAutoRobloxWindowLayout();
         }
         if (!IsMultiInstanceMutexValid())
         {
-            ShowTrayNotification(L"AntiAFK-RBX • Error", L"Failed to create Multi-Instance mutex!");
-            ShowStatusBarOverlay(L"Mutex creation failed. Close all Roblox windows and retry.", 5000, g_hwnd);
-            ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
+            ShowTrayNotification(TR(L"AntiAFK-RBX • Error"), TR(L"Failed to create Multi-Instance mutex!"));
+            ShowStatusBarOverlay(TR(L"Mutex creation failed. Close all Roblox windows and retry."), 5000, g_hwnd);
+            ShowMutexBanner(TR(L"Mutex registration failed"), TR(L"Could not register the singleton mutex"), false);
         }
     }
     ShowWindow(g_hwnd, SW_HIDE);
@@ -30870,7 +30942,7 @@ ApplyAutoRobloxWindowLayout();
             g_utilsWindowOpacityOverride = arg_utilsWindowOpacity ? 1 : 0;
             RefreshRobloxWindowOpacity(false);
             trayMenuNeedsRefresh = true;
-            ShowStatusBarOverlay(arg_utilsWindowOpacity ? L"Session opacity enabled" : L"Session opacity disabled", 1800, g_hwnd);
+            ShowStatusBarOverlay(arg_utilsWindowOpacity ? TR(L"Session opacity enabled") : TR(L"Session opacity disabled"), 1800, g_hwnd);
         }
 
         if (arg_utilsMuteSet) {
@@ -30880,7 +30952,7 @@ ApplyAutoRobloxWindowLayout();
             }
             MuteAllRoblox(arg_utilsMute);
             trayMenuNeedsRefresh = true;
-            ShowStatusBarOverlay(arg_utilsMute ? L"Roblox muted" : L"Roblox unmuted", 1800, g_hwnd);
+            ShowStatusBarOverlay(arg_utilsMute ? TR(L"Roblox muted") : TR(L"Roblox unmuted"), 1800, g_hwnd);
         }
 
         if (arg_utilsFpsSet) {
@@ -30889,10 +30961,10 @@ ApplyAutoRobloxWindowLayout();
             trayMenuNeedsRefresh = true;
             if (arg_utilsFps) {
                 wchar_t fpsMessage[80];
-                swprintf_s(fpsMessage, L"Session FPS Capper (CPU Limiter) set to %d FPS", g_utilsFpsLimitOverride.load());
+                swprintf_s(fpsMessage, TR(L"Session FPS Capper (CPU Limiter) set to %d FPS"), g_utilsFpsLimitOverride.load());
                 ShowStatusBarOverlay(fpsMessage, 1800, g_hwnd);
             } else {
-                ShowStatusBarOverlay(L"Session FPS Capper (CPU Limiter) override disabled", 1800, g_hwnd);
+                ShowStatusBarOverlay(TR(L"Session FPS Capper (CPU Limiter) override disabled"), 1800, g_hwnd);
             }
         }
 
