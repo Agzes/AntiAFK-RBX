@@ -1,8 +1,8 @@
 ﻿{
-    "enabled": false,
-    "notify": false,
-    "icon": "\uEB51",
-    "iconColor": "#b91d16",
-    "title": "Support AntiAFK-RBX development!",
-    "description": ""
+    "enabled": true,
+    "notify": true,
+    "icon": "\uE789",
+    "iconColor": "#4cc2ff",
+    "title": "AntiAFK-RBX v4.0.0 is out!",
+    "description": "Updated UI, Simple Mode, Macros, Instance Manager & more."
 }
