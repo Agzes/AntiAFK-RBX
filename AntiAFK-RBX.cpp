@@ -6,8 +6,8 @@
 #define RC      3
 #define STABLE  4
 #define MAKE_VERSION(major, minor, patch, type, num) ((major)*10000000 + (minor)*100000 + (patch)*1000 + (type)*100 + (num))
-int currentVersion = MAKE_VERSION(4, 0, 0, BETA, 3);
-const wchar_t* g_Version = L"v.4.0.0-beta3";
+int currentVersion = MAKE_VERSION(4, 0, 0, STABLE, 0);
+const wchar_t* g_Version = L"v.4.0.0";
 
 #include <windows.h>
 #include <mmsystem.h>
@@ -49,6 +49,11 @@ const wchar_t* g_Version = L"v.4.0.0-beta3";
 #pragma comment(lib, "WinInet.lib")
 #pragma comment(lib, "Comdlg32.lib")
 #pragma comment(lib, "msimg32.lib")
+
+#pragma warning(disable: 4100 4189 4456 4457)
+
+constexpr const wchar_t* kNotifyTitleError = L"AntiAFK-RBX • Error";
+constexpr const wchar_t* kMsgMacroSaveFailed = L"Failed to save macro - file locked or corrupt";
 
 static const wchar_t* GetVersionCheckUrl()
 {
@@ -124,6 +129,7 @@ using namespace std::chrono_literals;
 
 #define ID_ABOUT_MENU 1011
 #define ID_SHOW_TUTORIAL 1012
+#define ID_WHATS_NEW 1013
 #define ID_LINKWIKI_TUTORIAL 1001
 #define ID_LINKWIKI 1002
 #define ID_LINKGITHUB 1003
@@ -143,6 +149,7 @@ using namespace std::chrono_literals;
 #define ID_ACTION_WS 202
 #define ID_ACTION_ZOOM 203
 #define ID_ACTION_RANDOM 204
+#define ID_ACTION_ARROWS 205
 
 #define ID_AUTO_UPDATE 302
 #define ID_USER_SAFE_OFF 304
@@ -227,6 +234,18 @@ using namespace std::chrono_literals;
 #define ID_DISCORD_NOTIFY_STOP 1347
 #define ID_DISCORD_NOTIFY_ACTION 1319
 #define ID_DISCORD_NOTIFY_RECONNECT 1320
+#define ID_DISCORD_NOTIFY_RESET 1402
+#define ID_DISCORD_LAST_ERROR 1403
+#define ID_UI_DISABLE_SPLASH 1410
+#define ID_UI_DISABLE_ACRYLIC 1411
+#define ID_UI_DISABLE_ANIMATIONS 1412
+#define ID_UI_DISABLE_NOTIFICATIONS 1413
+#define ID_UI_KEEP_ON_TOP 1414
+#define ID_UI_DISABLE_CORNERS 1415
+#define ID_UI_HIDE_NEXT_ACTION 1416
+#define ID_UI_HIDE_INSTANCES 1417
+#define ID_UI_HIDE_SIMPLE_SWITCH 1418
+#define ID_GLOBAL_OPACITY_SET 1419
 #define ID_DISCORD_NOTIFY_ERRORS 1321
 #define ID_DISCORD_DISABLE_EMBED 1322
 #define ID_DISCORD_MENTION_ON_ERRORS 1323
@@ -281,6 +300,7 @@ using namespace std::chrono_literals;
 #define ID_DISCORD_USE_TIMESTAMP 1401
 #define ID_SCREEN_SAVER 1350
 #define ID_SS_ALWAYS_SHOW_EXIT 1351
+#define ID_SS_ALWAYS_SHOW_HINT_UI 1355
 #define ID_TOGGLE_SIMPLE_MODE 1352
 
 #define ID_MACROS_OPEN 1700
@@ -301,6 +321,8 @@ constexpr UINT WM_APP_HIDE_STATUS_BAR = WM_APP + 26;
 constexpr UINT WM_APP_MAINUI_STATE_ANIM = WM_APP + 27;
 constexpr UINT WM_APP_REFRESH_TRAY_MENU = WM_APP + 28;
 constexpr UINT WM_APP_WEBHOOK_TEST_RESULT = WM_APP + 29;
+constexpr UINT WM_APP_BLOXSTRAP_START = WM_APP + 70;
+constexpr UINT WM_APP_BLOXSTRAP_SETTING = WM_APP + 71;
 constexpr UINT STATUS_BAR_HIDE_TIMER = 1;
 constexpr UINT STATUS_BAR_ANIM_TIMER = 2;
 constexpr UINT STATUS_BAR_POSITION_TIMER = 3;
@@ -336,29 +358,15 @@ bool g_mutexIgnored = false;
 HWND g_hSplashWnd = NULL;
 HWND g_hStatusBarWnd = NULL;
 HWND g_hMainUiWnd = NULL;
-HWND g_hCustomFpsWnd = NULL;
-HWND g_hCustomIntervalWnd = NULL;
-HWND g_hCustomProcessWnd = NULL;
-HWND g_hCustomGridValueWnd = NULL;
-HWND g_hCustomGridSpacingBetweenWnd = NULL;
-HWND g_hCustomGridSpacingBordersWnd = NULL;
-HWND g_hCustomRamIntervalWnd = NULL;
-HWND g_hCustomRamLimitWnd = NULL;
-HWND g_hCustomMentionTargetWnd = NULL;
-HWND g_hCustomPreActionDelayWnd = NULL;
-HWND g_hCustomKeyPressDelayWnd = NULL;
-HWND g_hCustomPostActionDelayWnd = NULL;
-HWND g_hCustomActionRepeatCountWnd = NULL;
-HWND g_hCustomReconnectIntervalWnd = NULL;
-HWND g_hCustomReconnectMacroDelayWnd = NULL;
-HWND g_hCustomCpuLimitPercentWnd = NULL;
-HWND g_hCustomCpuLimitPeriodWnd = NULL;
 std::atomic<bool> g_useCustomProcessSearch(false);
 std::atomic<bool> g_excludeBuiltinNames(false);
 std::wstring g_customProcessNames = L"";
 std::mutex g_customProcessNamesMutex;
 std::atomic<bool> g_useMainUiStartupOverlay(false);
-std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(false), g_disableSplash(false), g_disableAcrylic(false), g_disableAnimations(false), g_keepWindowOnTop(false), g_disableWindowCorners(false);
+std::atomic<bool> g_isAfkStarted(false), g_stopThread(false), g_multiSupport(false), g_autoUpdate(true), g_updateFound(false), g_updateCheckFailed(false), g_autoStartAfk(false), g_autoReconnect(true), g_autoReset(false), g_autoHideRoblox(false), g_autoOpacity(false), g_autoGrid(false), g_gridForceSmall(false), g_gridAllMonitors(false), g_gridKeepAspectRatio(true), g_userActive(false), g_monitorThreadRunning(false), g_updateInterval(false), g_tutorialShown(false), g_firstWelcomeShown(false), g_previewAlphaNotify(false), g_useLegacyUi(false), g_statusBarEnabled(true), g_unlockFpsOnFocus(false), g_notificationsDisabled(false), g_bloxstrapIntegration(false), g_isFpsCapperRunning(false),  g_isFpsCapperPaused(false), g_windowOpacity(false), g_afkReminderEnabled(false), g_doNotSleep(false), g_autoMute(false), g_unmuteOnFocus(false), g_simpleMode(true), g_disableSplash(false), g_disableAcrylic(false), g_disableAnimations(false), g_keepWindowOnTop(false), g_disableWindowCorners(false);
+std::atomic<int> g_mainUiActivityPhase(0); // 0 idle, 1 waiting, 2 user-safe wait, 3 action, 4 focus retry
+std::atomic<int> g_globalOpacityPercent(70);
+std::atomic<bool> g_uiHideNextActionText(false), g_uiHideInstancesText(false), g_uiHideSimpleModeSwitch(false);
 std::atomic<bool> g_statusBarPrimaryMonitor(false);
 std::atomic<bool> g_statusBarPositionBottom(false);
 std::atomic<bool> g_statusBarShowIcon(true);
@@ -376,15 +384,21 @@ std::atomic<bool> g_hotkeyGridEnabled(true);
 std::atomic<UINT> g_hotkeyGridModifiers(MOD_CONTROL | MOD_SHIFT);
 std::atomic<UINT> g_hotkeyGridVk(VK_F2);
 std::atomic<bool> g_hotkeyCaptureIsGrid(false);
+UINT g_hotkeyPrevModifiers = MOD_CONTROL | MOD_SHIFT;
+UINT g_hotkeyPrevVk = VK_F1;
+bool g_hotkeyPrevEnabled = true;
+UINT g_hotkeyGridPrevModifiers = MOD_CONTROL | MOD_SHIFT;
+UINT g_hotkeyGridPrevVk = VK_F2;
+bool g_hotkeyGridPrevEnabled = true;
 HWND g_hotkeyCaptureWnd = NULL;
 HHOOK g_hHotkeyHook = NULL;
 std::atomic<int> g_updateServerVersion(0);
 std::atomic<int> g_gridMode(0); // 0 - auto, 1 - fixedSize, 2 - fixedLines, 3 - fixedRows, 4 - fixedWidth, 5 - fixedHeight
 std::atomic<bool> g_ramCleanerEnabled(false);
 std::atomic<bool> g_ramCleanerAutoStart(false);
-std::atomic<int> g_ramCleanerMode(0); // 0 - time, 1 - ram, 2 - time + ram
-std::atomic<int> g_ramCleanerInterval(120); // s
-std::atomic<int> g_ramCleanerLimit(500); // MB
+std::atomic<int> g_ramCleanerMode(2); // 0 - time, 1 - ram, 2 - time + ram
+std::atomic<int> g_ramCleanerInterval(300); // s
+std::atomic<int> g_ramCleanerLimit(750); // MB
 std::atomic<bool> g_isRamCleanerRunning(false);
 std::mutex g_ramCleanerThreadMutex;
 std::atomic<bool> g_intervalMacroEnabled(false);
@@ -398,7 +412,11 @@ std::atomic<int> g_intervalMacroGen(0);
 std::mutex g_intervalMacroThreadMutex;
 std::atomic<int> g_reconnectMacroDelaySec(60);
 std::mutex g_reconnectMacroDelayMutex;
-std::map<HWND, ULONGLONG> g_reconnectMacroPending;
+struct ReconnectMacroPendingRecord {
+    DWORD pid = 0;
+    ULONGLONG tick = 0;
+};
+std::map<HWND, ReconnectMacroPendingRecord> g_reconnectMacroPending;
 std::atomic<int> g_gridFixedWinW(800), g_gridFixedWinH(600);
 std::atomic<int> g_gridFixedCols(2), g_gridFixedRows(2);
 std::atomic<int> g_gridSpacingBetween(7), g_gridSpacingBorders(8);
@@ -407,9 +425,11 @@ std::atomic<int> g_discordHeartbeatIntervalMin(60);
 std::atomic<uint64_t> g_lastHeartbeatSend(0);
 std::atomic<uint64_t> g_lastSessionDurationSeconds(0);
 std::atomic<int> g_afkReminderState(0); // 0 - no reminder, 1 - reminded at 18min, 2 - AFK started at 19min
-std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_totalAfkTimeSeconds(0), g_longestAfkSessionSeconds(0), g_discordWebhooksSent(0), g_programLaunches(0), g_afkSessionsCompleted(0);
+std::atomic<uint64_t> g_lastActivityTime(0), g_afkStartTime(0), g_lastAfkActionTimestamp(0), g_autoReconnectsPerformed(0), g_afkActionsPerformed(0), g_macroRunsPerformed(0), g_totalAfkTimeSeconds(0), g_longestAfkSessionSeconds(0), g_discordWebhooksSent(0), g_programLaunches(0), g_afkSessionsCompleted(0);
+std::atomic<uint64_t> g_sessionAfkActions(0), g_sessionReconnects(0);
 std::atomic<DWORD> g_unmutedPid(0);
 std::atomic<bool> g_skipActiveEnabled(false);
+std::atomic<bool> g_v4WelcomeShown(true);
 struct WindowActivity {
     HWND hwnd = NULL;
     uint64_t lastActiveTick = 0;
@@ -418,6 +438,13 @@ struct WindowActivity {
 };
 std::map<HWND, WindowActivity> g_windowActivity;
 std::mutex g_windowActivityMutex;
+struct WindowActionRecord {
+    uint64_t tick = 0;
+    DWORD pid = 0;
+};
+std::map<HWND, WindowActionRecord> g_windowLastAction;
+std::mutex g_windowLastActionMutex;
+static void MarkWindowAction(HWND hwnd);
 int g_tutorialStartPage = 0;
 std::atomic<int> g_reconnectCheckInterval(0);
 std::atomic<bool> g_reconnectManualCheckRequest(false);
@@ -428,12 +455,19 @@ std::atomic<bool> g_reconnectMonitorRunning(false);
 std::atomic<bool> g_reconnectCheckAbort(false);
 std::mutex g_reconnectMonitorMutex;
 std::mutex g_fpsCapperThreadMutex;
-std::map<HWND, DWORD> g_reconnectCooldownMap;
+struct ReconnectCooldownRecord {
+    DWORD pid = 0;
+    DWORD tick = 0;
+};
+std::map<HWND, ReconnectCooldownRecord> g_reconnectCooldownMap;
 std::mutex g_reconnectCooldownMutex;
 std::thread g_fpsCapperThread;
 std::thread g_ramCleanerThread;
 std::atomic<bool> g_screenSaverActive(false);
 std::atomic<bool> g_screenSaverStopRequested(false);
+std::vector<HWND> g_screenSaverWindows;
+std::mutex g_screenSaverWindowsMutex;
+static void SetScreenSaverOverlaysVisible(bool visible);
 std::condition_variable g_cv;
 std::vector<DWORD> g_manuallyStoppedPids;
 std::mutex g_manuallyStoppedPidsMutex;
@@ -443,10 +477,22 @@ std::vector<UINT_PTR> g_lastAutoGridWindowSignature;
 std::mutex g_cv_m;
 std::mutex g_selfHiddenMutex;
 std::map<HWND, DWORD> g_selfHiddenRobloxWindows;
+std::recursive_mutex g_inputActionMutex;
+std::atomic<bool> g_afkEffectsReady(true);
+std::atomic<bool> g_macroAbortRequested(false);
+std::atomic<bool> g_bloxstrapStartPending(false);
+std::atomic<bool> g_pendingUtilityTestAction(false);
+std::atomic<bool> g_pendingUtilityReconnectCheck(false);
+std::atomic<bool> g_muteOverrideAuto(false);
+std::atomic<bool> g_fpsOverrideAuto(false);
+std::atomic<bool> g_opacityOverrideAuto(false);
+
+bool IsRobloxWindowClosedToTray(HWND w);
 
 void HideRobloxWindowTracked(HWND w)
 {
     if (!w || !IsWindow(w)) return;
+    if (IsRobloxWindowClosedToTray(w)) return;
     if (!IsWindowVisible(w) && !IsIconic(w)) {
         return;
     }
@@ -465,12 +511,36 @@ void HideRobloxWindowTracked(HWND w)
 
 void ShowRobloxWindowTracked(HWND w)
 {
-    if (!w) return;
+    if (!w || !IsWindow(w)) return;
     {
         std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
         g_selfHiddenRobloxWindows.erase(w);
     }
-    ShowWindow(w, SW_SHOW);
+    ShowWindow(w, IsIconic(w) ? SW_SHOWMINNOACTIVE : SW_SHOWNOACTIVATE);
+}
+
+size_t ShowAllSelfHiddenRobloxWindows()
+{
+    std::vector<HWND> toShow;
+    {
+        std::lock_guard<std::mutex> lock(g_selfHiddenMutex);
+        for (auto it = g_selfHiddenRobloxWindows.begin(); it != g_selfHiddenRobloxWindows.end(); ) {
+            HWND w = it->first;
+            DWORD pid = 0;
+            if (IsWindow(w)) GetWindowThreadProcessId(w, &pid);
+            if (!IsWindow(w) || pid != it->second) {
+                it = g_selfHiddenRobloxWindows.erase(it);
+                continue;
+            }
+            toShow.push_back(w);
+            ++it;
+        }
+        g_selfHiddenRobloxWindows.clear();
+    }
+    for (HWND w : toShow) {
+        ShowWindow(w, IsIconic(w) ? SW_SHOWMINNOACTIVE : SW_SHOWNOACTIVATE);
+    }
+    return toShow.size();
 }
 
 bool IsRobloxWindowClosedToTray(HWND w)
@@ -563,6 +633,9 @@ struct RobloxInstancePreset {
 };
 
 std::map<HWND, RobloxInstanceSettings> g_instanceSettings;
+std::map<HWND, DWORD> g_instanceSettingsPid;
+std::map<std::wstring, RobloxInstanceSettings> g_savedInstanceSettings;
+std::mutex g_savedInstanceSettingsMutex;
 std::vector<RobloxInstancePreset> g_instancePresets = {
     { L"Default", false, true, false, false, false, false, 180, false, false, false, false, 60, false, true, false, true, false, false, 540, false, false, {}, {}, {} },
     { L"All off", true, false, true, false, true, false, 180, true, false, true, false, 0, true, false, true, false, true, false, 540, true, false, {}, {}, {} },
@@ -639,7 +712,10 @@ bool GetWindowInstanceSetting_Opacity(HWND hwnd, bool globalDefault, int& outOpa
         outOpacity = it->second.opacityValue;
         return it->second.enableOpacity;
     }
-    outOpacity = 180;
+    int pct = g_globalOpacityPercent.load();
+    if (pct < 5) pct = 5;
+    if (pct > 100) pct = 100;
+    outOpacity = (pct * 255) / 100;
     return globalDefault;
 }
 
@@ -693,10 +769,12 @@ bool GetWindowInstanceSetting_Timer(HWND hwnd, int globalDefault, int& outSecond
     return false;
 }
 
-bool GetWindowInstanceSetting_Macro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+bool GetWindowInstanceSetting_Macro(HWND hwnd, std::vector<std::wstring>& outMacroNames, bool* outHasOverride = nullptr) {
+    if (outHasOverride) *outHasOverride = false;
     std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
     auto it = g_instanceSettings.find(hwnd);
     if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (outHasOverride) *outHasOverride = true;
         if (it->second.enableMacro) {
             outMacroNames = it->second.macroNames;
             return !outMacroNames.empty();
@@ -709,9 +787,12 @@ bool GetWindowInstanceSetting_Macro(HWND hwnd, std::vector<std::wstring>& outMac
             std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
             for (const auto& pr : g_instancePresets) {
                 if (pr.name == preset) {
-                    if (pr.overrideMacro && pr.enableMacro) {
-                        outMacroNames = pr.macroNames;
-                        return !outMacroNames.empty();
+                    if (pr.overrideMacro) {
+                        if (outHasOverride) *outHasOverride = true;
+                        if (pr.enableMacro) {
+                            outMacroNames = pr.macroNames;
+                            return !outMacroNames.empty();
+                        }
                     }
                     break;
                 }
@@ -721,10 +802,12 @@ bool GetWindowInstanceSetting_Macro(HWND hwnd, std::vector<std::wstring>& outMac
     return false;
 }
 
-bool GetWindowInstanceSetting_ReconnectMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+bool GetWindowInstanceSetting_ReconnectMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames, bool* outHasOverride = nullptr) {
+    if (outHasOverride) *outHasOverride = false;
     std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
     auto it = g_instanceSettings.find(hwnd);
     if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (outHasOverride) *outHasOverride = true;
         if (it->second.enableReconnectMacro) {
             outMacroNames = it->second.reconnectMacroNames;
             return !outMacroNames.empty();
@@ -737,9 +820,12 @@ bool GetWindowInstanceSetting_ReconnectMacro(HWND hwnd, std::vector<std::wstring
             std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
             for (const auto& pr : g_instancePresets) {
                 if (pr.name == preset) {
-                    if (pr.overrideMacro && pr.enableReconnectMacro) {
-                        outMacroNames = pr.reconnectMacroNames;
-                        return !outMacroNames.empty();
+                    if (pr.overrideMacro) {
+                        if (outHasOverride) *outHasOverride = true;
+                        if (pr.enableReconnectMacro) {
+                            outMacroNames = pr.reconnectMacroNames;
+                            return !outMacroNames.empty();
+                        }
                     }
                     break;
                 }
@@ -749,10 +835,12 @@ bool GetWindowInstanceSetting_ReconnectMacro(HWND hwnd, std::vector<std::wstring
     return false;
 }
 
-bool GetWindowInstanceSetting_IntervalMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames) {
+bool GetWindowInstanceSetting_IntervalMacro(HWND hwnd, std::vector<std::wstring>& outMacroNames, bool* outHasOverride = nullptr) {
+    if (outHasOverride) *outHasOverride = false;
     std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
     auto it = g_instanceSettings.find(hwnd);
     if (it != g_instanceSettings.end() && it->second.overrideMacro) {
+        if (outHasOverride) *outHasOverride = true;
         if (it->second.enableIntervalMacro) {
             outMacroNames = it->second.intervalMacroNames;
             return !outMacroNames.empty();
@@ -765,9 +853,12 @@ bool GetWindowInstanceSetting_IntervalMacro(HWND hwnd, std::vector<std::wstring>
             std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
             for (const auto& pr : g_instancePresets) {
                 if (pr.name == preset) {
-                    if (pr.overrideMacro && pr.enableIntervalMacro) {
-                        outMacroNames = pr.intervalMacroNames;
-                        return !outMacroNames.empty();
+                    if (pr.overrideMacro) {
+                        if (outHasOverride) *outHasOverride = true;
+                        if (pr.enableIntervalMacro) {
+                            outMacroNames = pr.intervalMacroNames;
+                            return !outMacroNames.empty();
+                        }
                     }
                     break;
                 }
@@ -818,7 +909,8 @@ enum class MacroStepType : uint8_t {
     MouseUp,
     Sleep,
     RandomSleep,
-    MouseWheel
+    MouseWheel,
+    Unknown
 };
 
 struct ImageTemplate {
@@ -855,7 +947,7 @@ struct ImageTemplate {
 };
 
 struct MacroAction {
-    MacroStepType type = MacroStepType::ImageClick;
+    MacroStepType type = MacroStepType::Unknown;
     uint16_t x = 0, y = 0;
     ImageTemplate image;
     uint8_t tolerance = 200;
@@ -893,21 +985,21 @@ std::vector<Macro> MacroEngine_GetCooldownMacros();
 std::vector<Macro> MacroEngine_GetReconnectMacros();
 std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target);
 std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target);
-void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest = false, bool allowWithoutAfk = false);
+bool MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest = false, bool allowWithoutAfk = false);
 void MacroEngine_StopRecording();
 static void MacroEngine_RestoreRecordingWindowSize();
 void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button);
 void MacroEngine_ShowWizard(HWND parent, int startStep = 1);
 void MacroEngine_ShowEditor(HWND parent, int macroIndex);
 void ShowMainUIDialog(HWND owner);
-void FocusRobloxWindow(HWND hwnd);
+static void FocusRobloxWindow(HWND hwnd);
 
 void FillRoundedRectangle(Gdiplus::Graphics* g, Gdiplus::Brush* brush, REAL x, REAL y, REAL width, REAL height, REAL radius);
 void DrawRoundedRectangle(Gdiplus::Graphics* g, Gdiplus::Pen* pen, REAL x, REAL y, REAL width, REAL height, REAL radius);
 int MeasureTextWidth(HDC hdc, HFONT font, const std::wstring& text);
 
 std::atomic<int> g_selectedTime(540);
-std::atomic<int> g_selectedAction(1); // 0 - space, 1 - w&s, 2 - zoom, 3 - random, 4 - macro
+std::atomic<int> g_selectedAction(5); // 0 - space, 1 - w&s, 2 - zoom, 3 - random, 4 - macro, 5 - arrows
 std::atomic<int> g_selectedMacroIndex(-1); // -1 = no macro selected
 std::atomic<int> g_macroIntervalTargetIndex(-1); // -1 = use g_selectedMacroIndex
 std::vector<Macro> g_macros;
@@ -956,6 +1048,7 @@ Macro* MacroEngine_FindMacro(const std::wstring& name) {
 
 static std::wstring MacroEngine_MakeUniqueName(const std::wstring& desired, int excludeIndex) {
     if (desired.empty()) return desired;
+    std::wstring clamped = desired.size() > 63 ? desired.substr(0, 63) : desired;
     auto nameExists = [&](const std::wstring& n) -> bool {
         for (size_t i = 0; i < g_macros.size(); i++) {
             if ((int)i == excludeIndex) continue;
@@ -963,14 +1056,17 @@ static std::wstring MacroEngine_MakeUniqueName(const std::wstring& desired, int 
         }
         return false;
     };
-    if (!nameExists(desired)) return desired;
-    std::wstring base = desired;
+    if (!nameExists(clamped)) return clamped;
     for (int suffix = 2; ; suffix++) {
-        std::wstring candidate = base + L" (" + std::to_wstring(suffix) + L")";
+        std::wstring suf = L" (" + std::to_wstring(suffix) + L")";
+        size_t maxBase = (suf.size() < 63) ? (63 - suf.size()) : 0;
+        std::wstring candidate = clamped.substr(0, maxBase) + suf;
         if (!nameExists(candidate)) return candidate;
     }
 }
 std::atomic<bool> g_isRecording{false};
+std::mutex g_recordingLifecycleMutex;
+std::mutex g_macroPlaybackMutex;
 HWND g_recordingTargetHwnd = NULL;
 HHOOK g_recordingMouseHook = NULL;
 std::thread g_recordingDeltaThread;
@@ -1026,9 +1122,14 @@ Macro g_wizardMacro;
 std::map<std::pair<HWND, std::wstring>, ULONGLONG> g_lastIntervalMacroRun;
 std::mutex g_lastIntervalMacroRunMutex;
 std::atomic<bool> g_macroTestRunning(false);
+std::atomic<int> g_macroTestProgress(0);
+std::atomic<int> g_macroTestTotal(0);
+int g_macroWizardReviewScroll = 0;
+int g_macroWizardReviewMaxScroll = 0;
 std::atomic<HWND> g_macroTestTargetWnd = nullptr;
 std::atomic<int> g_lastActionKind(1); // 0 - space, 1 - w/s, 2 - zoom (actual last performed)
-std::atomic<int> g_randomCyclePick(-1); // -1 = no pick yet, 0-2 = pick for current cycle
+std::atomic<int> g_randomCyclePick(-1); // -1 = no pick yet, 0/1/2/5 = pick for current cycle
+std::atomic<int> g_lastRandomPick(-1); // -1 = no previous pick, 0/1/2/5 = last performed random action
 std::atomic<int> g_restoreMethod(1); // 0 - Off, 1 - SetForeground, 2 - Alt+Tab (legacy), 3 - Smart Alt+Tab
 std::atomic<int> g_userSafeMode(2); // 0 - Off, 1 - Legacy, 2 - Beta
 std::atomic<int> g_fpsLimit(0); // 0 for OFF
@@ -1044,6 +1145,8 @@ const int USER_INACTIVITY_WAIT = 3;
 const int MAX_WAIT_TIME = 60;
 const int AFK_REMINDER_TIME = 18 * 60;
 const int AFK_AUTO_START_TIME = 19 * 60;
+constexpr uint64_t AFK_MAX_ACTION_GAP_MS = (19ull * 60ull + 50ull) * 1000ull;
+constexpr uint64_t AFK_DEADLINE_WARN_MS = (20ull * 60ull - 2ull * 60ull) * 1000ull;
 const size_t DISCORD_WEBHOOK_MAX_LENGTH = 2048;
 const COLORREF DARK_BG = RGB(30, 30, 30);
 const COLORREF DARK_TEXT = RGB(235, 235, 235);
@@ -1062,19 +1165,30 @@ struct StatusBarPayload {
 bool CheckForUpdates(bool showNotification);
 bool CheckForAnnouncement(bool showNotification = false);
 extern std::atomic<bool> g_ssAlwaysShowExitUI;
+extern std::atomic<bool> g_ssAlwaysShowHintAndClose;
 void SaveSettings();
 std::string EscapeJsonStringUtf8(const std::string& input);
 void FpsCapperThread();
 void RamCleanerThread();
+static void EnsureRamCleanerThreadStarted();
 void IntervalMacroThread(int myGen);
+static bool IsRobloxWindowActiveRecently(HWND hwnd);
+static void ApplySavedInstanceSettingsToWindow(HWND w);
+static void RefreshMainUiAfkState();
+static void RunPendingStartupUtilityActions();
 int ClearRobloxMemory();
 bool AnyRobloxWindowExceedsRamLimit(int limitMb);
 void ShowAllRobloxWindows_Multi();
+bool IsUtilsWindowOpacityEnabled();
+bool ShouldRunFpsCapperNow();
 void RefreshRobloxWindowOpacity(bool forceDisable);
 void RestoreForegroundWindow(HWND prevWnd);
 bool PauseFpsCapperBeforeAction(DWORD waitMs = FPS_CAPPER_PRE_ACTION_PAUSE_MS, bool allowAbort = false);
 void ResumeFpsCapperAfterAction(bool previousPausedState);
-RECT GetMainUIWindowRect();
+static void SetScreenSaverOverlaysVisible(bool visible);
+static void PauseFpsCapperNested();
+static void ResumeFpsCapperNested();
+RECT GetDefaultMainUiRect();
 std::wstring FormatHotkeyString(UINT modifiers, UINT vk);
 LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam);
 void ApplyAutoRobloxWindowLayout();
@@ -1096,6 +1210,8 @@ enum class DiscordWebhookEvent
 std::queue<std::pair<DiscordWebhookEvent, std::wstring>>& g_webhookQueue = *new std::queue<std::pair<DiscordWebhookEvent, std::wstring>>();
 std::condition_variable& g_webhookCv = *new std::condition_variable();
 std::atomic<bool>& g_webhookThreadRunning = *new std::atomic<bool>(false);
+std::wstring g_lastWebhookError;
+std::mutex g_lastWebhookErrorMutex;
 std::atomic<bool>& g_webhookBusy = *new std::atomic<bool>(false);
 std::thread g_webhookThread;
 std::wstring BuildDiscordTotalStatsLine();
@@ -1163,12 +1279,13 @@ void ShowHelp()
             L"  --no-update-check                    Skip checking for updates on startup.\r\n"
             L"  --check-updates                      Check for updates and exit.\r\n"
             L"  --reset-settings                     Reset all settings and exit.\r\n"
+            L"  --force                              Close the already-running instance and restart.\r\n"
             L"  --help, -?                           Show this help and exit.\r\n"
             L"\r\n"
             L"Anti-AFK:\r\n"
-            L"  --start-afk                          Start Anti-AFK immediately on launch.\r\n"
+            L"  --start-afk                          Start Anti-AFK on launch (waits up to 2 minutes for Roblox).\r\n"
             L"  --set-interval <seconds>             Set Anti-AFK interval in seconds (1-1200).\r\n"
-            L"  --set-action <action>                Action: space, ws, zoom, random*.\r\n"
+            L"  --set-action <action>                Action: space, ws, zoom, arrows, random, macros.\r\n"
             L"  --user-safe <mode>                   User-Safe mode: off, legacy, beta.\r\n"
             L"  --action-preset <preset>             Preset: default, safe, custom.\r\n"
             L"  --action-delay-pre <ms>              Delay before action (0-10000).\r\n"
@@ -1186,7 +1303,7 @@ void ShowHelp()
             L"  --auto-start [on|off]                Force enable/disable Auto-Start.\r\n"
             L"  --auto-reconnect [on|off]            Force enable/disable Auto Reconnect.\r\n"
             L"  --reconnect-interval <sec>           Independent reconnect check interval (0=with main cycle).\r\n"
-            L"  --reconnect-manual-check             Run manual reconnect check and exit.\r\n"
+            L"  --reconnect-manual-check             Run manual reconnect check (Anti-AFK must be running).\r\n"
             L"  --auto-reset [on|off]                Force enable/disable Auto Reset (Esc+R+Enter).\r\n"
             L"  --auto-hide [on|off]                 Force enable/disable auto-hide Roblox.\r\n"
             L"  --window-opacity [on|off]            Force enable/disable persistent window opacity (70%).\r\n"
@@ -1195,8 +1312,8 @@ void ShowHelp()
             L"  --restore-window <method>            off, foreground, alttab, smart.\r\n"
             L"  --do-not-sleep [on|off]              Force enable/disable sleep prevention.\r\n"
             L"  --i-can-forget [on|off]              Force enable/disable 18/19 min smart auto-start.\r\n"
-            L"  --skip-active [on|off]               Skip the anti-AFK action in Roblox windows that were active recently.\r\n"
-            L"  --bloxstrap-integration [on|off]     Force enable/disable Fish/Void/Bloxstrap.\r\n"
+            L"  --skip-active [on|off]               Skip the Anti-AFK action in Roblox windows that were active recently.\r\n"
+            L"  --bloxstrap-integration [on|off]     Enable/disable integration; no value = launcher mode.\r\n"
             L"  --simple-mode [on|off]               Force enable/disable simple mode (hide advanced).\r\n"
             L"\r\n"
             L"FPS Capper / Audio:\r\n"
@@ -1209,7 +1326,7 @@ void ShowHelp()
             L"  --unmute-on-focus [on|off]           Force enable/disable unmute on focus.\r\n"
             L"\r\n"
             L"RAM Cleaner:\r\n"
-            L"  --ram-cleaner [on|off]               Force enable/disable RAM cleaner.\r\n"
+            L"  --ram-cleaner [on|off]               Force enable/disable RAM Cleaner auto-start with Anti-AFK.\r\n"
             L"  --ram-cleaner-mode <mode>            Mode: time, smart, hybrid, disabled.\r\n"
             L"  --ram-cleaner-interval <sec>         Cleaning interval in seconds (1-86400).\r\n"
             L"  --ram-cleaner-limit <mb>             RAM threshold in MB (50-16384).\r\n"
@@ -1217,7 +1334,7 @@ void ShowHelp()
             L"\r\n"
             L"Custom Process Search:\r\n"
             L"  --custom-process-search [on|off]     Redirect Anti-AFK to custom processes.\r\n"
-            L"  --custom-process-names <names>       Comma-separated process names.\r\n"
+            L"  --custom-process-names <names>       Semicolon- or comma-separated process names.\r\n"
             L"  --custom-process-exclude-builtin     Exclude built-in Roblox names.\r\n"
             L"\r\n"
             L"Hotkey:\r\n"
@@ -1226,12 +1343,12 @@ void ShowHelp()
             L"\r\n"
             L"Screen Saver:\r\n"
             L"  --screen-saver [on|off]              Start (or stop with off).\r\n"
-            L"  --screen-saver-always-show-exit      Always show the bouncing exit text.\r\n"
+            L"  --screen-saver-always-show-exit [on|off]  Always show the bouncing exit text.\r\n"
             L"\r\n"
             L"Discord Webhook:\r\n"
             L"  --discord-webhook [on|off]           Force enable/disable webhook.\r\n"
-            L"  --discord-webhook-url <url>          Set Discord webhook URL for this session.\r\n"
-            L"  --discord-mention-target <target>    @everyone, <@id>, or <@&role>.\r\n"
+            L"  --discord-webhook-url <url>          Set Discord webhook URL (persisted on normal exit).\r\n"
+            L"  --discord-mention-target <target>    @everyone, <@USER_ID>, or <@&ROLE_ID>.\r\n"
             L"  --discord-notify-start [on|off]      Notify Start/Stop events.\r\n"
             L"  --discord-notify-action [on|off]     Notify Action events.\r\n"
             L"  --discord-notify-reconnect [on|off]  Notify Reconnect events.\r\n"
@@ -1259,6 +1376,11 @@ void ShowHelp()
         {
             DWORD charsWritten = 0;
             WriteConsoleW(hOut, helpText, (DWORD)wcslen(helpText), &charsWritten, NULL);
+        }
+
+        if (allocatedConsole)
+        {
+            MessageBoxW(NULL, L"CLI help has been printed to the console window.\n\nRun AntiAFK-RBX.exe --help from CMD or PowerShell to view it inline.", L"AntiAFK-RBX • Help", MB_OK | MB_ICONINFORMATION);
         }
 
         if (attachedToParentConsole || allocatedConsole)
@@ -1363,8 +1485,27 @@ static void ApplyWindowCornerPreference(HWND hWnd) {
     DWM_WINDOW_CORNER_PREFERENCE preference = g_disableWindowCorners.load() ? DWMWCP_DONOTROUND : DWMWCP_ROUND;
     DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
 }
+static void UpdateStatusBarWindowRegion(HWND hwnd);
+extern HWND g_hInstanceManagerDlg;
+static void DrawOverlayPillBackground(Gdiplus::Graphics& g, Gdiplus::SolidBrush& bodyBrush, Gdiplus::Pen& borderPen, Gdiplus::REAL width, Gdiplus::REAL height, Gdiplus::REAL radius) {
+    if (g_disableWindowCorners.load()) {
+        g.FillRectangle(&bodyBrush, 0.0f, 0.0f, width, height);
+        g.DrawRectangle(&borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f);
+    } else {
+        FillRoundedRectangle(&g, &bodyBrush, 0.0f, 0.0f, width, height, radius);
+        DrawRoundedRectangle(&g, &borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f, radius);
+    }
+}
 void ApplyWindowCornersSetting() {
     ApplyWindowCornerPreference(g_hMainUiWnd);
+    if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
+        ApplyWindowCornerPreference(g_hStatusBarWnd);
+        UpdateStatusBarWindowRegion(g_hStatusBarWnd);
+        InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
+    }
+    if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+        ApplyWindowCornerPreference(g_hInstanceManagerDlg);
+    }
 }
 static HBRUSH AcrylicBaseBgBrush() {
     static HBRUSH s_hDark = NULL;
@@ -1376,7 +1517,17 @@ static HBRUSH AcrylicBaseBgBrush() {
 }
 void ShowTrayNotification(const wchar_t* title, const wchar_t* msg)
 {
-    if (g_notificationsDisabled.load()) return;
+    if (!g_hwnd || !IsWindow(g_hwnd)) return;
+
+    DWORD infoFlags = NIIF_INFO;
+    bool isCritical = false;
+    if (title && (wcsstr(title, L"Error") || wcsstr(title, L"Failed"))) {
+        infoFlags = NIIF_ERROR;
+        isCritical = true;
+    } else if (title && (wcsstr(title, L"Warning") || wcsstr(title, L"Input Needed"))) {
+        infoFlags = NIIF_WARNING;
+    }
+    if (g_notificationsDisabled.load() && !isCritical) return;
 
     NOTIFYICONDATA info = { 0 };
     info.cbSize = sizeof(NOTIFYICONDATA);
@@ -1385,7 +1536,7 @@ void ShowTrayNotification(const wchar_t* title, const wchar_t* msg)
     info.uFlags = NIF_INFO;
     StringCchCopyW(info.szInfoTitle, _countof(info.szInfoTitle), title ? title : L"");
     StringCchCopyW(info.szInfo, _countof(info.szInfo), msg ? msg : L"");
-    info.dwInfoFlags = NIIF_INFO;
+    info.dwInfoFlags = infoFlags;
     Shell_NotifyIcon(NIM_MODIFY, &info);
 }
 HICON CreateCustomIconWithState(bool isOn, bool multi)
@@ -1444,9 +1595,9 @@ static void Popup_DrawActionButton(Graphics* g, HDC hdc, const RECT& rect, HFONT
     g->SetSmoothingMode(SmoothingModeNone);
     g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
     g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
+    if (rect.left > 0) {
+        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
+    }
     g->SetPixelOffsetMode(oldMode);
     g->SetSmoothingMode(oldSmooth);
 
@@ -1476,9 +1627,9 @@ static void Popup_DrawActionButtonWithoutTopBorder(Graphics* g, HDC hdc, const R
     g->SetPixelOffsetMode(PixelOffsetModeNone);
     g->SetSmoothingMode(SmoothingModeNone);
     g->FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
+    if (rect.left > 0) {
+        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
+    }
     g->SetPixelOffsetMode(oldMode);
     g->SetSmoothingMode(oldSmooth);
 
@@ -1512,10 +1663,8 @@ static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT&
     if (drawTopBorder) {
         g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
     }
-    g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     if (drawBottomSliver) {
-        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), 1.0f, (REAL)h);
+        g->FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
     }
     g->SetPixelOffsetMode(oldMode);
     g->SetSmoothingMode(oldSmooth);
@@ -1524,11 +1673,12 @@ static void Popup_DrawTextInputJoinedToButtons(Graphics* g, HDC hdc, const RECT&
     g->SetTextRenderingHint(TextRenderingHintAntiAlias);
     Font textFont(hdc, inputFont);
     SolidBrush textBrush((value && value[0] != L'\0') ? Color(255, 255, 255, 255) : Color(255, 130, 130, 130));
-    StringFormat sf;
+    StringFormat sf(StringFormat::GenericTypographic());
     sf.SetAlignment(StringAlignmentNear);
     sf.SetLineAlignment(StringAlignmentCenter);
-    sf.SetFormatFlags(StringFormatFlagsNoWrap);
-    RectF textRect((REAL)(rect.left + 12), (REAL)rect.top, (REAL)(rect.right - rect.left - 24), (REAL)(rect.bottom - rect.top));
+    sf.SetFormatFlags(sf.GetFormatFlags() | StringFormatFlagsNoWrap | StringFormatFlagsMeasureTrailingSpaces);
+    sf.SetTrimming(StringTrimmingEllipsisCharacter);
+    RectF textRect((REAL)(rect.left + 12), (REAL)rect.top, (REAL)max(0, rect.right - rect.left - 24), (REAL)(rect.bottom - rect.top));
     g->DrawString((value && value[0] != L'\0') ? value : placeholder, -1, &textFont, textRect, &sf, &textBrush);
     g->SetTextRenderingHint(oldTextHint);
 }
@@ -1543,8 +1693,6 @@ static void Popup_DrawInfoBanner(Graphics* g, HDC hdc, const RECT& rect, HFONT f
     g->SetPixelOffsetMode(PixelOffsetModeNone);
     g->FillRectangle(&infoBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
     g->FillRectangle(&infoBorderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
-    g->FillRectangle(&infoBorderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&infoBorderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     g->FillRectangle(&infoBorderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
     g->SetPixelOffsetMode(oldMode);
 
@@ -1574,14 +1722,11 @@ static void Popup_DrawInfoBanner(Graphics* g, HDC hdc, const RECT& rect, HFONT f
 #pragma warning(disable: 4310)
 static void Popup_DrawInfoBannerNoBottomBorder(Graphics* g, HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, COLORREF iconColor, const wchar_t* text) {
     SolidBrush infoBgBrush(Color(60, 45, 45, 45));
-    SolidBrush infoBorderBrush(Color(180, 56, 56, 56));
     int w = rect.right - rect.left;
     int h = rect.bottom - rect.top;
     PixelOffsetMode oldMode = g->GetPixelOffsetMode();
     g->SetPixelOffsetMode(PixelOffsetModeNone);
     g->FillRectangle(&infoBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
-    g->FillRectangle(&infoBorderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g->FillRectangle(&infoBorderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     g->SetPixelOffsetMode(oldMode);
 
     TextRenderingHint oldTextHint = g->GetTextRenderingHint();
@@ -1631,7 +1776,9 @@ static void Popup_DrawChrome(Graphics* g, HDC hdc, const RECT& clientRect, const
     StringFormat sf;
     sf.SetAlignment(StringAlignmentCenter);
     sf.SetLineAlignment(StringAlignmentCenter);
-    RectF titleRect(0.0f, 0.0f, (REAL)clientRect.right, 30.0f);
+    sf.SetTrimming(StringTrimmingEllipsisCharacter);
+    sf.SetFormatFlags(StringFormatFlagsNoWrap);
+    RectF titleRect(38.0f, 0.0f, (REAL)(std::max)(40L, clientRect.right - 84L), 30.0f);
     g->DrawString(title, -1, &popupTitleFont, titleRect, &sf, &titleBrush);
     g->SetTextRenderingHint(oldTextHint);
 
@@ -2007,7 +2154,7 @@ void CreateSplashScreen(HINSTANCE hInstance)
     if (!RegisterClass(&wc))
         return;
 
-    RECT targetRect = GetMainUIWindowRect();
+    RECT targetRect = GetDefaultMainUiRect();
     int x = targetRect.left;
     int y = targetRect.top;
     int winW = targetRect.right - targetRect.left;
@@ -2021,10 +2168,17 @@ void CreateSplashScreen(HINSTANCE hInstance)
         UpdateWindow(g_hSplashWnd);
     }
 }
-RECT GetMainUIWindowRect()
+RECT GetDefaultMainUiRect()
 {
     int screenW = GetSystemMetrics(SM_CXSCREEN), screenH = GetSystemMetrics(SM_CYSCREEN);
-    int winW = 380, winH = 520;
+    UINT dpi = 96;
+    typedef UINT(WINAPI* GetDpiForSystem_fn)();
+    auto fn = (GetDpiForSystem_fn)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+    if (fn) {
+        UINT systemDpi = fn();
+        if (systemDpi > 0) dpi = systemDpi;
+    }
+    int winW = MulDiv(380, dpi, 96), winH = MulDiv(520, dpi, 96);
     int x = (screenW - winW) / 2, y = (screenH - winH) / 2 + 15;
     RECT rect = { x, y, x + winW, y + winH };
     return rect;
@@ -2076,11 +2230,7 @@ void About_Paint_DrawButtons(HDC hdc, const RECT& githubButtonRect, const RECT& 
     g.FillRectangle(&githubBrush, (REAL)githubButtonRect.left, (REAL)githubButtonRect.top, (REAL)(githubButtonRect.right - githubButtonRect.left), (REAL)(githubButtonRect.bottom - githubButtonRect.top));
     g.FillRectangle(&sourceforgeBrush, (REAL)sourceforgeButtonRect.left, (REAL)sourceforgeButtonRect.top, (REAL)(sourceforgeButtonRect.right - sourceforgeButtonRect.left), (REAL)(sourceforgeButtonRect.bottom - sourceforgeButtonRect.top));
 
-    int gw = groupRect.right - groupRect.left;
     int gh = groupRect.bottom - groupRect.top;
-    g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)groupRect.top, 1.0f, (REAL)gh);
-    g.FillRectangle(&borderBrush, (REAL)(groupRect.right - 1), (REAL)groupRect.top, 1.0f, (REAL)gh);
-    g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)(groupRect.bottom - 1), (REAL)gw, 1.0f);
     g.FillRectangle(&borderBrush, (REAL)sourceforgeButtonRect.left, (REAL)groupRect.top, 1.0f, (REAL)gh);
 
     Font textFont(hdc, hFont);
@@ -2553,7 +2703,7 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             L"Possible reasons for failure:",
             L"• Roblox was started before AntiAFK-RBX",
             L"• Another app holds the mutex",
-            L"  (FishStrap, VoidStrap, Roblox Account Manager)",
+            L"  (Fishstrap, Voidstrap, Roblox Account Manager)",
             L"",
             L"Note: Anti-AFK will still work on all open",
             L"Roblox windows even if the mutex fails."
@@ -2692,6 +2842,29 @@ static LRESULT CALLBACK MutexErrorDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
+static void ModalSetOwnerEnabled(HWND owner, bool enable)
+{
+    if (!owner || !IsWindow(owner)) return;
+    static std::mutex s_modalOwnerMutex;
+    static std::map<HWND, int> s_modalDisableCounts;
+    std::lock_guard<std::mutex> lock(s_modalOwnerMutex);
+    if (!enable) {
+        if (++s_modalDisableCounts[owner] == 1) {
+            EnableWindow(owner, FALSE);
+        }
+    } else {
+        auto it = s_modalDisableCounts.find(owner);
+        if (it != s_modalDisableCounts.end()) {
+            if (--it->second <= 0) {
+                s_modalDisableCounts.erase(it);
+                EnableWindow(owner, TRUE);
+            }
+        } else {
+            EnableWindow(owner, TRUE);
+        }
+    }
+}
+
 int ShowMutexErrorDialog(HWND owner)
 {
     const wchar_t DLG_CLASS[] = L"AntiAFK-RBX-MutexError";
@@ -2721,13 +2894,15 @@ int ShowMutexErrorDialog(HWND owner)
     EnableAcrylic(h);
     ShowWindow(h, SW_SHOW);
     UpdateWindow(h);
-    if (owner) EnableWindow(owner, FALSE);
+    ModalSetOwnerEnabled(owner, false);
 
-    MSG m;
-    while (IsWindow(h) && GetMessage(&m, NULL, 0, 0) > 0) {
+    MSG m = { 0 };
+    BOOL gmRes = 1;
+    while (IsWindow(h) && (gmRes = GetMessage(&m, NULL, 0, 0)) > 0) {
         TranslateMessage(&m); DispatchMessage(&m);
     }
-    if (owner) { EnableWindow(owner, TRUE); EnableAcrylic(owner); SetForegroundWindow(owner); }
+    if (gmRes == 0) PostQuitMessage((int)m.wParam);
+    if (owner) { ModalSetOwnerEnabled(owner, true); EnableAcrylic(owner); SetForegroundWindow(owner); }
 
     return s_mutexDialogResult;
 }
@@ -2737,6 +2912,7 @@ void ShowAboutDialog(HWND owner)
     static HWND hAbout = NULL;
     if (IsWindow(hAbout))
     {
+        if (IsIconic(hAbout)) ShowWindow(hAbout, SW_RESTORE);
         SetForegroundWindow(hAbout);
         ShowWindow(hAbout, SW_SHOW);
         return;
@@ -2777,11 +2953,12 @@ void ShowAboutDialog(HWND owner)
 void MainUI_Paint_DrawToggle(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool checked, bool isHovering, float animState, bool hasRightNeighbor, const wchar_t* icon, bool isEnabled = true, Graphics* pG = nullptr, bool uniformRounding = false, int iconMargin = 16);
 void MainUI_Paint_DrawToggleGetHitbox(const RECT& rowRect, RECT* outToggleRect);
 void MainUI_Paint_DrawCloseButton(HDC hdc, const RECT& closeButtonRect, bool isHovering);
-void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary, bool drawBottomBorder = true);
+void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary, bool drawBottomBorder = true, bool drawRightBorder = true);
 void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wchar_t* label, const wchar_t* value, bool isHovering, bool hasRightNeighbor, const wchar_t* icon = nullptr, bool isEnabled = true, Graphics* pG = nullptr, int iconVerticalOffset = 0, int iconHorizontalOffset = 0, const wchar_t* rightIcon = L"\uE70D");
 float MainUI_Paint_DrawBadge(Graphics& g, float x, float y, float badgeH, const wchar_t* badgeText, int textAlpha = 255);
 void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering, bool fullyRounded = false, Graphics* pG = nullptr);
 void MainUI_Paint_DrawCompactButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* icon, bool isHovering, const wchar_t* label, bool checked, int iconXOffset, bool enabled);
+static void MainUI_Paint_VerticalScrollbar(Graphics& g, const RECT& track, int offset, int maxScroll, int pageSize);
 enum class CustomInputDialogType {
     Interval,
     FpsLimit,
@@ -2806,35 +2983,35 @@ enum class CustomInputDialogType {
     MacroName,
     MacroInterval,
     InstanceTimer,
+    InstanceOpacityValue,
+    GlobalOpacityValue,
+    InstanceFpsValue,
     MacroRename,
     DiscordWebhookUrl,
     DiscordHeartbeatInterval,
     MultiInstanceInterval
 };
 void ShowCustomInputDialog(HWND owner, CustomInputDialogType type);
-HWND g_hCustomMacroRenameWnd = NULL;
+static std::map<CustomInputDialogType, HWND> g_customInputDialogWindows;
 HWND g_geometryTargetHwnd = NULL;
 std::vector<HWND> g_geometryTargetWindows;
-HWND g_hCustomGeometryWnd = NULL;
 std::vector<HWND> g_renameTargetWindows;
-HWND g_hCustomRenameWnd = NULL;
 std::vector<HWND> g_instanceTimerTargetWindows;
-HWND g_hCustomInstanceTimerWnd = NULL;
-HWND g_hCustomPresetNameWnd = NULL;
-HWND g_hCustomMacroNameWnd = NULL;
-HWND g_hCustomMacroIntervalWnd = NULL;
-HWND g_hCustomWebhookUrlWnd = NULL;
-HWND g_hCustomHeartbeatIntervalWnd = NULL;
-HWND g_hCustomMultiInstanceIntervalWnd = NULL;
+std::vector<HWND> g_instanceOpacityTargetWindows;
+std::vector<HWND> g_instanceFpsTargetWindows;
 HWND g_presetEditSource = NULL;
+std::wstring g_presetRenameSourceName;
 void ShowInstanceManagerWindow(HWND owner);
-static HWND g_hInstanceManagerDlg = NULL;
+HWND g_hInstanceManagerDlg = NULL;
+static std::vector<HWND> g_instanceManagerSelection;
 
 // Forward declarations for Instance Settings Manager
 std::vector<HWND> FindAllRobloxWindows(bool includeHidden);
 void MuteProcessByPid(DWORD pid, bool mute);
 bool ShouldMuteRobloxNow();
 void RestartFpsCapperForEffectiveLimit();
+static std::wstring GetFpsSuspendMarkerPath();
+static void RecoverStaleFpsSuspendState();
 extern std::atomic<int> g_fpsLimit;
 extern std::atomic<bool> g_isFpsCapperRunning;
 extern std::atomic<bool> g_autoMute;
@@ -2850,7 +3027,7 @@ extern std::map<HWND, RobloxInstanceSettings> g_instanceSettings;
 extern std::mutex g_instanceSettingsMutex;
 extern std::mutex g_instancePresetsMutex;
 void PruneClosedInstanceSettings();
-void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, const wchar_t* text, bool centerOverAnchor = false, int extraTopOffset = 0);
+void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, const wchar_t* text, bool centerOverAnchor = false, int extraTopOffset = 0, int minTopY = 34);
 
 // Instance Settings Manager Dialog
 struct InstanceManagerData {
@@ -2869,6 +3046,7 @@ struct InstanceManagerData {
     int selectedIndex = -1;
     int scrollOffset = 0;
     bool isCtrlDown = false;
+    bool isShiftDown = false;
 
     bool isHoveringClose = false;
     bool isHoveringMinimize = false;
@@ -2895,6 +3073,8 @@ struct InstanceManagerData {
     bool isHoveringRename = false;
     bool isHoveringRefresh = false;
     bool isHoveringCreatePreset = false;
+    bool isHoveringRenamePreset = false;
+    bool isHoveringDeletePreset = false;
     bool isHoveringFocusBtn = false;
     int focusBtnRow = -1;
     bool isTrackingMouse = false;
@@ -2917,12 +3097,19 @@ struct InstanceManagerData {
     RECT intervalMacroSelectRect = { 0 };
     RECT intervalMacroSeqRect = { 0 };
     RECT createPresetRect = { 0 };
+    RECT renamePresetRect = { 0 };
+    RECT deletePresetRect = { 0 };
 
     RECT btnShowHideRect = { 0 };
     RECT btnGeometryRect = { 0 };
     RECT btnRenameRect = { 0 };
     RECT btnCloseClientRect = { 0 };
     RECT refreshBtnRect = { 0 };
+
+    RECT opacityValueRect = { 0 };
+    RECT fpsValueRect = { 0 };
+    bool isHoveringOpacityValue = false;
+    bool isHoveringFpsValue = false;
 
     float animAntiAfk = 0.0f;
     float animMute = 0.0f;
@@ -2954,10 +3141,16 @@ static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) 
     int ddH = 25, ddYOff = (rowH - ddH) / 2;
     int topBarTop = 31, topBarBot = 65;
     int topRowY = topBarTop;
-    pData->presetRect = { ctrlR - 180, topRowY + ddYOff + 1 + 2, ctrlR - 25, topRowY + ddYOff + 1 + ddH + 2 };
-    pData->createPresetRect = { ctrlR - 25, topRowY + ddYOff + 1 + 2, ctrlR, topRowY + ddYOff + 1 + ddH + 2 };
+    int presetTop = topRowY + ddYOff + 1 + 2;
+    int presetBottom = presetTop + ddH;
+    pData->renamePresetRect = { ctrlR - 72, presetTop, ctrlR - 48, presetBottom };
+    pData->deletePresetRect = { ctrlR - 48, presetTop, ctrlR - 24, presetBottom };
+    pData->createPresetRect = { ctrlR - 24, presetTop, ctrlR, presetBottom };
+    pData->presetRect = { ctrlR - 252, presetTop, ctrlR - 72, presetBottom };
 
     int r1 = rowStartY;
+    int valueW = 74, valueGap = 6;
+    int valueOff = (rowH - 24) / 2 + 4;
     pData->antiAfkRect = { ctrlL, r1, ctrlR, r1 + rowH };
 
     int r2 = r1 + rowStep + vGap;
@@ -2968,18 +3161,20 @@ static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) 
 
     int r4 = r3 + rowStep + vGap;
     pData->opacityRect = { ctrlL, r4, ctrlR, r4 + rowH };
+    pData->opacityValueRect = { ctrlR - 50 - valueGap - valueW, r4 + valueOff, ctrlR - 50 - valueGap, r4 + valueOff + 24 };
 
     int r5 = r4 + rowStep + vGap;
     pData->hideRect = { ctrlL, r5, ctrlR, r5 + rowH };
 
     int r6 = r5 + rowStep + vGap;
     pData->fpsLimitRect = { ctrlL, r6, ctrlR, r6 + rowH };
+    pData->fpsValueRect = { ctrlR - 50 - valueGap - valueW, r6 + valueOff, ctrlR - 50 - valueGap, r6 + valueOff + 24 };
 
     int r7 = r6 + rowStep + vGap;
     pData->reconnectRect = { ctrlL, r7, ctrlR, r7 + rowH };
 
     int r8 = r7 + rowStep + vGap;
-    int macroCtrlW = 84;
+    int macroCtrlW = 140;
     int macroSeqW = 24;
     int macroGap = 3;
     int ctrlOff = (rowH - 24) / 2 + 4;
@@ -3001,15 +3196,15 @@ static void InstanceManager_UpdateLayout(HWND hwnd, InstanceManagerData* pData) 
     pData->intervalMacroSelectRect = { macroSelectL, r10 + ctrlOff, macroSelectR, r10 + ctrlOff + 24 };
     pData->intervalMacroSeqRect = { ctrlR - macroSeqW, r10 + seqOff, ctrlR, r10 + seqOff + macroSeqW };
 
-    int btnY = cr.bottom - 32;
-    int rightPanelStartX = 215;
+    int btnY = cr.bottom - 31;
+    int rightPanelStartX = 216;
     int rightPanelW = cr.right - rightPanelStartX;
     int btnW = rightPanelW / 4;
 
-    pData->btnShowHideRect = { rightPanelStartX, btnY, rightPanelStartX + btnW, cr.bottom - 1 };
-    pData->btnGeometryRect = { rightPanelStartX + btnW, btnY, rightPanelStartX + btnW * 2, cr.bottom - 1 };
-    pData->btnRenameRect = { rightPanelStartX + btnW * 2, btnY, rightPanelStartX + btnW * 3, cr.bottom - 1 };
-    pData->btnCloseClientRect = { rightPanelStartX + btnW * 3, btnY, cr.right - 1, cr.bottom - 1 };
+    pData->btnShowHideRect = { rightPanelStartX, btnY, rightPanelStartX + btnW, cr.bottom };
+    pData->btnGeometryRect = { rightPanelStartX + btnW, btnY, rightPanelStartX + btnW * 2, cr.bottom };
+    pData->btnRenameRect = { rightPanelStartX + btnW * 2, btnY, rightPanelStartX + btnW * 3, cr.bottom };
+    pData->btnCloseClientRect = { rightPanelStartX + btnW * 3, btnY, cr.right, cr.bottom };
 }
 
 static RobloxInstanceSettings GetDefaultInstanceSettingsForWindow(HWND hwnd) {
@@ -3035,6 +3230,20 @@ static RobloxInstanceSettings GetDefaultInstanceSettingsForWindow(HWND hwnd) {
     s.macroNames.clear();
     s.presetName = L"Default";
     return s;
+}
+
+static bool CanEditInstancePreset(const std::wstring& presetName) {
+    if (presetName.empty()) return false;
+    if (_wcsicmp(presetName.c_str(), L"Default") == 0 ||
+        _wcsicmp(presetName.c_str(), L"All off") == 0 ||
+        _wcsicmp(presetName.c_str(), L"All on") == 0) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_instancePresetsMutex);
+    for (const auto& pr : g_instancePresets) {
+        if (_wcsicmp(pr.name.c_str(), presetName.c_str()) == 0) return true;
+    }
+    return false;
 }
 
 static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring& presetName) {
@@ -3090,9 +3299,9 @@ static void ApplyPresetToInstance(RobloxInstanceSettings& s, const std::wstring&
             s.overrideMacro = pr.overrideMacro;
             s.enableMacro = pr.enableMacro;
             s.macroNames = pr.macroNames;
-            s.enableReconnectMacro = pr.overrideMacro && !pr.reconnectMacroNames.empty();
+            s.enableReconnectMacro = pr.enableReconnectMacro || (pr.overrideMacro && !pr.reconnectMacroNames.empty());
             s.reconnectMacroNames = pr.reconnectMacroNames;
-            s.enableIntervalMacro = pr.overrideMacro && !pr.intervalMacroNames.empty();
+            s.enableIntervalMacro = pr.enableIntervalMacro || (pr.overrideMacro && !pr.intervalMacroNames.empty());
             s.intervalMacroNames = pr.intervalMacroNames;
             s.overrideTimer = pr.overrideTimer;
             s.enableTimer = pr.enableTimer;
@@ -3106,16 +3315,18 @@ void PruneClosedInstanceSettings()
 {
     std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
     for (auto it = g_instanceSettings.begin(); it != g_instanceSettings.end(); ) {
-        if (!IsWindow(it->first)) {
+        DWORD pid = 0;
+        if (IsWindow(it->first)) GetWindowThreadProcessId(it->first, &pid);
+        auto pidIt = g_instanceSettingsPid.find(it->first);
+        if (!IsWindow(it->first) || pid == 0 ||
+            (pidIt != g_instanceSettingsPid.end() && pidIt->second != pid)) {
+            g_instanceSettingsPid.erase(it->first);
             it = g_instanceSettings.erase(it);
         } else {
-            DWORD pid = 0;
-            GetWindowThreadProcessId(it->first, &pid);
-            if (pid == 0) {
-                it = g_instanceSettings.erase(it);
-            } else {
-                ++it;
+            if (pidIt == g_instanceSettingsPid.end()) {
+                g_instanceSettingsPid[it->first] = pid;
             }
+            ++it;
         }
     }
 }
@@ -3148,6 +3359,17 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         pData->hAppIcon = (HICON)LoadImage(g_hInst, MAKEINTRESOURCE(IDI_TRAY_OFF), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
         pData->robloxWins = FindAllRobloxWindows(true);
+        if (!g_instanceManagerSelection.empty()) {
+            for (HWND w : g_instanceManagerSelection) {
+                if (std::find(pData->robloxWins.begin(), pData->robloxWins.end(), w) != pData->robloxWins.end()) {
+                    pData->selectedWindows.push_back(w);
+                }
+            }
+            if (!pData->selectedWindows.empty()) {
+                auto firstSel = std::find(pData->robloxWins.begin(), pData->robloxWins.end(), pData->selectedWindows[0]);
+                if (firstSel != pData->robloxWins.end()) pData->selectedIndex = (int)(firstSel - pData->robloxWins.begin());
+            }
+        }
 
         SetTimer(hwnd, 1, 16, NULL);
         SetTimer(hwnd, 2, 500, NULL);
@@ -3168,12 +3390,20 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             PostMessage(hwnd, WM_CLOSE, 0, 0);
             return 0;
         }
+        if (pData && wParam == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
+            pData->selectedWindows.clear();
+            for (HWND w : pData->robloxWins) pData->selectedWindows.push_back(w);
+            pData->selectedIndex = pData->robloxWins.empty() ? -1 : 0;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
         break;
     }
     case WM_DESTROY: {
         KillTimer(hwnd, 1);
         KillTimer(hwnd, 2);
         if (pData) {
+            g_instanceManagerSelection = pData->selectedWindows;
             if (pData->hFontTitle) DeleteObject(pData->hFontTitle);
             if (pData->hFont14) DeleteObject(pData->hFont14);
             if (pData->hFont12) DeleteObject(pData->hFont12);
@@ -3196,13 +3426,17 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
                 auto animate = [&](float& val, bool target) {
                     float t = target ? 1.0f : 0.0f;
+                    if (g_disableAnimations.load()) {
+                        if (val != t) { val = t; animating = true; }
+                        return;
+                    }
                     if (fabs(val - t) > 0.001f) {
                         val += (t - val) * 0.18f;
                         if (fabs(val - t) < 0.005f) val = t;
                         animating = true;
                     }
                 };
-                animate(pData->animAntiAfk, s.overrideAntiAfk ? s.enableAntiAfk : true);
+                animate(pData->animAntiAfk, s.overrideAntiAfk ? s.enableAntiAfk : g_isAfkStarted.load());
                 animate(pData->animReset, s.overrideReset ? s.enableReset : g_autoReset.load());
                 animate(pData->animMute, s.overrideMute ? s.enableMute : g_autoMute.load());
                 animate(pData->animOpacity, s.overrideOpacity ? s.enableOpacity : g_autoOpacity.load());
@@ -3260,6 +3494,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         }
                     }
                 }
+                int maxScroll = (std::max)(0, (int)pData->robloxWins.size() * 40 - 395);
+                if (pData->scrollOffset > maxScroll) pData->scrollOffset = maxScroll;
+                if (pData->scrollOffset < 0) pData->scrollOffset = 0;
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
@@ -3295,12 +3532,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         bool oldIntervalMacro = pData->isHoveringIntervalMacro;
         bool oldIntervalMacroSelect = pData->isHoveringIntervalMacroSelect;
         bool oldIntervalMacroSeq = pData->isHoveringIntervalMacroSeq;
+        bool oldOpacityValue = pData->isHoveringOpacityValue;
+        bool oldFpsValue = pData->isHoveringFpsValue;
         bool oldShowHide = pData->isHoveringShowHide;
         bool oldGeom = pData->isHoveringGeometry;
         bool oldRename = pData->isHoveringRename;
         bool oldCloseCl = pData->isHoveringCloseClient;
         bool oldRefresh = pData->isHoveringRefresh;
         bool oldCreatePreset = pData->isHoveringCreatePreset;
+        bool oldRenamePreset = pData->isHoveringRenamePreset;
+        bool oldDeletePreset = pData->isHoveringDeletePreset;
         bool oldFocusBtn = pData->isHoveringFocusBtn;
 
         pData->isHoveringClose = PtInRect(&pData->closeButtonRect, pt) != 0;
@@ -3313,8 +3554,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
             auto it = g_instanceSettings.find(selWnd);
             RobloxInstanceSettings s = (it != g_instanceSettings.end()) ? it->second : GetDefaultInstanceSettingsForWindow(selWnd);
+            bool canEditPreset = CanEditInstancePreset(s.presetName);
 
             pData->isHoveringPreset = PtInRect(&pData->presetRect, pt) != 0;
+            pData->isHoveringRenamePreset = canEditPreset && PtInRect(&pData->renamePresetRect, pt) != 0;
+            pData->isHoveringDeletePreset = canEditPreset && PtInRect(&pData->deletePresetRect, pt) != 0;
             pData->isHoveringAntiAfk = PtInRect(&pData->antiAfkRect, pt) != 0;
             pData->isHoveringMute = PtInRect(&pData->muteRect, pt) != 0;
             pData->isHoveringOpacity = PtInRect(&pData->opacityRect, pt) != 0;
@@ -3331,6 +3575,8 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringIntervalMacro = PtInRect(&pData->intervalMacroRect, pt) != 0;
             pData->isHoveringIntervalMacroSelect = PtInRect(&pData->intervalMacroSelectRect, pt) != 0;
             pData->isHoveringIntervalMacroSeq = PtInRect(&pData->intervalMacroSeqRect, pt) != 0;
+            pData->isHoveringOpacityValue = canEditPreset && PtInRect(&pData->opacityValueRect, pt) != 0;
+            pData->isHoveringFpsValue = canEditPreset && PtInRect(&pData->fpsValueRect, pt) != 0;
 
             pData->isHoveringShowHide = PtInRect(&pData->btnShowHideRect, pt) != 0;
             pData->isHoveringGeometry = PtInRect(&pData->btnGeometryRect, pt) != 0;
@@ -3363,6 +3609,8 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringIntervalMacro = false;
             pData->isHoveringIntervalMacroSelect = false;
             pData->isHoveringIntervalMacroSeq = false;
+            pData->isHoveringOpacityValue = false;
+            pData->isHoveringFpsValue = false;
             pData->isHoveringShowHide = false;
             pData->isHoveringGeometry = false;
             pData->isHoveringRename = false;
@@ -3376,9 +3624,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq ||
             pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq ||
             pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq ||
+            pData->isHoveringOpacityValue || pData->isHoveringFpsValue ||
             pData->isHoveringShowHide ||
             pData->isHoveringGeometry || pData->isHoveringRename || pData->isHoveringCloseClient ||
-            pData->isHoveringRefresh || pData->isHoveringCreatePreset;
+            pData->isHoveringRefresh || pData->isHoveringCreatePreset ||
+            pData->isHoveringRenamePreset || pData->isHoveringDeletePreset;
 
         if (!hand && pt.x >= 0 && pt.x <= 215 && pt.y >= 65) {
             RECT cr2; GetClientRect(hwnd, &cr2);
@@ -3415,10 +3665,13 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             pData->isHoveringMacroSeq != oldMacroSeq ||
             pData->isHoveringReconnectMacro != oldReconnectMacro || pData->isHoveringReconnectSelect != oldReconnectSelect || pData->isHoveringReconnectSeq != oldReconnectSeq ||
             pData->isHoveringIntervalMacro != oldIntervalMacro || pData->isHoveringIntervalMacroSelect != oldIntervalMacroSelect || pData->isHoveringIntervalMacroSeq != oldIntervalMacroSeq ||
+            pData->isHoveringOpacityValue != oldOpacityValue || pData->isHoveringFpsValue != oldFpsValue ||
             oldShowHide != pData->isHoveringShowHide ||
             oldGeom != pData->isHoveringGeometry || oldRename != pData->isHoveringRename ||
             oldCloseCl != pData->isHoveringCloseClient || oldRefresh != pData->isHoveringRefresh ||
             oldCreatePreset != pData->isHoveringCreatePreset ||
+            oldRenamePreset != pData->isHoveringRenamePreset ||
+            oldDeletePreset != pData->isHoveringDeletePreset ||
             oldFocusBtn != pData->isHoveringFocusBtn) {
             InvalidateRect(hwnd, NULL, FALSE);
         }
@@ -3446,12 +3699,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         pData->isHoveringIntervalMacro = false;
         pData->isHoveringIntervalMacroSelect = false;
         pData->isHoveringIntervalMacroSeq = false;
+        pData->isHoveringOpacityValue = false;
+        pData->isHoveringFpsValue = false;
         pData->isHoveringShowHide = false;
         pData->isHoveringGeometry = false;
         pData->isHoveringRename = false;
         pData->isHoveringCloseClient = false;
         pData->isHoveringRefresh = false;
         pData->isHoveringCreatePreset = false;
+        pData->isHoveringRenamePreset = false;
+        pData->isHoveringDeletePreset = false;
         pData->isHoveringFocusBtn = false;
         pData->focusBtnRow = -1;
         InvalidateRect(hwnd, NULL, FALSE);
@@ -3467,10 +3724,20 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         InvalidateRect(hwnd, NULL, FALSE);
         break;
     }
+    case WM_RBUTTONUP: {
+        if (!pData) break;
+        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        if (pt.y < 30) {
+            ShowWindow(hwnd, SW_MINIMIZE);
+            return 0;
+        }
+        break;
+    }
     case WM_LBUTTONDOWN: {
         if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         pData->isCtrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        pData->isShiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 
         if (PtInRect(&pData->closeButtonRect, pt)) {
             PostMessage(hwnd, WM_CLOSE, 0, 0);
@@ -3479,9 +3746,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
         if (PtInRect(&pData->minimizeButtonRect, pt)) {
             ShowDarkMessageBox(hwnd, L"Instance Manager allows you to configure per-instance overrides for each running Roblox client.\n\n"
-                L"You can change AFK, Mute, Opacity, Hide, FPS Cap, Reconnect, and Reset settings independently per window.\n\n"
-                L"Use Ctrl+Click to select multiple windows and apply settings to all of them at once.\n\n"
-                L"Presets allow you to save and quickly apply different configurations.",                 L"AntiAFK-RBX • About Instance Manager", MB_OK);
+                L"You can change Anti-AFK, Mute, Opacity, Hide, FPS Cap, Reconnect, Reset, AFK timer and macro settings independently per window.\n\n"
+                L"Use Ctrl+Click or Shift+Click to select multiple windows and apply settings to all of them at once.\n\n"
+                L"Presets allow you to save and quickly apply different configurations.", L"AntiAFK-RBX • About Instance Manager", MB_OK);
             return 0;
         }
 
@@ -3493,7 +3760,12 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             }
             pData->robloxWins = currentWins;
             pData->selectedIndex = -1;
-            pData->selectedWindows.clear();
+            std::vector<HWND> keptSelected;
+            for (HWND w : pData->selectedWindows) {
+                if (std::find(currentWins.begin(), currentWins.end(), w) != currentWins.end())
+                    keptSelected.push_back(w);
+            }
+            pData->selectedWindows = keptSelected;
             if (selectedWnd) {
                 for (size_t i = 0; i < pData->robloxWins.size(); i++) {
                     if (pData->robloxWins[i] == selectedWnd) {
@@ -3518,7 +3790,15 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         FocusRobloxWindow(clickedWnd);
                         return 0;
                     }
-                    if (pData->isCtrlDown) {
+                    if (pData->isShiftDown && pData->selectedIndex >= 0 && pData->selectedIndex < (int)pData->robloxWins.size()) {
+                        int rangeStart = (std::min)(pData->selectedIndex, idx);
+                        int rangeEnd = (std::max)(pData->selectedIndex, idx);
+                        pData->selectedWindows.clear();
+                        for (int k = rangeStart; k <= rangeEnd; k++) {
+                            pData->selectedWindows.push_back(pData->robloxWins[k]);
+                        }
+                        pData->selectedIndex = idx;
+                    } else if (pData->isCtrlDown) {
                         auto selIt = std::find(pData->selectedWindows.begin(), pData->selectedWindows.end(), clickedWnd);
                         if (selIt != pData->selectedWindows.end()) {
                             pData->selectedWindows.erase(selIt);
@@ -3595,9 +3875,55 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             } while(0)
 
             if (PtInRect(&pData->createPresetRect, pt)) {
+                g_presetRenameSourceName.clear();
                 g_presetEditSource = selWnd;
                 ShowCustomInputDialog(hwnd, CustomInputDialogType::PresetName);
                 InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
+            if (PtInRect(&pData->renamePresetRect, pt)) {
+                if (CanEditInstancePreset(s.presetName)) {
+                    g_presetEditSource = selWnd;
+                    g_presetRenameSourceName = s.presetName;
+                    ShowCustomInputDialog(hwnd, CustomInputDialogType::PresetName);
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                return 0;
+            }
+
+            if (PtInRect(&pData->deletePresetRect, pt)) {
+                if (CanEditInstancePreset(s.presetName)) {
+                    std::wstring presetToDelete = s.presetName;
+                    wchar_t confirm[320];
+                    swprintf_s(confirm, L"Delete preset \"%s\"?\n\nWindows using it will switch to Default.", presetToDelete.c_str());
+                    if (ShowDarkMessageBox(hwnd, confirm, L"AntiAFK-RBX • Delete Preset", MB_YESNO | MB_DEFBUTTON2) == IDYES) {
+                        bool deleted = false;
+                        {
+                            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                            for (auto itp = g_instancePresets.begin(); itp != g_instancePresets.end(); ++itp) {
+                                if (_wcsicmp(itp->name.c_str(), presetToDelete.c_str()) == 0) {
+                                    g_instancePresets.erase(itp);
+                                    deleted = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (deleted) {
+                            {
+                                std::lock_guard<std::mutex> settingsLock(g_instanceSettingsMutex);
+                                for (auto& kv : g_instanceSettings) {
+                                    if (_wcsicmp(kv.second.presetName.c_str(), presetToDelete.c_str()) == 0) {
+                                        kv.second = GetDefaultInstanceSettingsForWindow(kv.first);
+                                    }
+                                }
+                            }
+                            SaveSettings();
+                            InvalidateRect(hwnd, NULL, FALSE);
+                            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+                        }
+                    }
+                }
                 return 0;
             }
 
@@ -3625,6 +3951,9 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             nextPreset = g_instancePresets[selected - 2000].name;
                         }
                     }
+                    if (targets.size() > 1 && ShowDarkMessageBox(hwnd, L"Apply this preset to all selected windows?", L"AntiAFK-RBX • Apply Preset", MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+                        return 0;
+                    }
                     lock.lock();
                     for (HWND tWnd : targets) {
                         DWORD tPidInner = 0; GetWindowThreadProcessId(tWnd, &tPidInner);
@@ -3639,10 +3968,17 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     bool shouldMute = ShouldMuteRobloxNow();
                     for (HWND tWnd : targets) {
                         DWORD tPidInner = 0; GetWindowThreadProcessId(tWnd, &tPidInner);
-                        MuteProcessByPid(tPidInner, GetWindowInstanceSetting_Mute(tWnd, shouldMute));
+                        if (tPidInner != 0) MuteProcessByPid(tPidInner, GetWindowInstanceSetting_Mute(tWnd, shouldMute));
+                        if (g_isAfkStarted.load() && GetWindowInstanceSetting_Hide(tWnd, g_autoHideRoblox.load())) {
+                            HideRobloxWindowTracked(tWnd);
+                        } else if (IsRobloxWindowSelfHidden(tWnd)) {
+                            ShowRobloxWindowTracked(tWnd);
+                        }
                     }
+                    RestartFpsCapperForEffectiveLimit();
                     InvalidateRect(hwnd, NULL, FALSE);
                 } else if (selected == 5000) {
+                    g_presetRenameSourceName.clear();
                     g_presetEditSource = selWnd;
                     ShowCustomInputDialog(hwnd, CustomInputDialogType::PresetName);
                     InvalidateRect(hwnd, NULL, FALSE);
@@ -3654,32 +3990,38 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             MainUI_Paint_DrawToggleGetHitbox(pData->antiAfkRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curAntiAfk = s.overrideAntiAfk ? s.enableAntiAfk : g_isAfkStarted.load();
+                bool newAntiAfk = !curAntiAfk;
                 APPLY_TO_TARGETS({
                     s2.overrideAntiAfk = true;
-                    s2.enableAntiAfk = !s2.enableAntiAfk;
+                    s2.enableAntiAfk = newAntiAfk;
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->muteRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curMute = s.overrideMute ? s.enableMute : ShouldMuteRobloxNow();
+                bool newMute = !curMute;
                 APPLY_TO_TARGETS({
                     s2.overrideMute = true;
-                    s2.enableMute = !s2.enableMute;
+                    s2.enableMute = newMute;
                 });
                 bool shouldMute = ShouldMuteRobloxNow();
                 for (HWND tWnd : targets) {
                     DWORD tp = 0; GetWindowThreadProcessId(tWnd, &tp);
-                    MuteProcessByPid(tp, GetWindowInstanceSetting_Mute(tWnd, shouldMute));
+                    if (tp != 0) MuteProcessByPid(tp, GetWindowInstanceSetting_Mute(tWnd, shouldMute));
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->opacityRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curOpacity = s.overrideOpacity ? s.enableOpacity : (IsUtilsWindowOpacityEnabled() || (g_autoOpacity.load() && g_isAfkStarted.load()));
+                bool newOpacity = !curOpacity;
                 APPLY_TO_TARGETS({
                     s2.overrideOpacity = true;
-                    s2.enableOpacity = !s2.enableOpacity;
+                    s2.enableOpacity = newOpacity;
                 });
                 RefreshRobloxWindowOpacity(false);
                 InvalidateRect(hwnd, NULL, FALSE);
@@ -3687,9 +4029,11 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             MainUI_Paint_DrawToggleGetHitbox(pData->hideRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curHide = s.overrideHide ? s.enableHide : g_autoHideRoblox.load();
+                bool newHide = !curHide;
                 APPLY_TO_TARGETS({
                     s2.overrideHide = true;
-                    s2.enableHide = !s2.enableHide;
+                    s2.enableHide = newHide;
                 });
                 if (g_isAfkStarted.load()) {
                     for (HWND tWnd : targets) {
@@ -3701,49 +4045,65 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             MainUI_Paint_DrawToggleGetHitbox(pData->fpsLimitRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curFps = s.overrideFpsLimit ? s.enableFpsLimit : ShouldRunFpsCapperNow();
+                bool newFps = !curFps;
                 APPLY_TO_TARGETS({
                     s2.overrideFpsLimit = true;
-                    s2.enableFpsLimit = !s2.enableFpsLimit;
+                    s2.enableFpsLimit = newFps;
                 });
-                if (g_isFpsCapperRunning.load()) {
-                    RestartFpsCapperForEffectiveLimit();
-                }
+                RestartFpsCapperForEffectiveLimit();
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->reconnectRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curReconnect = s.overrideReconnect ? s.enableReconnect : g_autoReconnect.load();
+                bool newReconnect = !curReconnect;
                 APPLY_TO_TARGETS({
                     s2.overrideReconnect = true;
-                    s2.enableReconnect = !s2.enableReconnect;
+                    s2.enableReconnect = newReconnect;
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->resetRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curReset = s.overrideReset ? s.enableReset : g_autoReset.load();
+                bool newReset = !curReset;
                 APPLY_TO_TARGETS({
                     s2.overrideReset = true;
-                    s2.enableReset = !s2.enableReset;
+                    s2.enableReset = newReset;
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->macroRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curMacro = s.overrideMacro ? s.enableMacro : (g_selectedAction.load() == 4);
+                bool newMacro = !curMacro;
                 APPLY_TO_TARGETS({
+                    if (!s2.overrideMacro) {
+                        s2.enableReconnectMacro = MacroEngine_HasReconnectMacros();
+                        s2.enableIntervalMacro = MacroEngine_HasIntervalMacros();
+                    }
                     s2.overrideMacro = true;
-                    s2.enableMacro = !s2.enableMacro;
+                    s2.enableMacro = newMacro;
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
 
             MainUI_Paint_DrawToggleGetHitbox(pData->reconnectMacroRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curReconnectMacro = s.overrideMacro ? s.enableReconnectMacro : MacroEngine_HasReconnectMacros();
+                bool newReconnectMacro = !curReconnectMacro;
                 APPLY_TO_TARGETS({
+                    if (!s2.overrideMacro) {
+                        s2.enableMacro = (g_selectedAction.load() == 4);
+                        s2.enableIntervalMacro = MacroEngine_HasIntervalMacros();
+                    }
                     s2.overrideMacro = true;
-                    s2.enableReconnectMacro = !s2.enableReconnectMacro;
-                    if (!s2.enableReconnectMacro) s2.reconnectMacroNames.clear();
+                    s2.enableReconnectMacro = newReconnectMacro;
+                    if (!newReconnectMacro) s2.reconnectMacroNames.clear();
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -3802,6 +4162,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                                 s2.reconnectMacroNames.erase(it);
                             } else {
                                 s2.reconnectMacroNames.push_back(macroName);
+                                s2.enableReconnectMacro = true;
                             }
                         });
                         InvalidateRect(hwnd, NULL, FALSE);
@@ -3888,10 +4249,16 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 
             MainUI_Paint_DrawToggleGetHitbox(pData->intervalMacroRect, &toggleHitbox);
             if (PtInRect(&toggleHitbox, pt)) {
+                bool curIntervalMacro = s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros();
+                bool newIntervalMacro = !curIntervalMacro;
                 APPLY_TO_TARGETS({
+                    if (!s2.overrideMacro) {
+                        s2.enableMacro = (g_selectedAction.load() == 4);
+                        s2.enableReconnectMacro = MacroEngine_HasReconnectMacros();
+                    }
                     s2.overrideMacro = true;
-                    s2.enableIntervalMacro = !s2.enableIntervalMacro;
-                    if (!s2.enableIntervalMacro) s2.intervalMacroNames.clear();
+                    s2.enableIntervalMacro = newIntervalMacro;
+                    if (!newIntervalMacro) s2.intervalMacroNames.clear();
                 });
                 InvalidateRect(hwnd, NULL, FALSE);
             }
@@ -3956,6 +4323,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                             s2.intervalMacroNames.erase(it);
                         } else {
                             s2.intervalMacroNames.push_back(macroName);
+                            s2.enableIntervalMacro = true;
                         }
                     });
                     InvalidateRect(hwnd, NULL, FALSE);
@@ -3967,6 +4335,21 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (canSeq) {
                     ShowMacroOrderDialog(hwnd, targets, MacroOrderListType::Interval);
                 }
+                return 0;
+            }
+
+            bool isDefaultPreset = (_wcsicmp(s.presetName.c_str(), L"Default") == 0);
+
+            if (PtInRect(&pData->opacityValueRect, pt)) {
+                if (isDefaultPreset) return 0;
+                g_instanceOpacityTargetWindows = targets;
+                ShowCustomInputDialog(hwnd, CustomInputDialogType::InstanceOpacityValue);
+                return 0;
+            }
+            if (PtInRect(&pData->fpsValueRect, pt)) {
+                if (isDefaultPreset) return 0;
+                g_instanceFpsTargetWindows = targets;
+                ShowCustomInputDialog(hwnd, CustomInputDialogType::InstanceFpsValue);
                 return 0;
             }
             #undef APPLY_TO_TARGETS
@@ -4002,7 +4385,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 std::wstring msg = (tgts.size() == 1)
                     ? L"Are you sure you want to close this Roblox client?"
                     : L"Are you sure you want to close these " + std::to_wstring((int)tgts.size()) + L" Roblox clients?";
-                int res = ShowDarkMessageBox(hwnd, msg.c_str(), L"AntiAFK-RBX • Close Roblox Client", MB_YESNO);
+                int res = ShowDarkMessageBox(hwnd, msg.c_str(), L"AntiAFK-RBX • Close Roblox Client", MB_YESNO | MB_DEFBUTTON2);
                 if (res == IDYES) {
                     for (HWND tWnd : tgts) {
                         if (IsWindow(tWnd)) PostMessage(tWnd, WM_CLOSE, 0, 0);
@@ -4169,7 +4552,8 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     Gdiplus::Pen selBorder(Gdiplus::Color(120, 0, 122, 204), 1.0f);
                     gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
                     gfx.SetSmoothingMode(Gdiplus::SmoothingModeNone);
-                    gfx.DrawRectangle(&selBorder, (REAL)rowRect.left, (REAL)rowRect.top, (REAL)(rowRect.right - rowRect.left - 1), (REAL)(rowRect.bottom - rowRect.top - 3));
+                    gfx.DrawLine(&selBorder, (REAL)rowRect.left, (REAL)rowRect.top, (REAL)rowRect.right, (REAL)rowRect.top);
+                    gfx.DrawLine(&selBorder, (REAL)rowRect.left, (REAL)(rowRect.bottom - 2), (REAL)rowRect.right, (REAL)(rowRect.bottom - 2));
                     gfx.SetPixelOffsetMode(sepOld);
                     gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
                 } else if (isHovered) {
@@ -4298,7 +4682,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 Gdiplus::StringFormat hdrSF;
                 hdrSF.SetAlignment(Gdiplus::StringAlignmentNear);
                 hdrSF.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-                gfx.DrawString(detailsHeader, -1, &headerFont, Gdiplus::RectF(228.0f, (REAL)(pData->presetRect.top - 4), 200.0f, 32.0f), &hdrSF, &headerBrush);
+                hdrSF.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+                int headerW = pData->presetRect.left - 228 - 8;
+                if (headerW < 60) headerW = 60;
+                gfx.DrawString(detailsHeader, -1, &headerFont, Gdiplus::RectF(228.0f, (REAL)(pData->presetRect.top - 4), (REAL)headerW, 32.0f), &hdrSF, &headerBrush);
 
                 {
                     Gdiplus::Pen hSep(Gdiplus::Color(180, 56, 56, 56), 1.0f);
@@ -4349,33 +4736,76 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     }
                 }
 
-                MainUI_Paint_DrawDropdown(memDC, pData->presetRect, pData->hFont12, L"", s.presetName.c_str(), pData->isHoveringPreset, true, nullptr, true);
                 {
-                    RECT& plusBtnRect = pData->createPresetRect;
-                    Gdiplus::SolidBrush btnFillBrush(pData->isHoveringCreatePreset ? Gdiplus::Color(140, 80, 80, 80) : Gdiplus::Color(140, 55, 55, 55));
-                    Gdiplus::Pen btnBorderPen(Gdiplus::Color(180, 56, 56, 56), 1.0f);
-                    Gdiplus::GraphicsPath btnPath;
-                    REAL br = 5.0f;
-                    btnPath.AddLine((REAL)plusBtnRect.left, (REAL)plusBtnRect.top, (REAL)(plusBtnRect.right - br), (REAL)plusBtnRect.top);
-                    btnPath.AddArc((REAL)(plusBtnRect.right - br * 2), (REAL)plusBtnRect.top, br * 2, br * 2, 270, 90);
-                    btnPath.AddArc((REAL)(plusBtnRect.right - br * 2), (REAL)(plusBtnRect.bottom - br * 2), br * 2, br * 2, 0, 90);
-                    btnPath.AddLine((REAL)(plusBtnRect.right - br), (REAL)plusBtnRect.bottom, (REAL)plusBtnRect.left, (REAL)plusBtnRect.bottom);
-                    btnPath.CloseFigure();
+                    RECT groupRect = { pData->presetRect.left, pData->presetRect.top, pData->createPresetRect.right, pData->createPresetRect.bottom };
+                    bool canEditPreset = CanEditInstancePreset(s.presetName);
+                    Gdiplus::SolidBrush groupFill(Gdiplus::Color(140, 45, 45, 45));
+                    Gdiplus::SolidBrush hoverFill(Gdiplus::Color(140, 65, 65, 65));
+                    Gdiplus::Pen groupBorder(Gdiplus::Color(180, 56, 56, 56), 1.0f);
                     {
                         Gdiplus::SmoothingMode oldSmooth = gfx.GetSmoothingMode();
                         Gdiplus::PixelOffsetMode oldOffset = gfx.GetPixelOffsetMode();
                         gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
                         gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-                        gfx.FillPath(&btnFillBrush, &btnPath);
+
+                        REAL rad = 5.0f;
+                        REAL gl = (REAL)groupRect.left, gt = (REAL)groupRect.top;
+                        REAL gr = (REAL)groupRect.right, gb = (REAL)groupRect.bottom;
+                        Gdiplus::GraphicsPath groupPath;
+                        groupPath.AddArc(gl, gt, rad * 2, rad * 2, 180, 90);
+                        groupPath.AddArc(gr - rad * 2, gt, rad * 2, rad * 2, 270, 90);
+                        groupPath.AddArc(gr - rad * 2, gb - rad * 2, rad * 2, rad * 2, 0, 90);
+                        groupPath.AddArc(gl, gb - rad * 2, rad * 2, rad * 2, 90, 90);
+                        groupPath.CloseFigure();
+
+                        gfx.FillPath(&groupFill, &groupPath);
+                        gfx.SetClip(&groupPath);
+                        if (pData->isHoveringPreset) gfx.FillRectangle(&hoverFill, (REAL)pData->presetRect.left, (REAL)pData->presetRect.top, (REAL)(pData->presetRect.right - pData->presetRect.left + 1), (REAL)(pData->presetRect.bottom - pData->presetRect.top));
+                        if (pData->isHoveringRenamePreset) gfx.FillRectangle(&hoverFill, (REAL)pData->renamePresetRect.left, (REAL)pData->renamePresetRect.top, (REAL)(pData->renamePresetRect.right - pData->renamePresetRect.left + 1), (REAL)(pData->renamePresetRect.bottom - pData->renamePresetRect.top));
+                        if (pData->isHoveringDeletePreset) gfx.FillRectangle(&hoverFill, (REAL)pData->deletePresetRect.left, (REAL)pData->deletePresetRect.top, (REAL)(pData->deletePresetRect.right - pData->deletePresetRect.left + 1), (REAL)(pData->deletePresetRect.bottom - pData->deletePresetRect.top));
+                        if (pData->isHoveringCreatePreset) gfx.FillRectangle(&hoverFill, (REAL)pData->createPresetRect.left, (REAL)pData->createPresetRect.top, (REAL)(pData->createPresetRect.right - pData->createPresetRect.left), (REAL)(pData->createPresetRect.bottom - pData->createPresetRect.top));
+                        gfx.ResetClip();
+
                         gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
-                        gfx.DrawPath(&btnBorderPen, &btnPath);
+                        gfx.DrawPath(&groupBorder, &groupPath);
                         gfx.SetPixelOffsetMode(oldOffset);
                         gfx.SetSmoothingMode(oldSmooth);
                     }
-                    Gdiplus::SolidBrush plusIconBrush(pData->isHoveringCreatePreset ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(200, 200, 200, 200));
-                    Gdiplus::Font plusIconFont(L"Segoe MDL2 Assets", 8.0f);
-                    Gdiplus::RectF plusRect((REAL)plusBtnRect.left, (REAL)(plusBtnRect.top + 1.5f), (REAL)(plusBtnRect.right - plusBtnRect.left), (REAL)(plusBtnRect.bottom - plusBtnRect.top));
-                    gfx.DrawString(L"\uE710", -1, &plusIconFont, plusRect, &formatCent, &plusIconBrush);
+
+                    Gdiplus::SolidBrush sepBrush(Gdiplus::Color(180, 56, 56, 56));
+                    gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+                    gfx.SetSmoothingMode(Gdiplus::SmoothingModeNone);
+                    gfx.FillRectangle(&sepBrush, (REAL)pData->presetRect.right, (REAL)(groupRect.top + 4), 1.0f, (REAL)(groupRect.bottom - groupRect.top - 8));
+                    gfx.FillRectangle(&sepBrush, (REAL)pData->renamePresetRect.right, (REAL)(groupRect.top + 4), 1.0f, (REAL)(groupRect.bottom - groupRect.top - 8));
+                    gfx.FillRectangle(&sepBrush, (REAL)pData->deletePresetRect.right, (REAL)(groupRect.top + 4), 1.0f, (REAL)(groupRect.bottom - groupRect.top - 8));
+                    gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+                    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+                    Gdiplus::Font presetFont(memDC, pData->hFont12);
+                    Gdiplus::SolidBrush presetText(pData->isHoveringPreset ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(235, 235, 235, 235));
+                    Gdiplus::StringFormat sfPreset;
+                    sfPreset.SetAlignment(Gdiplus::StringAlignmentNear);
+                    sfPreset.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+                    sfPreset.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+                    sfPreset.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+                    gfx.DrawString(s.presetName.c_str(), -1, &presetFont, Gdiplus::RectF((REAL)(pData->presetRect.left + 10), (REAL)pData->presetRect.top, (REAL)(pData->presetRect.right - pData->presetRect.left - 36), (REAL)(pData->presetRect.bottom - pData->presetRect.top)), &sfPreset, &presetText);
+
+                    Gdiplus::SolidBrush arrowBrush(pData->isHoveringPreset ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(200, 200, 200, 200));
+                    Gdiplus::Font arrowFont(L"Segoe MDL2 Assets", 8.0f);
+                    Gdiplus::RectF arrowRect((REAL)(pData->presetRect.right - 22), (REAL)(pData->presetRect.top + 1.5f), 16.0f, (REAL)(pData->presetRect.bottom - pData->presetRect.top));
+                    gfx.DrawString(L"\uE70D", -1, &arrowFont, arrowRect, &formatCent, &arrowBrush);
+
+                    auto drawSegmentIcon = [&](const RECT& r, const wchar_t* icon, bool hovered, bool enabled) {
+                        Gdiplus::SolidBrush iconBrush(enabled
+                            ? (hovered ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(200, 200, 200, 200))
+                            : Gdiplus::Color(100, 130, 130, 130));
+                        Gdiplus::Font iconFont(L"Segoe MDL2 Assets", 9.0f);
+                        Gdiplus::RectF iconRect((REAL)r.left + 0.5f, (REAL)r.top + 1.5f, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+                        gfx.DrawString(icon, -1, &iconFont, iconRect, &formatCent, &iconBrush);
+                    };
+                    drawSegmentIcon(pData->renamePresetRect, L"\uE70F", pData->isHoveringRenamePreset, canEditPreset);
+                    drawSegmentIcon(pData->deletePresetRect, L"\uE74D", pData->isHoveringDeletePreset, canEditPreset);
+                    drawSegmentIcon(pData->createPresetRect, L"\uE710", pData->isHoveringCreatePreset, true);
                 }
 
                 MainUI_Paint_DrawToggle(memDC, pData->antiAfkRect, pData->hFont12, L"Anti-AFK", s.overrideAntiAfk ? s.enableAntiAfk : g_isAfkStarted.load(), pData->isHoveringAntiAfk, pData->animAntiAfk, false, L"\uE768", !isDefaultPreset, nullptr, true, 10);
@@ -4385,15 +4815,37 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 MainUI_Paint_DrawToggle(memDC, pData->muteRect, pData->hFont12, L"Mute", s.overrideMute ? s.enableMute : g_autoMute.load(), pData->isHoveringMute, pData->animMute, false, L"\uE74F", !isDefaultPreset, nullptr, true, 10);
 
                 MainUI_Paint_DrawToggle(memDC, pData->opacityRect, pData->hFont12, L"Opacity", s.overrideOpacity ? s.enableOpacity : g_autoOpacity.load(), pData->isHoveringOpacity, pData->animOpacity, false, L"\uE727", !isDefaultPreset, nullptr, true, 10);
+                {
+                    int opacityPercent = s.overrideOpacity ? (s.opacityValue * 100 / 255) : g_globalOpacityPercent.load();
+                    if (opacityPercent < 5) opacityPercent = 5;
+                    if (opacityPercent > 100) opacityPercent = 100;
+                    wchar_t opacityValText[32];
+                    swprintf_s(opacityValText, L"%d%%", opacityPercent);
+                    MainUI_Paint_DrawDropdown(memDC, pData->opacityValueRect, pData->hFont12, L"", opacityValText, pData->isHoveringOpacityValue, false, nullptr, !isDefaultPreset);
+                }
 
                 MainUI_Paint_DrawToggle(memDC, pData->hideRect, pData->hFont12, L"Auto Hide", s.overrideHide ? s.enableHide : g_autoHideRoblox.load(), pData->isHoveringHide, pData->animHide, false, L"\uEE47", !isDefaultPreset, nullptr, true, 10);
 
                 MainUI_Paint_DrawToggle(memDC, pData->fpsLimitRect, pData->hFont12, L"FPS Cap", s.overrideFpsLimit ? s.enableFpsLimit : (g_fpsLimit > 0), pData->isHoveringFpsLimit, pData->animFpsLimit, false, L"\uE950", !isDefaultPreset, nullptr, true, 10);
+                {
+                    int fpsValue = s.overrideFpsLimit ? s.fpsLimitValue : g_fpsLimit.load();
+                    wchar_t fpsValText[32];
+                    if (fpsValue > 0) swprintf_s(fpsValText, L"%d FPS", fpsValue);
+                    else wcscpy_s(fpsValText, L"Off");
+                    MainUI_Paint_DrawDropdown(memDC, pData->fpsValueRect, pData->hFont12, L"", fpsValText, pData->isHoveringFpsValue, false, nullptr, !isDefaultPreset);
+                }
 
+                auto formatMacroNames = [](const std::vector<std::wstring>& names) -> std::wstring {
+                    if (names.empty()) return L"None";
+                    std::wstring result = names[0];
+                    if (result.size() > 16) result = result.substr(0, 14) + L"...";
+                    if (names.size() > 1) result += L" +" + std::to_wstring((int)names.size() - 1);
+                    return result;
+                };
                 std::wstring currentReconnectMacroName = L"None";
                 if (s.overrideMacro) {
                     if (!s.reconnectMacroNames.empty()) {
-                        currentReconnectMacroName = std::to_wstring((int)s.reconnectMacroNames.size());
+                        currentReconnectMacroName = formatMacroNames(s.reconnectMacroNames);
                     }
                 } else {
                     if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
@@ -4401,7 +4853,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         for (const auto& pr : g_instancePresets) {
                             if (pr.name == s.presetName) {
                                 if (pr.overrideMacro && !pr.reconnectMacroNames.empty()) {
-                                    currentReconnectMacroName = std::to_wstring((int)pr.reconnectMacroNames.size());
+                                    currentReconnectMacroName = formatMacroNames(pr.reconnectMacroNames);
                                 }
                                 break;
                             }
@@ -4415,7 +4867,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 std::wstring currentMacroName = L"None";
                 if (s.overrideMacro) {
                     if (s.enableMacro && !s.macroNames.empty()) {
-                        currentMacroName = std::to_wstring((int)s.macroNames.size());
+                        currentMacroName = formatMacroNames(s.macroNames);
                     }
                 } else {
                     if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
@@ -4423,7 +4875,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         for (const auto& pr : g_instancePresets) {
                             if (pr.name == s.presetName) {
                                 if (pr.overrideMacro && pr.enableMacro && !pr.macroNames.empty()) {
-                                    currentMacroName = std::to_wstring((int)pr.macroNames.size());
+                                    currentMacroName = formatMacroNames(pr.macroNames);
                                 }
                                 break;
                             }
@@ -4437,7 +4889,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 bool intervalMacroToggle = s.overrideMacro ? s.enableIntervalMacro : MacroEngine_HasIntervalMacros();
                 bool macroControlsEnabled = !isDefaultPreset;
 
-                MainUI_Paint_DrawToggle(memDC, pData->macroRect, pData->hFont12, L"Custom afk action macro", actionMacroEnabled, pData->isHoveringMacro, pData->animMacro, false, L"\uE7C9", macroControlsEnabled, nullptr, true, 10);
+                MainUI_Paint_DrawToggle(memDC, pData->macroRect, pData->hFont12, L"Custom AFK Action Macro", actionMacroEnabled, pData->isHoveringMacro, pData->animMacro, false, L"\uE7C9", macroControlsEnabled, nullptr, true, 10);
                 MainUI_Paint_DrawDropdown(memDC, pData->macroSelectRect, pData->hFont12, L"", currentMacroName.c_str(), pData->isHoveringMacroSelect, false, nullptr, actionMacroEnabled && macroControlsEnabled);
                 auto drawSeqBtn = [&](RECT& sr, bool hovered, bool enabled) {
                     Gdiplus::SolidBrush seqBg(enabled ? (hovered ? Gdiplus::Color(150, 80, 80, 80) : Gdiplus::Color(140, 45, 45, 45)) : Gdiplus::Color(100, 40, 40, 40));
@@ -4465,7 +4917,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 std::wstring currentIntervalMacroName = L"None";
                 if (s.overrideMacro) {
                     if (!s.intervalMacroNames.empty()) {
-                        currentIntervalMacroName = std::to_wstring((int)s.intervalMacroNames.size());
+                        currentIntervalMacroName = formatMacroNames(s.intervalMacroNames);
                     }
                 } else {
                     if (_wcsicmp(s.presetName.c_str(), L"Default") != 0) {
@@ -4473,7 +4925,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         for (const auto& pr : g_instancePresets) {
                             if (pr.name == s.presetName) {
                                 if (pr.overrideMacro && !pr.intervalMacroNames.empty()) {
-                                    currentIntervalMacroName = std::to_wstring((int)pr.intervalMacroNames.size());
+                                    currentIntervalMacroName = formatMacroNames(pr.intervalMacroNames);
                                 }
                                 break;
                             }
@@ -4502,7 +4954,7 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                         MainUI_Paint_DrawHoverTooltip(memDC, tipRect, pData->hFont10, L"Settings are inherited from main settings, click to switch", false);
                     }
                 } else if (pData->isHoveringMacro || pData->isHoveringMacroSelect || pData->isHoveringMacroSeq) {
-                    MainUI_Paint_DrawHoverTooltip(memDC, pData->macroRect, pData->hFont10, L"Replaces the anti-AFK action for this instance with the selected macro", false);
+                    MainUI_Paint_DrawHoverTooltip(memDC, pData->macroRect, pData->hFont10, L"Replaces the Anti-AFK action for this instance with the selected macro", false);
                 } else if (pData->isHoveringReconnectMacro || pData->isHoveringReconnectSelect || pData->isHoveringReconnectSeq) {
                     MainUI_Paint_DrawHoverTooltip(memDC, pData->reconnectMacroRect, pData->hFont10, L"Macro executed when this instance reconnects", false);
                 } else if (pData->isHoveringIntervalMacro || pData->isHoveringIntervalMacroSelect || pData->isHoveringIntervalMacroSeq) {
@@ -4510,10 +4962,10 @@ LRESULT CALLBACK InstanceManagerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 }
 
                 bool visible = IsWindowVisible(selWnd) != 0;
-                MainUI_Paint_DrawActionButton(memDC, pData->btnShowHideRect, pData->hFont12, visible ? L"Hide" : L"Show", pData->isHoveringShowHide, true);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnGeometryRect, pData->hFont12, L"Geometry", pData->isHoveringGeometry, false, false);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnRenameRect, pData->hFont12, L"Rename", pData->isHoveringRename, false, false);
-                MainUI_Paint_DrawActionButton(memDC, pData->btnCloseClientRect, pData->hFont12, L"Close", pData->isHoveringCloseClient, false, false);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnShowHideRect, pData->hFont12, visible ? L"Hide" : L"Show", pData->isHoveringShowHide, true, false, true);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnGeometryRect, pData->hFont12, L"Geometry", pData->isHoveringGeometry, false, false, true);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnRenameRect, pData->hFont12, L"Rename", pData->isHoveringRename, false, false, true);
+                MainUI_Paint_DrawActionButton(memDC, pData->btnCloseClientRect, pData->hFont12, L"Close", pData->isHoveringCloseClient, false, false, false);
             } else {
                 Gdiplus::SolidBrush textBrush(Gdiplus::Color(140, 150, 150, 150));
                 Gdiplus::Font placeholderFont(memDC, pData->hFont12);
@@ -4582,6 +5034,14 @@ struct EnumWindowsData
     bool includeHidden;
     std::vector<HWND>* wins;
 };
+static bool IsBuiltinRobloxProcessName(const wchar_t* name)
+{
+    if (!name) return false;
+    return _wcsicmp(name, L"RobloxPlayerBeta.exe") == 0 ||
+           _wcsicmp(name, L"Windows10Universal.exe") == 0 ||
+           _wcsicmp(name, L"RobloxPlayer.exe") == 0;
+}
+
 bool IsIgnorableHelperWindow(HWND h)
 {
     auto isHelperName = [](const wchar_t* s) -> bool {
@@ -4638,8 +5098,8 @@ std::wstring GetProcessExeName(DWORD pid)
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (hProcess)
     {
-        wchar_t path[MAX_PATH];
-        DWORD size = MAX_PATH;
+        wchar_t path[4096] = { 0 };
+        DWORD size = 4096;
         if (QueryFullProcessImageNameW(hProcess, 0, path, &size))
         {
             wchar_t* lastSlash = wcsrchr(path, L'\\');
@@ -4753,7 +5213,7 @@ std::vector<HWND> FindAllRobloxWindows(bool includeHidden = false)
                 {
                     do
                     {
-                        if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+                        if (IsBuiltinRobloxProcessName(pe.szExeFile))
                         {
                             auto procWins = GetWindowsForProcess(pe.th32ProcessID, includeHidden);
                             rawWins.insert(rawWins.end(), procWins.begin(), procWins.end());
@@ -4775,7 +5235,7 @@ std::vector<HWND> FindAllRobloxWindows(bool includeHidden = false)
             {
                 do
                 {
-                    if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+                    if (IsBuiltinRobloxProcessName(pe.szExeFile))
                     {
                         auto procWins = GetWindowsForProcess(pe.th32ProcessID, includeHidden);
                         rawWins.insert(rawWins.end(), procWins.begin(), procWins.end());
@@ -4802,7 +5262,7 @@ std::vector<HWND> FindAllRobloxWindows(bool includeHidden = false)
 void MuteProcessByPid(DWORD pid, bool mute)
 {
     HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    bool comInitializedByUs = (hrCom == S_OK);
+    bool comInitializedByUs = (hrCom == S_OK || hrCom == S_FALSE);
 
     IMMDeviceEnumerator* pEnumerator = NULL;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
@@ -4886,16 +5346,9 @@ void MuteAllRoblox(bool globalMuteState)
         MuteProcessByPid(pid, false);
     }
 }
-void MuteUnmutedPid()
-{
-    DWORD pid = g_unmutedPid.load();
-    if (pid > 0) {
-        MuteProcessByPid(pid, true);
-        g_unmutedPid = 0;
-    }
-}
 std::vector<DWORD> FindAllRobloxProcessIds()
 {
+    DWORD myPid = GetCurrentProcessId();
     if (g_useCustomProcessSearch.load())
     {
         std::vector<DWORD> pids;
@@ -4905,7 +5358,7 @@ std::vector<DWORD> FindAllRobloxProcessIds()
         {
             DWORD pid = 0;
             GetWindowThreadProcessId(hwnd, &pid);
-            if (pid > 0)
+            if (pid > 0 && pid != myPid)
             {
                 if (seenPids.insert(pid).second)
                 {
@@ -4924,7 +5377,7 @@ std::vector<DWORD> FindAllRobloxProcessIds()
                 {
                     do
                     {
-                        if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+                        if (IsBuiltinRobloxProcessName(pe.szExeFile) && pe.th32ProcessID != myPid)
                         {
                             if (seenPids.insert(pe.th32ProcessID).second) {
                                 pids.push_back(pe.th32ProcessID);
@@ -4949,7 +5402,7 @@ std::vector<DWORD> FindAllRobloxProcessIds()
     {
         do
         {
-            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
+            if (IsBuiltinRobloxProcessName(pe.szExeFile))
             {
                 if (seenPids.insert(pe.th32ProcessID).second) {
                     pids.push_back(pe.th32ProcessID);
@@ -4963,6 +5416,7 @@ std::vector<DWORD> FindAllRobloxProcessIds()
 }
 bool IsUtilsWindowOpacityEnabled()
 {
+    if (g_simpleMode.load()) return false;
     int overrideValue = g_utilsWindowOpacityOverride.load();
     if (overrideValue != -1) {
         return overrideValue != 0;
@@ -4973,6 +5427,7 @@ bool IsUtilsWindowOpacityEnabled()
 }
 bool ShouldMuteRobloxNow()
 {
+    if (g_simpleMode.load()) return false;
     int overrideValue = g_utilsMuteOverride.load();
     if (overrideValue == 1) {
         return true;
@@ -4990,6 +5445,17 @@ int GetEffectiveFpsLimit()
     }
     return g_fpsLimit;
 }
+static bool HasAnyPerInstanceFpsOverride()
+{
+    if (!g_isAfkStarted.load()) return false;
+    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+    for (const auto& kv : g_instanceSettings) {
+        if (IsWindow(kv.first) && kv.second.overrideFpsLimit && kv.second.enableFpsLimit && kv.second.fpsLimitValue > 0) {
+            return true;
+        }
+    }
+    return false;
+}
 bool ShouldRunFpsCapperNow()
 {
     int overrideValue = g_utilsFpsLimitOverride.load();
@@ -5005,17 +5471,74 @@ void RestartFpsCapperForEffectiveLimit()
         g_fpsCapperThread.join();
     }
 
-    if (GetEffectiveFpsLimit() > 0) {
+    if (!g_stopThread.load() && ((ShouldRunFpsCapperNow() && GetEffectiveFpsLimit() > 0) || HasAnyPerInstanceFpsOverride())) {
         g_isFpsCapperRunning = true;
-        g_fpsCapperThread = std::thread(FpsCapperThread);
+        try {
+            g_fpsCapperThread = std::thread(FpsCapperThread);
+        } catch (...) {
+            g_isFpsCapperRunning = false;
+        }
     }
 }
+static HANDLE g_doNotSleepRequest = NULL;
+static std::mutex g_doNotSleepMutex;
+
+static void ReleaseDoNotSleepRequest()
+{
+    std::lock_guard<std::mutex> lock(g_doNotSleepMutex);
+    if (g_doNotSleepRequest) {
+        PowerClearRequest(g_doNotSleepRequest, PowerRequestSystemRequired);
+        PowerClearRequest(g_doNotSleepRequest, PowerRequestDisplayRequired);
+        CloseHandle(g_doNotSleepRequest);
+        g_doNotSleepRequest = NULL;
+    }
+}
+
+static void UpdateDoNotSleepRequest()
+{
+    bool want = !g_simpleMode.load() && g_doNotSleep.load() && g_isAfkStarted.load();
+    std::lock_guard<std::mutex> lock(g_doNotSleepMutex);
+    if (want) {
+        if (!g_doNotSleepRequest) {
+            REASON_CONTEXT context = {};
+            context.Version = POWER_REQUEST_CONTEXT_VERSION;
+            context.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
+            context.Reason.SimpleReasonString = const_cast<LPWSTR>(L"AntiAFK-RBX: Do Not Sleep");
+            g_doNotSleepRequest = PowerCreateRequest(&context);
+            if (g_doNotSleepRequest == INVALID_HANDLE_VALUE) {
+                g_doNotSleepRequest = NULL;
+            }
+            if (g_doNotSleepRequest) {
+                PowerSetRequest(g_doNotSleepRequest, PowerRequestSystemRequired);
+                PowerSetRequest(g_doNotSleepRequest, PowerRequestDisplayRequired);
+            }
+        }
+    } else if (g_doNotSleepRequest) {
+        PowerClearRequest(g_doNotSleepRequest, PowerRequestSystemRequired);
+        PowerClearRequest(g_doNotSleepRequest, PowerRequestDisplayRequired);
+        CloseHandle(g_doNotSleepRequest);
+        g_doNotSleepRequest = NULL;
+    }
+}
+
 void ResetRobloxSessionEffectsOnExit()
 {
-    ShowAllRobloxWindows_Multi();
+    ShowAllSelfHiddenRobloxWindows();
     RefreshRobloxWindowOpacity(true);
     MuteAllRoblox(false);
+    for (DWORD pid : FindAllRobloxProcessIds()) {
+        MuteProcessByPid(pid, false);
+    }
+    {
+        auto wins = FindAllRobloxWindows(true);
+        for (HWND w : wins) {
+            if (!IsWindow(w)) continue;
+            SetWindowLong(w, GWL_EXSTYLE, GetWindowLong(w, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+            RedrawWindow(w, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
+        }
+    }
     g_unmutedPid = 0;
+    ReleaseDoNotSleepRequest();
 
     g_utilsWindowOpacityOverride = -1;
     g_utilsMuteOverride = -1;
@@ -5025,21 +5548,28 @@ void ResetRobloxSessionEffectsOnExit()
 
 void ActivateAutoUtilsOnAfkStart()
 {
-    if (g_autoOpacity.load()) {
+    g_sessionAfkActions = 0;
+    g_sessionReconnects = 0;
+    if (!g_simpleMode.load() && g_autoOpacity.load()) {
         g_utilsWindowOpacityOverride = 1;
+        g_opacityOverrideAuto = true;
     }
-    if (g_autoMute.load()) {
+    if (!g_simpleMode.load() && g_autoMute.load()) {
         g_utilsMuteOverride = 1;
+        g_muteOverrideAuto = true;
     }
     if (g_fpsLimit > 0) {
         g_utilsFpsLimitOverride = g_fpsLimit.load();
+        g_fpsOverrideAuto = true;
     }
     if (g_ramCleanerAutoStart.load()) {
         g_ramCleanerEnabled = true;
+        EnsureRamCleanerThreadStarted();
     }
     if (g_autoReconnect.load() && g_reconnectCheckInterval.load() > 0) {
         StartReconnectMonitor();
     }
+    UpdateDoNotSleepRequest();
 }
 
 void ApplyAutoUtilsStartEffects()
@@ -5047,35 +5577,46 @@ void ApplyAutoUtilsStartEffects()
     std::lock_guard<std::mutex> guard(g_autoUtilsStartMutex);
     RefreshRobloxWindowOpacity(false);
     RestartFpsCapperForEffectiveLimit();
-    if (g_utilsMuteOverride.load() == 1) {
+    if (ShouldMuteRobloxNow()) {
         MuteAllRoblox(true);
     }
-    if (g_autoHideRoblox.load()) {
+    if (!g_simpleMode.load()) {
         auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
-            HideRobloxWindowTracked(w);
+            if (GetWindowInstanceSetting_Hide(w, g_autoHideRoblox.load())) {
+                HideRobloxWindowTracked(w);
+            }
         }
     }
-    if (g_autoGrid.load()) {
+    if (!g_simpleMode.load() && g_autoGrid.load()) {
         ApplyAutoRobloxWindowLayout();
     }
 }
 
 void DeactivateAutoUtilsOnAfkStop()
 {
-    g_utilsWindowOpacityOverride = 0;
+    g_utilsWindowOpacityOverride = -1;
+    g_opacityOverrideAuto = false;
     g_utilsMuteOverride = 0;
-    g_utilsFpsLimitOverride = 0;
+    g_muteOverrideAuto = false;
+    g_utilsFpsLimitOverride = -1;
+    g_fpsOverrideAuto = false;
     g_ramCleanerEnabled = false;
     StopReconnectMonitor();
+    UpdateDoNotSleepRequest();
 }
 
 void ApplyAutoUtilsStopEffects()
 {
-    auto wins = FindAllRobloxWindows(true);
-    if (g_autoHideRoblox.load()) {
+    {
+        auto wins = FindAllRobloxWindows(true);
         for (HWND w : wins) {
-            ShowRobloxWindowTracked(w);
+            bool keepHidden = GetWindowInstanceSetting_Hide(w, false);
+            if (keepHidden) {
+                if (IsWindowVisible(w)) HideRobloxWindowTracked(w);
+            } else if (IsRobloxWindowSelfHidden(w)) {
+                ShowRobloxWindowTracked(w);
+            }
         }
     }
     RefreshRobloxWindowOpacity(false);
@@ -5110,6 +5651,7 @@ static BOOL CALLBACK GridSnapEnumMonitorsProc(HMONITOR hMonitor, HDC hdcMonitor,
 
 void GridSnapRobloxWindows()
 {
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
     auto allWins = FindAllRobloxWindows(true);
     std::vector<HWND> wins;
     wins.reserve(allWins.size());
@@ -5153,6 +5695,9 @@ void GridSnapRobloxWindows()
             continue;
         }
         if (IsRobloxWindowSelfHidden(w)) {
+            continue;
+        }
+        if (!g_isAfkStarted.load() && (IsIconic(w) || IsZoomed(w))) {
             continue;
         }
 
@@ -5227,18 +5772,23 @@ void GridSnapRobloxWindows()
 
     if (targetMonitors.empty()) return;
 
-    std::sort(wins.begin(), wins.end(), [](HWND a, HWND b) {
-        RECT ra{ 0 }, rb{ 0 };
-        bool gotA = GetWindowRect(a, &ra) != FALSE;
-        bool gotB = GetWindowRect(b, &rb) != FALSE;
-
-        if (gotA && gotB) {
-            if (ra.top != rb.top) return ra.top < rb.top;
-            if (ra.left != rb.left) return ra.left < rb.left;
+    struct WinSortItem { HWND h; bool got; RECT rc; };
+    std::vector<WinSortItem> sortItems;
+    sortItems.reserve(wins.size());
+    for (HWND h : wins) {
+        RECT r = { 0 };
+        bool got = GetWindowRect(h, &r) != FALSE;
+        sortItems.push_back({ h, got, r });
+    }
+    std::sort(sortItems.begin(), sortItems.end(), [](const WinSortItem& a, const WinSortItem& b) {
+        if (a.got != b.got) return a.got > b.got;
+        if (a.got && b.got) {
+            if (a.rc.top != b.rc.top) return a.rc.top < b.rc.top;
+            if (a.rc.left != b.rc.left) return a.rc.left < b.rc.left;
         }
-
-        return reinterpret_cast<UINT_PTR>(a) < reinterpret_cast<UINT_PTR>(b);
+        return reinterpret_cast<UINT_PTR>(a.h) < reinterpret_cast<UINT_PTR>(b.h);
     });
+    for (size_t si = 0; si < wins.size(); ++si) wins[si] = sortItems[si].h;
 
     const int preferredWinW = 800;
     const int preferredWinH = 600;
@@ -5554,11 +6104,107 @@ void GridSnapRobloxWindows()
 
     for (HWND w : wins) {
         if (!IsWindow(w) || IsHungAppWindow(w)) continue;
-        BringWindowToTop(w);
-        SetForegroundWindow(w);
+        SetWindowPos(w, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         Sleep(25);
     }
 }
+static bool IsCurrentProcessElevated()
+{
+    HANDLE hToken = NULL;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return false;
+    TOKEN_ELEVATION elev = { 0 };
+    DWORD sz = 0;
+    bool ok = GetTokenInformation(hToken, TokenElevation, &elev, sizeof(elev), &sz) && elev.TokenIsElevated != 0;
+    CloseHandle(hToken);
+    return ok;
+}
+
+static bool IsWindowProcessElevatedMismatch(HWND hwnd)
+{
+    if (IsCurrentProcessElevated()) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid) return false;
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProc) {
+        return GetLastError() == ERROR_ACCESS_DENIED;
+    }
+    bool elevated = false;
+    HANDLE hToken = NULL;
+    if (OpenProcessToken(hProc, TOKEN_QUERY, &hToken)) {
+        TOKEN_ELEVATION elev = { 0 };
+        DWORD sz = 0;
+        if (GetTokenInformation(hToken, TokenElevation, &elev, sizeof(elev), &sz)) {
+            elevated = (elev.TokenIsElevated != 0);
+        }
+        CloseHandle(hToken);
+    } else if (GetLastError() == ERROR_ACCESS_DENIED) {
+        elevated = true;
+    }
+    CloseHandle(hProc);
+    return elevated;
+}
+
+static bool TryActivateRobloxWindow(HWND target)
+{
+    if (!target || !IsWindow(target) || IsHungAppWindow(target))
+        return false;
+    if (GetForegroundWindow() == target)
+        return true;
+    const bool wasIconic = IsIconic(target) != FALSE;
+    if (wasIconic) {
+        ShowWindow(target, SW_RESTORE);
+        Sleep(50);
+    }
+
+    HWND fg = GetForegroundWindow();
+    DWORD fgThread = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
+    DWORD targetThread = GetWindowThreadProcessId(target, NULL);
+    DWORD currentThread = GetCurrentThreadId();
+    bool attachedFg = false;
+    bool attachedTarget = false;
+    if (fgThread && fgThread != currentThread)
+        attachedFg = AttachThreadInput(currentThread, fgThread, TRUE) != FALSE;
+    if (targetThread && targetThread != currentThread && targetThread != fgThread)
+        attachedTarget = AttachThreadInput(currentThread, targetThread, TRUE) != FALSE;
+
+    BringWindowToTop(target);
+    SetForegroundWindow(target);
+    SetFocus(target);
+
+    if (attachedTarget)
+        AttachThreadInput(currentThread, targetThread, FALSE);
+    if (attachedFg)
+        AttachThreadInput(currentThread, fgThread, FALSE);
+
+    if (GetForegroundWindow() != target) {
+        SwitchToThisWindow(target, TRUE);
+        for (int waitMs = 0; waitMs < 45 && GetForegroundWindow() != target; waitMs += 15) {
+            Sleep(15);
+        }
+    }
+    if (wasIconic && GetForegroundWindow() != target) {
+        Sleep(20);
+    }
+    return GetForegroundWindow() == target;
+}
+
+static bool IsTargetForegroundForInput(HWND hwnd)
+{
+    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd))
+        return false;
+    return GetForegroundWindow() == hwnd;
+}
+
+static bool EnsureTargetForegroundForInput(HWND hwnd)
+{
+    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd))
+        return false;
+    if (GetForegroundWindow() == hwnd)
+        return true;
+    return TryActivateRobloxWindow(hwnd) && GetForegroundWindow() == hwnd;
+}
+
 std::vector<UINT_PTR> BuildRobloxWindowSignature(const std::vector<HWND>& wins)
 {
     std::vector<UINT_PTR> signature;
@@ -5567,29 +6213,46 @@ std::vector<UINT_PTR> BuildRobloxWindowSignature(const std::vector<HWND>& wins)
     {
         DWORD pid = 0;
         GetWindowThreadProcessId(w, &pid);
-        signature.push_back(reinterpret_cast<UINT_PTR>(w) ^ (static_cast<UINT_PTR>(pid) << 16));
+        signature.push_back(reinterpret_cast<UINT_PTR>(w) ^ (static_cast<UINT_PTR>(pid) << 16) ^ (IsWindowVisible(w) ? 1u : 0u));
     }
     std::sort(signature.begin(), signature.end());
     return signature;
 }
 void RestoreForegroundWindow(HWND prevWnd)
 {
-    if (!prevWnd)
+    if (!prevWnd || !IsWindow(prevWnd))
+        return;
+    DWORD initialPid = 0;
+    DWORD prevThreadId = GetWindowThreadProcessId(prevWnd, &initialPid);
+    if (prevThreadId == 0 || initialPid == 0)
         return;
     wchar_t className[256] = { 0 };
     if (GetClassNameW(prevWnd, className, 256) > 0 && wcscmp(className, L"AntiAFK-RBX-tray") == 0)
         return;
     if (!IsWindowVisible(prevWnd) || IsIconic(prevWnd))
         return;
+    bool wasTopMost = (GetWindowLongPtr(prevWnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
     ShowWindow(prevWnd, SW_SHOW);
+    DWORD checkPid = 0;
+    if (!IsWindow(prevWnd) || (GetWindowThreadProcessId(prevWnd, &checkPid), checkPid != initialPid))
+        return;
     SetWindowPos(prevWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
     DWORD currentThreadId = GetCurrentThreadId();
-    DWORD prevThreadId = GetWindowThreadProcessId(prevWnd, NULL);
-    AttachThreadInput(currentThreadId, prevThreadId, TRUE);
-    BringWindowToTop(prevWnd);
-    SetForegroundWindow(prevWnd);
-    AttachThreadInput(currentThreadId, prevThreadId, FALSE);
-    SetWindowPos(prevWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    bool attached = (prevThreadId != currentThreadId && AttachThreadInput(currentThreadId, prevThreadId, TRUE) != FALSE);
+    if (IsWindow(prevWnd) && (GetWindowThreadProcessId(prevWnd, &checkPid), checkPid == initialPid)) {
+        BringWindowToTop(prevWnd);
+        SetForegroundWindow(prevWnd);
+        if (GetForegroundWindow() != prevWnd) {
+            Sleep(30);
+            if (IsWindow(prevWnd) && (GetWindowThreadProcessId(prevWnd, &checkPid), checkPid == initialPid)) {
+                SetForegroundWindow(prevWnd);
+            }
+        }
+    }
+    if (attached) AttachThreadInput(currentThreadId, prevThreadId, FALSE);
+    if (IsWindow(prevWnd) && (GetWindowThreadProcessId(prevWnd, &checkPid), checkPid == initialPid)) {
+        SetWindowPos(prevWnd, wasTopMost ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    }
 }
 void RestorePreviousWindowWithAltTab()
 {
@@ -5634,13 +6297,19 @@ void RestoreUserWindowAfterRobloxAction(HWND previousWindow)
 }
 void ShowAllRobloxWindows_Multi()
 {
+    HWND previous = GetForegroundWindow();
     auto wins = FindAllRobloxWindows(true);
     for (HWND w : wins)
     {
-        if (!IsWindowVisible(w) || IsIconic(w))
-        {
+        if (!IsWindow(w) || IsRobloxWindowClosedToTray(w)) continue;
+        if (IsIconic(w)) {
+            ShowWindow(w, SW_RESTORE);
+        } else if (!IsWindowVisible(w)) {
             ShowRobloxWindowTracked(w);
         }
+    }
+    if (previous && previous != GetForegroundWindow() && IsWindow(previous)) {
+        RestoreForegroundWindow(previous);
     }
 }
 void HideAllRobloxWindows()
@@ -5657,8 +6326,8 @@ void RefreshRobloxWindowOpacity(bool forceDisable)
     for (HWND w : wins)
     {
         int opVal = 180;
-        bool globalDefault = !forceDisable && (IsUtilsWindowOpacityEnabled() || (g_autoOpacity.load() && g_isAfkStarted.load()));
-        bool shouldApplyOpacity = GetWindowInstanceSetting_Opacity(w, globalDefault, opVal);
+        bool globalDefault = !forceDisable && !g_simpleMode.load() && (IsUtilsWindowOpacityEnabled() || (g_autoOpacity.load() && g_isAfkStarted.load()));
+        bool shouldApplyOpacity = forceDisable ? false : GetWindowInstanceSetting_Opacity(w, globalDefault, opVal);
 
         if (shouldApplyOpacity)
         {
@@ -5675,6 +6344,7 @@ void RefreshRobloxWindowOpacity(bool forceDisable)
 void ApplyAutoRobloxWindowLayout()
 {
     auto wins = FindAllRobloxWindows(true);
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
     std::lock_guard<std::mutex> guard(g_autoWindowLayoutMutex);
 
     if (wins.empty())
@@ -5683,12 +6353,12 @@ void ApplyAutoRobloxWindowLayout()
         return;
     }
 
-    if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load())
+    if (!g_simpleMode.load() && (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load()))
     {
         RefreshRobloxWindowOpacity(false);
     }
 
-    if (g_autoGrid.load())
+    if (!g_simpleMode.load() && g_autoGrid.load())
     {
         auto signature = BuildRobloxWindowSignature(wins);
         if (signature != g_lastAutoGridWindowSignature)
@@ -5715,7 +6385,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
     size_t winIndex = 0;
     size_t validWindowCount = 0;
     for (HWND w : wins) {
-        if (IsWindow(w)) ++validWindowCount;
+        if (IsWindow(w) && !IsRobloxWindowClosedToTray(w)) ++validWindowCount;
     }
 
     for (HWND w : wins)
@@ -5725,6 +6395,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
         ++winIndex;
         const bool isLastWindow = (winIndex == validWindowCount);
 
+        std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
         bool wasVisible = IsWindowVisible(w) != FALSE;
         bool selfHidden = IsRobloxWindowSelfHidden(w);
         bool wasMinimized = IsIconic(w) && !(selfHidden && !showHiddenWindows);
@@ -5736,14 +6407,13 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
             ShowWindow(w, SW_RESTORE);
         }
 
-        SetForegroundWindow(w);
-        Sleep(g_preActionDelay.load());
-        for (int attempt = 0; attempt < 2 && GetForegroundWindow() != w; ++attempt) {
-            SetForegroundWindow(w);
+        bool focused = TryActivateRobloxWindow(w);
+        if (!focused) {
             Sleep(g_preActionDelay.load());
+            focused = TryActivateRobloxWindow(w);
         }
 
-        if (GetForegroundWindow() != w) {
+        if (!focused) {
             if (!wasVisible && showHiddenWindows) {
                 HideRobloxWindowTracked(w);
             }
@@ -5753,6 +6423,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
             continue;
         }
 
+        Sleep(g_preActionDelay.load());
         anyFocused = true;
 
         for (int i = 0; i < repeatCount; ++i) {
@@ -5778,7 +6449,7 @@ bool ExecuteRobloxWindowActionForAll(void(*action)(HWND), int repeatCount, bool 
     }
 
     ResumeFpsCapperAfterAction(wasFpsCapperPaused);
-    RestoreUserWindowAfterRobloxAction(previousWindow);
+    if (anyFocused) RestoreUserWindowAfterRobloxAction(previousWindow);
     return anyFocused;
 }
 int CloseAllRobloxInstances()
@@ -5816,8 +6487,10 @@ int CloseAllRobloxInstances()
 // ==========
 
 // Multi Instance
+static std::recursive_mutex g_multiInstanceMutex;
 MutexCreateResult EnableMultiInstanceSupport()
 {
+    std::lock_guard<std::recursive_mutex> miLock(g_multiInstanceMutex);
     if (g_hMultiInstanceMutex)
     {
         if (IsMultiInstanceMutexValid())
@@ -5845,6 +6518,7 @@ MutexCreateResult EnableMultiInstanceSupport()
 }
 bool IsMultiInstanceMutexValid()
 {
+    std::lock_guard<std::recursive_mutex> miLock(g_multiInstanceMutex);
     if (!g_hMultiInstanceMutex) return false;
     DWORD result = WaitForSingleObject(g_hMultiInstanceMutex, 0);
     if (result == WAIT_OBJECT_0 || result == WAIT_ABANDONED)
@@ -5861,6 +6535,7 @@ bool IsMultiInstanceMutexValid()
 }
 void DisableMultiInstanceSupport()
 {
+    std::lock_guard<std::recursive_mutex> miLock(g_multiInstanceMutex);
     if (g_hMultiInstanceMutex)
     {
         if (!g_multiInstanceMutexOwnedByOther)
@@ -5894,18 +6569,22 @@ void ClearMutexBanner()
 }
 // ==========
 
-static void PreciseSleepMs(double ms);
+static void PreciseSleepMs(double ms, bool honorMacroAbort = true);
 static double MacroEngine_NowMs();
 
 // AntiAFK Action
 static int RandomInt(int max);
 
-void AntiAFK_Action(HWND target)
+bool AntiAFK_Action(HWND target)
 {
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
-    if (!target || !IsWindow(target)) return;
+    if (g_stopThread.load() || !g_isAfkStarted.load()) return false;
+    if (!target || !IsWindow(target)) return false;
+
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+    if (!EnsureTargetForegroundForInput(target)) return false;
 
     int action = g_selectedAction.load();
+    if (g_simpleMode.load() && action == 4) action = 5;
 
     int performKind = action;
     if (action == 3) // Random
@@ -5913,7 +6592,14 @@ void AntiAFK_Action(HWND target)
         int pick = g_randomCyclePick.load();
         if (pick == -1)
         {
-            pick = RandomInt(3);
+            static const int kRandomActions[4] = { 0, 1, 2, 5 }; // Space, W/S, Zoom, Arrows
+            int idx = RandomInt(4);
+            int previous = g_lastRandomPick.load();
+            if (kRandomActions[idx] == previous) {
+                idx = (idx + 1 + RandomInt(3)) % 4;
+            }
+            pick = kRandomActions[idx];
+            g_lastRandomPick = pick;
             g_randomCyclePick = pick;
         }
         performKind = pick;
@@ -5921,27 +6607,47 @@ void AntiAFK_Action(HWND target)
 
     g_lastActionKind = performKind;
 
+    bool performed = false;
+    auto markOnce = [&]() {
+        if (!performed) {
+            performed = true;
+            MarkWindowAction(target);
+        }
+    };
+    auto canSend = [&]() {
+        if (g_stopThread.load() || !g_isAfkStarted.load()) return false;
+        return IsTargetForegroundForInput(target);
+    };
+
     switch (performKind)
     {
     case 0: // Space
+        if (!canSend()) break;
         keybd_event(static_cast<BYTE>(VK_SPACE), static_cast<BYTE>(MapVirtualKey(VK_SPACE, 0)), 0, 0);
+        markOnce();
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event(static_cast<BYTE>(VK_SPACE), static_cast<BYTE>(MapVirtualKey(VK_SPACE, 0)), KEYEVENTF_KEYUP, 0);
         break;
     case 1: // W & S
+        if (!canSend()) break;
         keybd_event('W', static_cast<BYTE>(MapVirtualKey('W', 0)), 0, 0);
+        markOnce();
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('W', static_cast<BYTE>(MapVirtualKey('W', 0)), KEYEVENTF_KEYUP, 0);
         PreciseSleepMs(g_keyPressDelay.load());
+        if (!canSend()) break;
         keybd_event('S', static_cast<BYTE>(MapVirtualKey('S', 0)), 0, 0);
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('S', static_cast<BYTE>(MapVirtualKey('S', 0)), KEYEVENTF_KEYUP, 0);
         break;
     case 2: // Zoom
+        if (!canSend()) break;
         keybd_event('I', static_cast<BYTE>(MapVirtualKey('I', 0)), 0, 0);
+        markOnce();
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('I', static_cast<BYTE>(MapVirtualKey('I', 0)), KEYEVENTF_KEYUP, 0);
         PreciseSleepMs(g_keyPressDelay.load());
+        if (!canSend()) break;
         keybd_event('O', static_cast<BYTE>(MapVirtualKey('O', 0)), 0, 0);
         PreciseSleepMs(g_keyPressDelay.load());
         keybd_event('O', static_cast<BYTE>(MapVirtualKey('O', 0)), KEYEVENTF_KEYUP, 0);
@@ -5950,42 +6656,86 @@ void AntiAFK_Action(HWND target)
     {
         std::vector<Macro> cds = MacroEngine_GetCooldownMacrosForWindow(target);
         for (const auto& m : cds) {
-            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
-            MacroEngine_ExecuteMacro(m, target);
+            if (!canSend()) break;
+            if (MacroEngine_ExecuteMacro(m, target)) {
+                performed = true;
+            }
         }
         break;
     }
+    case 5: // Arrows Left / Right
+        if (!canSend()) break;
+        keybd_event(static_cast<BYTE>(VK_LEFT), static_cast<BYTE>(MapVirtualKey(VK_LEFT, 0)), KEYEVENTF_EXTENDEDKEY, 0);
+        markOnce();
+        PreciseSleepMs(g_keyPressDelay.load());
+        keybd_event(static_cast<BYTE>(VK_LEFT), static_cast<BYTE>(MapVirtualKey(VK_LEFT, 0)), KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        PreciseSleepMs(g_keyPressDelay.load());
+        if (!canSend()) break;
+        keybd_event(static_cast<BYTE>(VK_RIGHT), static_cast<BYTE>(MapVirtualKey(VK_RIGHT, 0)), KEYEVENTF_EXTENDEDKEY, 0);
+        PreciseSleepMs(g_keyPressDelay.load());
+        keybd_event(static_cast<BYTE>(VK_RIGHT), static_cast<BYTE>(MapVirtualKey(VK_RIGHT, 0)), KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        break;
     }
+    return performed;
+}
+
+static void AntiAFK_ActionVoid(HWND target)
+{
+    (void)AntiAFK_Action(target);
 }
 // ==========
 
 // Auto Reset
-void AutoReset_Action(HWND target)
+static bool AutoReset_SendSequence(HWND target, bool requireAfk)
 {
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
-    if (!target || !IsWindow(target)) return;
-    if (GetForegroundWindow() != target) {
-        SetForegroundWindow(target);
-        Sleep(50);
-        if (GetForegroundWindow() != target) return;
-    }
+    if (g_stopThread.load()) return false;
+    if (requireAfk && !g_isAfkStarted.load()) return false;
+    if (!target || !IsWindow(target)) return false;
+
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+    if (!EnsureTargetForegroundForInput(target)) return false;
+
+    auto canSend = [&]() {
+        if (g_stopThread.load() || (requireAfk && !g_isAfkStarted.load())) return false;
+        return IsTargetForegroundForInput(target);
+    };
+    if (!canSend()) return false;
+
     keybd_event(VK_ESCAPE, static_cast<BYTE>(MapVirtualKey(VK_ESCAPE, 0)), 0, 0);
+    MarkWindowAction(target);
     PreciseSleepMs(g_keyPressDelay.load());
+    if (!canSend()) {
+        keybd_event(VK_ESCAPE, static_cast<BYTE>(MapVirtualKey(VK_ESCAPE, 0)), KEYEVENTF_KEYUP, 0);
+        return true;
+    }
     keybd_event(VK_ESCAPE, static_cast<BYTE>(MapVirtualKey(VK_ESCAPE, 0)), KEYEVENTF_KEYUP, 0);
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
     Sleep(100);
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
+    if (!canSend()) return true;
 
     keybd_event('R', static_cast<BYTE>(MapVirtualKey('R', 0)), 0, 0);
     PreciseSleepMs(g_keyPressDelay.load());
+    if (!canSend()) {
+        keybd_event('R', static_cast<BYTE>(MapVirtualKey('R', 0)), KEYEVENTF_KEYUP, 0);
+        return true;
+    }
     keybd_event('R', static_cast<BYTE>(MapVirtualKey('R', 0)), KEYEVENTF_KEYUP, 0);
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
     Sleep(100);
-    if (g_stopThread.load() || !g_isAfkStarted.load()) return;
+    if (!canSend()) return true;
 
     keybd_event(VK_RETURN, static_cast<BYTE>(MapVirtualKey(VK_RETURN, 0)), 0, 0);
     PreciseSleepMs(g_keyPressDelay.load());
     keybd_event(VK_RETURN, static_cast<BYTE>(MapVirtualKey(VK_RETURN, 0)), KEYEVENTF_KEYUP, 0);
+    return true;
+}
+
+void AutoReset_Action(HWND target)
+{
+    AutoReset_SendSequence(target, false);
+}
+
+static bool AutoReset_ActionDuringAfk(HWND target)
+{
+    return AutoReset_SendSequence(target, true);
 }
 // ==========
 
@@ -6031,6 +6781,40 @@ static int RandomInt(int max) {
     return static_cast<int>((seed >> 16) % static_cast<unsigned int>(max));
 }
 
+static void SetScreenSaverPixelHole(POINT screenPoint, int radius, bool enable)
+{
+    std::lock_guard<std::mutex> lock(g_screenSaverWindowsMutex);
+    for (HWND h : g_screenSaverWindows) {
+        if (!h || !IsWindow(h)) continue;
+        if (!enable) {
+            SetWindowRgn(h, NULL, TRUE);
+            continue;
+        }
+        RECT wr = { 0 };
+        if (!GetWindowRect(h, &wr)) {
+            SetWindowRgn(h, NULL, TRUE);
+            continue;
+        }
+        if (screenPoint.x < wr.left || screenPoint.x >= wr.right ||
+            screenPoint.y < wr.top || screenPoint.y >= wr.bottom) {
+            SetWindowRgn(h, NULL, TRUE);
+            continue;
+        }
+        int w = wr.right - wr.left;
+        int ht = wr.bottom - wr.top;
+        HRGN full = CreateRectRgn(0, 0, w, ht);
+        if (!full) continue;
+        int lx = screenPoint.x - wr.left;
+        int ly = screenPoint.y - wr.top;
+        HRGN hole = CreateRectRgn(lx - radius, ly - radius, lx + radius + 1, ly + radius + 1);
+        if (hole) {
+            CombineRgn(full, full, hole, RGN_DIFF);
+            DeleteObject(hole);
+        }
+        if (!SetWindowRgn(h, full, TRUE)) DeleteObject(full);
+    }
+}
+
 static bool KickDialogDetected(HWND hRobloxWnd)
 {
     RECT rc;
@@ -6050,10 +6834,15 @@ static bool KickDialogDetected(HWND hRobloxWnd)
 
     ClientToScreen(hRobloxWnd, &checkPoint);
 
+    SetScreenSaverPixelHole(checkPoint, 3, true);
     HDC hdcScreen = GetDC(NULL);
-    if (!hdcScreen) return false;
+    if (!hdcScreen) {
+        SetScreenSaverPixelHole(checkPoint, 3, false);
+        return false;
+    }
     COLORREF pixelColor = GetPixel(hdcScreen, checkPoint.x, checkPoint.y);
     ReleaseDC(NULL, hdcScreen);
+    SetScreenSaverPixelHole(checkPoint, 3, false);
 
     return pixelColor == RGB(57, 59, 61);
 }
@@ -6068,7 +6857,11 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
     if (IsHungAppWindow(hRobloxWnd)) {
         return false;
     }
+    if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(hRobloxWnd)) {
+        return false;
+    }
 
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
     BringWindowToTop(hRobloxWnd);
     SetForegroundWindow(hRobloxWnd);
     Sleep(250);
@@ -6093,10 +6886,15 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
 
     ClientToScreen(hRobloxWnd, &checkPoint);
 
+    SetScreenSaverPixelHole(checkPoint, 3, true);
     HDC hdcScreen = GetDC(NULL);
-    if (!hdcScreen) return false;
+    if (!hdcScreen) {
+        SetScreenSaverPixelHole(checkPoint, 3, false);
+        return false;
+    }
     COLORREF pixelColor = GetPixel(hdcScreen, checkPoint.x, checkPoint.y);
     ReleaseDC(NULL, hdcScreen);
+    SetScreenSaverPixelHole(checkPoint, 3, false);
 
     if (pixelColor == CLR_INVALID || pixelColor != RGB(57, 59, 61)) {
         return false;
@@ -6112,10 +6910,17 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
     POINT clickPoint = { clickX, clickY };
     ClientToScreen(hRobloxWnd, &clickPoint);
 
-    POINT oldCursorPos;
-    GetCursorPos(&oldCursorPos);
+    const bool saverWasActive = g_screenSaverActive.load();
+    if (saverWasActive) SetScreenSaverOverlaysVisible(false);
 
-    IncrementalMouseMove(oldCursorPos.x, oldCursorPos.y, clickPoint.x, clickPoint.y, 20, 80);
+    POINT oldCursorPos = { 0 };
+    bool haveOldCursor = (GetCursorPos(&oldCursorPos) != FALSE);
+
+    if (haveOldCursor) {
+        IncrementalMouseMove(oldCursorPos.x, oldCursorPos.y, clickPoint.x, clickPoint.y, 20, 80);
+    } else {
+        SetCursorPos(clickPoint.x, clickPoint.y);
+    }
 
     Sleep(30 + RandomInt(20));
 
@@ -6123,7 +6928,9 @@ bool CheckForAutoReconnect(HWND hRobloxWnd)
     Sleep(40 + RandomInt(30));
     mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
 
-    SetCursorPos(oldCursorPos.x, oldCursorPos.y);
+    if (haveOldCursor) SetCursorPos(oldCursorPos.x, oldCursorPos.y);
+
+    if (saverWasActive && g_screenSaverActive.load()) SetScreenSaverOverlaysVisible(true);
 
     return true;
 }
@@ -6136,20 +6943,13 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
         return false;
     }
 
-    RECT clientRect;
-    if (!GetClientRect(hRobloxWnd, &clientRect)) {
-        return false;
-    }
-    int windowWidth = clientRect.right - clientRect.left;
-    int windowHeight = clientRect.bottom - clientRect.top;
-    if (windowWidth < 30 || windowHeight < 30) return false;
-
     bool windowWasIconic = IsIconic(hRobloxWnd) != FALSE;
     bool windowWasInvisible = !IsWindowVisible(hRobloxWnd);
     bool windowWasHidden = windowWasIconic || windowWasInvisible;
+    bool selfHidden = IsRobloxWindowSelfHidden(hRobloxWnd);
 
     auto restorePreviousWindowState = [hRobloxWnd, windowWasIconic, windowWasInvisible]() {
-        if (windowWasIconic) ShowWindow(hRobloxWnd, SW_MINIMIZE);
+        if (windowWasIconic) ShowWindow(hRobloxWnd, SW_SHOWMINNOACTIVE);
         else if (windowWasInvisible) HideRobloxWindowTracked(hRobloxWnd);
     };
 
@@ -6159,8 +6959,25 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     }
 
     if (windowWasHidden) {
-        ShowWindow(hRobloxWnd, SW_RESTORE);
-        Sleep(200);
+        if (selfHidden) {
+            ShowWindow(hRobloxWnd, SW_SHOWNOACTIVATE);
+            Sleep(50);
+        } else {
+            ShowWindow(hRobloxWnd, SW_RESTORE);
+            Sleep(200);
+        }
+    }
+
+    RECT clientRect;
+    if (!GetClientRect(hRobloxWnd, &clientRect)) {
+        if (windowWasHidden) restorePreviousWindowState();
+        return false;
+    }
+    int windowWidth = clientRect.right - clientRect.left;
+    int windowHeight = clientRect.bottom - clientRect.top;
+    if (windowWidth < 30 || windowHeight < 30) {
+        if (windowWasHidden) restorePreviousWindowState();
+        return false;
     }
 
     if (!KickDialogDetected(hRobloxWnd)) {
@@ -6194,18 +7011,37 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
     POINT clickPoint = { clickX, clickY };
     ClientToScreen(hRobloxWnd, &clickPoint);
 
-    POINT oldCursorPos;
-    GetCursorPos(&oldCursorPos);
+    {
+        std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+        const bool saverWasActive = g_screenSaverActive.load();
+        if (saverWasActive) SetScreenSaverOverlaysVisible(false);
 
-    IncrementalMouseMove(oldCursorPos.x, oldCursorPos.y, clickPoint.x, clickPoint.y, 20, 80);
+        HWND ptWnd = WindowFromPoint(clickPoint);
+        HWND ptRoot = ptWnd ? GetAncestor(ptWnd, GA_ROOT) : NULL;
+        if (ptWnd && ptWnd != hRobloxWnd && ptRoot != hRobloxWnd) {
+            if (saverWasActive && g_screenSaverActive.load()) SetScreenSaverOverlaysVisible(true);
+            if (windowWasHidden) restorePreviousWindowState();
+            return false;
+        }
 
-    Sleep(30 + RandomInt(20));
+        POINT oldCursorPos = { 0 };
+        bool haveOldCursor = (GetCursorPos(&oldCursorPos) != FALSE);
 
-    mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-    Sleep(40 + RandomInt(30));
-    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+        if (haveOldCursor) {
+            IncrementalMouseMove(oldCursorPos.x, oldCursorPos.y, clickPoint.x, clickPoint.y, 20, 80);
+        } else {
+            SetCursorPos(clickPoint.x, clickPoint.y);
+        }
 
-    SetCursorPos(oldCursorPos.x, oldCursorPos.y);
+        Sleep(30 + RandomInt(20));
+
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        Sleep(40 + RandomInt(30));
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+
+        if (haveOldCursor) SetCursorPos(oldCursorPos.x, oldCursorPos.y);
+        if (saverWasActive && g_screenSaverActive.load()) SetScreenSaverOverlaysVisible(true);
+    }
 
     if (windowWasHidden) {
         restorePreviousWindowState();
@@ -6215,7 +7051,7 @@ bool CheckForAutoReconnectNoFocus(HWND hRobloxWnd)
 }
 
 static void MacroEngine_RunPendingReconnectMacros() {
-    if (g_stopThread.load() || !g_isAfkStarted.load() || g_reconnectCheckAbort.load()) {
+    if (g_stopThread.load() || !g_isAfkStarted.load() || !g_autoReconnect.load() || g_reconnectCheckAbort.load()) {
         std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
         g_reconnectMacroPending.clear();
         return;
@@ -6226,7 +7062,11 @@ static void MacroEngine_RunPendingReconnectMacros() {
     {
         std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
         for (auto it = g_reconnectMacroPending.begin(); it != g_reconnectMacroPending.end(); ) {
-            if (now - it->second >= delayMs) {
+            DWORD currentPid = 0;
+            if (IsWindow(it->first)) GetWindowThreadProcessId(it->first, &currentPid);
+            if (!IsWindow(it->first) || currentPid == 0 || currentPid != it->second.pid) {
+                it = g_reconnectMacroPending.erase(it);
+            } else if (now - it->second.tick >= delayMs) {
                 due.push_back(it->first);
                 it = g_reconnectMacroPending.erase(it);
             } else {
@@ -6255,7 +7095,7 @@ void PerformReconnectCheckOnAllWindows(bool useFocus = false)
     {
         std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
         for (auto it = g_reconnectCooldownMap.begin(); it != g_reconnectCooldownMap.end(); ) {
-            if ((now - it->second) > 60000) it = g_reconnectCooldownMap.erase(it);
+            if ((now - it->second.tick) > 60000) it = g_reconnectCooldownMap.erase(it);
             else ++it;
         }
     }
@@ -6264,21 +7104,28 @@ if (g_reconnectCheckAbort.load()) break;
 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
         if (!IsWindow(w)) continue;
         if (!GetWindowInstanceSetting_Reconnect(w, g_autoReconnect.load())) continue;
+        if (!useFocus) {
+            if (g_userSafeMode.load() > 0 && g_userActive.load()) continue;
+            if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(w)) continue;
+        }
+        DWORD cooldownPid = 0;
+        GetWindowThreadProcessId(w, &cooldownPid);
         {
             std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
             auto it = g_reconnectCooldownMap.find(w);
-            if (it != g_reconnectCooldownMap.end() && (now - it->second) < 30000) continue;
+            if (it != g_reconnectCooldownMap.end() && it->second.pid == cooldownPid && (now - it->second.tick) < 30000) continue;
         }
         bool triggered = useFocus ? CheckForAutoReconnect(w) : CheckForAutoReconnectNoFocus(w);
         if (triggered) {
             g_autoReconnectsPerformed++;
+            g_sessionReconnects++;
             reconnectTriggered = true;
             {
                 std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
-                g_reconnectMacroPending[w] = GetTickCount64();
+                g_reconnectMacroPending[w] = { cooldownPid, GetTickCount64() };
             }
             std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
-            g_reconnectCooldownMap[w] = now;
+            g_reconnectCooldownMap[w] = { cooldownPid, now };
         }
     }
     MacroEngine_RunPendingReconnectMacros();
@@ -6301,7 +7148,7 @@ void ReconnectMonitorThread()
             std::lock_guard<std::mutex> lock(g_reconnectCooldownMutex);
             DWORD now = GetTickCount();
             for (auto it = g_reconnectCooldownMap.begin(); it != g_reconnectCooldownMap.end(); ) {
-                if ((now - it->second) > 60000) it = g_reconnectCooldownMap.erase(it);
+                if ((now - it->second.tick) > 60000) it = g_reconnectCooldownMap.erase(it);
                 else ++it;
             }
         }
@@ -6329,7 +7176,11 @@ g_reconnectMonitorThread.join();
 }
 g_reconnectCheckAbort = false;
 g_reconnectMonitorRunning = true;
-g_reconnectMonitorThread = std::thread(ReconnectMonitorThread);
+try {
+    g_reconnectMonitorThread = std::thread(ReconnectMonitorThread);
+} catch (...) {
+    g_reconnectMonitorRunning = false;
+}
 }
 
 void StopReconnectMonitor()
@@ -6340,8 +7191,20 @@ g_reconnectMonitorRunning = false;
 if (g_reconnectMonitorThread.joinable()) {
 g_reconnectMonitorThread.join();
 }
-std::lock_guard<std::mutex> cooldownLock(g_reconnectCooldownMutex);
-g_reconnectCooldownMap.clear();
+{
+    std::lock_guard<std::mutex> cooldownLock(g_reconnectCooldownMutex);
+    g_reconnectCooldownMap.clear();
+}
+{
+    std::lock_guard<std::mutex> pendingLock(g_reconnectMacroDelayMutex);
+    g_reconnectMacroPending.clear();
+}
+}
+
+void RestartReconnectMonitor()
+{
+    StopReconnectMonitor();
+    StartReconnectMonitor();
 }
 
 static std::wstring MacroEngine_GetMacrosPath() {
@@ -6362,18 +7225,20 @@ static void MacroEngine_EnsureDirectory() {
 static std::string MacroEngine_WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return {};
     int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+    if (len <= 0) return {};
     std::string result(len, 0);
     WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &result[0], len, NULL, NULL);
-    result.pop_back();
+    if (!result.empty() && result.back() == '\0') result.pop_back();
     return result;
 }
 
 static std::wstring MacroEngine_Utf8ToWide(const std::string& str) {
     if (str.empty()) return {};
     int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
+    if (len <= 0) return {};
     std::wstring result(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &result[0], len);
-    result.pop_back();
+    if (!result.empty() && result.back() == L'\0') result.pop_back();
     return result;
 }
 
@@ -6458,8 +7323,9 @@ static std::string MacroEngine_StepTypeToString(MacroStepType type) {
         case MacroStepType::Sleep: return "sleep";
         case MacroStepType::RandomSleep: return "random_sleep";
         case MacroStepType::MouseWheel: return "mouse_wheel";
+        case MacroStepType::Unknown: return "unknown";
     }
-    return "image_click";
+    return "unknown";
 }
 
 static MacroStepType MacroEngine_StringToStepType(const std::string& s) {
@@ -6473,7 +7339,8 @@ static MacroStepType MacroEngine_StringToStepType(const std::string& s) {
     if (s == "sleep") return MacroStepType::Sleep;
     if (s == "random_sleep") return MacroStepType::RandomSleep;
     if (s == "mouse_wheel") return MacroStepType::MouseWheel;
-    return MacroStepType::ImageClick;
+    if (s == "image_click") return MacroStepType::ImageClick;
+    return MacroStepType::Unknown;
 }
 
 static std::atomic<bool> g_macrosLoadFailed(false);
@@ -6550,30 +7417,56 @@ bool MacroEngine_LoadMacros() {
         std::string search = "\"" + key + "\"";
         size_t pos = json.find(search, start);
         if (pos == std::string::npos) return false;
-        pos = json.find_first_of(": ", pos + search.size());
+        pos = json.find(':', pos + search.size());
         if (pos == std::string::npos) return false;
-        pos = json.find_first_of("-0123456789", pos);
-        if (pos == std::string::npos) return false;
+        pos++;
+        while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' || json[pos] == '\r' || json[pos] == '\n')) pos++;
+        if (pos >= json.size()) return false;
         char* end = nullptr;
         out = (int)strtol(json.c_str() + pos, &end, 10);
         return true;
     };
 
     size_t scanPos = 0;
+    size_t macrosKey = content.find("\"macros\"");
+    if (macrosKey != std::string::npos) {
+        size_t arrOpen = content.find('[', macrosKey);
+        if (arrOpen != std::string::npos) scanPos = arrOpen + 1;
+    }
     size_t nameCount = 0;
-    while (true) {
-        size_t namePos = content.find("\"name\"", scanPos);
-        if (namePos == std::string::npos) break;
-        nameCount++;
-
-        size_t macroStart = content.rfind('{', namePos);
+    while (scanPos < content.size()) {
+        size_t macroStart = std::string::npos;
+        bool inString = false;
+        bool escape = false;
+        for (size_t p = scanPos; p < content.size(); p++) {
+            char c = content[p];
+            if (inString) {
+                if (escape) escape = false;
+                else if (c == '\\') escape = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') { inString = true; continue; }
+            if (c == ']') break;
+            if (c == '{') { macroStart = p; break; }
+        }
         if (macroStart == std::string::npos) break;
 
         int depth = 0;
         size_t macroEnd = std::string::npos;
+        inString = false;
+        escape = false;
         for (size_t p = macroStart; p < content.size(); p++) {
-            if (content[p] == '{') depth++;
-            else if (content[p] == '}') {
+            char c = content[p];
+            if (inString) {
+                if (escape) escape = false;
+                else if (c == '\\') escape = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') { inString = true; continue; }
+            if (c == '{') depth++;
+            else if (c == '}') {
                 depth--;
                 if (depth == 0) { macroEnd = p; break; }
             }
@@ -6581,6 +7474,7 @@ bool MacroEngine_LoadMacros() {
         if (macroEnd == std::string::npos) break;
 
         std::string mjson = content.substr(macroStart, macroEnd - macroStart + 1);
+        if (mjson.find("\"name\"") != std::string::npos) nameCount++;
 
         Macro m;
         std::string name;
@@ -6699,7 +7593,15 @@ bool MacroEngine_LoadMacros() {
                                 a.image.pixels = MacroEngine_Base64Decode(b64);
                                 int px = (int)a.image.pixels.size();
                                 if (px > 0) {
-                                    a.image.width = a.image.height = (uint16_t)sqrt((double)px);
+                                    int iw = 0, ih = 0;
+                                    findInt(astr, "imageW", 0, iw);
+                                    findInt(astr, "imageH", 0, ih);
+                                    if (iw > 0 && ih > 0 && iw * ih == px) {
+                                        a.image.width = (uint16_t)iw;
+                                        a.image.height = (uint16_t)ih;
+                                    } else {
+                                        a.image.width = a.image.height = (uint16_t)sqrt((double)px);
+                                    }
                                 }
                             }
                         }
@@ -6720,7 +7622,7 @@ bool MacroEngine_LoadMacros() {
         maxOrder = (std::max)(maxOrder, (std::max)((std::max)(m.triggerOrderCooldown, m.triggerOrderReconnect), m.triggerOrderInterval));
     }
     g_macroTriggerOrderCounter = maxOrder + 1;
-    if (nameCount > 0 && g_macros.empty()) {
+    if ((nameCount > 0 || parseFailed) && g_macros.empty()) {
         g_macrosLoadFailed = true;
     } else {
         g_macrosLoadFailed = false;
@@ -6963,9 +7865,12 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         return val;
     };
     auto findIntIn = [](const std::string& s, const std::string& key) -> int {
-        auto pos = s.find("\"" + key + "\": ");
+        auto pos = s.find("\"" + key + "\"");
         if (pos == std::string::npos) return 0;
-        pos += key.size() + 4;
+        pos = s.find(':', pos + key.size() + 2);
+        if (pos == std::string::npos) return 0;
+        pos++;
+        while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t' || s[pos] == '\r' || s[pos] == '\n')) pos++;
         size_t end = pos;
         while (end < s.size() && (isdigit((unsigned char)s[end]) || s[end] == '-')) end++;
         if (end == pos) return 0;
@@ -6976,7 +7881,13 @@ static bool MacroEngine_ImportMacroFromFile(HWND parent) {
         }
     };
     auto findBoolIn = [](const std::string& s, const std::string& key) -> bool {
-        return s.find("\"" + key + "\": true") != std::string::npos;
+        auto pos = s.find("\"" + key + "\"");
+        if (pos == std::string::npos) return false;
+        pos = s.find(':', pos + key.size() + 2);
+        if (pos == std::string::npos) return false;
+        pos++;
+        while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t' || s[pos] == '\r' || s[pos] == '\n')) pos++;
+        return s.compare(pos, 4, "true") == 0;
     };
 
 auto parseMacroJson = [&](const std::string& json) -> Macro {
@@ -7057,8 +7968,8 @@ if (m.name.size() > 63) m.name.resize(63);
                     int w = findIntIn(block, "imageW");
                     int h = findIntIn(block, "imageH");
                     if (!imgStr.empty() && w > 0 && h > 0) {
-                        a.image.width = w;
-                        a.image.height = h;
+                        a.image.width = (uint16_t)w;
+                        a.image.height = (uint16_t)h;
                         a.image.pixels = MacroEngine_Base64Decode(imgStr);
                     }
                 }
@@ -7111,7 +8022,6 @@ if (m.name.size() > 63) m.name.resize(63);
         }
         g_macros.push_back(imported);
         g_selectedMacroIndex = (int)g_macros.size() - 1;
-        g_selectedAction = 4;
     }
     if (!MacroEngine_SaveMacros()) {
         ShowDarkMessageBox(parent, L"Failed to save macros. The macros file may be read-only or locked.", L"Import Macro", MB_OK);
@@ -7155,7 +8065,10 @@ std::vector<Macro> MacroEngine_GetReconnectMacros() {
 std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target) {
     std::vector<Macro> globalCd = MacroEngine_GetCooldownMacros();
     std::vector<std::wstring> names;
-    if (!GetWindowInstanceSetting_Macro(target, names) || names.empty()) return globalCd;
+    bool hasOverride = false;
+    bool hasMacros = GetWindowInstanceSetting_Macro(target, names, &hasOverride);
+    if (!hasOverride) return globalCd;
+    if (!hasMacros || names.empty()) return {};
     std::vector<Macro> result;
     std::lock_guard<std::mutex> lock(g_macrosMutex);
     for (const auto& name : names) {
@@ -7171,8 +8084,10 @@ std::vector<Macro> MacroEngine_GetCooldownMacrosForWindow(HWND target) {
 
 std::vector<Macro> MacroEngine_GetReconnectMacrosForWindow(HWND target) {
     std::vector<std::wstring> names;
-    if (!GetWindowInstanceSetting_ReconnectMacro(target, names) || names.empty())
-        return MacroEngine_GetReconnectMacros();
+    bool hasOverride = false;
+    bool hasMacros = GetWindowInstanceSetting_ReconnectMacro(target, names, &hasOverride);
+    if (!hasOverride) return MacroEngine_GetReconnectMacros();
+    if (!hasMacros || names.empty()) return {};
 
     std::vector<Macro> result;
     std::lock_guard<std::mutex> lock(g_macrosMutex);
@@ -7193,11 +8108,15 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
     std::vector<Macro> intervalMacros;
     {
         std::vector<std::wstring> macroNames;
-        if (GetWindowInstanceSetting_IntervalMacro(w, macroNames) && !macroNames.empty()) {
-            std::lock_guard<std::mutex> lockM(g_macrosMutex);
-            for (const auto& macroName : macroNames) {
-                Macro* m = MacroEngine_FindMacro(macroName);
-                if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+        bool hasOverride = false;
+        bool hasMacros = GetWindowInstanceSetting_IntervalMacro(w, macroNames, &hasOverride);
+        if (hasOverride) {
+            if (hasMacros && !macroNames.empty()) {
+                std::lock_guard<std::mutex> lockM(g_macrosMutex);
+                for (const auto& macroName : macroNames) {
+                    Macro* m = MacroEngine_FindMacro(macroName);
+                    if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+                }
             }
         } else {
             std::lock_guard<std::mutex> lockM(g_macrosMutex);
@@ -7214,8 +8133,11 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
             return oa < ob;
         });
     }
+    const bool standaloneAllowed = !g_simpleMode.load() && g_intervalMacroEnabled.load();
     for (const auto& m : intervalMacros) {
-        if (g_stopThread.load()) break;
+        if (g_stopThread.load() || (!g_isAfkStarted.load() && !standaloneAllowed)) break;
+        if (g_userSafeMode.load() > 0 && g_userActive.load()) continue;
+        if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(w)) continue;
         bool shouldRun = false;
         {
             std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
@@ -7227,21 +8149,41 @@ static void MacroEngine_CheckIntervalMacros(HWND w, ULONGLONG now) {
             } else {
                 ULONGLONG elapsed = now - it->second;
                 if (elapsed >= (ULONGLONG)m.intervalSec * 1000) {
-                    it->second = now;
                     shouldRun = true;
                 }
             }
         }
         if (shouldRun) {
+            std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+            HWND prevWnd = GetForegroundWindow();
             bool selfHidden = IsRobloxWindowSelfHidden(w);
             bool wasMinimized = IsIconic(w) && !selfHidden;
+            bool temporarilyShown = false;
             if (wasMinimized) ShowWindow(w, SW_RESTORE);
-            SetForegroundWindow(w);
+            if (selfHidden && !IsWindowVisible(w)) {
+                ShowWindow(w, SW_SHOWNOACTIVATE);
+                temporarilyShown = true;
+                Sleep(50);
+            }
+            if (!TryActivateRobloxWindow(w)) {
+                if (temporarilyShown && IsWindowVisible(w)) HideRobloxWindowTracked(w);
+                if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                continue;
+            }
+            {
+                std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+                g_lastIntervalMacroRun[std::make_pair(w, m.name)] = now;
+            }
             Sleep(g_preActionDelay.load());
-            MacroEngine_ExecuteMacro(m, w, false, true);
+            bool executed = MacroEngine_ExecuteMacro(m, w, false, standaloneAllowed);
+            if (temporarilyShown && IsWindowVisible(w)) HideRobloxWindowTracked(w);
             if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
-            g_afkActionsPerformed++;
-            g_lastAfkActionTimestamp = GetTickCount64();
+            RestoreUserWindowAfterRobloxAction(prevWnd);
+            if (executed) {
+                g_afkActionsPerformed++;
+                g_sessionAfkActions++;
+                g_lastAfkActionTimestamp = GetTickCount64();
+            }
         }
     }
 }
@@ -7251,10 +8193,11 @@ void IntervalMacroThread(int myGen) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock(g_intervalMacroThreadMutex);
-            if (!(g_intervalMacroEnabled.load() && !g_stopThread.load() && g_intervalMacroGen.load() == myGen)) {
+            if (!g_intervalMacroEnabled.load() || g_stopThread.load()) {
                 g_intervalMacroThreadRunning = false;
                 return;
             }
+            myGen = g_intervalMacroGen.load();
         }
         ULONGLONG now = GetTickCount64();
         auto wins = FindAllRobloxWindows(true);
@@ -7288,6 +8231,31 @@ static void SpawnIntervalMacroThreadIfNeeded() {
     }
 }
 
+static void ResetIntervalMacroTracking()
+{
+    std::lock_guard<std::mutex> lock(g_lastIntervalMacroRunMutex);
+    g_lastIntervalMacroRun.clear();
+}
+
+static void StartIntervalMacroForAfkSession()
+{
+    if (g_simpleMode.load()) return;
+    ResetIntervalMacroTracking();
+    if (!g_intervalMacroEnabled.exchange(true)) {
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled with Anti-AFK.", false);
+    }
+    SpawnIntervalMacroThreadIfNeeded();
+}
+
+static void StopIntervalMacroForAfkSession()
+{
+    if (g_intervalMacroEnabled.exchange(false)) {
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
+    }
+    g_intervalMacroGen++;
+    ResetIntervalMacroTracking();
+}
+
 static void MacroEngine_SendKey(BYTE vk, bool down) {
     DWORD flags = down ? 0 : KEYEVENTF_KEYUP;
     if ((vk >= VK_PRIOR && vk <= VK_DOWN) ||
@@ -7297,7 +8265,7 @@ static void MacroEngine_SendKey(BYTE vk, bool down) {
         vk == VK_DIVIDE || vk == VK_NUMLOCK || vk == VK_SNAPSHOT) {
         flags |= KEYEVENTF_EXTENDEDKEY;
     }
-    keybd_event(vk, MapVirtualKey(vk, 0), flags, 0);
+    keybd_event(vk, (BYTE)MapVirtualKey(vk, 0), flags, 0);
 }
 
 static bool MacroEngine_IsMouseButtonDown(int btn) {
@@ -7345,12 +8313,14 @@ void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
     screenPt.x += r;
     screenPt.y += (RandomInt(5) - 2);
 
-    POINT oldPos;
-    GetCursorPos(&oldPos);
-
-    int steps = max(4, (int)(sqrt((double)(screenPt.x - oldPos.x) * (screenPt.x - oldPos.x) + (screenPt.y - oldPos.y) * (screenPt.y - oldPos.y)) / 20));
-    steps = min(steps, 15);
-    IncrementalMouseMove(oldPos.x, oldPos.y, screenPt.x, screenPt.y, steps, 40);
+    POINT oldPos = { 0 };
+    if (GetCursorPos(&oldPos)) {
+        int steps = max(4, (int)(sqrt((double)(screenPt.x - oldPos.x) * (screenPt.x - oldPos.x) + (screenPt.y - oldPos.y) * (screenPt.y - oldPos.y)) / 20));
+        steps = min(steps, 15);
+        IncrementalMouseMove(oldPos.x, oldPos.y, screenPt.x, screenPt.y, steps, 40);
+    } else {
+        SetCursorPos(screenPt.x, screenPt.y);
+    }
 
     Sleep(20 + RandomInt(30));
 
@@ -7377,30 +8347,59 @@ void MacroEngine_HumanClick(HWND hwnd, int targetX, int targetY, int button) {
     }
 }
 
-void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool allowWithoutAfk) {
-    if (g_macroTestRunning && !isTest && hwnd && hwnd == g_macroTestTargetWnd.load()) return;
-    if (!hwnd || !IsWindow(hwnd)) return;
-    if (IsRobloxWindowClosedToTray(hwnd)) return;
+bool MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool allowWithoutAfk) {
+    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+    std::lock_guard<std::mutex> playbackLock(g_macroPlaybackMutex);
+    struct MacroFpsPauseGuard {
+        MacroFpsPauseGuard() { PauseFpsCapperNested(); }
+        ~MacroFpsPauseGuard() { ResumeFpsCapperNested(); }
+    } fpsPauseGuard;
+    struct SaverInputGuard {
+        bool active = false;
+        SaverInputGuard() {
+            active = g_screenSaverActive.load();
+            if (active) SetScreenSaverOverlaysVisible(false);
+        }
+        ~SaverInputGuard() {
+            if (active && g_screenSaverActive.load()) SetScreenSaverOverlaysVisible(true);
+        }
+    } saverGuard;
+    if (g_macroTestRunning && !isTest && hwnd && hwnd == g_macroTestTargetWnd.load()) return false;
+    if (!hwnd || !IsWindow(hwnd)) return false;
+    if (IsRobloxWindowClosedToTray(hwnd)) return false;
 
     RECT origRect;
     GetWindowRect(hwnd, &origRect);
-    bool wasHidden = !IsWindowVisible(hwnd) || IsIconic(hwnd);
+    WINDOWPLACEMENT placement = { sizeof(WINDOWPLACEMENT) };
+    GetWindowPlacement(hwnd, &placement);
+    WINDOWPLACEMENT prevPlacement = { sizeof(prevPlacement) };
+    bool havePrevPlacement = (GetWindowPlacement(hwnd, &prevPlacement) != FALSE);
+    bool wasIconic = IsIconic(hwnd) != FALSE;
+    bool wasHidden = !IsWindowVisible(hwnd) || wasIconic;
     bool selfHidden = IsRobloxWindowSelfHidden(hwnd);
+    bool temporarilyShown = false;
     if (wasHidden && !selfHidden) {
         ShowWindow(hwnd, SW_RESTORE);
         Sleep(200);
+    } else if (selfHidden && !IsWindowVisible(hwnd)) {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        temporarilyShown = true;
+        Sleep(50);
     }
 
-    if (!selfHidden) {
-        MacroEngine_EnsureWindowInsideWorkArea(hwnd, 800, 600);
-        Sleep(100);
-        SetForegroundWindow(hwnd);
-        BringWindowToTop(hwnd);
-        Sleep(200);
+    MacroEngine_EnsureWindowInsideWorkArea(hwnd, 800, 600);
+    Sleep(100);
+    if (!EnsureTargetForegroundForInput(hwnd)) {
+        if (IsWindow(hwnd)) {
+            if (havePrevPlacement) SetWindowPlacement(hwnd, &prevPlacement);
+            if (temporarilyShown) HideRobloxWindowTracked(hwnd);
+        }
+        return false;
     }
+    Sleep(100);
 
-    POINT cursorRestore;
-    GetCursorPos(&cursorRestore);
+    POINT cursorRestore = { 0 };
+    bool haveCursorRestore = (GetCursorPos(&cursorRestore) != FALSE);
 
     std::unordered_set<uint8_t> keysActuallyDown;
     bool leftButtonDown = false;
@@ -7410,8 +8409,10 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
     bool xButton2Down = false;
 
     int repeats = macro.totalRepeats > 0 ? macro.totalRepeats : 1;
+    bool performed = false;
+    int testStepIndex = 0;
     for (int r = 0; r < repeats; r++) {
-        if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
+        if (g_stopThread.load() || g_macroAbortRequested.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
         if (!IsWindow(hwnd) || IsRobloxWindowClosedToTray(hwnd)) goto macroEngineEnd;
         double base = MacroEngine_NowMs();
         double due = 0.0;
@@ -7419,27 +8420,41 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
             double remain = base + due - MacroEngine_NowMs();
             if (remain > 0.0) PreciseSleepMs(remain);
         };
+        auto stillValidAfterWait = [&]() -> bool {
+            if (g_stopThread.load() || g_macroAbortRequested.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) return false;
+            if (!IsWindow(hwnd) || IsRobloxWindowClosedToTray(hwnd)) return false;
+            if (!IsTargetForegroundForInput(hwnd)) return false;
+            return true;
+        };
         for (const auto& a : macro.actions) {
-            if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) goto macroEngineEnd;
-            if (!IsWindow(hwnd) || IsRobloxWindowClosedToTray(hwnd)) goto macroEngineEnd;
+            if (!stillValidAfterWait()) goto macroEngineEnd;
+            if (!performed && !isTest && (g_isAfkStarted.load() || allowWithoutAfk) &&
+                a.type != MacroStepType::Sleep && a.type != MacroStepType::RandomSleep) {
+                MarkWindowAction(hwnd);
+                performed = true;
+            }
 
             switch (a.type) {
                 case MacroStepType::ImageClick: {
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     SetForegroundWindow(hwnd);
                     Sleep(50);
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     MacroEngine_HumanClick(hwnd, a.x, a.y, a.mouseButton);
                     break;
                 }
                 case MacroStepType::MouseClick:
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     MacroEngine_HumanClick(hwnd, a.x, a.y, a.mouseButton);
                     break;
                 case MacroStepType::MouseDown: {
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     SetForegroundWindow(hwnd);
                     POINT screenPt = { a.x, a.y };
                     ClientToScreen(hwnd, &screenPt);
@@ -7456,6 +8471,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                 case MacroStepType::MouseUp: {
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     switch (a.mouseButton) {
                         case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); leftButtonDown = false; break;
                         case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); rightButtonDown = false; break;
@@ -7468,6 +8484,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                 case MacroStepType::KeyPress:
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     MacroEngine_SendKey(a.vkCode, true);
                     PreciseSleepMs(50);
                     MacroEngine_SendKey(a.vkCode, false);
@@ -7475,12 +8492,14 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                 case MacroStepType::KeyDown:
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     MacroEngine_SendKey(a.vkCode, true);
                     keysActuallyDown.insert(a.vkCode);
                     break;
                 case MacroStepType::KeyUp:
                     due += a.delayBeforeMs + 15.0;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     MacroEngine_SendKey(a.vkCode, false);
                     keysActuallyDown.erase(a.vkCode);
                     break;
@@ -7508,10 +8527,11 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                         DWORD extraMs = (numPoints > 0) ? (totalDurationMs % numPoints) : 0;
 
                         for (size_t i = 0; i < numPoints; i++) {
-                            if (g_stopThread.load() || (!isTest && !g_isAfkStarted.load() && !allowWithoutAfk)) break;
+                            if (!stillValidAfterWait()) goto macroEngineEnd;
                             DWORD sleepTime = (i < a.pathDelays.size()) ? a.pathDelays[i] : (stepDelay + (i < extraMs ? 1 : 0));
                             due += sleepTime;
                             waitDue();
+                            if (!stillValidAfterWait()) goto macroEngineEnd;
                             const auto& pt = a.path[i];
                             if (a.relative) {
                                 mouse_event(MOUSEEVENTF_MOVE, (int16_t)pt.first, (int16_t)pt.second, 0, 0);
@@ -7524,6 +8544,7 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                         if (a.mouseUp && MacroEngine_IsMouseButtonDown(a.mouseButton)) {
                             due += 10;
                             waitDue();
+                            if (!stillValidAfterWait()) goto macroEngineEnd;
                             switch (a.mouseButton) {
                                 case 0: mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); leftButtonDown = false; break;
                                 case 1: mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); rightButtonDown = false; break;
@@ -7535,10 +8556,15 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                     } else {
                         due += a.delayBeforeMs;
                         waitDue();
-                        MacroEngine_HumanClick(hwnd, a.x, a.y, 0);
+                        if (!stillValidAfterWait()) goto macroEngineEnd;
+                        POINT mp = { a.x, a.y };
+                        ClientToScreen(hwnd, &mp);
+                        SetCursorPos(mp.x, mp.y);
                     }
                     break;
                 }
+                case MacroStepType::Unknown:
+                    break;
                 case MacroStepType::Sleep:
                     due += a.delayBeforeMs;
                     waitDue();
@@ -7550,11 +8576,13 @@ void MacroEngine_ExecuteMacro(const Macro& macro, HWND hwnd, bool isTest, bool a
                 case MacroStepType::MouseWheel: {
                     due += a.delayBeforeMs;
                     waitDue();
+                    if (!stillValidAfterWait()) goto macroEngineEnd;
                     DWORD dwData = (DWORD)(int)(a.wheelDelta != 0 ? a.wheelDelta : (a.mouseButton == 1 ? -120 : 120));
                     mouse_event(MOUSEEVENTF_WHEEL, 0, 0, dwData, 0);
                     break;
                 }
             }
+            if (isTest) g_macroTestProgress = ++testStepIndex;
         }
     }
 
@@ -7569,21 +8597,24 @@ macroEngineEnd:
         MacroEngine_SendKey(vk, false);
     }
 
-    SetCursorPos(cursorRestore.x, cursorRestore.y);
+    if (haveCursorRestore) SetCursorPos(cursorRestore.x, cursorRestore.y);
 
-    SetWindowPos(hwnd, NULL, origRect.left, origRect.top,
-                 origRect.right - origRect.left,
-                 origRect.bottom - origRect.top,
-                 SWP_NOZORDER | SWP_NOACTIVATE);
-    if (wasHidden && !selfHidden) HideRobloxWindowTracked(hwnd);
+    SetWindowPlacement(hwnd, &placement);
+    if (wasHidden && !selfHidden) {
+        if (wasIconic) ShowWindow(hwnd, SW_MINIMIZE);
+        else HideRobloxWindowTracked(hwnd);
+    }
+    if (temporarilyShown && IsWindow(hwnd) && IsWindowVisible(hwnd)) HideRobloxWindowTracked(hwnd);
 
-    if (!isTest) {
+    if (!isTest && performed) {
+        g_macroRunsPerformed++;
         wchar_t winTitle[128] = L"";
         GetWindowTextW(hwnd, winTitle, 128);
         wchar_t summary[256];
         swprintf_s(summary, L"Macro \"%s\" on %s", macro.name.c_str(), (wcslen(winTitle) > 0) ? winTitle : L"Roblox window");
         QueueDiscordWebhookEvent(DiscordWebhookEvent::Macro, summary, false);
     }
+    return performed;
 }
 
 static double MacroEngine_NowMs() {
@@ -7604,6 +8635,17 @@ static void MacroEngine_FlushRecordingMouseDeltas() {
     double now = MacroEngine_NowMs();
     DWORD moveDelay = (g_recordingLastMoveTime > 0) ? (DWORD)(now - g_recordingLastMoveTime) : 10;
     g_recordingLastMoveTime = now;
+    if (g_recordingPendingMoves.size() >= 8192) {
+        auto& lastPt = g_recordingPendingMoves.back();
+        int sumX = (int)(int16_t)lastPt.first + dx;
+        int sumY = (int)(int16_t)lastPt.second + dy;
+        if (sumX < -32768) sumX = -32768; if (sumX > 32767) sumX = 32767;
+        if (sumY < -32768) sumY = -32768; if (sumY > 32767) sumY = 32767;
+        lastPt.first = (uint16_t)(int16_t)sumX;
+        lastPt.second = (uint16_t)(int16_t)sumY;
+        g_recordingHasRelativeMoves = true;
+        return;
+    }
     g_recordingPendingMoves.push_back({ (uint16_t)(int16_t)dx, (uint16_t)(int16_t)dy });
     g_recordingPendingDelays.push_back((uint16_t)min((DWORD)65535, moveDelay));
     g_recordingHasRelativeMoves = true;
@@ -7650,6 +8692,8 @@ static void MacroEngine_ClearPendingMoves() {
 static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && g_isRecording && !g_recordingStopPending) {
         MSLLHOOKSTRUCT* p = (MSLLHOOKSTRUCT*)lParam;
+        if ((p->flags & LLMHF_INJECTED) != 0)
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
         POINT pt = p->pt;
         RECT targetCr = { 0, 0, 800, 600 };
         if (g_recordingTargetHwnd && IsWindow(g_recordingTargetHwnd)) {
@@ -7785,12 +8829,26 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
             g_recordingLastEventTime = now;
         } else if (wParam == WM_MBUTTONDOWN || wParam == WM_XBUTTONDOWN || wParam == WM_MBUTTONUP || wParam == WM_XBUTTONUP) {
             if (!inBounds) {
+                int upBtn = -1;
                 if (wParam == WM_MBUTTONUP && g_recordingMiddleDown) {
                     g_recordingMiddleDown = false;
-                } else if (wParam == WM_XBUTTONUP && (g_recordingXButton1Down || g_recordingXButton2Down)) {
+                    upBtn = 2;
+                } else if (wParam == WM_XBUTTONUP) {
                     int xBtn = (int)HIWORD(p->mouseData);
-                    if (xBtn == 1) g_recordingXButton1Down = false;
-                    else if (xBtn == 2) g_recordingXButton2Down = false;
+                    if (xBtn == 1 && g_recordingXButton1Down) { g_recordingXButton1Down = false; upBtn = 3; }
+                    else if (xBtn == 2 && g_recordingXButton2Down) { g_recordingXButton2Down = false; upBtn = 4; }
+                }
+                if (upBtn >= 2) {
+                    double now = MacroEngine_NowMs();
+                    DWORD delay = (DWORD)(now - g_recordingLastEventTime);
+                    MacroAction action;
+                    action.type = MacroStepType::MouseUp;
+                    action.x = 0;
+                    action.y = 0;
+                    action.mouseButton = (uint8_t)upBtn;
+                    action.delayBeforeMs = (uint16_t)min((DWORD)65535, delay);
+                    MacroEngine_PushRecordingAction(action);
+                    g_recordingLastEventTime = now;
                 }
                 return CallNextHookEx(NULL, nCode, wParam, lParam);
             }
@@ -7865,6 +8923,8 @@ static LRESULT CALLBACK MacroEngine_LLMouseProc(int nCode, WPARAM wParam, LPARAM
 static LRESULT CALLBACK MacroEngine_LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && g_isRecording && !g_recordingStopPending) {
         KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+        if ((p->flags & (LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED)) != 0)
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
 
         if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) &&
             p->vkCode == 'R' && (GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
@@ -8022,10 +9082,7 @@ static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             int x = wr.left + 12;
             int y = wr.top - MulDiv(35, dpiY, 96);
             HMONITOR mon = MonitorFromWindow(g_recordingTargetHwnd, MONITOR_DEFAULTTONEAREST);
-            MONITORINFO mi;
-            mi.rcMonitor = { 0 };
-            mi.rcWork = { 0 };
-            mi.dwFlags = 0;
+            MONITORINFO mi = { sizeof(MONITORINFO) };
             if (mon && GetMonitorInfo(mon, &mi) && y < mi.rcWork.top) {
                 y = mi.rcWork.top + 4;
             }
@@ -8072,8 +9129,7 @@ static LRESULT CALLBACK RecordOverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         SolidBrush bodyBrush(Color(90, 16, 16, 16));
         Pen borderPen(Color(180, 56, 56, 56), 1.0f);
 
-        FillRoundedRectangle(&g, &bodyBrush, 0.0f, 0.0f, width, height, radius);
-        DrawRoundedRectangle(&g, &borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f, radius);
+        DrawOverlayPillBackground(g, bodyBrush, borderPen, width, height, radius);
 
         HFONT hFontText = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
@@ -8159,6 +9215,18 @@ static void ShowRecordingOverlayWindow(HWND targetHwnd)
     int height = MulDiv(34, dpiY, 96);
     int x = wr.left + 12;
     int y = wr.top - MulDiv(35, dpiY, 96);
+    RECT overlayWorkArea = { 0 };
+    HMONITOR hMonOverlay = MonitorFromRect(&wr, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO miOverlay = { sizeof(miOverlay) };
+    if (hMonOverlay && GetMonitorInfo(hMonOverlay, &miOverlay)) {
+        overlayWorkArea = miOverlay.rcWork;
+    } else {
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &overlayWorkArea, 0);
+    }
+    if (y < overlayWorkArea.top + 4) y = overlayWorkArea.top + 4;
+    if (y + height > overlayWorkArea.bottom - 4) y = overlayWorkArea.bottom - height - 4;
+    if (x < overlayWorkArea.left + 4) x = overlayWorkArea.left + 4;
+    if (x + width > overlayWorkArea.right - 4) x = overlayWorkArea.right - width - 4;
 
     g_recordingOverlayWnd = CreateWindowEx(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
@@ -8180,6 +9248,7 @@ static void HideRecordingOverlayWindow()
 }
 
 void MacroEngine_StopRecording() {
+    std::lock_guard<std::mutex> lifecycle(g_recordingLifecycleMutex);
     bool expected = true;
     if (!g_isRecording.compare_exchange_strong(expected, false)) return;
     g_recordingStopPending = true;
@@ -8253,7 +9322,7 @@ void MacroEngine_StopRecording() {
             QueueStatusBarOverlay(L"Original macro was deleted - recording discarded", 2500, nullptr, StatusBarEventType::Macro);
         }
         if (!MacroEngine_SaveMacros())
-            QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, nullptr, StatusBarEventType::Macro);
+            QueueStatusBarOverlay(kMsgMacroSaveFailed, 3000, nullptr, StatusBarEventType::Macro);
         g_macroWizardActive = false;
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
@@ -8262,9 +9331,11 @@ void MacroEngine_StopRecording() {
         {
             std::lock_guard<std::mutex> lock(g_macrosMutex);
             g_wizardMacro.name = MacroEngine_MakeUniqueName(g_wizardMacro.name, -1);
+            if (!g_wizardMacro.triggerOnCooldown && !g_wizardMacro.triggerOnReconnect && !g_wizardMacro.triggerOnInterval) {
+                g_wizardMacro.triggerOnCooldown = true;
+            }
             g_macros.push_back(g_wizardMacro);
             g_selectedMacroIndex = (int)g_macros.size() - 1;
-            g_selectedAction = 4;
         }
         bool macroSaved = MacroEngine_SaveMacros();
         g_macroWizardActive = false;
@@ -8275,16 +9346,15 @@ void MacroEngine_StopRecording() {
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             PostMessage(g_hMainUiWnd, WM_APP_SHOW_MACROS, 0, 0);
         }
-        QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, nullptr, StatusBarEventType::Macro);
+        QueueStatusBarOverlay(macroSaved ? (L"Macro saved • AFK action trigger enabled: " + g_wizardMacro.name) : std::wstring(kMsgMacroSaveFailed), 3000, nullptr, StatusBarEventType::Macro);
     }
     g_macroWizardStep = 3;
 
-    QueueStatusBarHide(true);
-    QueueStatusBarOverlay(L"Recording stopped", 2000, nullptr, StatusBarEventType::Macro);
     QueueRefreshTrayMenu(g_isAfkStarted.load());
 }
 
 static void MacroEngine_CancelRecording() {
+    std::lock_guard<std::mutex> lifecycle(g_recordingLifecycleMutex);
     bool expected = true;
     if (!g_isRecording.compare_exchange_strong(expected, false)) return;
     g_recordingStopPending = true;
@@ -8327,25 +9397,46 @@ static void MacroEngine_CancelRecording() {
     CreateTrayMenu(g_isAfkStarted.load());
 }
 
+static WINDOWPLACEMENT g_recordingSavedPlacement = { sizeof(WINDOWPLACEMENT) };
+static bool g_recordingHasSavedPlacement = false;
+static bool g_recordingWasSelfHidden = false;
+
 static void MacroEngine_RestoreRecordingWindowSize() {
     if (g_recordingWindowRestorePending.exchange(false)) {
         HWND target = g_recordingTargetHwnd;
         RECT r = g_recordingWindowRestoreRect;
         if (target && IsWindow(target)) {
-            SetWindowPos(target, NULL, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (g_recordingHasSavedPlacement) {
+                SetWindowPlacement(target, &g_recordingSavedPlacement);
+            } else {
+                SetWindowPos(target, NULL, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (g_recordingWasSelfHidden) {
+                HideRobloxWindowTracked(target);
+            }
         }
+        g_recordingHasSavedPlacement = false;
+        g_recordingWasSelfHidden = false;
     }
 }
 
 static bool MacroEngine_StartRecording(HWND targetHwnd, const std::wstring& macroName) {
+    std::lock_guard<std::mutex> lifecycle(g_recordingLifecycleMutex);
     if (g_isRecording) return false;
     if (!targetHwnd || !IsWindow(targetHwnd)) return false;
 
+    g_recordingWasSelfHidden = IsRobloxWindowSelfHidden(targetHwnd);
     RECT restoreRect;
     GetWindowRect(targetHwnd, &restoreRect);
     WINDOWPLACEMENT wp = { sizeof(wp) };
-    if (GetWindowPlacement(targetHwnd, &wp) && (wp.flags & WPF_RESTORETOMAXIMIZED) == 0) {
-        restoreRect = wp.rcNormalPosition;
+    if (GetWindowPlacement(targetHwnd, &wp)) {
+        g_recordingSavedPlacement = wp;
+        g_recordingHasSavedPlacement = true;
+        if ((wp.flags & WPF_RESTORETOMAXIMIZED) == 0) {
+            restoreRect = wp.rcNormalPosition;
+        }
+    } else {
+        g_recordingHasSavedPlacement = false;
     }
     g_recordingWindowRestoreRect = restoreRect;
     g_recordingWindowRestorePending = true;
@@ -8446,7 +9537,7 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                 HWND hNameEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", L"",
                     WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                     mg, 50, cw - mg * 2, 24, hwnd, (HMENU)1001, g_hInst, NULL);
-                SendMessage(hNameEdit, EM_SETLIMITTEXT, 64, 0);
+                SendMessage(hNameEdit, EM_SETLIMITTEXT, 63, 0);
 
                 HWND hWinCombo = CreateWindowEx(WS_EX_CLIENTEDGE, L"COMBOBOX", L"",
                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
@@ -8552,8 +9643,19 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
 
                 int listY = 90;
-                int maxShow = min(stepCount, 8);
-                for (int i = 0; i < maxShow; i++) {
+                int listBottom = rc.bottom - 56;
+                int visibleH = listBottom - listY;
+                if (visibleH < 40) visibleH = 40;
+                int contentH = stepCount * 22;
+                int maxScroll = contentH - visibleH;
+                if (maxScroll < 0) maxScroll = 0;
+                g_macroWizardReviewMaxScroll = maxScroll;
+                if (g_macroWizardReviewScroll > maxScroll) g_macroWizardReviewScroll = maxScroll;
+                if (g_macroWizardReviewScroll < 0) g_macroWizardReviewScroll = 0;
+
+                GraphicsState reviewState = g.Save();
+                g.SetClip(Rect(0, listY, rc.right, visibleH));
+                for (int i = 0; i < stepCount; i++) {
                     const auto& a = g_wizardMacro.actions[i];
                     const wchar_t* typeStr = L"Click";
                     switch (a.type) {
@@ -8577,13 +9679,12 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                         swprintf_s(line, L"  %d. %s +%dms", i + 1, typeStr, a.delayBeforeMs);
                     }
                     g.DrawString(line, -1, &smallFont,
-                        Gdiplus::PointF(20.0f, (REAL)(listY + i * 22)), &textBrush);
+                        Gdiplus::PointF(20.0f, (REAL)(listY + i * 22 - g_macroWizardReviewScroll)), &textBrush);
                 }
-                if (stepCount > maxShow) {
-                    wchar_t more[32];
-                    swprintf_s(more, L"  ... and %d more", stepCount - maxShow);
-                    g.DrawString(more, -1, &smallFont,
-                        Gdiplus::PointF(20.0f, (REAL)(listY + maxShow * 22)), &textBrush);
+                g.Restore(reviewState);
+                if (maxScroll > 0) {
+                    RECT sbRc = { rc.right - 12, listY, rc.right - 8, listBottom };
+                    MainUI_Paint_VerticalScrollbar(g, sbRc, g_macroWizardReviewScroll, maxScroll, visibleH);
                 }
             } else if (g_macroWizardStep == 4) {
                 g.DrawString(L"Step 4/5 - Configure Triggers", -1, &titleFont,
@@ -8595,13 +9696,42 @@ static LRESULT CALLBACK MacroEngine_WizardProc(HWND hwnd, UINT msg, WPARAM wPara
                     Gdiplus::PointF(20.0f, 20.0f), &textBrush);
                 g.DrawString(L"Your macro is ready to use.", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 55.0f), &textBrush);
-                g.DrawString(L"Select Custom Macro* from the Action menu", -1, &stepFont,
+                g.DrawString(L"Select Macros Only from the Action menu", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 80.0f), &textBrush);
                 g.DrawString(L"to enable it in the Anti-AFK cycle.", -1, &stepFont,
                     Gdiplus::PointF(20.0f, 103.0f), &textBrush);
             }
 
             EndPaint(hwnd, &ps);
+            break;
+        }
+        case WM_MOUSEWHEEL: {
+            if (g_macroWizardStep == 3) {
+                int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+                g_macroWizardReviewScroll -= zDelta / 3;
+                if (g_macroWizardReviewScroll < 0) g_macroWizardReviewScroll = 0;
+                if (g_macroWizardReviewScroll > g_macroWizardReviewMaxScroll) g_macroWizardReviewScroll = g_macroWizardReviewMaxScroll;
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+            break;
+        }
+        case WM_KEYDOWN: {
+            if (g_macroWizardStep == 3) {
+                int page = 220;
+                bool handled = true;
+                if (wParam == VK_HOME) g_macroWizardReviewScroll = 0;
+                else if (wParam == VK_END) g_macroWizardReviewScroll = g_macroWizardReviewMaxScroll;
+                else if (wParam == VK_PRIOR || wParam == VK_UP) g_macroWizardReviewScroll -= (wParam == VK_UP ? 22 : page);
+                else if (wParam == VK_NEXT || wParam == VK_DOWN) g_macroWizardReviewScroll += (wParam == VK_DOWN ? 22 : page);
+                else handled = false;
+                if (handled) {
+                    if (g_macroWizardReviewScroll < 0) g_macroWizardReviewScroll = 0;
+                    if (g_macroWizardReviewScroll > g_macroWizardReviewMaxScroll) g_macroWizardReviewScroll = g_macroWizardReviewMaxScroll;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+            }
             break;
         }
         case WM_CTLCOLORSTATIC:
@@ -8703,7 +9833,7 @@ g_wizardMacro = Macro();
                     HWND hNameEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", g_wizardMacro.name.c_str(),
                         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                         20, 100, 360, 24, hwnd, (HMENU)1001, g_hInst, NULL);
-                    SendMessage(hNameEdit, EM_SETLIMITTEXT, 64, 0);
+                    SendMessage(hNameEdit, EM_SETLIMITTEXT, 63, 0);
 
                     CreateWindowEx(WS_EX_CLIENTEDGE, L"COMBOBOX", L"",
                         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
@@ -8808,9 +9938,9 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                     g_wizardMacro.name = MacroEngine_MakeUniqueName(g_wizardMacro.name, -1);
                     g_macros.push_back(g_wizardMacro);
                     g_selectedMacroIndex = (int)g_macros.size() - 1;
-                    g_selectedAction = 4;
                 }
-                if (!MacroEngine_SaveMacros()) {
+                bool macroSaved = MacroEngine_SaveMacros();
+                if (!macroSaved) {
                     ShowDarkMessageBox(hwnd, L"Failed to save macros. The macros file may be read-only or locked.", L"Save Macro", MB_OK);
                 }
                 g_macroWizardActive = false;
@@ -8822,11 +9952,14 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                     PostMessage(parentWnd, WM_APP_SHOW_MACROS, 0, 0);
                     InvalidateRect(parentWnd, NULL, TRUE);
                 }
-                QueueStatusBarOverlay(L"Macro saved: " + g_wizardMacro.name, 2000, nullptr, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(kMsgMacroSaveFailed), 2000, nullptr, StatusBarEventType::Macro);
                 return 0;
             }
             if (id == ID_MACROS_TEST_RUN) {
-                if (g_macroTestRunning) return 0;
+                if (g_macroTestRunning) {
+                    g_macroAbortRequested = true;
+                    return 0;
+                }
                 Macro testMacro = g_wizardMacro;
                 HWND testTarget = g_wizardTargetHwnd;
                 if (!testTarget || !IsWindow(testTarget)) {
@@ -8835,6 +9968,9 @@ if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
                 }
                 g_macroTestTargetWnd.store(testTarget);
                 g_macroTestRunning = true;
+                g_macroAbortRequested = false;
+                g_macroTestProgress = 0;
+                g_macroTestTotal = (int)testMacro.actions.size();
                 std::thread([testMacro, testTarget]() {
                     if (testTarget) {
                         MacroEngine_ExecuteMacro(testMacro, testTarget, true);
@@ -8901,10 +10037,7 @@ void MacroEngine_ShowWizard(HWND parent, int startStep) {
     HMONITOR mon = parent && IsWindow(parent) ? MonitorFromWindow(parent, MONITOR_DEFAULTTONEAREST) : NULL;
     RECT wa = { 0 };
     if (mon) {
-        MONITORINFO mi;
-        mi.rcMonitor = { 0 };
-        mi.rcWork = { 0 };
-        mi.dwFlags = 0;
+        MONITORINFO mi = { sizeof(MONITORINFO) };
         if (GetMonitorInfo(mon, &mi)) wa = mi.rcWork;
         else SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
     } else {
@@ -9010,9 +10143,10 @@ std::wstring path_w(value);
         DWORD attrs = GetFileAttributesW(candidate_w.c_str());
         if (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
             int len = WideCharToMultiByte(CP_UTF8, 0, candidate_w.c_str(), -1, NULL, 0, NULL, NULL);
+            if (len <= 0) continue;
             std::string settings_path(len, 0);
             WideCharToMultiByte(CP_UTF8, 0, candidate_w.c_str(), -1, &settings_path[0], len, NULL, NULL);
-            settings_path.pop_back();
+            if (!settings_path.empty() && settings_path.back() == '\0') settings_path.pop_back();
             return settings_path;
         }
     }
@@ -9028,9 +10162,10 @@ std::string GetSelfExePath() {
         if (c == '\\') c = '/';
     }
     int len = WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, NULL, 0, NULL, NULL);
+    if (len <= 0) return "";
     std::string spath(len, 0);
     WideCharToMultiByte(CP_UTF8, 0, wpath.c_str(), -1, &spath[0], len, NULL, NULL);
-    spath.pop_back();
+    if (!spath.empty() && spath.back() == '\0') spath.pop_back();
     return spath;
 }
 void UpdateBloxstrapIntegration(bool enable) {
@@ -9047,7 +10182,7 @@ int wlen = MultiByteToWideChar(CP_UTF8, 0, settingsPath.c_str(), -1, NULL, 0);
 if (wlen > 0) {
 std::wstring wbuf(wlen, L'\0');
 MultiByteToWideChar(CP_UTF8, 0, settingsPath.c_str(), -1, &wbuf[0], wlen);
-wbuf.pop_back();
+if (!wbuf.empty() && wbuf.back() == L'\0') wbuf.pop_back();
 settingsPathW = wbuf;
 }
 }
@@ -9123,6 +10258,11 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
             content.erase(comma_before, end - comma_before);
         } else {
             content.erase(start, end - start);
+            size_t afterObject = start;
+            while (afterObject < content.size() && isspace((unsigned char)content[afterObject])) ++afterObject;
+            if (afterObject < content.size() && content[afterObject] == ',') {
+                content.erase(afterObject, 1);
+            }
 
             size_t integrationsArrayPos = content.find("\"CustomIntegrations\": [");
             size_t openingBracket = (integrationsArrayPos == std::string::npos) ? std::string::npos : content.find('[', integrationsArrayPos);
@@ -9142,10 +10282,15 @@ std::ifstream inFile(settingsPathW.c_str(), std::ios::binary);
     std::wstring tmpPathW = settingsPathW + L".tmp";
     {
         std::ofstream outFile(tmpPathW.c_str(), std::ios::binary);
+        bool writeOk = false;
         if (outFile.is_open()) {
-            outFile << content;
+            outFile.write(content.data(), (std::streamsize)content.size());
+            outFile.flush();
+            writeOk = outFile.good() && (outFile.tellp() == (std::streampos)content.size());
             outFile.close();
-        } else {
+        }
+        if (!writeOk) {
+            DeleteFileW(tmpPathW.c_str());
             ShowTrayNotification(L"AntiAFK-RBX • Integration Error", L"Failed to write to the launcher settings file. Check permissions.");
             g_bloxstrapIntegration = false;
             return;
@@ -9196,19 +10341,14 @@ bool AnyRobloxWindowExceedsRamLimit(int limitMb)
 
 int ClearRobloxMemory()
 {
-    std::vector<DWORD> pids = GetRobloxProcessIds();
+    std::vector<DWORD> pids = FindAllRobloxProcessIds();
     int successCount = 0;
+    DWORD myPid = GetCurrentProcessId();
     for (DWORD pid : pids) {
+        if (pid == 0 || pid == myPid) continue;
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA, FALSE, pid);
         if (hProcess) {
-            wchar_t imageName[MAX_PATH] = { 0 };
-            DWORD nameSize = MAX_PATH;
-            bool isRoblox = false;
-            if (QueryFullProcessImageNameW(hProcess, 0, imageName, &nameSize)) {
-                CharLowerW(imageName);
-                isRoblox = wcsstr(imageName, L"roblox") != NULL;
-            }
-            if (isRoblox && EmptyWorkingSet(hProcess)) {
+            if (EmptyWorkingSet(hProcess)) {
                 successCount++;
             }
             CloseHandle(hProcess);
@@ -9271,17 +10411,45 @@ static void EnsureRamCleanerThreadStarted()
     if (g_isRamCleanerRunning.load()) return;
     if (g_ramCleanerThread.joinable()) g_ramCleanerThread.join();
     g_isRamCleanerRunning = true;
-    g_ramCleanerThread = std::thread(RamCleanerThread);
+    try {
+        g_ramCleanerThread = std::thread(RamCleanerThread);
+    } catch (...) {
+        g_isRamCleanerRunning = false;
+    }
 }
 
-static void PreciseSleepMs(double ms)
+static std::mutex g_fpsPauseMutex;
+static int g_fpsPauseDepth = 0;
+static bool g_fpsPauseWasPaused = false;
+
+static void PauseFpsCapperNested()
+{
+    std::lock_guard<std::mutex> lock(g_fpsPauseMutex);
+    if (g_fpsPauseDepth++ == 0)
+        g_fpsPauseWasPaused = PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, false);
+}
+
+static void ResumeFpsCapperNested()
+{
+    std::lock_guard<std::mutex> lock(g_fpsPauseMutex);
+    if (g_fpsPauseDepth > 0 && --g_fpsPauseDepth == 0)
+        ResumeFpsCapperAfterAction(g_fpsPauseWasPaused);
+}
+
+static void PreciseSleepMs(double ms, bool honorMacroAbort)
 {
     if (ms <= 0.0) return;
 
     if (ms > 2.5) {
-        DWORD sleepPart = static_cast<DWORD>(ms - 1.5);
-        Sleep(sleepPart);
-        ms -= sleepPart;
+        double sleepMs = ms - 1.5;
+        while (sleepMs > 0.0) {
+            if (g_stopThread.load() || (honorMacroAbort && g_macroAbortRequested.load())) return;
+            DWORD chunk = static_cast<DWORD>((std::min)(50.0, sleepMs));
+            if (chunk == 0) chunk = 1;
+            Sleep(chunk);
+            sleepMs -= static_cast<double>(chunk);
+        }
+        ms = 1.5;
     }
 
     LARGE_INTEGER freq, start;
@@ -9307,123 +10475,167 @@ static void PreciseSleepMs(double ms)
     }
 }
 
+static std::wstring GetFpsSuspendMarkerPath()
+{
+    wchar_t tempPath[MAX_PATH] = { 0 };
+    DWORD len = GetTempPathW(MAX_PATH, tempPath);
+    std::wstring path = (len > 0 && len < MAX_PATH) ? std::wstring(tempPath, len) : std::wstring();
+    path += L"AntiAFK-RBX-fps-suspend.flag";
+    return path;
+}
+
+static void RecoverStaleFpsSuspendState()
+{
+    std::wstring markerPath = GetFpsSuspendMarkerPath();
+    if (GetFileAttributesW(markerPath.c_str()) == INVALID_FILE_ATTRIBUTES) return;
+
+    auto pids = FindAllRobloxProcessIds();
+    if (!pids.empty()) {
+        HANDLE thSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (thSnap != INVALID_HANDLE_VALUE) {
+            THREADENTRY32 te = { 0 };
+            te.dwSize = sizeof(THREADENTRY32);
+            if (Thread32First(thSnap, &te)) {
+                do {
+                    if (std::find(pids.begin(), pids.end(), te.th32OwnerProcessID) != pids.end()) {
+                        HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+                        if (hThread) {
+                            ResumeThread(hThread);
+                            CloseHandle(hThread);
+                        }
+                    }
+                } while (Thread32Next(thSnap, &te));
+            }
+            CloseHandle(thSnap);
+        }
+    }
+    DeleteFileW(markerPath.c_str());
+}
+
 void FpsCapperThread()
 {
     bool timerPeriodActive = false;
+    std::wstring suspendMarkerPath = GetFpsSuspendMarkerPath();
+    HANDLE suspendMarker = CreateFileW(suspendMarkerPath.c_str(), GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+    if (suspendMarker != INVALID_HANDLE_VALUE) CloseHandle(suspendMarker);
 
-    std::vector<HANDLE> threadHandles;
+    struct FpsGroup {
+        int fps = 0;
+        std::vector<HANDLE> handles;
+    };
+    std::vector<FpsGroup> fpsGroups;
     std::mutex handlesMutex;
-    auto last_update = std::chrono::steady_clock::now();
+    auto last_update = std::chrono::steady_clock::now() - std::chrono::milliseconds(500);
+
+    auto calcDuty = [&](int fpsVal, double& workMs, double& freezeMs) {
+        if (g_cpuLimitMode.load()) {
+            double period = static_cast<double>(g_cpuLimitPeriod.load());
+            double limit_percent = static_cast<double>(g_cpuLimitPercent.load());
+            freezeMs = period * (1.0 - limit_percent / 100.0);
+            workMs = period - freezeMs;
+            if (freezeMs < 0.0) freezeMs = 0.0;
+            if (workMs < 2.0) workMs = 2.0;
+        } else {
+            double frameMs = 1000.0 / static_cast<double>((std::max)(1, fpsVal));
+            workMs = (std::min)(15.0, (std::max)(4.0, frameMs * 0.10));
+            freezeMs = frameMs - workMs;
+            if (freezeMs < 0.0) freezeMs = 0.0;
+        }
+    };
 
     while (g_isFpsCapperRunning && !g_stopThread.load())
     {
         int effectiveFpsLimit = GetEffectiveFpsLimit();
-        if (!ShouldRunFpsCapperNow() || g_isFpsCapperPaused.load() || effectiveFpsLimit <= 0) {
+        bool anyOverride = HasAnyPerInstanceFpsOverride();
+        if (g_isFpsCapperPaused.load() || ((!ShouldRunFpsCapperNow() || effectiveFpsLimit <= 0) && !anyOverride)) {
             if (timerPeriodActive) { timeEndPeriod(1); timerPeriodActive = false; }
             Sleep(100);
             continue;
-        }
-
-        double frame_duration_ms = 1000.0 / static_cast<double>(effectiveFpsLimit);
-        double work_ms = 0.0;
-        double freeze_ms = 0.0;
-
-        if (g_cpuLimitMode.load()) {
-            double period = static_cast<double>(g_cpuLimitPeriod.load());
-            double limit_percent = static_cast<double>(g_cpuLimitPercent.load());
-            freeze_ms = period * (limit_percent / 100.0);
-            work_ms = period - freeze_ms;
-            if (freeze_ms < 0.0) freeze_ms = 0.0;
-            if (work_ms < 2.0) work_ms = 2.0;
-        } else {
-            work_ms = (std::min)(15.0, (std::max)(4.0, frame_duration_ms * 0.10));
-            freeze_ms = frame_duration_ms - work_ms;
         }
 
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update).count() >= 300) {
             last_update = now;
 
-            std::vector<HANDLE> newThreadHandles;
             HWND foreground_wnd = g_unlockFpsOnFocus.load() ? GetForegroundWindow() : NULL;
-
-            std::vector<DWORD> pidsToCap;
+            std::vector<DWORD> targetPids;
             if (g_useCustomProcessSearch.load()) {
-                auto allPids = FindAllRobloxProcessIds();
-                for (DWORD pid : allPids) {
-                    bool shouldCap = true;
-                    auto procWins = GetWindowsForProcess(pid, true);
-                    if (!procWins.empty()) {
-                        int dummyFps = 0;
-                        shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), ShouldRunFpsCapperNow(), dummyFps);
-                    } else {
-                        shouldCap = ShouldRunFpsCapperNow();
+                DWORD myPid = GetCurrentProcessId();
+                std::unordered_set<DWORD> seenPids;
+                auto customWins = FindAllCustomSearchWindows(true);
+                for (HWND h : customWins) {
+                    DWORD pid = 0;
+                    GetWindowThreadProcessId(h, &pid);
+                    if (pid != 0 && pid != myPid && seenPids.insert(pid).second) targetPids.push_back(pid);
+                }
+                if (!g_excludeBuiltinNames.load()) {
+                    auto robloxPids = FindAllRobloxProcessIds();
+                    for (DWORD pid : robloxPids) {
+                        if (seenPids.insert(pid).second) targetPids.push_back(pid);
                     }
-                    if (shouldCap && foreground_wnd && !procWins.empty()) {
-                        bool isFocused = std::any_of(procWins.begin(), procWins.end(), [foreground_wnd](HWND w) {
-                            return w == foreground_wnd;
-                        });
-                        if (isFocused) shouldCap = false;
-                    }
-                    if (shouldCap) pidsToCap.push_back(pid);
                 }
             } else {
-                HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-                if (snap != INVALID_HANDLE_VALUE) {
-                    PROCESSENTRY32 pe = { 0 };
-                    pe.dwSize = sizeof(PROCESSENTRY32);
-                    if (Process32First(snap, &pe)) {
-                        do {
-                            if (_wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0) {
-                                bool shouldCap = true;
-                                auto procWins = GetWindowsForProcess(pe.th32ProcessID, true);
-                                if (!procWins.empty()) {
-                                    int dummyFps = 0;
-                                    shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), ShouldRunFpsCapperNow(), dummyFps);
-                                } else {
-                                    shouldCap = ShouldRunFpsCapperNow();
-                                }
-                                if (shouldCap && foreground_wnd && !procWins.empty()) {
-                                    bool isFocused = std::any_of(procWins.begin(), procWins.end(), [foreground_wnd](HWND w) {
-                                        return w == foreground_wnd;
-                                    });
-                                    if (isFocused) shouldCap = false;
-                                }
-                                if (shouldCap) pidsToCap.push_back(pe.th32ProcessID);
-                            }
-                        } while (Process32Next(snap, &pe));
-                    }
-                    CloseHandle(snap);
-                }
+                targetPids = FindAllRobloxProcessIds();
             }
 
-            for (DWORD pid : pidsToCap) {
-                HANDLE thSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-                if (thSnap != INVALID_HANDLE_VALUE) {
-                    THREADENTRY32 te = { 0 };
-                    te.dwSize = sizeof(THREADENTRY32);
-                    if (Thread32First(thSnap, &te)) {
-                        do {
-                            if (te.th32OwnerProcessID == pid) {
-                                HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
-                                if (hThread) newThreadHandles.push_back(hThread);
-                            }
-                        } while (Thread32Next(thSnap, &te));
-                    }
-                    CloseHandle(thSnap);
+            std::map<int, std::vector<DWORD>> pidsByFps;
+            for (DWORD pid : targetPids) {
+                bool shouldCap = true;
+                int procFps = effectiveFpsLimit;
+                auto procWins = GetWindowsForProcess(pid, true);
+                if (!procWins.empty()) {
+                    int customFps = 0;
+                    shouldCap = GetWindowInstanceSetting_FpsLimit(procWins.front(), ShouldRunFpsCapperNow(), customFps);
+                    if (shouldCap && customFps > 0) procFps = customFps;
+                } else {
+                    shouldCap = ShouldRunFpsCapperNow();
                 }
+                if (shouldCap && procFps <= 0) shouldCap = false;
+                if (shouldCap && foreground_wnd && !procWins.empty()) {
+                    bool isFocused = std::any_of(procWins.begin(), procWins.end(), [foreground_wnd](HWND w) {
+                        return w == foreground_wnd;
+                    });
+                    if (isFocused && !g_screenSaverActive.load()) shouldCap = false;
+                }
+                if (shouldCap) pidsByFps[procFps].push_back(pid);
+            }
+
+            std::vector<FpsGroup> newGroups;
+            for (const auto& kv : pidsByFps) {
+                FpsGroup grp;
+                grp.fps = kv.first;
+                for (DWORD pid : kv.second) {
+                    HANDLE thSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+                    if (thSnap != INVALID_HANDLE_VALUE) {
+                        THREADENTRY32 te = { 0 };
+                        te.dwSize = sizeof(THREADENTRY32);
+                        if (Thread32First(thSnap, &te)) {
+                            do {
+                                if (te.th32OwnerProcessID == pid) {
+                                    HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
+                                    if (hThread) grp.handles.push_back(hThread);
+                                }
+                            } while (Thread32Next(thSnap, &te));
+                        }
+                        CloseHandle(thSnap);
+                    }
+                }
+                if (!grp.handles.empty()) newGroups.push_back(std::move(grp));
             }
 
             std::lock_guard<std::mutex> lock(handlesMutex);
-            for (HANDLE h : threadHandles) {
-                ResumeThread(h);
-                CloseHandle(h);
+            for (auto& g : fpsGroups) {
+                for (HANDLE h : g.handles) {
+                    ResumeThread(h);
+                    CloseHandle(h);
+                }
             }
-            threadHandles = std::move(newThreadHandles);
+            fpsGroups = std::move(newGroups);
         }
 
         std::lock_guard<std::mutex> lock(handlesMutex);
-        if (threadHandles.empty()) {
+        if (fpsGroups.empty()) {
             if (timerPeriodActive) { timeEndPeriod(1); timerPeriodActive = false; }
             Sleep(100);
             continue;
@@ -9431,25 +10643,61 @@ void FpsCapperThread()
 
         if (!timerPeriodActive) { timeBeginPeriod(1); timerPeriodActive = true; }
 
-        for (HANDLE hThread : threadHandles) {
-            SuspendThread(hThread);
+        if (fpsGroups.size() == 1) {
+            double work_ms = 0.0, freeze_ms = 0.0;
+            calcDuty(fpsGroups[0].fps, work_ms, freeze_ms);
+            for (HANDLE hThread : fpsGroups[0].handles) SuspendThread(hThread);
+            PreciseSleepMs(freeze_ms, false);
+            for (HANDLE hThread : fpsGroups[0].handles) ResumeThread(hThread);
+            PreciseSleepMs(work_ms, false);
+        } else {
+            struct GroupState { double workMs; double freezeMs; bool frozen; double nextMs; };
+            std::vector<GroupState> states(fpsGroups.size());
+            double tNow = MacroEngine_NowMs();
+            for (size_t gi = 0; gi < fpsGroups.size(); ++gi) {
+                calcDuty(fpsGroups[gi].fps, states[gi].workMs, states[gi].freezeMs);
+                states[gi].frozen = true;
+                states[gi].nextMs = tNow + states[gi].freezeMs;
+                for (HANDLE hThread : fpsGroups[gi].handles) SuspendThread(hThread);
+            }
+            double sliceEnd = tNow + 250.0;
+            while (g_isFpsCapperRunning && !g_stopThread.load() && !g_isFpsCapperPaused.load()) {
+                double cur = MacroEngine_NowMs();
+                if (cur >= sliceEnd) break;
+                for (size_t gi = 0; gi < fpsGroups.size(); ++gi) {
+                    if (cur >= states[gi].nextMs) {
+                        if (states[gi].frozen) {
+                            for (HANDLE hThread : fpsGroups[gi].handles) ResumeThread(hThread);
+                            states[gi].frozen = false;
+                            states[gi].nextMs = cur + states[gi].workMs;
+                        } else {
+                            for (HANDLE hThread : fpsGroups[gi].handles) SuspendThread(hThread);
+                            states[gi].frozen = true;
+                            states[gi].nextMs = cur + states[gi].freezeMs;
+                        }
+                    }
+                }
+                Sleep(1);
+            }
+            for (size_t gi = 0; gi < fpsGroups.size(); ++gi) {
+                if (states[gi].frozen) {
+                    for (HANDLE hThread : fpsGroups[gi].handles) ResumeThread(hThread);
+                }
+            }
         }
-        PreciseSleepMs(freeze_ms);
-
-        for (HANDLE hThread : threadHandles) {
-            ResumeThread(hThread);
-        }
-        PreciseSleepMs(work_ms);
     }
 
     std::lock_guard<std::mutex> lock(handlesMutex);
-    for (HANDLE h : threadHandles) {
-        ResumeThread(h);
-        CloseHandle(h);
+    for (auto& g : fpsGroups) {
+        for (HANDLE h : g.handles) {
+            ResumeThread(h);
+            CloseHandle(h);
+        }
     }
-    threadHandles.clear();
+    fpsGroups.clear();
 
     if (timerPeriodActive) timeEndPeriod(1);
+    DeleteFileW(suspendMarkerPath.c_str());
     g_isFpsCapperRunning = false;
 }
 // ==========
@@ -9457,7 +10705,7 @@ void FpsCapperThread()
 bool PauseFpsCapperBeforeAction(DWORD waitMs, bool allowAbort)
 {
     bool wasFpsCapperPaused = g_isFpsCapperPaused.load();
-    if (GetEffectiveFpsLimit() <= 0 || !g_isFpsCapperRunning.load()) {
+    if ((GetEffectiveFpsLimit() <= 0 && !HasAnyPerInstanceFpsOverride()) || !g_isFpsCapperRunning.load()) {
         return wasFpsCapperPaused;
     }
 
@@ -9696,7 +10944,7 @@ static void SetMenuIconPopup(HMENU hParent, HMENU hSub, wchar_t glyph)
     MENUITEMINFO mii = { sizeof(mii) };
     mii.fMask = MIIM_BITMAP;
     mii.hbmpItem = hBmp;
-    SetMenuItemInfo(hParent, (UINT_PTR)hSub, FALSE, &mii);
+    SetMenuItemInfo(hParent, (UINT)(UINT_PTR)hSub, FALSE, &mii);
 }
 
 static void SetMenuIconBitmap(HMENU hMenu, UINT itemId, HBITMAP hBmp)
@@ -9763,6 +11011,7 @@ static wchar_t GetMenuGlyph(UINT cmdId)
     {
         case ID_ABOUT_MENU:                return 0xE946;
         case ID_SHOW_TUTORIAL:             return 0xE8BD;
+        case ID_WHATS_NEW:                 return 0xE946;
         case ID_LINKTTU:
         case ID_LINKWIKI:
         case ID_LINKGITHUB:
@@ -9772,6 +11021,10 @@ static wchar_t GetMenuGlyph(UINT cmdId)
         case ID_SHOW_WINDOW:               return 0xF19D;
         case ID_HIDE_WINDOW:               return 0xEE47;
         case ID_WINDOW_OPACITY:            return 0xE727;
+        case ID_GLOBAL_OPACITY_SET:        return 0xE70F;
+        case ID_UI_HIDE_NEXT_ACTION:
+        case ID_UI_HIDE_INSTANCES:
+        case ID_UI_HIDE_SIMPLE_SWITCH:     return 0xED1A;
         case ID_GRID_SNAP:                 return 0xE80A;
         case ID_OPEN_UI:                   return 0xE80F;
         case ID_TOGGLE_HOTKEY:             return 0xE765;
@@ -9854,6 +11107,7 @@ case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
         case ID_CUSTOM_PROCESS_SEARCH_EXCLUDE:  return 0xE711;
         case ID_SCREEN_SAVER:              return 0xE708;
         case ID_SS_ALWAYS_SHOW_EXIT:       return 0xED55;
+        case ID_SS_ALWAYS_SHOW_HINT_UI:    return 0xE946;
         case ID_IMPORT_SETTINGS:           return 0xE896;
         case ID_EXPORT_SETTINGS:           return 0xE898;
         case ID_RESET_SETTINGS:
@@ -9886,6 +11140,7 @@ case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
         case ID_RETRY_MULTI_INSTANCE:      return 0xE72E;
         case ID_DISCORD_NOTIFY_ACTION:     return 0xE7C9;
         case ID_DISCORD_NOTIFY_RECONNECT:  return 0xE8AF;
+        case ID_DISCORD_NOTIFY_RESET:      return 0xE81C;
         case ID_DISCORD_NOTIFY_ERRORS:     return 0xE7BA;
         case ID_DISCORD_MENTION_ON_ERRORS: return 0xE781;
         case ID_DISCORD_DISABLE_EMBED:     return 0xE8FD;
@@ -9903,7 +11158,8 @@ case ID_OPEN_INSTANCE_MANAGER:     return 0xE8A7;
         case ID_ACTION_SPACE:
         case ID_ACTION_WS:
         case ID_ACTION_ZOOM:
-        case ID_ACTION_RANDOM:             return 0xE7C9;
+        case ID_ACTION_RANDOM:
+        case ID_ACTION_ARROWS:             return 0xE7C9;
         case ID_MI_INTERVAL_0:
         case ID_MI_INTERVAL_1:
         case ID_MI_INTERVAL_3:
@@ -9951,7 +11207,7 @@ static bool IsAnyKeyPressed()
 {
     for (int i = 1; i < 256; i++)
     {
-        if (GetAsyncKeyState(i) & 0x0001)
+        if (GetAsyncKeyState(i) & 0x8000)
             return true;
     }
     return false;
@@ -9971,6 +11227,7 @@ static void PruneClosedWindowActivity()
 
 static void TrackForegroundRobloxActivity()
 {
+    if (!IsAnyKeyPressed()) return;
     HWND fg = GetForegroundWindow();
     if (!fg) return;
     HWND top = GetAncestor(fg, GA_ROOT);
@@ -9979,28 +11236,9 @@ static void TrackForegroundRobloxActivity()
     GetWindowThreadProcessId(top, &pid);
     if (pid == 0) return;
 
-    bool isRoblox = false;
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap != INVALID_HANDLE_VALUE)
-    {
-        PROCESSENTRY32 pe = { 0 };
-        pe.dwSize = sizeof(PROCESSENTRY32);
-        if (Process32First(snap, &pe))
-        {
-            do
-            {
-                if (pe.th32ProcessID == pid &&
-                    _wcsicmp(pe.szExeFile, L"RobloxPlayerBeta.exe") == 0)
-                {
-                    isRoblox = true;
-                    break;
-                }
-            } while (Process32Next(snap, &pe));
-        }
-        CloseHandle(snap);
-    }
+    auto trackedWins = FindAllRobloxWindows(true);
+    bool isRoblox = std::find(trackedWins.begin(), trackedWins.end(), top) != trackedWins.end();
     if (!isRoblox) return;
-    if (!IsAnyKeyPressed()) return;
 
     uint64_t now = GetTickCount64();
     std::lock_guard<std::mutex> lock(g_windowActivityMutex);
@@ -10016,6 +11254,7 @@ static void TrackForegroundRobloxActivity()
     else
     {
         it->second.lastActiveTick = now;
+        it->second.icanForgetState = 0;
     }
 }
 
@@ -10025,6 +11264,91 @@ static uint64_t GetLastActiveTickForWindow(HWND hwnd)
     auto it = g_windowActivity.find(hwnd);
     if (it != g_windowActivity.end()) return it->second.lastActiveTick;
     return 0;
+}
+
+static void PruneWindowActionTracking()
+{
+    std::lock_guard<std::mutex> lock(g_windowLastActionMutex);
+    for (auto it = g_windowLastAction.begin(); it != g_windowLastAction.end(); ) {
+        DWORD pid = 0;
+        if (IsWindow(it->first)) GetWindowThreadProcessId(it->first, &pid);
+        if (!IsWindow(it->first) || pid != it->second.pid)
+            it = g_windowLastAction.erase(it);
+        else
+            ++it;
+    }
+}
+
+static void ResetWindowActionTracking()
+{
+    std::lock_guard<std::mutex> lock(g_windowLastActionMutex);
+    g_windowLastAction.clear();
+}
+
+static void MarkWindowAction(HWND hwnd)
+{
+    if (!hwnd || !IsWindow(hwnd)) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0) return;
+    std::lock_guard<std::mutex> lock(g_windowLastActionMutex);
+    WindowActionRecord& rec = g_windowLastAction[hwnd];
+    rec.tick = GetTickCount64();
+    rec.pid = pid;
+}
+
+static uint64_t GetWindowLastActivityTick(HWND hwnd)
+{
+    uint64_t actionTick = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_windowLastActionMutex);
+        auto it = g_windowLastAction.find(hwnd);
+        if (it != g_windowLastAction.end() && it->second.pid != 0) actionTick = it->second.tick;
+    }
+    uint64_t inputTick = GetLastActiveTickForWindow(hwnd);
+    uint64_t startTick = g_afkStartTime.load();
+    uint64_t base = (std::max)((std::max)(actionTick, inputTick), startTick);
+    return base > 0 ? base : GetTickCount64();
+}
+
+static uint64_t GetActionLeadMs(size_t windowCount)
+{
+    uint64_t lead = (uint64_t)STATUS_BAR_PRE_ACTION_DELAY + (uint64_t)g_preActionDelay.load() + 1500ull;
+    uint64_t repeats = (uint64_t)(std::max)(1, g_actionRepeatCount.load());
+    lead += repeats * (uint64_t)g_keyPressDelay.load() * 3ull;
+    if (windowCount > 1) {
+        uint64_t perWindow = (uint64_t)g_multiInstanceInterval.load()
+                           + (uint64_t)g_postActionDelay.load()
+                           + (uint64_t)g_keyPressDelay.load() * 2ull;
+        lead += (uint64_t)(windowCount - 1) * perWindow;
+    }
+    return lead;
+}
+
+static uint64_t GetMaxSafeWaitMs(const std::vector<HWND>& wins)
+{
+    uint64_t now = GetTickCount64();
+    uint64_t maxWait = ~0ull;
+    bool anyDue = false;
+    for (HWND w : wins) {
+        if (!w || !IsWindow(w)) continue;
+        if (!IsWindowVisible(w) && !IsRobloxWindowSelfHidden(w)) continue;
+        if (!GetWindowInstanceSetting_AntiAfk(w)) continue;
+        anyDue = true;
+        uint64_t latest = GetWindowLastActivityTick(w) + AFK_MAX_ACTION_GAP_MS;
+        uint64_t wait = latest > now ? latest - now : 0;
+        if (wait < maxWait) maxWait = wait;
+    }
+    if (!anyDue || maxWait == ~0ull) return ~0ull;
+    uint64_t lead = GetActionLeadMs(wins.size());
+    return maxWait > lead ? maxWait - lead : 0;
+}
+
+static bool IsWindowNearAfkDeadline(HWND hwnd)
+{
+    uint64_t now = GetTickCount64();
+    uint64_t base = GetWindowLastActivityTick(hwnd);
+    return now >= base && now - base >= AFK_DEADLINE_WARN_MS;
 }
 
 static bool IsRobloxWindowActiveRecently(HWND hwnd)
@@ -10045,31 +11369,35 @@ void MonitorUserActivity()
     while (g_monitorThreadRunning)
     {
         int currentMode = g_userSafeMode.load();
+        uint64_t nowTick = GetTickCount64();
 
-        LASTINPUTINFO lii;
-        lii.cbSize = sizeof(LASTINPUTINFO);
-        if (GetLastInputInfo(&lii))
+        if (currentMode == 2)
         {
-            uint64_t now = GetTickCount64();
-            DWORD nowLow = static_cast<DWORD>(now & 0xFFFFFFFF);
-            DWORD diff32 = nowLow - lii.dwTime;
-            uint64_t lastInputTime = now - diff32;
-
-            if (lastInputTime != g_lastActivityTime.load())
+            LASTINPUTINFO lii;
+            lii.cbSize = sizeof(LASTINPUTINFO);
+            if (GetLastInputInfo(&lii))
             {
-                g_lastActivityTime = lastInputTime;
-                if (!g_userActive.load()) {
-                    g_userActive = true;
-                    g_afkReminderState = 0;
+                nowTick = GetTickCount64();
+                DWORD nowLow = static_cast<DWORD>(nowTick & 0xFFFFFFFF);
+                DWORD diff32 = nowLow - lii.dwTime;
+                if (diff32 > 0x7FFFFFFFu) diff32 = 0;
+                uint64_t lastInputTime = nowTick - diff32;
+
+                if (lastInputTime > g_lastActivityTime.load() + 50 || g_lastActivityTime.load() > lastInputTime + 50)
+                {
+                    g_lastActivityTime = lastInputTime;
+                    if (!g_userActive.load()) {
+                        g_userActive = true;
+                        g_afkReminderState = 0;
+                    }
+                }
+                else if ((nowTick - lastInputTime) / 1000 >= USER_INACTIVITY_WAIT)
+                {
+                    g_userActive = false;
                 }
             }
-            else if ((now - lastInputTime) / 1000 >= USER_INACTIVITY_WAIT)
-            {
-                g_userActive = false;
-            }
         }
-
-        if (currentMode == 1)
+        else if (currentMode == 1)
         {
             bool keyActivity = false;
             for (int i = 1; i < 256; i++)
@@ -10083,10 +11411,18 @@ void MonitorUserActivity()
 
             if (keyActivity)
             {
-                g_lastActivityTime = GetTickCount64();
+                g_lastActivityTime = nowTick;
                 g_userActive = true;
                 g_afkReminderState = 0;
             }
+            else if ((nowTick - g_lastActivityTime.load()) / 1000 >= USER_INACTIVITY_WAIT)
+            {
+                g_userActive = false;
+            }
+        }
+        else
+        {
+            g_userActive = false;
         }
 
         if (g_afkReminderEnabled.load() || g_skipActiveEnabled.load())
@@ -10098,6 +11434,7 @@ void MonitorUserActivity()
         if (g_afkReminderEnabled.load() && !g_isAfkStarted.load())
         {
             auto wins = FindAllRobloxWindows(true);
+            wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
             if (wins.empty())
             {
                 if (g_afkReminderState.load() > 0) {
@@ -10153,9 +11490,16 @@ void MonitorUserActivity()
                     g_afkReminderState = 1;
                 }
 
-                if (anyAutoStartPending && g_afkReminderState.load() < 2)
+                bool manuallyStopped = false;
+                {
+                    std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
+                    manuallyStopped = !g_manuallyStoppedPids.empty();
+                }
+                if (anyAutoStartPending && !manuallyStopped && g_afkReminderState.load() < 2)
                 {
                     ShowTrayNotification(L"AntiAFK-RBX • Auto-Started", L"No Roblox activity detected for 19 minutes. Starting AFK prevention.");
+                    g_afkEffectsReady = false;
+                    g_macroAbortRequested = false;
                     g_afkStartTime = GetTickCount64();
                     g_isAfkStarted = true;
                     {
@@ -10164,10 +11508,14 @@ void MonitorUserActivity()
                     }
                     QueueRefreshTrayMenu(true);
                     UpdateTrayIcon();
+                    RefreshMainUiAfkState();
                     g_afkReminderState = 2;
                     ActivateAutoUtilsOnAfkStart();
-                    g_cv.notify_all();
                     ApplyAutoUtilsStartEffects();
+                    g_afkEffectsReady = true;
+                    StartIntervalMacroForAfkSession();
+                    RunPendingStartupUtilityActions();
+                    g_cv.notify_all();
 
                     QueueStatusBarOverlay(L"Auto-started after inactivity", 2200, wins.front(), StatusBarEventType::Session);
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started after inactivity.", false);
@@ -10184,7 +11532,7 @@ void MonitorUserActivity()
             }
         }
 
-        Sleep(100);
+        Sleep(250);
     }
 }
 void StartActivityMonitor()
@@ -10193,13 +11541,21 @@ void StartActivityMonitor()
     g_lastActivityTime = GetTickCount64();
     g_userActive = true;
     g_afkReminderState = 0;
+    {
+        std::lock_guard<std::mutex> activityLock(g_windowActivityMutex);
+        g_windowActivity.clear();
+    }
     g_monitorThreadRunning = false;
     if (g_activityMonitorThread.joinable())
     {
         g_activityMonitorThread.join();
     }
     g_monitorThreadRunning = true;
-    g_activityMonitorThread = std::thread(MonitorUserActivity);
+    try {
+        g_activityMonitorThread = std::thread(MonitorUserActivity);
+    } catch (...) {
+        g_monitorThreadRunning = false;
+    }
 }
 void StopActivityMonitor()
 {
@@ -10211,7 +11567,7 @@ void StopActivityMonitor()
     }
 }
 
-static void ResetIcanForgetCounter()
+static void ResetICanForgetTracking()
 {
     g_afkReminderState = 0;
     {
@@ -10402,12 +11758,12 @@ static int ClampInt(int value, int minValue, int maxValue)
 
 static int NormalizeSelectedTimeValue(int value)
 {
-    return ClampInt(value, 1, 24 * 60 * 60);
+    return ClampInt(value, 1, 1200);
 }
 
 static int NormalizeSelectedAction(int value)
 {
-    return ClampInt(value, 0, 4);
+    return ClampInt(value, 0, 5);
 }
 
 static int NormalizeUserSafeMode(int value)
@@ -10530,6 +11886,8 @@ std::wstring GetDiscordActionCompactLabel()
     case 0: baseName = L"Jump"; break;
     case 1: baseName = L"W/S"; break;
     case 2: baseName = L"Zoom"; break;
+    case 4: baseName = L"Macros Only"; break;
+    case 5: baseName = L"<- / ->"; break;
     default: baseName = L"Action"; break;
     }
     if (g_selectedAction.load() == 3)
@@ -10619,7 +11977,7 @@ std::wstring BuildDiscordStartedCompactInstancesLabel()
     return fullLabel;
 }
 
-std::wstring BuildDiscordAsciiDescription(DiscordWebhookEvent eventType, const std::wstring& summary)
+std::wstring BuildDiscordPlainDescription(DiscordWebhookEvent eventType, const std::wstring& summary)
 {
     std::wstring description;
     description.reserve(256);
@@ -10881,7 +12239,7 @@ std::wstring BuildDiscordPlainContentLine(DiscordWebhookEvent eventType, const s
         return std::wstring(L"AntiAFK-RBX ") + GetDiscordCompactVersionLabel() + L" • Started • " + BuildDiscordStartedCompactInstancesLabel();
     }
 
-    std::wstring content = BuildDiscordAsciiDescription(eventType, summary);
+    std::wstring content = BuildDiscordPlainDescription(eventType, summary);
     for (wchar_t& ch : content)
     {
         if (ch == L'\n' || ch == L'\r')
@@ -11028,7 +12386,13 @@ std::wstring FormatDurationShort(uint64_t totalSeconds)
     uint64_t minutes = (totalSeconds % 3600) / 60;
 
     wchar_t buffer[64];
-    swprintf_s(buffer, L"%llu h %llu min", hours, minutes);
+    if (totalSeconds < 60) {
+        swprintf_s(buffer, L"%llu sec", (unsigned long long)totalSeconds);
+    } else if (hours == 0) {
+        swprintf_s(buffer, L"%llu min", (unsigned long long)minutes);
+    } else {
+        swprintf_s(buffer, L"%llu h %llu min", (unsigned long long)hours, (unsigned long long)minutes);
+    }
     return buffer;
 }
 
@@ -11037,8 +12401,8 @@ std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
     wchar_t buffer[224];
     swprintf_s(buffer, L"Session: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
         FormatDurationShort(lastSessionSeconds).c_str(),
-        (unsigned long long)g_afkActionsPerformed.load(),
-        (unsigned long long)g_autoReconnectsPerformed.load(),
+        (unsigned long long)g_sessionAfkActions.load(),
+        (unsigned long long)g_sessionReconnects.load(),
         (unsigned long long)g_afkSessionsCompleted.load());
     return buffer;
 }
@@ -11046,9 +12410,10 @@ std::wstring BuildDiscordSessionStatsLine(uint64_t lastSessionSeconds)
 std::wstring BuildDiscordTotalStatsLine()
 {
     wchar_t buffer[224];
-    swprintf_s(buffer, L"Total time: %s • Actions: %llu • Reconnects: %llu • Sessions completed: %llu",
+    swprintf_s(buffer, L"Total time: %s • Actions: %llu • Macros: %llu • Reconnects: %llu • Sessions completed: %llu",
         FormatDurationShort(g_totalAfkTimeSeconds.load()).c_str(),
         (unsigned long long)g_afkActionsPerformed.load(),
+        (unsigned long long)g_macroRunsPerformed.load(),
         (unsigned long long)g_autoReconnectsPerformed.load(),
         (unsigned long long)g_afkSessionsCompleted.load());
     return buffer;
@@ -11061,7 +12426,7 @@ bool ShouldSendDiscordWebhookEvent(DiscordWebhookEvent eventType, bool bypassEna
         return true;
     }
 
-    if (!bypassEnabledCheck && !g_discordWebhookEnabled.load())
+    if (!bypassEnabledCheck && (g_simpleMode.load() || !g_discordWebhookEnabled.load()))
     {
         return false;
     }
@@ -11150,6 +12515,7 @@ void ResetStatisticsCounters()
 {
     g_totalAfkTimeSeconds = 0;
     g_afkActionsPerformed = 0;
+    g_macroRunsPerformed = 0;
     g_autoReconnectsPerformed = 0;
     g_longestAfkSessionSeconds = 0;
     g_discordWebhooksSent = 0;
@@ -11158,7 +12524,7 @@ void ResetStatisticsCounters()
     SaveSettings();
 }
 
-bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEvent eventType, const std::wstring& summary, std::wstring* errorOut = nullptr, DWORD* statusCodeOut = nullptr)
+bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEvent eventType, const std::wstring& summary, std::wstring* errorOut = nullptr, DWORD* statusCodeOut = nullptr, DWORD* retryAfterMsOut = nullptr)
 {
     std::wstring normalizedUrl = NormalizeDiscordWebhookUrl(webhookUrl);
     if (!IsDiscordWebhookUrl(normalizedUrl))
@@ -11255,6 +12621,19 @@ bool SendDiscordWebhookRequest(const std::wstring& webhookUrl, DiscordWebhookEve
         }
 
         if (statusCodeOut) *statusCodeOut = statusCode;
+        if (retryAfterMsOut && statusCode == 429) {
+            wchar_t retryBuf[32] = { 0 };
+            DWORD retryLen = sizeof(retryBuf);
+            if (HttpQueryInfoW(hRequest, HTTP_QUERY_RETRY_AFTER, retryBuf, &retryLen, NULL)) {
+                double sec = _wtof(retryBuf);
+                if (sec > 0.0) {
+                    DWORD ms = (DWORD)(sec * 1000.0);
+                    if (ms < 500) ms = 500;
+                    if (ms > 15000) ms = 15000;
+                    *retryAfterMsOut = ms;
+                }
+            }
+        }
 
         if (statusCode >= 200 && statusCode < 300)
         {
@@ -11311,6 +12690,10 @@ static void QueueWebhookTestAsync(const std::wstring& webhookUrl, const std::wst
         } else {
             body = errorText.empty() ? std::wstring(L"Failed to send the test webhook.") : errorText;
         }
+        {
+            std::lock_guard<std::mutex> errorLock(g_lastWebhookErrorMutex);
+            g_lastWebhookError = sent ? std::wstring() : (statusCode > 0 ? (L"HTTP " + std::to_wstring(statusCode)) : body);
+        }
         std::wstring* payload = new std::wstring(body);
         HWND target = (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) ? g_hMainUiWnd : g_hwnd;
         if (!target || !IsWindow(target) || !PostMessage(target, WM_APP_WEBHOOK_TEST_RESULT, reinterpret_cast<WPARAM>(payload), 0)) {
@@ -11336,8 +12719,36 @@ void WebhookWorkerThread()
         webhookUrl = GetDiscordWebhookUrlCopy();
         if (IsDiscordWebhookUrl(webhookUrl)) {
             try {
-                SendDiscordWebhookRequest(webhookUrl, item.first, item.second, nullptr, nullptr);
+                std::wstring error;
+                DWORD statusCode = 0;
+                DWORD retryAfterMs = 1000;
+                bool sent = SendDiscordWebhookRequest(webhookUrl, item.first, item.second, &error, &statusCode, &retryAfterMs);
+                for (int attempt = 0; !sent && (statusCode == 429 || statusCode >= 500) && attempt < 2 && g_webhookThreadRunning && !g_stopThread.load(); ++attempt) {
+                    DWORD waitMs = (statusCode == 429 && retryAfterMs > 0) ? retryAfterMs : 1000;
+                    for (DWORD waited = 0; waited < waitMs && g_webhookThreadRunning && !g_stopThread.load(); waited += 100) {
+                        Sleep((std::min)((DWORD)100, waitMs - waited));
+                    }
+                    if (g_webhookThreadRunning && !g_stopThread.load()) {
+                        error.clear();
+                        statusCode = 0;
+                        retryAfterMs = 1000;
+                        sent = SendDiscordWebhookRequest(webhookUrl, item.first, item.second, &error, &statusCode, &retryAfterMs);
+                    }
+                }
+                {
+                    std::lock_guard<std::mutex> errorLock(g_lastWebhookErrorMutex);
+                    if (sent) {
+                        g_lastWebhookError.clear();
+                    } else {
+                        g_lastWebhookError = statusCode > 0 ? (L"HTTP " + std::to_wstring(statusCode)) : (error.empty() ? L"Send failed" : error);
+                    }
+                }
+                if (g_webhookThreadRunning && !g_stopThread.load()) {
+                    Sleep(200);
+                }
             } catch (...) {
+                std::lock_guard<std::mutex> errorLock(g_lastWebhookErrorMutex);
+                g_lastWebhookError = L"Exception while sending";
             }
         }
         g_webhookBusy = false;
@@ -11360,7 +12771,7 @@ void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring&
 
     {
         std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
-        if (g_webhookQueue.size() >= 64) {
+        if (g_webhookQueue.size() >= 256) {
             g_webhookQueue.pop();
         }
         g_webhookQueue.emplace(eventType, summary);
@@ -11370,6 +12781,131 @@ void QueueDiscordWebhookEvent(DiscordWebhookEvent eventType, const std::wstring&
 // ==========
 
 // Settings
+static std::wstring SanitizePersistToken(const std::wstring& value)
+{
+    std::wstring out = value;
+    for (wchar_t& c : out) {
+        if (c == L'|' || c == L',' || c == L'\n' || c == L'\r') c = L' ';
+    }
+    return out;
+}
+
+static bool ParseInstanceSettingsLine(const std::wstring& line, std::wstring& title, RobloxInstanceSettings& s)
+{
+    size_t p1 = line.find(L'|');
+    if (p1 == std::wstring::npos) return false;
+    title = line.substr(0, p1);
+    if (title.empty()) return false;
+
+    size_t p2 = line.find(L'|', p1 + 1);
+    std::wstring intsPart = (p2 == std::wstring::npos) ? line.substr(p1 + 1) : line.substr(p1 + 1, p2 - p1 - 1);
+    int vals[23] = { 0 };
+    int n = 0;
+    const wchar_t* p = intsPart.c_str();
+    while (n < 23 && *p) {
+        while (*p == L',' || *p == L' ') ++p;
+        if (!*p) break;
+        int sign = 1;
+        if (*p == L'-') { sign = -1; ++p; }
+        int v = 0;
+        while (*p >= L'0' && *p <= L'9') { v = v * 10 + (*p - L'0'); ++p; }
+        vals[n++] = sign * v;
+        if (*p == L',') ++p;
+    }
+    if (n < 16) return false;
+
+    s.overrideAntiAfk = vals[0] != 0;
+    s.enableAntiAfk = vals[1] != 0;
+    s.overrideMute = vals[2] != 0;
+    s.enableMute = vals[3] != 0;
+    s.overrideOpacity = vals[4] != 0;
+    s.enableOpacity = vals[5] != 0;
+    s.opacityValue = vals[6];
+    s.overrideHide = vals[7] != 0;
+    s.enableHide = vals[8] != 0;
+    s.overrideFpsLimit = vals[9] != 0;
+    s.enableFpsLimit = vals[10] != 0;
+    s.fpsLimitValue = vals[11];
+    s.overrideReconnect = vals[12] != 0;
+    s.enableReconnect = vals[13] != 0;
+    s.overrideReset = vals[14] != 0;
+    s.enableReset = vals[15] != 0;
+    if (n > 16) s.overrideTimer = vals[16] != 0;
+    if (n > 17) s.enableTimer = vals[17] != 0;
+    if (n > 18) s.timerSeconds = vals[18];
+    if (n > 19) s.overrideMacro = vals[19] != 0;
+    if (n > 20) s.enableMacro = vals[20] != 0;
+    if (n > 21) s.enableReconnectMacro = vals[21] != 0;
+    if (n > 22) s.enableIntervalMacro = vals[22] != 0;
+
+    if (p2 != std::wstring::npos) {
+        std::wstring rest = line.substr(p2 + 1);
+        std::vector<std::wstring> sections;
+        size_t pos = 0;
+        while (sections.size() < 4) {
+            size_t bar = rest.find(L'|', pos);
+            sections.push_back((bar == std::wstring::npos) ? rest.substr(pos) : rest.substr(pos, bar - pos));
+            if (bar == std::wstring::npos) break;
+            pos = bar + 1;
+        }
+        auto parseNames = [](const std::wstring& raw, std::vector<std::wstring>& out) {
+            out.clear();
+            size_t nPos = 0;
+            while (nPos < raw.size()) {
+                size_t comma = raw.find(L',', nPos);
+                std::wstring name = (comma == std::wstring::npos) ? raw.substr(nPos) : raw.substr(nPos, comma - nPos);
+                size_t start = name.find_first_not_of(L' ');
+                size_t end = name.find_last_not_of(L' ');
+                if (start != std::wstring::npos) name = name.substr(start, end - start + 1);
+                if (name.size() > 63) name.resize(63);
+                if (!name.empty()) out.push_back(name);
+                if (comma == std::wstring::npos) break;
+                nPos = comma + 1;
+            }
+        };
+        if (!sections.empty()) parseNames(sections[0], s.macroNames);
+        if (sections.size() > 1) parseNames(sections[1], s.reconnectMacroNames);
+        if (sections.size() > 2) parseNames(sections[2], s.intervalMacroNames);
+        if (sections.size() > 3 && !sections[3].empty()) s.presetName = sections[3];
+    }
+    return true;
+}
+
+static std::wstring SerializeInstanceSettingsLine(const std::wstring& title, const RobloxInstanceSettings& s)
+{
+    std::wstring safeTitle = SanitizePersistToken(title);
+    auto joinNames = [](const std::vector<std::wstring>& names) {
+        std::wstring out;
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (i > 0) out += L", ";
+            out += SanitizePersistToken(names[i]);
+        }
+        return out;
+    };
+    const int fields[23] = {
+        s.overrideAntiAfk, s.enableAntiAfk,
+        s.overrideMute, s.enableMute,
+        s.overrideOpacity, s.enableOpacity, s.opacityValue,
+        s.overrideHide, s.enableHide,
+        s.overrideFpsLimit, s.enableFpsLimit, s.fpsLimitValue,
+        s.overrideReconnect, s.enableReconnect,
+        s.overrideReset, s.enableReset,
+        s.overrideTimer, s.enableTimer, s.timerSeconds,
+        s.overrideMacro, s.enableMacro,
+        s.enableReconnectMacro, s.enableIntervalMacro
+    };
+    std::wstring line = safeTitle;
+    for (size_t i = 0; i < 23; ++i) {
+        line += (i == 0) ? L'|' : L',';
+        line += std::to_wstring(fields[i]);
+    }
+    line += L'|'; line += joinNames(s.macroNames);
+    line += L'|'; line += joinNames(s.reconnectMacroNames);
+    line += L'|'; line += joinNames(s.intervalMacroNames);
+    line += L'|'; line += SanitizePersistToken(s.presetName);
+    return line;
+}
+
 void SaveSettings()
 {
     HKEY hKey;
@@ -11385,6 +12921,7 @@ void SaveSettings()
     DWORD tutorialShown = g_tutorialShown.load();
     DWORD firstWelcomeShown = g_firstWelcomeShown.load();
     DWORD previewAlphaNotify = g_previewAlphaNotify.load();
+    DWORD v4WelcomeShown = g_v4WelcomeShown.load();
     DWORD bloxstrapIntegration = g_bloxstrapIntegration.load();
     DWORD statusBarEnabled = g_statusBarEnabled.load();
     DWORD unlockFpsOnFocus = g_unlockFpsOnFocus.load();
@@ -11420,11 +12957,13 @@ void SaveSettings()
     uint64_t discordWebhooksSent = g_discordWebhooksSent.load();
     uint64_t programLaunches = g_programLaunches.load();
     uint64_t afkSessionsCompleted = g_afkSessionsCompleted.load();
+    uint64_t macroRunsPerformed = g_macroRunsPerformed.load();
     std::wstring discordWebhookUrl = GetDiscordWebhookUrlCopy();
     std::wstring discordMentionTarget = GetDiscordMentionTargetCopy();
     DWORD useCustomProcessSearch = g_useCustomProcessSearch.load();
     DWORD excludeBuiltinNames = g_excludeBuiltinNames.load();
     DWORD ssAlwaysShowText = g_ssAlwaysShowExitUI.load();
+    DWORD ssAlwaysShowHintUI = g_ssAlwaysShowHintAndClose.load();
     std::wstring customProcessNames;
     {
         std::lock_guard<std::mutex> lock(g_customProcessNamesMutex);
@@ -11447,6 +12986,10 @@ void SaveSettings()
         RegSetValueEx(hKey, L"AutoReset", 0, REG_DWORD, (const BYTE*)&autoReset, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoHideRoblox", 0, REG_DWORD, (const BYTE*)&autoHideRoblox, sizeof(DWORD));
         RegSetValueEx(hKey, L"AutoOpacity", 0, REG_DWORD, (const BYTE*)&autoOpacity, sizeof(DWORD));
+        {
+            DWORD globalOpacityPct = (DWORD)g_globalOpacityPercent.load();
+            RegSetValueEx(hKey, L"GlobalOpacityPercent", 0, REG_DWORD, (const BYTE*)&globalOpacityPct, sizeof(DWORD));
+        }
         RegSetValueEx(hKey, L"AutoGrid", 0, REG_DWORD, (const BYTE*)&autoGrid, sizeof(DWORD));
         {
             DWORD gridForceSmall = g_gridForceSmall.load();
@@ -11480,6 +13023,7 @@ void SaveSettings()
         RegSetValueEx(hKey, L"TutorialShown", 0, REG_DWORD, (const BYTE*)&tutorialShown, sizeof(DWORD));
         RegSetValueEx(hKey, L"FirstWelcomeShown", 0, REG_DWORD, (const BYTE*)&firstWelcomeShown, sizeof(DWORD));
         RegSetValueEx(hKey, L"PreviewAlphaNotify", 0, REG_DWORD, (const BYTE*)&previewAlphaNotify, sizeof(DWORD));
+        RegSetValueEx(hKey, L"V4WelcomeShown", 0, REG_DWORD, (const BYTE*)&v4WelcomeShown, sizeof(DWORD));
         RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&totalAfkTime, sizeof(uint64_t));
         RegSetValueEx(hKey, L"AfkActions", 0, REG_QWORD, (const BYTE*)&afkActions, sizeof(uint64_t));
         RegSetValueEx(hKey, L"AutoReconnects", 0, REG_QWORD, (const BYTE*)&autoReconnects, sizeof(uint64_t));
@@ -11487,6 +13031,7 @@ void SaveSettings()
         RegSetValueEx(hKey, L"DiscordWebhooksSent", 0, REG_QWORD, (const BYTE*)&discordWebhooksSent, sizeof(uint64_t));
         RegSetValueEx(hKey, L"ProgramLaunches", 0, REG_QWORD, (const BYTE*)&programLaunches, sizeof(uint64_t));
         RegSetValueEx(hKey, L"AfkSessionsCompleted", 0, REG_QWORD, (const BYTE*)&afkSessionsCompleted, sizeof(uint64_t));
+        RegSetValueEx(hKey, L"MacroRunsPerformed", 0, REG_QWORD, (const BYTE*)&macroRunsPerformed, sizeof(uint64_t));
 
         RegSetValueEx(hKey, L"BloxstrapIntegration", 0, REG_DWORD, (const BYTE*)&bloxstrapIntegration, sizeof(DWORD));
         RegSetValueEx(hKey, L"UseLegacyUI", 0, REG_DWORD, (const BYTE*)&useLegacyUi, sizeof(DWORD));
@@ -11516,6 +13061,8 @@ void SaveSettings()
             RegSetValueEx(hKey, L"StatusBarEventUi", 0, REG_DWORD, (const BYTE*)&statusBarEventUi, sizeof(DWORD));
         }
         RegSetValueEx(hKey, L"FpsLimit", 0, REG_DWORD, (const BYTE*)&fpsLimit, sizeof(DWORD));
+        DWORD fpsLastActiveLimit = (DWORD)g_fpsLastActiveLimit.load();
+        RegSetValueEx(hKey, L"FpsLastActiveLimit", 0, REG_DWORD, (const BYTE*)&fpsLastActiveLimit, sizeof(DWORD));
         RegSetValueEx(hKey, L"UnlockFpsOnFocus", 0, REG_DWORD, (const BYTE*)&unlockFpsOnFocus, sizeof(DWORD));
         DWORD multiInstanceInterval = g_multiInstanceInterval.load();
         RegSetValueEx(hKey, L"MultiInstanceInterval", 0, REG_DWORD, (const BYTE*)&multiInstanceInterval, sizeof(DWORD));
@@ -11606,6 +13153,15 @@ void SaveSettings()
         RegSetValueEx(hKey, L"UseCustomProcessSearch", 0, REG_DWORD, (const BYTE*)&useCustomProcessSearch, sizeof(DWORD));
         RegSetValueEx(hKey, L"ExcludeBuiltinNames", 0, REG_DWORD, (const BYTE*)&excludeBuiltinNames, sizeof(DWORD));
         RegSetValueEx(hKey, L"SsAlwaysShowText", 0, REG_DWORD, (const BYTE*)&ssAlwaysShowText, sizeof(DWORD));
+        RegSetValueEx(hKey, L"SsAlwaysShowHintUI", 0, REG_DWORD, (const BYTE*)&ssAlwaysShowHintUI, sizeof(DWORD));
+        {
+            DWORD uiHideNextActionText = g_uiHideNextActionText.load() ? 1 : 0;
+            DWORD uiHideInstancesText = g_uiHideInstancesText.load() ? 1 : 0;
+            DWORD uiHideSimpleModeSwitch = g_uiHideSimpleModeSwitch.load() ? 1 : 0;
+            RegSetValueEx(hKey, L"UiHideNextActionText", 0, REG_DWORD, (const BYTE*)&uiHideNextActionText, sizeof(DWORD));
+            RegSetValueEx(hKey, L"UiHideInstancesText", 0, REG_DWORD, (const BYTE*)&uiHideInstancesText, sizeof(DWORD));
+            RegSetValueEx(hKey, L"UiHideSimpleModeSwitch", 0, REG_DWORD, (const BYTE*)&uiHideSimpleModeSwitch, sizeof(DWORD));
+        }
         RegSetValueExW(hKey, L"CustomProcessNames", 0, REG_SZ, (const BYTE*)customProcessNames.c_str(), (DWORD)((customProcessNames.size() + 1) * sizeof(wchar_t)));
         DWORD cpuLimitPercent = g_cpuLimitPercent.load();
         RegSetValueEx(hKey, L"CpuLimitPercent", 0, REG_DWORD, (const BYTE*)&cpuLimitPercent, sizeof(DWORD));
@@ -11626,7 +13182,7 @@ void SaveSettings()
                     std::wstring s;
                     for (size_t mi = 0; mi < names.size(); mi++) {
                         if (mi > 0) s += L", ";
-                        s += names[mi];
+                        s += SanitizePersistToken(names[mi]);
                     }
                     return s;
                 };
@@ -11642,7 +13198,7 @@ void SaveSettings()
                     pr.overrideMacro, pr.enableMacro,
                     pr.enableReconnectMacro, pr.enableIntervalMacro
                 };
-                std::wstring buf = pr.name;
+                std::wstring buf = SanitizePersistToken(pr.name);
                 for (size_t fi = 0; fi < 23; ++fi) {
                     if (fi == 0) buf += L'|';
                     else buf += L',';
@@ -11663,6 +13219,33 @@ void SaveSettings()
             }
         }
 
+        {
+            std::vector<std::pair<std::wstring, RobloxInstanceSettings>> live;
+            {
+                std::unique_lock<std::mutex> lock(g_instanceSettingsMutex, std::try_to_lock);
+                if (lock.owns_lock()) {
+                    for (const auto& kv : g_instanceSettings) {
+                        wchar_t title[256] = { 0 };
+                        if (IsWindow(kv.first)) GetWindowTextW(kv.first, title, 256);
+                        if (title[0]) live.push_back({ title, kv.second });
+                    }
+                }
+            }
+            std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+            for (const auto& kv : live) g_savedInstanceSettings[kv.first] = kv.second;
+            std::wstring blob;
+            for (const auto& kv : g_savedInstanceSettings) {
+                if (!blob.empty()) blob += L'\n';
+                blob += SerializeInstanceSettingsLine(kv.first, kv.second);
+            }
+            if (!blob.empty()) {
+                RegSetValueExW(hKey, L"SavedInstanceSettings", 0, REG_SZ,
+                    (const BYTE*)blob.c_str(), (DWORD)((blob.size() + 1) * sizeof(wchar_t)));
+            } else {
+                RegDeleteValueW(hKey, L"SavedInstanceSettings");
+            }
+        }
+
         RegCloseKey(hKey);
     }
 }
@@ -11670,21 +13253,22 @@ bool LoadSettings()
 {
     bool loaded = false;
     HKEY hKey;
-    DWORD multiSupport = 0, selectedTime = 540, selectedAction = 1, autoStartAfk = 0;
+    DWORD multiSupport = 0, selectedTime = 540, selectedAction = 5, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
-    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, statusBarShowIcon = 1, statusBarShowBrand = 1, statusBarEventSession = 1, statusBarEventAction = 1, statusBarEventReconnect = 1, statusBarEventMacro = 1, statusBarEventUi = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
+    DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, v4WelcomeShown = 1, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, statusBarShowIcon = 1, statusBarShowBrand = 1, statusBarEventSession = 1, statusBarEventAction = 1, statusBarEventReconnect = 1, statusBarEventMacro = 1, statusBarEventUi = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
     DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
-    DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 0;
+    DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 1;
     DWORD disableSplash = 0, disableAcrylic = 0, disableAnimations = 0, notificationsDisabled = 0, keepWindowOnTop = 0;
     DWORD disableWindowCorners = 0;
-    DWORD ramCleanerEnabled = 0, ramCleanerMode = 0, ramCleanerInterval = 120, ramCleanerLimit = 500;
+    DWORD ramCleanerEnabled = 0, ramCleanerMode = 2, ramCleanerInterval = 300, ramCleanerLimit = 750;
     DWORD discordWebhookEnabled = 0, discordNotifyStart = 1, discordNotifyStop = 1, discordNotifyAction = 0, discordNotifyReconnect = 1, discordNotifyReset = 0, discordNotifyErrors = 1, discordNotifyMacro = 0, discordNotifyIntervalMacros = 0, discordDisableEmbed = 0, discordMentionOnErrors = 0;
     DWORD reconnectCheckInterval = 0;    DWORD gridForceSmall = 0, gridAllMonitors = 0, gridKeepAspectRatio = 1;
     DWORD useCustomProcessSearch = 0;
     DWORD excludeBuiltinNames = 0;
     DWORD ssAlwaysShowText = 0;
+    DWORD ssAlwaysShowHintUI = 0;
     DWORD actionPreset = 0, preActionDelay = 55, keyPressDelay = 25, postActionDelay = 55, actionRepeatCount = 3;
-    uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0, longestAfkSession = 0, discordWebhooksSent = 0, programLaunches = 0, afkSessionsCompleted = 0;
+    uint64_t totalAfkTime = 0, afkActions = 0, autoReconnects = 0, longestAfkSession = 0, discordWebhooksSent = 0, programLaunches = 0, afkSessionsCompleted = 0, macroRunsPerformed = 0;
     DWORD dataSize = sizeof(DWORD);
     DWORD dataSize64 = sizeof(uint64_t);
     std::wstring discordWebhookUrl;
@@ -11704,6 +13288,15 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"AutoReset", NULL, NULL, (LPBYTE)&autoReset, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"AutoHideRoblox", NULL, NULL, (LPBYTE)&autoHideRoblox, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"AutoOpacity", NULL, NULL, (LPBYTE)&autoOpacity, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD globalOpacityPct = 70;
+            if (RegQueryValueEx(hKey, L"GlobalOpacityPercent", NULL, NULL, (LPBYTE)&globalOpacityPct, &dataSize) == ERROR_SUCCESS) {
+                if (globalOpacityPct < 5) globalOpacityPct = 5;
+                if (globalOpacityPct > 100) globalOpacityPct = 100;
+                g_globalOpacityPercent = (int)globalOpacityPct;
+            }
+            dataSize = sizeof(DWORD);
+        }
         RegQueryValueEx(hKey, L"AutoGrid", NULL, NULL, (LPBYTE)&autoGrid, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"GridForceSmall", NULL, NULL, (LPBYTE)&gridForceSmall, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"GridAllMonitors", NULL, NULL, (LPBYTE)&gridAllMonitors, &dataSize); dataSize = sizeof(DWORD);
@@ -11717,16 +13310,21 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"GridSpacingBetween", NULL, NULL, (LPBYTE)&gridSpacingBetween, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"GridSpacingBorders", NULL, NULL, (LPBYTE)&gridSpacingBorders, &dataSize); dataSize = sizeof(DWORD);
         g_gridMode = NormalizeGridMode((int)gridMode);
-        g_gridFixedWinW = gridFixedWinW;
-        g_gridFixedWinH = gridFixedWinH;
-        g_gridFixedCols = gridFixedCols;
-        g_gridFixedRows = gridFixedRows;
-        g_gridSpacingBetween = gridSpacingBetween;
-        g_gridSpacingBorders = gridSpacingBorders;
+        g_gridFixedWinW = ClampInt((int)gridFixedWinW, 100, 4000);
+        g_gridFixedWinH = ClampInt((int)gridFixedWinH, 100, 4000);
+        g_gridFixedCols = ClampInt((int)gridFixedCols, 1, 20);
+        g_gridFixedRows = ClampInt((int)gridFixedRows, 1, 20);
+        g_gridSpacingBetween = ClampInt((int)gridSpacingBetween, 0, 200);
+        g_gridSpacingBorders = ClampInt((int)gridSpacingBorders, 0, 200);
         RegQueryValueEx(hKey, L"RestoreMethod", NULL, NULL, (LPBYTE)&restoreMethod, &dataSize); dataSize = sizeof(DWORD);
-        RegQueryValueEx(hKey, L"TutorialShown", NULL, NULL, (LPBYTE)&tutorialShown, &dataSize); dataSize = sizeof(DWORD);
-        RegQueryValueEx(hKey, L"FirstWelcomeShown", NULL, NULL, (LPBYTE)&firstWelcomeShown, &dataSize); dataSize = sizeof(DWORD);
+        bool hasTutorialV3 = (RegQueryValueEx(hKey, L"TutorialShown", NULL, NULL, (LPBYTE)&tutorialShown, &dataSize) == ERROR_SUCCESS); dataSize = sizeof(DWORD);
+        bool hasFirstWelcomeV4 = (RegQueryValueEx(hKey, L"FirstWelcomeShown", NULL, NULL, (LPBYTE)&firstWelcomeShown, &dataSize) == ERROR_SUCCESS); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"PreviewAlphaNotify", NULL, NULL, (LPBYTE)&previewAlphaNotify, &dataSize); dataSize = sizeof(DWORD);
+        bool hasV4Welcome = (RegQueryValueEx(hKey, L"V4WelcomeShown", NULL, NULL, (LPBYTE)&v4WelcomeShown, &dataSize) == ERROR_SUCCESS); dataSize = sizeof(DWORD);
+        bool hasFishstrapV3 = (RegQueryValueEx(hKey, L"FishstrapSupport", NULL, NULL, NULL, NULL) == ERROR_SUCCESS);
+        if (!hasV4Welcome && (hasFishstrapV3 || (hasTutorialV3 && !hasFirstWelcomeV4))) {
+            v4WelcomeShown = 0;
+        }
         RegQueryValueEx(hKey, L"TotalAfkTime", NULL, NULL, (LPBYTE)&totalAfkTime, &dataSize64); dataSize64 = sizeof(uint64_t);
         RegQueryValueEx(hKey, L"AfkActions", NULL, NULL, (LPBYTE)&afkActions, &dataSize64); dataSize64 = sizeof(uint64_t);
         RegQueryValueEx(hKey, L"AutoReconnects", NULL, NULL, (LPBYTE)&autoReconnects, &dataSize64); dataSize64 = sizeof(uint64_t);
@@ -11734,6 +13332,7 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"DiscordWebhooksSent", NULL, NULL, (LPBYTE)&discordWebhooksSent, &dataSize64); dataSize64 = sizeof(uint64_t);
         RegQueryValueEx(hKey, L"ProgramLaunches", NULL, NULL, (LPBYTE)&programLaunches, &dataSize64); dataSize64 = sizeof(uint64_t);
         RegQueryValueEx(hKey, L"AfkSessionsCompleted", NULL, NULL, (LPBYTE)&afkSessionsCompleted, &dataSize64); dataSize64 = sizeof(uint64_t);
+        RegQueryValueEx(hKey, L"MacroRunsPerformed", NULL, NULL, (LPBYTE)&macroRunsPerformed, &dataSize64); dataSize64 = sizeof(uint64_t);
         RegQueryValueEx(hKey, L"UseLegacyUI", NULL, NULL, (LPBYTE)&useLegacyUi, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"BloxstrapIntegration", NULL, NULL, (LPBYTE)&bloxstrapIntegration, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"StatusBarEnabled", NULL, NULL, (LPBYTE)&statusBarEnabled, &dataSize); dataSize = sizeof(DWORD);
@@ -11747,6 +13346,13 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"StatusBarEventMacro", NULL, NULL, (LPBYTE)&statusBarEventMacro, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"StatusBarEventUi", NULL, NULL, (LPBYTE)&statusBarEventUi, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"FpsLimit", NULL, NULL, (LPBYTE)&fpsLimit, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD fpsLast = 15;
+            if (RegQueryValueEx(hKey, L"FpsLastActiveLimit", NULL, NULL, (LPBYTE)&fpsLast, &dataSize) == ERROR_SUCCESS && fpsLast >= 1 && fpsLast <= 60) {
+                g_fpsLastActiveLimit = (int)fpsLast;
+            }
+            dataSize = sizeof(DWORD);
+        }
         RegQueryValueEx(hKey, L"UnlockFpsOnFocus", NULL, NULL, (LPBYTE)&unlockFpsOnFocus, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"MultiInstanceInterval", NULL, NULL, (LPBYTE)&multiInstanceInterval, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"CpuLimitPercent", NULL, NULL, (LPBYTE)&cpuLimitPercent, &dataSize); dataSize = sizeof(DWORD);
@@ -11820,6 +13426,16 @@ bool LoadSettings()
         RegQueryValueEx(hKey, L"UseCustomProcessSearch", NULL, NULL, (LPBYTE)&useCustomProcessSearch, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"ExcludeBuiltinNames", NULL, NULL, (LPBYTE)&excludeBuiltinNames, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"SsAlwaysShowText", NULL, NULL, (LPBYTE)&ssAlwaysShowText, &dataSize); dataSize = sizeof(DWORD);
+        RegQueryValueEx(hKey, L"SsAlwaysShowHintUI", NULL, NULL, (LPBYTE)&ssAlwaysShowHintUI, &dataSize); dataSize = sizeof(DWORD);
+        {
+            DWORD vHideNext = 0, vHideInst = 0, vHideSimple = 0;
+            if (RegQueryValueEx(hKey, L"UiHideNextActionText", NULL, NULL, (LPBYTE)&vHideNext, &dataSize) == ERROR_SUCCESS) g_uiHideNextActionText = (vHideNext != 0);
+            dataSize = sizeof(DWORD);
+            if (RegQueryValueEx(hKey, L"UiHideInstancesText", NULL, NULL, (LPBYTE)&vHideInst, &dataSize) == ERROR_SUCCESS) g_uiHideInstancesText = (vHideInst != 0);
+            dataSize = sizeof(DWORD);
+            if (RegQueryValueEx(hKey, L"UiHideSimpleModeSwitch", NULL, NULL, (LPBYTE)&vHideSimple, &dataSize) == ERROR_SUCCESS) g_uiHideSimpleModeSwitch = (vHideSimple != 0);
+            dataSize = sizeof(DWORD);
+        }
         RegQueryValueEx(hKey, L"ActionPreset", NULL, NULL, (LPBYTE)&actionPreset, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"PreActionDelay", NULL, NULL, (LPBYTE)&preActionDelay, &dataSize); dataSize = sizeof(DWORD);
         RegQueryValueEx(hKey, L"KeyPressDelay", NULL, NULL, (LPBYTE)&keyPressDelay, &dataSize); dataSize = sizeof(DWORD);
@@ -11996,10 +13612,32 @@ pos = comma + 1;
             }
         }
 
+        {
+            DWORD valSize = 0;
+            if (RegQueryValueExW(hKey, L"SavedInstanceSettings", NULL, NULL, NULL, &valSize) == ERROR_SUCCESS && valSize > sizeof(wchar_t)) {
+                std::wstring buf(valSize / sizeof(wchar_t), L'\0');
+                if (RegQueryValueExW(hKey, L"SavedInstanceSettings", NULL, NULL, (LPBYTE)&buf[0], &valSize) == ERROR_SUCCESS) {
+                    if (!buf.empty() && buf.back() == L'\0') buf.pop_back();
+                    std::wstringstream lines(buf);
+                    std::wstring line;
+                    while (std::getline(lines, line)) {
+                        if (line.empty()) continue;
+                        std::wstring title;
+                        RobloxInstanceSettings s;
+                        if (ParseInstanceSettingsLine(line, title, s)) {
+                            std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+                            g_savedInstanceSettings[title] = s;
+                        }
+                    }
+                }
+            }
+        }
+
         RegCloseKey(hKey);
     }
 
     g_ssAlwaysShowExitUI = (ssAlwaysShowText != 0);
+    g_ssAlwaysShowHintAndClose = (ssAlwaysShowHintUI != 0);
     g_multiSupport = (multiSupport != 0);
     g_selectedTime = NormalizeSelectedTimeValue((int)selectedTime);
     g_selectedAction = NormalizeSelectedAction((int)selectedAction);
@@ -12019,6 +13657,7 @@ pos = comma + 1;
     g_tutorialShown = (tutorialShown != 0);
     g_firstWelcomeShown = (firstWelcomeShown != 0);
     g_previewAlphaNotify = (previewAlphaNotify != 0);
+    g_v4WelcomeShown = (v4WelcomeShown != 0);
     g_totalAfkTimeSeconds = totalAfkTime;
     g_afkActionsPerformed = afkActions;
     g_autoReconnectsPerformed = autoReconnects;
@@ -12026,6 +13665,7 @@ pos = comma + 1;
     g_discordWebhooksSent = discordWebhooksSent;
     g_programLaunches = programLaunches;
     g_afkSessionsCompleted = afkSessionsCompleted;
+    g_macroRunsPerformed = macroRunsPerformed;
     g_useLegacyUi = (useLegacyUi != 0);
     g_bloxstrapIntegration = (bloxstrapIntegration != 0);
     g_statusBarEnabled = (statusBarEnabled != 0);
@@ -12104,9 +13744,38 @@ pos = comma + 1;
 }
 void ResetSettings()
 {
+    if (g_isAfkStarted.exchange(false)) {
+        g_afkEffectsReady = true;
+        g_macroAbortRequested = true;
+        StopIntervalMacroForAfkSession();
+        FinalizeAfkSession();
+    }
+    DeactivateAutoUtilsOnAfkStop();
+    {
+        std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+        ShowAllSelfHiddenRobloxWindows();
+        RefreshRobloxWindowOpacity(true);
+        MuteAllRoblox(false);
+        g_unmutedPid = 0;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+        g_instanceSettings.clear();
+        g_instanceSettingsPid.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+        g_savedInstanceSettings.clear();
+    }
+    g_utilsWindowOpacityOverride = -1;
+    g_utilsMuteOverride = -1;
+    g_utilsFpsLimitOverride = -1;
+    g_opacityOverrideAuto = false;
+    g_muteOverrideAuto = false;
+    g_fpsOverrideAuto = false;
     g_multiSupport = false;
     g_selectedTime = 540;
-    g_selectedAction = 1;
+    g_selectedAction = 5;
     g_lastActionKind = 1;
     g_autoUpdate = true;
     g_userSafeMode = 2;
@@ -12128,6 +13797,7 @@ void ResetSettings()
     g_autoReset = false;
     g_autoHideRoblox = false;
     g_autoOpacity = false;
+    g_globalOpacityPercent = 70;
     g_autoGrid = false;
     g_gridForceSmall = false;
     g_gridAllMonitors = false;
@@ -12143,8 +13813,10 @@ void ResetSettings()
     g_tutorialShown = false;
     g_firstWelcomeShown = false;
     g_previewAlphaNotify = false;
+    g_v4WelcomeShown = true;
     g_totalAfkTimeSeconds = 0;
     g_afkActionsPerformed = 0;
+    g_macroRunsPerformed = 0;
     g_autoReconnectsPerformed = 0;
     g_longestAfkSessionSeconds = 0;
     g_discordWebhooksSent = 0;
@@ -12156,6 +13828,7 @@ void ResetSettings()
     }
     g_useLegacyUi = false;
     g_bloxstrapIntegration = false;
+    UpdateBloxstrapIntegration(false);
     g_statusBarEnabled = true;
     g_statusBarPrimaryMonitor = false;
     g_statusBarPositionBottom = false;
@@ -12167,7 +13840,7 @@ void ResetSettings()
     g_statusBarEventMacro = true;
     g_statusBarEventUi = true;
     g_fpsLimit = 0;
-    g_fpsLastActiveLimit = 0;
+    g_fpsLastActiveLimit = 15;
     g_unlockFpsOnFocus = false;
     g_cpuLimitPercent = 90;
     g_cpuLimitPeriod = 100;
@@ -12176,17 +13849,17 @@ void ResetSettings()
     g_windowOpacity = false;
     g_ramCleanerAutoStart = false;
     g_ramCleanerEnabled = false;
-    g_ramCleanerMode = 0;
-    g_ramCleanerInterval = 120;
-    g_ramCleanerLimit = 500;
+    g_ramCleanerMode = 2;
+    g_ramCleanerInterval = 300;
+    g_ramCleanerLimit = 750;
     g_afkReminderEnabled = false;
     g_afkReminderState = 0;
     g_skipActiveEnabled = false;
     g_doNotSleep = false;
-    SetThreadExecutionState(ES_CONTINUOUS);
+    ReleaseDoNotSleepRequest();
     g_autoMute = false;
     g_unmuteOnFocus = false;
-    g_simpleMode = false;
+    g_simpleMode = true;
     g_disableSplash = false;
     g_disableAcrylic = false;
     g_disableAnimations = false;
@@ -12197,6 +13870,10 @@ void ResetSettings()
     ApplyWindowOnTopSetting();
     ApplyWindowCornersSetting();
     g_ssAlwaysShowExitUI = false;
+    g_ssAlwaysShowHintAndClose = false;
+    g_uiHideNextActionText = false;
+    g_uiHideInstancesText = false;
+    g_uiHideSimpleModeSwitch = false;
     g_hotkeyEnabled = true;
     g_hotkeyModifiers = MOD_CONTROL | MOD_SHIFT;
     g_hotkeyVk = VK_F1;
@@ -12250,6 +13927,10 @@ void ResetSettings()
     {
         StopActivityMonitor();
     }
+    if (g_userSafeMode.load() > 0 || g_afkReminderEnabled.load() || g_skipActiveEnabled.load())
+    {
+        StartActivityMonitor();
+    }
 
     if (g_hMultiInstanceMutex)
     {
@@ -12294,7 +13975,7 @@ static std::wstring SerializeInstancePreset(const RobloxInstancePreset& pr)
         std::wstring s;
         for (size_t mi = 0; mi < names.size(); mi++) {
             if (mi > 0) s += L", ";
-            s += names[mi];
+            s += SanitizePersistToken(names[mi]);
         }
         return s;
     };
@@ -12310,7 +13991,7 @@ static std::wstring SerializeInstancePreset(const RobloxInstancePreset& pr)
         pr.overrideMacro, pr.enableMacro,
         pr.enableReconnectMacro, pr.enableIntervalMacro
     };
-    std::wstring buf = pr.name;
+    std::wstring buf = SanitizePersistToken(pr.name);
     for (size_t fi = 0; fi < 23; ++fi) {
         if (fi == 0) buf += L'|';
         else buf += L',';
@@ -12328,7 +14009,7 @@ static std::wstring SerializeInstancePreset(const RobloxInstancePreset& pr)
 struct SettingsSnapshot {
     bool multiSupport = false;
     int selectedTime = 540;
-    int selectedAction = 1;
+    int selectedAction = 5;
     bool autoUpdate = true;
     int userSafeMode = 2;
     bool autoStartAfk = false;
@@ -12351,6 +14032,7 @@ struct SettingsSnapshot {
     bool tutorialShown = false;
     bool firstWelcomeShown = false;
     bool previewAlphaNotify = false;
+    bool v4WelcomeShown = false;
     uint64_t totalAfkTime = 0;
     uint64_t afkActions = 0;
     uint64_t autoReconnects = 0;
@@ -12358,6 +14040,7 @@ struct SettingsSnapshot {
     uint64_t discordWebhooksSent = 0;
     uint64_t programLaunches = 0;
     uint64_t afkSessionsCompleted = 0;
+    uint64_t macroRunsPerformed = 0;
     bool useLegacyUi = false;
     bool bloxstrapIntegration = false;
     bool statusBarEnabled = true;
@@ -12374,16 +14057,21 @@ struct SettingsSnapshot {
     bool unlockFpsOnFocus = false;
     int multiInstanceInterval = 0;
     bool windowOpacity = false;
+    int globalOpacityPercent = 70;
+    bool ssAlwaysShowHintAndClose = false;
+    bool uiHideNextActionText = false;
+    bool uiHideInstancesText = false;
+    bool uiHideSimpleModeSwitch = false;
     bool ramCleanerEnabled = false;
-    int ramCleanerMode = 0;
-    int ramCleanerInterval = 120;
-    int ramCleanerLimit = 500;
+    int ramCleanerMode = 2;
+    int ramCleanerInterval = 300;
+    int ramCleanerLimit = 750;
     bool afkReminder = false;
     bool skipActive = false;
     bool doNotSleep = false;
     bool autoMute = false;
     bool unmuteOnFocus = false;
-    bool simpleMode = false;
+    bool simpleMode = true;
     bool discordWebhookEnabled = false;
     bool discordNotifyStart = true;
     bool discordNotifyStop = true;
@@ -12430,6 +14118,7 @@ struct SettingsSnapshot {
     bool keepWindowOnTop = false;
     bool disableWindowCorners = false;
     std::wstring instancePresetsBlob;
+    std::wstring savedInstanceSettingsBlob;
 };
 
 SettingsSnapshot CaptureSettingsSnapshot()
@@ -12460,6 +14149,7 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.tutorialShown = g_tutorialShown.load();
     s.firstWelcomeShown = g_firstWelcomeShown.load();
     s.previewAlphaNotify = g_previewAlphaNotify.load();
+    s.v4WelcomeShown = g_v4WelcomeShown.load();
     s.totalAfkTime = g_totalAfkTimeSeconds.load();
     s.afkActions = g_afkActionsPerformed.load();
     s.autoReconnects = g_autoReconnectsPerformed.load();
@@ -12467,6 +14157,7 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.discordWebhooksSent = g_discordWebhooksSent.load();
     s.programLaunches = g_programLaunches.load();
     s.afkSessionsCompleted = g_afkSessionsCompleted.load();
+    s.macroRunsPerformed = g_macroRunsPerformed.load();
     s.useLegacyUi = g_useLegacyUi.load();
     s.bloxstrapIntegration = g_bloxstrapIntegration.load();
     s.statusBarEnabled = g_statusBarEnabled.load();
@@ -12486,6 +14177,11 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.cpuLimitMode = g_cpuLimitMode.load();
     s.multiInstanceInterval = g_multiInstanceInterval.load();
     s.windowOpacity = g_windowOpacity.load();
+    s.globalOpacityPercent = g_globalOpacityPercent.load();
+    s.ssAlwaysShowHintAndClose = g_ssAlwaysShowHintAndClose.load();
+    s.uiHideNextActionText = g_uiHideNextActionText.load();
+    s.uiHideInstancesText = g_uiHideInstancesText.load();
+    s.uiHideSimpleModeSwitch = g_uiHideSimpleModeSwitch.load();
     s.ramCleanerEnabled = g_ramCleanerAutoStart.load();
     s.ramCleanerMode = g_ramCleanerMode.load();
     s.ramCleanerInterval = g_ramCleanerInterval.load();
@@ -12541,6 +14237,15 @@ SettingsSnapshot CaptureSettingsSnapshot()
     s.postActionDelay = g_postActionDelay.load();
     s.actionRepeatCount = g_actionRepeatCount.load();
     s.ssAlwaysShowExitUI = g_ssAlwaysShowExitUI.load();
+    {
+        std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+        std::wstring blob;
+        for (const auto& kv : g_savedInstanceSettings) {
+            if (!blob.empty()) blob += L'\n';
+            blob += SerializeInstanceSettingsLine(kv.first, kv.second);
+        }
+        s.savedInstanceSettingsBlob = std::move(blob);
+    }
     return s;
 }
 
@@ -12621,6 +14326,7 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"TutorialShown", s.tutorialShown, first);
     AppendJsonBool(ss, L"FirstWelcomeShown", s.firstWelcomeShown, first);
     AppendJsonBool(ss, L"PreviewAlphaNotify", s.previewAlphaNotify, first);
+    AppendJsonBool(ss, L"V4WelcomeShown", s.v4WelcomeShown, first);
     AppendJsonUInt64(ss, L"TotalAfkTime", s.totalAfkTime, first);
     AppendJsonUInt64(ss, L"AfkActions", s.afkActions, first);
     AppendJsonUInt64(ss, L"AutoReconnects", s.autoReconnects, first);
@@ -12628,6 +14334,7 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonUInt64(ss, L"DiscordWebhooksSent", s.discordWebhooksSent, first);
     AppendJsonUInt64(ss, L"ProgramLaunches", s.programLaunches, first);
     AppendJsonUInt64(ss, L"AfkSessionsCompleted", s.afkSessionsCompleted, first);
+    AppendJsonUInt64(ss, L"MacroRunsPerformed", s.macroRunsPerformed, first);
     AppendJsonBool(ss, L"UseLegacyUI", s.useLegacyUi, first);
     AppendJsonBool(ss, L"BloxstrapIntegration", s.bloxstrapIntegration, first);
     AppendJsonBool(ss, L"StatusBarEnabled", s.statusBarEnabled, first);
@@ -12647,6 +14354,11 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
     AppendJsonBool(ss, L"CpuLimitMode", s.cpuLimitMode, first);
     AppendJsonInt(ss, L"MultiInstanceInterval", s.multiInstanceInterval, first);
     AppendJsonBool(ss, L"WindowOpacity", s.windowOpacity, first);
+    AppendJsonInt(ss, L"GlobalOpacityPercent", s.globalOpacityPercent, first);
+    AppendJsonBool(ss, L"SsAlwaysShowHintUI", s.ssAlwaysShowHintAndClose, first);
+    AppendJsonBool(ss, L"UiHideNextActionText", s.uiHideNextActionText, first);
+    AppendJsonBool(ss, L"UiHideInstancesText", s.uiHideInstancesText, first);
+    AppendJsonBool(ss, L"UiHideSimpleModeSwitch", s.uiHideSimpleModeSwitch, first);
     AppendJsonBool(ss, L"RamCleanerEnabled", s.ramCleanerEnabled, first);
     AppendJsonInt(ss, L"RamCleanerMode", s.ramCleanerMode, first);
     AppendJsonInt(ss, L"RamCleanerInterval", s.ramCleanerInterval, first);
@@ -12717,6 +14429,11 @@ static std::wstring BuildSettingsJson(const SettingsSnapshot& s)
             AppendJsonString(ss, L"InstancePresetsData", MacroEngine_Utf8ToWide(MacroEngine_Base64Encode(bytes)), first);
         }
     }
+    if (!s.savedInstanceSettingsBlob.empty()) {
+        std::string utf8 = MacroEngine_WideToUtf8(s.savedInstanceSettingsBlob);
+        std::vector<uint32_t> bytes(utf8.begin(), utf8.end());
+        AppendJsonString(ss, L"SavedInstanceSettingsData", MacroEngine_Utf8ToWide(MacroEngine_Base64Encode(bytes)), first);
+    }
     ss << L"\r\n}\r\n";
     return ss.str();
 }
@@ -12727,9 +14444,9 @@ static bool SaveTextFileUtf8(const std::wstring& path, const std::wstring& conte
     if (!outFile.is_open()) return false;
     int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, NULL, 0, NULL, NULL);
     if (bytesNeeded <= 0) return false;
-    std::string utf8(bytesNeeded - 1, '\0');
+    std::string utf8(bytesNeeded, '\0');
     WideCharToMultiByte(CP_UTF8, 0, content.c_str(), -1, &utf8[0], bytesNeeded, NULL, NULL);
-    outFile.write(utf8.data(), (std::streamsize)utf8.size());
+    outFile.write(utf8.data(), (std::streamsize)(bytesNeeded - 1));
     return outFile.good();
 }
 
@@ -12737,6 +14454,10 @@ static bool LoadTextFileUtf8(const std::wstring& path, std::wstring& content)
 {
     std::ifstream inFile(path, std::ios::binary);
     if (!inFile.is_open()) return false;
+    inFile.seekg(0, std::ios::end);
+    std::streamoff fileSize = inFile.tellg();
+    if (fileSize <= 0 || fileSize > 5 * 1024 * 1024) return false;
+    inFile.seekg(0, std::ios::beg);
     std::string bytes((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
     if (bytes.empty()) return false;
     int charsNeeded = MultiByteToWideChar(CP_UTF8, 0, bytes.c_str(), (int)bytes.size(), NULL, 0);
@@ -12767,11 +14488,12 @@ static bool FindJsonValue(const std::wstring& json, const std::wstring& key, std
             continue;
         }
         if (c == L'"') {
-            if (json.substr(i, searchKey.size()) == searchKey) {
-                size_t colonPos = json.find(L':', i + searchKey.size());
-                if (colonPos == std::wstring::npos) return false;
-                size_t valPos = colonPos + 1;
-                while (valPos < json.size() && iswspace(json[valPos])) ++valPos;
+            if (json.compare(i, searchKey.size(), searchKey) == 0) {
+                size_t afterKey = i + searchKey.size();
+                while (afterKey < json.size() && iswspace(json[afterKey])) ++afterKey;
+                if (afterKey < json.size() && json[afterKey] == L':') {
+                    size_t valPos = afterKey + 1;
+                    while (valPos < json.size() && iswspace(json[valPos])) ++valPos;
                 size_t end = valPos;
                 if (valPos < json.size() && json[valPos] == L'"') {
                     ++valPos;
@@ -12791,6 +14513,7 @@ static bool FindJsonValue(const std::wstring& json, const std::wstring& key, std
                 rawValue.erase(0, rawValue.find_first_not_of(L" \t"));
                 rawValue.erase(rawValue.find_last_not_of(L" \t") + 1);
                 return !rawValue.empty();
+                }
             }
             inString = true;
             escape = false;
@@ -12810,10 +14533,26 @@ static bool ParseJsonBool(const std::wstring& json, const std::wstring& key, boo
     return false;
 }
 
+static bool IsJsonIntegerToken(const std::wstring& raw)
+{
+    size_t i = 0;
+    while (i < raw.size() && iswspace(raw[i])) ++i;
+    size_t end = raw.size();
+    while (end > i && iswspace(raw[end - 1])) --end;
+    if (i >= end) return false;
+    if (raw[i] == L'-' || raw[i] == L'+') ++i;
+    if (i >= end) return false;
+    for (; i < end; ++i) {
+        if (raw[i] < L'0' || raw[i] > L'9') return false;
+    }
+    return true;
+}
+
 static bool ParseJsonInt(const std::wstring& json, const std::wstring& key, int& value)
 {
     std::wstring raw;
     if (!FindJsonValue(json, key, raw)) return false;
+    if (!IsJsonIntegerToken(raw)) return false;
     try { value = std::stoi(raw); return true; } catch (...) { return false; }
 }
 
@@ -12821,6 +14560,7 @@ static bool ParseJsonUInt64(const std::wstring& json, const std::wstring& key, u
 {
     std::wstring raw;
     if (!FindJsonValue(json, key, raw)) return false;
+    if (!IsJsonIntegerToken(raw) || raw[0] == L'-') return false;
     try { value = std::stoull(raw); return true; } catch (...) { return false; }
 }
 
@@ -12866,6 +14606,47 @@ static bool ParseJsonString(const std::wstring& json, const std::wstring& key, s
     }
     value = out;
     return true;
+}
+
+static int RunJsonSelfTests()
+{
+    int failures = 0;
+    std::wstring report;
+    auto check = [&](bool cond, const wchar_t* name) {
+        if (!cond) {
+            ++failures;
+            report += L"FAIL: ";
+        } else {
+            report += L"PASS: ";
+        }
+        report += name;
+        report += L"\r\n";
+    };
+
+    const std::wstring json = L"{\"Alpha\":true,\"Number\":42,\"Text\":\"hello \\\"world\\\"\",\"Escaped\":\"line\\nbreak\",\"Unicode\":\"\\u0041\",\"Fake\":\"\\\"Alpha\\\":false\"}";
+    bool b = false;
+    check(ParseJsonBool(json, L"Alpha", b) && b, L"bool true");
+    check(ParseJsonBool(json, L"Missing", b) == false, L"missing bool rejected");
+    int i = 0;
+    check(ParseJsonInt(json, L"Number", i) && i == 42, L"int value");
+    check(ParseJsonInt(json, L"Text", i) == false, L"non-int rejected");
+    std::wstring s;
+    check(ParseJsonString(json, L"Text", s) && s == L"hello \"world\"", L"escaped string");
+    check(ParseJsonString(json, L"Escaped", s) && s == L"line\nbreak", L"newline escape");
+    check(ParseJsonString(json, L"Unicode", s) && s == L"A", L"unicode escape");
+    check(ParseJsonString(json, L"Fake", s) && s == L"\"Alpha\":false", L"key inside string ignored");
+    check(ParseJsonInt(L"{\"Number\":}", L"Number", i) == false, L"malformed value rejected");
+    check(ParseJsonInt(L"{\"Number\" 42}", L"Number", i) == false, L"missing colon rejected");
+
+    std::wstring outPath = GetFpsSuspendMarkerPath();
+    size_t slash = outPath.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) outPath = outPath.substr(0, slash + 1);
+    outPath += L"AntiAFK-RBX-selftest.txt";
+    wchar_t summary[64];
+    swprintf_s(summary, L"JSON self-test: %d failure(s)\r\n\r\n", failures);
+    report = std::wstring(summary) + report;
+    SaveTextFileUtf8(outPath, report);
+    return failures == 0 ? 0 : 1;
 }
 
 static std::wstring TrimAnnouncementField(std::wstring value, size_t maxLength)
@@ -12949,10 +14730,21 @@ static bool DownloadTextUrl(const wchar_t* url, std::string& outText, DWORD time
         return false;
     }
 
+    DWORD statusCode = 0;
+    DWORD statusSize = sizeof(statusCode);
+    if (HttpQueryInfoW(hConnect, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusSize, NULL)) {
+        if (statusCode < 200 || statusCode >= 300) {
+            InternetCloseHandle(hConnect);
+            InternetCloseHandle(hInternet);
+            return false;
+        }
+    }
+
     char buffer[512] = { 0 };
     DWORD bytesRead = 0;
     bool ok = true;
-    while (InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+    BOOL readOk = FALSE;
+    while ((readOk = InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead)) && bytesRead > 0)
     {
         if (outText.size() + bytesRead > maxBytes)
         {
@@ -12962,6 +14754,7 @@ static bool DownloadTextUrl(const wchar_t* url, std::string& outText, DWORD time
         outText.append(buffer, bytesRead);
         bytesRead = 0;
     }
+    if (!readOk) ok = false;
 
     InternetCloseHandle(hConnect);
     InternetCloseHandle(hInternet);
@@ -13055,16 +14848,17 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_gridAllMonitors = s.gridAllMonitors;
     g_gridKeepAspectRatio = s.gridKeepAspectRatio;
     g_gridMode = NormalizeGridMode(s.gridMode);
-    g_gridFixedWinW = s.gridFixedWinW;
-    g_gridFixedWinH = s.gridFixedWinH;
-    g_gridFixedCols = s.gridFixedCols;
-    g_gridFixedRows = s.gridFixedRows;
-    g_gridSpacingBetween = s.gridSpacingBetween;
-    g_gridSpacingBorders = s.gridSpacingBorders;
+    g_gridFixedWinW = ClampInt(s.gridFixedWinW, 100, 4000);
+    g_gridFixedWinH = ClampInt(s.gridFixedWinH, 100, 4000);
+    g_gridFixedCols = ClampInt(s.gridFixedCols, 1, 20);
+    g_gridFixedRows = ClampInt(s.gridFixedRows, 1, 20);
+    g_gridSpacingBetween = ClampInt(s.gridSpacingBetween, 0, 200);
+    g_gridSpacingBorders = ClampInt(s.gridSpacingBorders, 0, 200);
     g_restoreMethod = NormalizeRestoreMethod(s.restoreMethod);
     g_tutorialShown = s.tutorialShown;
     g_firstWelcomeShown = s.firstWelcomeShown;
     g_previewAlphaNotify = s.previewAlphaNotify;
+    g_v4WelcomeShown = s.v4WelcomeShown;
     g_totalAfkTimeSeconds = s.totalAfkTime;
     g_afkActionsPerformed = s.afkActions;
     g_autoReconnectsPerformed = s.autoReconnects;
@@ -13072,6 +14866,7 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_discordWebhooksSent = s.discordWebhooksSent;
     g_programLaunches = s.programLaunches;
     g_afkSessionsCompleted = s.afkSessionsCompleted;
+    g_macroRunsPerformed = s.macroRunsPerformed;
     g_useLegacyUi = s.useLegacyUi;
     g_bloxstrapIntegration = s.bloxstrapIntegration;
     g_statusBarEnabled = s.statusBarEnabled;
@@ -13113,6 +14908,11 @@ static void ApplySettingsSnapshot(const SettingsSnapshot& s)
     g_notificationsDisabled = s.disableNotifications;
     g_keepWindowOnTop = s.keepWindowOnTop;
     g_disableWindowCorners = s.disableWindowCorners;
+    g_globalOpacityPercent = ClampInt(s.globalOpacityPercent, 5, 100);
+    g_ssAlwaysShowHintAndClose = s.ssAlwaysShowHintAndClose;
+    g_uiHideNextActionText = s.uiHideNextActionText;
+    g_uiHideInstancesText = s.uiHideInstancesText;
+    g_uiHideSimpleModeSwitch = s.uiHideSimpleModeSwitch;
     g_discordWebhookEnabled = s.discordWebhookEnabled;
     g_discordNotifyStart = s.discordNotifyStart;
     g_discordNotifyStop = s.discordNotifyStop;
@@ -13250,6 +15050,48 @@ pos = comma + 1;
             g_instancePresets = std::move(imported);
         }
     }
+
+    {
+        std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+        g_savedInstanceSettings.clear();
+        std::wstringstream lines(s.savedInstanceSettingsBlob);
+        std::wstring line;
+        while (std::getline(lines, line)) {
+            if (line.empty()) continue;
+            std::wstring title;
+            RobloxInstanceSettings saved;
+            if (ParseInstanceSettingsLine(line, title, saved)) {
+                g_savedInstanceSettings[title] = saved;
+            }
+        }
+    }
+    {
+        auto wins = FindAllRobloxWindows(true);
+        for (HWND w : wins) ApplySavedInstanceSettingsToWindow(w);
+    }
+
+    if (g_isAfkStarted.load()) {
+        g_utilsWindowOpacityOverride = g_autoOpacity.load() ? 1 : -1;
+        g_opacityOverrideAuto = g_autoOpacity.load();
+        g_utilsMuteOverride = g_autoMute.load() ? 1 : 0;
+        g_muteOverrideAuto = g_autoMute.load();
+        g_utilsFpsLimitOverride = g_fpsLimit > 0 ? g_fpsLimit.load() : 0;
+        g_fpsOverrideAuto = g_fpsLimit > 0;
+        g_ramCleanerEnabled = g_ramCleanerAutoStart.load();
+        if (g_ramCleanerEnabled.load()) EnsureRamCleanerThreadStarted();
+        ApplyAutoUtilsStartEffects();
+    } else {
+        ShowAllSelfHiddenRobloxWindows();
+        RefreshRobloxWindowOpacity(false);
+        MuteAllRoblox(false);
+        g_unmutedPid = 0;
+    }
+    if (g_autoReconnect.load() && g_reconnectCheckInterval.load() > 0 && g_isAfkStarted.load()) {
+        StartReconnectMonitor();
+    } else {
+        StopReconnectMonitor();
+    }
+    UpdateBloxstrapIntegration(g_bloxstrapIntegration.load());
 }
 
 static bool ExportSettingsToFile(HWND owner)
@@ -13279,7 +15121,9 @@ static bool ExportSettingsToFile(HWND owner)
             std::wstring macrosSrc = MacroEngine_GetMacrosPath();
             DWORD attrs = GetFileAttributesW(macrosSrc.c_str());
             if (attrs != INVALID_FILE_ATTRIBUTES) {
-                CopyFileW(macrosSrc.c_str(), macroFile, FALSE);
+                if (!CopyFileW(macrosSrc.c_str(), macroFile, FALSE)) {
+                    ShowDarkMessageBox(owner, L"Settings were exported, but the macros file could not be saved.\nCheck the destination permissions and try again.", L"AntiAFK-RBX • Export Settings", MB_OK);
+                }
             } else {
                 ShowDarkMessageBox(owner, L"Macros file not found - nothing to export.", L"AntiAFK-RBX • Export Settings", MB_OK);
             }
@@ -13301,6 +15145,26 @@ static bool ImportSettingsFromFile(HWND owner)
 
     std::wstring json;
     if (!LoadTextFileUtf8(fileName, json)) return false;
+
+    if (json.find(L"\"SelectedTime\"") == std::wstring::npos &&
+        json.find(L"\"AutoUpdate\"") == std::wstring::npos &&
+        json.find(L"\"FpsLimit\"") == std::wstring::npos) {
+        ShowDarkMessageBox(owner, L"This file does not look like an AntiAFK-RBX settings export.", L"AntiAFK-RBX • Import Settings", MB_OK | MB_ICONWARNING);
+        return false;
+    }
+
+    if (ShowDarkMessageBox(owner, L"Import settings from this file?\n\nCurrent settings, statistics and instance presets will be replaced. The current registry values are saved before import.", L"AntiAFK-RBX • Import Settings", MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+        return false;
+    }
+    SaveSettings();
+    {
+        wchar_t appData[MAX_PATH];
+        if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData) == S_OK) {
+            MacroEngine_EnsureDirectory();
+            std::wstring backupPath = std::wstring(appData) + L"\\AntiAFK-RBX\\settings-backup-before-import.json";
+            SaveTextFileUtf8(backupPath.c_str(), BuildSettingsJson(CaptureSettingsSnapshot()));
+        }
+    }
 
     SettingsSnapshot s = CaptureSettingsSnapshot();
     ParseJsonBool(json, L"MultiSupport", s.multiSupport);
@@ -13328,6 +15192,7 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"TutorialShown", s.tutorialShown);
     ParseJsonBool(json, L"FirstWelcomeShown", s.firstWelcomeShown);
     ParseJsonBool(json, L"PreviewAlphaNotify", s.previewAlphaNotify);
+    ParseJsonBool(json, L"V4WelcomeShown", s.v4WelcomeShown);
     ParseJsonUInt64(json, L"TotalAfkTime", s.totalAfkTime);
     ParseJsonUInt64(json, L"AfkActions", s.afkActions);
     ParseJsonUInt64(json, L"AutoReconnects", s.autoReconnects);
@@ -13335,6 +15200,7 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonUInt64(json, L"DiscordWebhooksSent", s.discordWebhooksSent);
     ParseJsonUInt64(json, L"ProgramLaunches", s.programLaunches);
     ParseJsonUInt64(json, L"AfkSessionsCompleted", s.afkSessionsCompleted);
+    ParseJsonUInt64(json, L"MacroRunsPerformed", s.macroRunsPerformed);
     ParseJsonBool(json, L"UseLegacyUI", s.useLegacyUi);
     ParseJsonBool(json, L"BloxstrapIntegration", s.bloxstrapIntegration);
     ParseJsonBool(json, L"StatusBarEnabled", s.statusBarEnabled);
@@ -13372,6 +15238,11 @@ static bool ImportSettingsFromFile(HWND owner)
     ParseJsonBool(json, L"DisableWindowCorners", s.disableWindowCorners);
     ParseJsonBool(json, L"DiscordWebhookEnabled", s.discordWebhookEnabled);
     ParseJsonBool(json, L"DiscordNotifyStart", s.discordNotifyStart);
+    ParseJsonInt(json, L"GlobalOpacityPercent", s.globalOpacityPercent);
+    ParseJsonBool(json, L"SsAlwaysShowHintUI", s.ssAlwaysShowHintAndClose);
+    ParseJsonBool(json, L"UiHideNextActionText", s.uiHideNextActionText);
+    ParseJsonBool(json, L"UiHideInstancesText", s.uiHideInstancesText);
+    ParseJsonBool(json, L"UiHideSimpleModeSwitch", s.uiHideSimpleModeSwitch);
     ParseJsonBool(json, L"DiscordNotifyStop", s.discordNotifyStop);
     ParseJsonBool(json, L"DiscordNotifyAction", s.discordNotifyAction);
     ParseJsonBool(json, L"DiscordNotifyReconnect", s.discordNotifyReconnect);
@@ -13438,8 +15309,25 @@ static bool ImportSettingsFromFile(HWND owner)
             s.instancePresetsBlob = MacroEngine_Utf8ToWide(utf8);
         }
     }
+    {
+        std::wstring instancesB64;
+        if (ParseJsonString(json, L"SavedInstanceSettingsData", instancesB64) && !instancesB64.empty()) {
+            std::vector<uint32_t> bytes = MacroEngine_Base64Decode(MacroEngine_WideToUtf8(instancesB64));
+            std::string utf8;
+            utf8.reserve(bytes.size());
+            for (uint32_t b : bytes) utf8.push_back((char)b);
+            s.savedInstanceSettingsBlob = MacroEngine_Utf8ToWide(utf8);
+        }
+    }
     ApplySettingsSnapshot(s);
     SaveSettings();
+    ApplyAcrylicSetting();
+    ApplyWindowOnTopSetting();
+    ApplyWindowCornersSetting();
+    UpdateDoNotSleepRequest();
+    if (g_multiSupport.load()) EnableMultiInstanceSupport();
+    else DisableMultiInstanceSupport();
+    CreateTrayMenu(g_isAfkStarted.load());
     if (g_hotkeyEnabled.load()) {
         UnregisterHotKey(g_hwnd, HOTKEY_START_STOP_ID);
         RegisterHotKey(g_hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
@@ -13557,8 +15445,9 @@ void CreateTrayMenu(bool afk)
 
     HMENU InfoMenu = CreatePopupMenu();
     AppendMenu(InfoMenu, MF_STRING, ID_ABOUT_MENU, L"About AntiAFK-RBX");
-    AppendMenu(InfoMenu, MF_STRING, ID_SHOW_TUTORIAL, L"Show First Welcome");
-    AppendMenu(InfoMenu, MF_STRING, ID_LINKTTU, L"[Link] - TipsToUse");
+    AppendMenu(InfoMenu, MF_STRING, ID_WHATS_NEW, L"What's New in v4");
+    AppendMenu(InfoMenu, MF_STRING, ID_SHOW_TUTORIAL, L"Show Welcome Tour");
+    AppendMenu(InfoMenu, MF_STRING, ID_LINKTTU, L"[Link] - Tips to Use");
     AppendMenu(InfoMenu, MF_STRING, ID_LINKWIKI, L"[Link] - Wiki");
     AppendMenu(InfoMenu, MF_STRING, ID_LINKGITHUB, L"[Link] - GitHub");
     AppendMenu(InfoMenu, MF_STRING, ID_LINKSF, L"[Link] - SourceForge");
@@ -13566,7 +15455,7 @@ void CreateTrayMenu(bool afk)
     {
         HBITMAP hAppBmp = CreateMenuIconFromAppIcon();
         g_menuIconBitmaps.push_back(hAppBmp);
-        SetMenuIconBitmap(g_hMenu, (UINT_PTR)InfoMenu, hAppBmp);
+        SetMenuIconBitmap(g_hMenu, (UINT)(UINT_PTR)InfoMenu, hAppBmp);
     }
 
     if (!g_useLegacyUi.load())
@@ -13581,29 +15470,77 @@ void CreateTrayMenu(bool afk)
         AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
         AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-        if (!g_simpleMode.load()) {
-            AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
-            AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
-            AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
-            AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
-            AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-        }
         AppendMenu(g_hMenu, MF_STRING, ID_OPEN_UI, L"Open AntiAFK-RBX");
-        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-        {
-            wchar_t hkStatus[128];
-            std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
-            swprintf_s(hkStatus, L"Hotkey: %s [%s]", hkStr.c_str(), g_hotkeyEnabled.load() ? L"On" : L"Off");
-            AppendMenu(g_hMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, hkStatus);
+        if (!g_simpleMode.load()) {
+            AppendMenu(g_hMenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance Manager");
+            AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
+            AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+
+            HMENU hV4WindowsMenu = CreatePopupMenu();
+            AppendMenu(hV4WindowsMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
+            AppendMenu(hV4WindowsMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
+            wchar_t winOpacityLabel[64], autoOpacityLabel[64];
+            swprintf_s(winOpacityLabel, L"Window Opacity (%d%%)", g_globalOpacityPercent.load());
+            swprintf_s(autoOpacityLabel, L"Auto Opacity (%d%%)", g_globalOpacityPercent.load());
+            AppendMenu(hV4WindowsMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, winOpacityLabel);
+            AppendMenu(hV4WindowsMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox");
+            AppendMenu(hV4WindowsMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hV4WindowsMenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
+            AppendMenu(hV4WindowsMenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, autoOpacityLabel);
+            AppendMenu(hV4WindowsMenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox");
+            AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hV4WindowsMenu, L"Windows");
+            SetMenuIconPopup(g_hMenu, hV4WindowsMenu, 0xE737);
+
+            HMENU hV4SettingsMenu = CreatePopupMenu();
+            AppendMenu(hV4SettingsMenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start Anti-AFK");
+            AppendMenu(hV4SettingsMenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect");
+            AppendMenu(hV4SettingsMenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset");
+            AppendMenu(hV4SettingsMenu, MF_STRING | (g_doNotSleep.load() ? MF_CHECKED : 0), ID_DO_NOT_SLEEP, L"Do Not Sleep");
+            AppendMenu(hV4SettingsMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hV4SettingsMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
+            AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hV4SettingsMenu, L"Settings");
+            SetMenuIconPopup(g_hMenu, hV4SettingsMenu, 0xE713);
+
+            HMENU hV4UtilsMenu = CreatePopupMenu();
+            AppendMenu(hV4UtilsMenu, MF_STRING, ID_UTILS_SHOW_ALL, L"Show All Roblox");
+            AppendMenu(hV4UtilsMenu, MF_STRING, ID_UTILS_HIDE_ALL, L"Hide All Roblox");
+            AppendMenu(hV4UtilsMenu, MF_STRING, ID_UTILS_TEST_ACTION, L"Test Anti-AFK Action");
+            AppendMenu(hV4UtilsMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hV4UtilsMenu, MF_STRING, ID_UTILS_RESET_ALL, L"Reset All Roblox");
+            AppendMenu(hV4UtilsMenu, MF_STRING, ID_UTILS_CLOSE_ALL, L"Close All Roblox");
+            AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hV4UtilsMenu, L"Utils");
+            SetMenuIconPopup(g_hMenu, hV4UtilsMenu, 0xE945);
+
+            HMENU hV4HotkeysMenu = CreatePopupMenu();
+            {
+                wchar_t hkStatus[128];
+                std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
+                swprintf_s(hkStatus, L"Hotkey: %s [%s]", hkStr.c_str(), g_hotkeyEnabled.load() ? L"On" : L"Off");
+                AppendMenu(hV4HotkeysMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, hkStatus);
+            }
+            AppendMenu(hV4HotkeysMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"Change Hotkey...");
+            {
+                wchar_t gkStatus[128];
+                std::wstring gkStr = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+                swprintf_s(gkStatus, L"Grid Hotkey: %s [%s]", gkStr.c_str(), g_hotkeyGridEnabled.load() ? L"On" : L"Off");
+                AppendMenu(hV4HotkeysMenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, gkStatus);
+            }
+            AppendMenu(hV4HotkeysMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"Change Grid Hotkey...");
+            AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hV4HotkeysMenu, L"Hotkeys");
+            SetMenuIconPopup(g_hMenu, hV4HotkeysMenu, 0xE765);
+        } else {
+            HMENU hV4SimpleMenu = CreatePopupMenu();
+            AppendMenu(hV4SimpleMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Bypass");
+            AppendMenu(hV4SimpleMenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto-Reconnect");
+            AppendMenu(hV4SimpleMenu, MF_STRING | (g_fpsLimit > 0 ? MF_CHECKED : 0), ID_FPS_CAP_TOGGLE, L"FPS Capper");
+            AppendMenu(hV4SimpleMenu, MF_STRING | (g_ramCleanerAutoStart.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_TOGGLE, L"RAM Cleaner");
+            AppendMenu(hV4SimpleMenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip Active");
+            AppendMenu(hV4SimpleMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hV4SimpleMenu, MF_STRING, ID_TOGGLE_SIMPLE_MODE, L"Switch to Advanced Mode");
+            AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hV4SimpleMenu, L"Settings");
+            SetMenuIconPopup(g_hMenu, hV4SimpleMenu, 0xE713);
         }
-        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"Change Hotkey...");
-        {
-            wchar_t gkStatus[128];
-            std::wstring gkStr = FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
-            swprintf_s(gkStatus, L"Grid Hotkey: %s [%s]", gkStr.c_str(), g_hotkeyGridEnabled.load() ? L"On" : L"Off");
-            AppendMenu(g_hMenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, gkStatus);
-        }
-        AppendMenu(g_hMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"Change Grid Hotkey...");
+
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
         AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
         if (g_updateFound)
@@ -13630,10 +15567,18 @@ void CreateTrayMenu(bool afk)
         AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     }
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(g_hMenu, MF_STRING, ID_TEST_ACTION, L"Test Anti-AFK move");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
-    AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+
+    HMENU hAntiAfkMenu = CreatePopupMenu();
+    HMENU hWindowsMenu = CreatePopupMenu();
+    HMENU hMacrosMenu = CreatePopupMenu();
+    HMENU hAutomationMenu = CreatePopupMenu();
+    HMENU hIntegrationsMenu = CreatePopupMenu();
+    HMENU hDiagnosticsMenu = CreatePopupMenu();
+
+    AppendMenu(hAntiAfkMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
+    AppendMenu(hAntiAfkMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
+    AppendMenu(hAntiAfkMenu, MF_STRING, ID_TEST_ACTION, L"Test Anti-AFK move");
+    AppendMenu(hAntiAfkMenu, MF_SEPARATOR, 0, NULL);
 
     HMENU hTimeSubmenu = CreatePopupMenu();
     AppendMenu(hTimeSubmenu, MF_STRING, ID_TIME_CUSTOM, L"Custom interval...");
@@ -13649,42 +15594,49 @@ void CreateTrayMenu(bool afk)
         swprintf_s(timeLabel, L"Set Interval • %d sec", g_selectedTime.load());
     else
         swprintf_s(timeLabel, L"Set Interval • %d min", g_selectedTime.load() / 60);
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hTimeSubmenu, timeLabel);
-    SetMenuIconPopup(g_hMenu, hTimeSubmenu, 0xE916);
+    if (!g_simpleMode.load()) {
+        AppendMenu(hAntiAfkMenu, MF_STRING | MF_POPUP, (UINT_PTR)hTimeSubmenu, timeLabel);
+        SetMenuIconPopup(hAntiAfkMenu, hTimeSubmenu, 0xE916);
+    }
 
     HMENU hActionSubmenu = CreatePopupMenu();
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
-    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 5 ? MF_CHECKED : 0), ID_ACTION_ARROWS, L"<- / ->");
+    AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random");
     AppendMenu(hActionSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hActionSubmenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
     wchar_t actionLabel[32];
-        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
+        const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random", L"Macros Only", L"<- / ->" };
     swprintf_s(actionLabel, L"Set Action • %s", actionNames[g_selectedAction.load()]);
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
-    SetMenuIconPopup(g_hMenu, hActionSubmenu, 0xE7C9);
-    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
-    AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : 0) | (g_intervalMacroEnabled.load() ? MF_CHECKED : 0), ID_INTERVAL_MACRO_TOGGLE, L"Interval Macros");
-    AppendMenu(g_hMenu, MF_STRING, ID_MACROS_IMPORT, L"Import Macro...");
-    AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (!g_simpleMode.load()) {
-        AppendMenu(g_hMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
-        AppendMenu(g_hMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
-        AppendMenu(g_hMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, L"Window Opacity (70%)");
-        AppendMenu(g_hMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
-        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hAntiAfkMenu, MF_STRING | MF_POPUP, (UINT_PTR)hActionSubmenu, actionLabel);
+        SetMenuIconPopup(hAntiAfkMenu, hActionSubmenu, 0xE7C9);
     }
-    HMENU hSettingsSubmenu = CreatePopupMenu();
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar*");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, L"├ Status Bar: Primary Monitor");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"├ Status Bar: Position Bottom");
+    AppendMenu(hMacrosMenu, MF_STRING, ID_MACROS_OPEN, L"Macros...");
+    AppendMenu(hMacrosMenu, MF_STRING | (afk ? MF_GRAYED : 0) | (g_intervalMacroEnabled.load() ? MF_CHECKED : 0), ID_INTERVAL_MACRO_TOGGLE, L"Interval Macros");
+    AppendMenu(hMacrosMenu, MF_STRING, ID_MACROS_IMPORT, L"Import Macro...");
+    if (!g_simpleMode.load()) {
+        AppendMenu(hWindowsMenu, MF_STRING, ID_SHOW_WINDOW, L"Show Roblox");
+        AppendMenu(hWindowsMenu, MF_STRING, ID_HIDE_WINDOW, L"Hide Roblox");
+        wchar_t winOpacityLabel[64];
+        swprintf_s(winOpacityLabel, L"Window Opacity (%d%%)", g_globalOpacityPercent.load());
+        AppendMenu(hWindowsMenu, MF_STRING | (g_windowOpacity.load() ? MF_CHECKED : 0), ID_WINDOW_OPACITY, winOpacityLabel);
+        AppendMenu(hWindowsMenu, MF_STRING, ID_GLOBAL_OPACITY_SET, L"╰ Set Opacity %...");
+        AppendMenu(hWindowsMenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox");
+        AppendMenu(hWindowsMenu, MF_SEPARATOR, 0, NULL);
+    }
+    HMENU hSettingsSubmenu = hAutomationMenu;
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_autoUpdate.load() ? MF_CHECKED : 0), ID_AUTO_UPDATE, L"Update/Announcement Checker");
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_statusBarEnabled.load() ? MF_CHECKED : 0), ID_STATUS_BAR, L"Status Bar");
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_statusBarPrimaryMonitor.load() ? MF_CHECKED : 0), ID_STATUS_BAR_PRIMARY_MONITOR, L"├ Status Bar: Primary Monitor");
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_statusBarPositionBottom.load() ? MF_CHECKED : 0), ID_STATUS_BAR_POSITION_BOTTOM, L"├ Status Bar: Position Bottom");
     {
         HMENU hSbContentSubmenu = CreatePopupMenu();
         AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowIcon.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_ICON, L"App icon");
         AppendMenu(hSbContentSubmenu, MF_STRING | (g_statusBarShowBrand.load() ? MF_CHECKED : 0), ID_STATUS_BAR_CONTENT_BRAND, L"Program name");
-        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbContentSubmenu, L"├ Status Bar: Content");
+        AppendMenu(hIntegrationsMenu, MF_POPUP, (UINT_PTR)hSbContentSubmenu, L"├ Status Bar: Content");
 
         HMENU hSbEventsSubmenu = CreatePopupMenu();
         AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventSession.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_SESSION, L"Start && Stop");
@@ -13692,13 +15644,13 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventReconnect.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_RECONNECT, L"Auto-Reconnect");
         AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventMacro.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_MACRO, L"Macros");
         AppendMenu(hSbEventsSubmenu, MF_STRING | (g_statusBarEventUi.load() ? MF_CHECKED : 0), ID_STATUS_BAR_EVENT_UI, L"Interface feedback");
-        AppendMenu(hSettingsSubmenu, MF_POPUP, (UINT_PTR)hSbEventsSubmenu, L"╰ Status Bar: Events");
+        AppendMenu(hIntegrationsMenu, MF_POPUP, (UINT_PTR)hSbEventsSubmenu, L"╰ Status Bar: Events");
 
-        SetMenuIconPopup(hSettingsSubmenu, hSbContentSubmenu, 0xE7F4);
-        SetMenuIconPopup(hSettingsSubmenu, hSbEventsSubmenu, 0xE916);
+        SetMenuIconPopup(hIntegrationsMenu, hSbContentSubmenu, 0xE7F4);
+        SetMenuIconPopup(hIntegrationsMenu, hSbEventsSubmenu, 0xE916);
     }
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoStartAfk.load() ? MF_CHECKED : 0), ID_AUTO_START_AFK, L"Auto-Start Anti-AFK");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect*");
+    AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto Reconnect");
     if (!g_simpleMode.load()) {
         HMENU hReconnectIntervalSubmenu = CreatePopupMenu();
         AppendMenu(hReconnectIntervalSubmenu, MF_STRING | (g_reconnectCheckInterval.load() == 0 ? MF_CHECKED : 0), ID_RECONNECT_INTERVAL_OFF, L"Off (with main cycle)");
@@ -13738,17 +15690,19 @@ void CreateTrayMenu(bool afk)
         }
     }
     if (!g_simpleMode.load()) {
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"╰ Manual Reconnect Check*");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, L"Auto Opacity (70%)");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox*");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid Settings...");
-        AppendMenu(hSettingsSubmenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance Manager");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoReconnect.load() ? 0 : MF_GRAYED), ID_RECONNECT_MANUAL_CHECK, L"╰ Manual Reconnect Check");
+        AppendMenu(hWindowsMenu, MF_STRING | (g_autoReset.load() ? MF_CHECKED : 0), ID_AUTO_RESET, L"Auto Reset (Esc+R+Enter)");
+        AppendMenu(hWindowsMenu, MF_STRING | (g_autoHideRoblox.load() ? MF_CHECKED : 0), ID_AUTO_HIDE, L"Auto-Hide Roblox");
+        wchar_t autoOpacityLabel[64];
+        swprintf_s(autoOpacityLabel, L"Auto Opacity (%d%%)", g_globalOpacityPercent.load());
+        AppendMenu(hWindowsMenu, MF_STRING | (g_autoOpacity.load() ? MF_CHECKED : 0), ID_AUTO_OPACITY, autoOpacityLabel);
+        AppendMenu(hWindowsMenu, MF_STRING | (g_autoGrid.load() ? MF_CHECKED : 0), ID_AUTO_GRID, L"Auto Grid Roblox");
+        AppendMenu(hWindowsMenu, MF_STRING, ID_GRID_SETTINGS, L"╰ Grid Settings...");
+        AppendMenu(hWindowsMenu, MF_STRING, ID_OPEN_INSTANCE_MANAGER, L"Instance Manager");
+        AppendMenu(hIntegrationsMenu, MF_STRING | (g_bloxstrapIntegration.load() ? MF_CHECKED : 0), ID_BLOXSTRAP_INTEGRATION, L"Fish/Void/Bloxstrap Integration");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_afkReminderEnabled.load() ? MF_CHECKED : 0), ID_I_CAN_FORGET, L"I Can Forget (Smart Auto-Start)");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip Active");
-        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"AutoMute Roblox");
+        AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? MF_CHECKED : 0), ID_AUTO_MUTE, L"Auto-Mute Roblox");
         AppendMenu(hSettingsSubmenu, MF_STRING | (g_autoMute.load() ? 0 : MF_GRAYED) | (g_unmuteOnFocus.load() ? MF_CHECKED : 0), ID_UNMUTE_ON_FOCUS, L"Unmute on Focus");
     }
     AppendMenu(hSettingsSubmenu, MF_STRING | (g_fpsLimit > 0 ? 0 : MF_GRAYED) | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), ID_UNLOCK_FPS_ON_FOCUS, L"Unlock FPS on Focus");
@@ -13761,28 +15715,31 @@ void CreateTrayMenu(bool afk)
     const wchar_t* userSafeNames[] = { L"Off", L"Legacy", L"Beta" };
     wchar_t userSafeLabel[48];
     swprintf_s(userSafeLabel, L"User-Safe Mode • %s", userSafeNames[g_userSafeMode.load()]);
-    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
-    SetMenuIconPopup(hSettingsSubmenu, hUserSafeSubmenu, 0xE72E);
-    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    if (!g_simpleMode.load()) {
+        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
+        SetMenuIconPopup(hSettingsSubmenu, hUserSafeSubmenu, 0xE72E);
+        AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    }
 
     if (!g_simpleMode.load()) {
+        AppendMenu(hWindowsMenu, MF_SEPARATOR, 0, NULL);
         HMENU hRestoreSubmenu = CreatePopupMenu();
         AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 0 ? MF_CHECKED : 0), ID_RESTORE_OFF, L"Off");
         AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 1 ? MF_CHECKED : 0), ID_RESTORE_FOREGROUND, L"SetForeground");
         AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 2 ? MF_CHECKED : 0), ID_RESTORE_ALTTAB, L"Alt+Tab (Legacy) - single tab");
         AppendMenu(hRestoreSubmenu, MF_STRING | (g_restoreMethod.load() == 3 ? MF_CHECKED : 0), ID_RESTORE_SMART_ALTTAB, L"Smart Alt+Tab - skip all Roblox");
-        const wchar_t* restoreNames[] = { L"Off", L"SetFor.", L"Alt+Tab", L"Smart" };
+        const wchar_t* restoreNames[] = { L"Off", L"SetForeground", L"Alt+Tab", L"Smart" };
         wchar_t restoreLabel[48];
         swprintf_s(restoreLabel, L"Restore Window Method • %s", restoreNames[g_restoreMethod.load()]);
-        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRestoreSubmenu, restoreLabel);
-        SetMenuIconPopup(hSettingsSubmenu, hRestoreSubmenu, 0xE73F);
-        AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hWindowsMenu, MF_POPUP | MF_STRING, (UINT_PTR)hRestoreSubmenu, restoreLabel);
+        SetMenuIconPopup(hWindowsMenu, hRestoreSubmenu, 0xE73F);
+        AppendMenu(hWindowsMenu, MF_SEPARATOR, 0, NULL);
     }
 
     HMENU hFpsCapperSubmenu = CreatePopupMenu();
     AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_fpsLimit > 0 ? MF_CHECKED : 0), ID_FPS_CAP_TOGGLE, L"Enabled");
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_CPU_LIMIT_MODE_TOGGLE, L"FPS Capper (CPU Limiter) % Mode (BES-style)");
+    AppendMenu(hFpsCapperSubmenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_CPU_LIMIT_MODE_TOGGLE, L"FPS Capper (CPU Limiter) Mode (BES-style)");
     AppendMenu(hFpsCapperSubmenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), ID_FPS_PRESETS_MODE, L"FPS Presets Mode");
     AppendMenu(hFpsCapperSubmenu, MF_SEPARATOR, 0, NULL);
 
@@ -13803,11 +15760,13 @@ void CreateTrayMenu(bool afk)
     }
 
     wchar_t fpsLabel[64];
-    if (g_fpsLimit == 0) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • Disabled");
-    else if (g_cpuLimitMode.load()) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d%% Limit (%dms)", g_cpuLimitPercent.load(), g_cpuLimitPeriod.load());
-    else swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter)* • %d FPS", g_fpsLimit.load());
-    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
-    SetMenuIconPopup(hSettingsSubmenu, hFpsCapperSubmenu, 0xE950);
+    if (g_fpsLimit == 0) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter) • Disabled");
+    else if (g_cpuLimitMode.load()) swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter) • %d%% Limit (%dms)", g_cpuLimitPercent.load(), g_cpuLimitPeriod.load());
+    else swprintf_s(fpsLabel, L"FPS Capper (CPU Limiter) • %d FPS", g_fpsLimit.load());
+    if (!g_simpleMode.load()) {
+        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
+        SetMenuIconPopup(hSettingsSubmenu, hFpsCapperSubmenu, 0xE950);
+    }
 
     HMENU hRamCleanerSubmenu = CreatePopupMenu();
     AppendMenu(hRamCleanerSubmenu, MF_STRING | (g_ramCleanerEnabled.load() ? MF_CHECKED : 0), ID_RAM_CLEANER_RUNTIME_TOGGLE, L"Enabled");
@@ -13833,8 +15792,10 @@ void CreateTrayMenu(bool afk)
         if (modeVal < 0 || modeVal > 2) modeVal = 0;
         swprintf_s(ramCleanerLabel, L"RAM Cleaner • %s", modeNames[modeVal]);
     }
-    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRamCleanerSubmenu, ramCleanerLabel);
-    SetMenuIconPopup(hSettingsSubmenu, hRamCleanerSubmenu, 0xE964);
+    if (!g_simpleMode.load()) {
+        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hRamCleanerSubmenu, ramCleanerLabel);
+        SetMenuIconPopup(hSettingsSubmenu, hRamCleanerSubmenu, 0xE964);
+    }
 
     if (!g_simpleMode.load()) {
         HMENU hActionDelaysSubmenu = CreatePopupMenu();
@@ -13863,8 +15824,8 @@ void CreateTrayMenu(bool afk)
             swprintf_s(repeatText, L"Action Repeat Count... (%d)", g_actionRepeatCount.load());
             AppendMenu(hActionDelaysSubmenu, MF_STRING, ID_ACTION_DELAY_REPEAT, repeatText);
         }
-        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hActionDelaysSubmenu, L"Action Delays & Repeats");
-        SetMenuIconPopup(hSettingsSubmenu, hActionDelaysSubmenu, 0xE713);
+        AppendMenu(hAntiAfkMenu, MF_POPUP | MF_STRING, (UINT_PTR)hActionDelaysSubmenu, L"Action Delays & Repeats");
+        SetMenuIconPopup(hAntiAfkMenu, hActionDelaysSubmenu, 0xE713);
     }
 
     if (!g_simpleMode.load()) {
@@ -13885,53 +15846,65 @@ void CreateTrayMenu(bool afk)
             AppendMenu(hCustomProcessSubmenu, MF_STRING | MF_STRING, ID_CUSTOM_PROCESS_SEARCH_SETTINGS, L"Set Process Names...");
             AppendMenu(hCustomProcessSubmenu, MF_STRING | (g_excludeBuiltinNames.load() ? MF_CHECKED : 0), ID_CUSTOM_PROCESS_SEARCH_EXCLUDE, L"Exclude Built-in Names");
         }
-        AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hCustomProcessSubmenu, L"Custom Process Search");
-        SetMenuIconPopup(hSettingsSubmenu, hCustomProcessSubmenu, 0xE721);
+        AppendMenu(hWindowsMenu, MF_POPUP | MF_STRING, (UINT_PTR)hCustomProcessSubmenu, L"Custom Process Search");
+        SetMenuIconPopup(hWindowsMenu, hCustomProcessSubmenu, 0xE721);
     }
 
     HMENU hScreenSaverSubmenu = CreatePopupMenu();
     {
         AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_screenSaverActive.load() ? MF_CHECKED : 0), ID_SCREEN_SAVER,
             g_screenSaverActive.load() ? L"Stop Screen Saver" : L"Start Screen Saver");
-        AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowExitUI.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_EXIT, L"Always show Exit");
+        AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowExitUI.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_EXIT, L"Always show Text");
+        AppendMenu(hScreenSaverSubmenu, MF_STRING | (g_ssAlwaysShowHintAndClose.load() ? MF_CHECKED : 0), ID_SS_ALWAYS_SHOW_HINT_UI, L"Always show Hint & Close");
     }
     AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hScreenSaverSubmenu,
         g_screenSaverActive.load() ? L"Screen Saver \x2022 Active" : L"Screen Saver");
     SetMenuIconPopup(hSettingsSubmenu, hScreenSaverSubmenu, 0xE708);
 
-    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_RETRY_MULTI_INSTANCE, L"Retry Multi-Instance");
-    AppendMenu(hSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    HMENU hUiSettingsSubmenu = CreatePopupMenu();
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_disableSplash.load() ? MF_CHECKED : 0), ID_UI_DISABLE_SPLASH, L"Disable Splash Screen");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_disableAcrylic.load() ? MF_CHECKED : 0), ID_UI_DISABLE_ACRYLIC, L"Disable Acrylic Blur");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_disableAnimations.load() ? MF_CHECKED : 0), ID_UI_DISABLE_ANIMATIONS, L"Disable UI Animations");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_notificationsDisabled.load() ? MF_CHECKED : 0), ID_UI_DISABLE_NOTIFICATIONS, L"Disable Tray Notifications");
+    AppendMenu(hUiSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_keepWindowOnTop.load() ? MF_CHECKED : 0), ID_UI_KEEP_ON_TOP, L"Keep Window On Top");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_disableWindowCorners.load() ? MF_CHECKED : 0), ID_UI_DISABLE_CORNERS, L"Disable Rounded Corners");
+    AppendMenu(hUiSettingsSubmenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_uiHideNextActionText.load() ? MF_CHECKED : 0), ID_UI_HIDE_NEXT_ACTION, L"Hide \"Next action in\"");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_uiHideInstancesText.load() ? MF_CHECKED : 0), ID_UI_HIDE_INSTANCES, L"Hide \"Instances\"");
+    AppendMenu(hUiSettingsSubmenu, MF_STRING | (g_uiHideSimpleModeSwitch.load() ? MF_CHECKED : 0), ID_UI_HIDE_SIMPLE_SWITCH, L"Hide Simple Mode Switch");
+    AppendMenu(hSettingsSubmenu, MF_POPUP | MF_STRING, (UINT_PTR)hUiSettingsSubmenu, L"User Interface");
+    SetMenuIconPopup(hSettingsSubmenu, hUiSettingsSubmenu, 0xE790);
+
+    AppendMenu(hDiagnosticsMenu, MF_STRING, ID_IMPORT_SETTINGS, L"Import Settings...");
+    AppendMenu(hDiagnosticsMenu, MF_STRING, ID_EXPORT_SETTINGS, L"Export Settings...");
+    AppendMenu(hDiagnosticsMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hDiagnosticsMenu, MF_STRING, ID_RESET_SETTINGS, L"Reset Settings");
     {
         wchar_t hkStatus[128];
         std::wstring hkStr = FormatHotkeyString(g_hotkeyModifiers.load(), g_hotkeyVk.load());
         swprintf_s(hkStatus, L"Hotkey • %s • %s", g_hotkeyEnabled.load() ? L"On" : L"Off", hkStr.c_str());
-        AppendMenuLabelWithIcon(hSettingsSubmenu, hkStatus, 0xE765);
+        AppendMenuLabelWithIcon(hIntegrationsMenu, hkStatus, 0xE765);
     }
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"├ Enable Hotkey");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_HOTKEY, L"╰ Change Hotkey...");
-    AppendMenu(hSettingsSubmenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, L"├ Enable Grid Hotkey");
-    AppendMenu(hSettingsSubmenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"╰ Change Grid Hotkey...");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSettingsSubmenu, L"Settings");
-    SetMenuIconPopup(g_hMenu, hSettingsSubmenu, 0xE713);
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_hotkeyEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_HOTKEY, L"├ Enable Hotkey");
+    AppendMenu(hIntegrationsMenu, MF_STRING, ID_CAPTURE_HOTKEY, L"╰ Change Hotkey...");
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_hotkeyGridEnabled.load() ? MF_CHECKED : 0), ID_TOGGLE_GRID_HOTKEY, L"├ Enable Grid Hotkey");
+    AppendMenu(hIntegrationsMenu, MF_STRING, ID_CAPTURE_GRID_HOTKEY, L"╰ Change Grid Hotkey...");
 
     HMENU hUtilsSubmenu = CreatePopupMenu();
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_SHOW_ALL, L"Show All Roblox");
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_HIDE_ALL, L"Hide All Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox*");
+    AppendMenu(hUtilsSubmenu, MF_STRING, ID_GRID_SNAP, L"Grid Snap Roblox");
     AppendMenu(hUtilsSubmenu, MF_STRING | (IsUtilsWindowOpacityEnabled() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_WINDOW_OPACITY, L"Session Window Opacity");
     AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldMuteRobloxNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_MUTE, L"Session Mute Roblox");
-    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldRunFpsCapperNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_FPS, L"Session FPS Capper (CPU Limiter)*");
+    AppendMenu(hUtilsSubmenu, MF_STRING | (ShouldRunFpsCapperNow() ? MF_CHECKED : 0), ID_UTILS_TOGGLE_FPS, L"Session FPS Capper (CPU Limiter)");
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_RAM_CLEAN_SWEEP, L"Clean Roblox RAM Now");
     AppendMenu(hUtilsSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_TEST_ACTION, L"Test Anti-AFK Action");
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_RESET_ALL, L"Reset All Roblox");
     AppendMenu(hUtilsSubmenu, MF_STRING, ID_UTILS_CLOSE_ALL, L"Close All Roblox");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, L"Utils");
-    SetMenuIconPopup(g_hMenu, hUtilsSubmenu, 0xE945);
+    AppendMenu(hDiagnosticsMenu, MF_STRING | MF_POPUP, (UINT_PTR)hUtilsSubmenu, L"Utils");
+    SetMenuIconPopup(hDiagnosticsMenu, hUtilsSubmenu, 0xE945);
 
     HMENU hStatsSubmenu = CreatePopupMenu();
     {
@@ -13966,8 +15939,8 @@ void CreateTrayMenu(bool afk)
     AppendMenu(hStatsSubmenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hStatsSubmenu, MF_STRING, ID_TIMINGS_INFO, L"Current Timings...");
     AppendMenu(hStatsSubmenu, MF_STRING, ID_RESET_STATS, L"Reset Statistics");
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
-    SetMenuIconPopup(g_hMenu, hStatsSubmenu, 0xE9D2);
+    AppendMenu(hDiagnosticsMenu, MF_STRING | MF_POPUP, (UINT_PTR)hStatsSubmenu, L"Statistics");
+    SetMenuIconPopup(hDiagnosticsMenu, hStatsSubmenu, 0xE9D2);
 
     HMENU hDiscordSubmenu = CreatePopupMenu();
     {
@@ -13981,6 +15954,7 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyStart.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_START, L"Notify Start / Stop");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyAction.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ACTION, L"Notify Action");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyReconnect.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RECONNECT, L"Notify Reconnect");
+        AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyReset.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_RESET, L"Notify Auto Reset");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyErrors.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_ERRORS, L"Notify Errors");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyMacro.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_MACRO, L"Notify Macros");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyIntervalMacros.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_INTERVAL_MACROS, L"Notify Interval Macros");
@@ -14002,15 +15976,25 @@ void CreateTrayMenu(bool afk)
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (g_discordNotifyUtilsRam.load() ? MF_CHECKED : 0), ID_DISCORD_NOTIFY_UTILS_RAM, L"Notify RAM Cleaner");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookUrl.empty() ? MF_GRAYED : 0), ID_DISCORD_WEBHOOK_CLEAR, L"Clear Webhook URL");
         AppendMenu(hDiscordSubmenu, MF_STRING | webhookDependentState | (webhookConfigured ? 0 : MF_GRAYED), ID_DISCORD_WEBHOOK_TEST, L"Send Test Webhook");
+        std::wstring lastWebhookErrorCopy;
+        {
+            std::lock_guard<std::mutex> errorLock(g_lastWebhookErrorMutex);
+            lastWebhookErrorCopy = g_lastWebhookError;
+        }
+        if (lastWebhookErrorCopy.empty()) {
+            AppendMenu(hDiscordSubmenu, MF_STRING | MF_GRAYED, ID_DISCORD_LAST_ERROR, L"Last Error • none");
+        } else {
+            std::wstring shortError = lastWebhookErrorCopy;
+            if (shortError.size() > 60) shortError = shortError.substr(0, 57) + L"...";
+            wchar_t lastErrorLabel[160];
+            StringCchPrintfW(lastErrorLabel, ARRAYSIZE(lastErrorLabel), L"Last Error • %s", shortError.c_str());
+            AppendMenu(hDiscordSubmenu, MF_STRING, ID_DISCORD_LAST_ERROR, lastErrorLabel);
+        }
     }
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, L"Discord Webhook");
-    SetMenuIconPopup(g_hMenu, hDiscordSubmenu, 0xE8BD);
+    AppendMenu(hIntegrationsMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiscordSubmenu, L"Discord Webhook");
+    SetMenuIconPopup(hIntegrationsMenu, hDiscordSubmenu, 0xE8BD);
 
-    AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
-    AppendMenu(g_hMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
-    if (g_simpleMode.load())
-        AppendMenuLabelWithIcon(g_hMenu, L"╰ (some options hidden)", 0xE946);
-    AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance bypass");
+    AppendMenu(hIntegrationsMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Bypass");
 
     HMENU hMiIntervalSubmenu = CreatePopupMenu();
     AppendMenu(hMiIntervalSubmenu, MF_STRING | (g_multiInstanceInterval.load() == 0 ? MF_CHECKED : 0), ID_MI_INTERVAL_0, L"Minimum (0)");
@@ -14030,8 +16014,64 @@ void CreateTrayMenu(bool afk)
     else if (miVal == 10000) wcscpy_s(miLabelV, L"10s");
     else swprintf_s(miLabelV, L"%d ms", miVal);
     swprintf_s(miIntervalLabel, L"Multi-Instance Delay • %s", miLabelV);
-    AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
-    SetMenuIconPopup(g_hMenu, hMiIntervalSubmenu, 0xE916);
+    AppendMenu(hIntegrationsMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMiIntervalSubmenu, miIntervalLabel);
+    SetMenuIconPopup(hIntegrationsMenu, hMiIntervalSubmenu, 0xE916);
+    AppendMenu(hIntegrationsMenu, MF_STRING, ID_RETRY_MULTI_INSTANCE, L"Retry Multi-Instance");
+
+    if (g_simpleMode.load()) {
+        AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
+        AppendMenu(g_hMenu, MF_STRING | MF_CHECKED, ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
+        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+
+        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_GRAYED : MF_STRING), ID_START_AFK, L"Start Anti-AFK");
+        AppendMenu(g_hMenu, MF_STRING | (afk ? MF_STRING : MF_GRAYED), ID_STOP_AFK, L"Stop Anti-AFK");
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hTimeSubmenu, timeLabel);
+        SetMenuIconPopup(g_hMenu, hTimeSubmenu, 0xE916);
+
+        HMENU hSimpleActionMenu = CreatePopupMenu();
+        AppendMenu(hSimpleActionMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
+        AppendMenu(hSimpleActionMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
+        AppendMenu(hSimpleActionMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
+        AppendMenu(hSimpleActionMenu, MF_STRING | (g_selectedAction.load() == 5 ? MF_CHECKED : 0), ID_ACTION_ARROWS, L"<- / ->");
+        AppendMenu(hSimpleActionMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random");
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hSimpleActionMenu, actionLabel);
+        SetMenuIconPopup(g_hMenu, hSimpleActionMenu, 0xE7C9);
+        DestroyMenu(hActionSubmenu);
+
+        AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(g_hMenu, MF_STRING | (g_multiSupport.load() ? MF_CHECKED : 0), ID_MULTI_SUPPORT, L"Multi-Instance Bypass");
+        AppendMenu(g_hMenu, MF_STRING | (g_autoReconnect.load() ? MF_CHECKED : 0), ID_AUTO_RECONNECT, L"Auto-Reconnect");
+        AppendMenu(g_hMenu, MF_POPUP | MF_STRING, (UINT_PTR)hFpsCapperSubmenu, fpsLabel);
+        SetMenuIconPopup(g_hMenu, hFpsCapperSubmenu, 0xE950);
+        AppendMenu(g_hMenu, MF_POPUP | MF_STRING, (UINT_PTR)hRamCleanerSubmenu, ramCleanerLabel);
+        SetMenuIconPopup(g_hMenu, hRamCleanerSubmenu, 0xE964);
+        AppendMenu(g_hMenu, MF_STRING | (g_skipActiveEnabled.load() ? MF_CHECKED : 0), ID_SKIP_ACTIVE, L"Skip Active");
+        AppendMenu(g_hMenu, MF_POPUP | MF_STRING, (UINT_PTR)hUserSafeSubmenu, userSafeLabel);
+        SetMenuIconPopup(g_hMenu, hUserSafeSubmenu, 0xE72E);
+
+        DestroyMenu(hAntiAfkMenu);
+        DestroyMenu(hWindowsMenu);
+        DestroyMenu(hMacrosMenu);
+        DestroyMenu(hAutomationMenu);
+        DestroyMenu(hIntegrationsMenu);
+        DestroyMenu(hDiagnosticsMenu);
+    } else {
+        AppendMenu(g_hMenu, MF_STRING | (g_useLegacyUi.load() ? MF_CHECKED : 0), ID_USE_LEGACY_UI, L"Use Legacy UI (Tray)");
+        AppendMenu(g_hMenu, MF_STRING | (g_simpleMode.load() ? MF_CHECKED : 0), ID_TOGGLE_SIMPLE_MODE, L"Simple Mode");
+
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hAntiAfkMenu, L"Anti-AFK");
+        SetMenuIconPopup(g_hMenu, hAntiAfkMenu, 0xE768);
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hWindowsMenu, L"Windows");
+        SetMenuIconPopup(g_hMenu, hWindowsMenu, 0xE737);
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hMacrosMenu, L"Macros");
+        SetMenuIconPopup(g_hMenu, hMacrosMenu, 0xE8B7);
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hAutomationMenu, L"Automation");
+        SetMenuIconPopup(g_hMenu, hAutomationMenu, 0xE945);
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hIntegrationsMenu, L"Integrations");
+        SetMenuIconPopup(g_hMenu, hIntegrationsMenu, 0xE774);
+        AppendMenu(g_hMenu, MF_STRING | MF_POPUP, (UINT_PTR)hDiagnosticsMenu, L"Diagnostics");
+        SetMenuIconPopup(g_hMenu, hDiagnosticsMenu, 0xE9D2);
+    }
 
     AppendMenu(g_hMenu, MF_SEPARATOR, 0, NULL);
     if (g_updateFound)
@@ -14042,6 +16082,16 @@ void CreateTrayMenu(bool afk)
 void UpdateTrayIcon()
 {
     std::lock_guard<std::mutex> lock(g_trayIconMutex);
+    if (g_isAfkStarted.load()) {
+        uint64_t last = g_lastAfkActionTimestamp.load();
+        if (last == 0) last = g_afkStartTime.load();
+        uint64_t interval = (uint64_t)g_selectedTime.load();
+        uint64_t elapsed = last > 0 ? (GetTickCount64() - last) / 1000 : 0;
+        uint64_t remain = elapsed < interval ? interval - elapsed : 0;
+        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"AntiAFK-RBX • Running • next %02llu:%02llu", remain / 60, remain % 60);
+    } else {
+        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"AntiAFK-RBX • Stopped");
+    }
     HICON oldIcon = g_nid.hIcon;
     g_nid.hIcon = CreateCustomIcon();
     bool ok = Shell_NotifyIcon(NIM_MODIFY, &g_nid) != FALSE;
@@ -14054,12 +16104,23 @@ void UpdateTrayIcon()
 }
 
 static constexpr UINT TRAY_READD_RETRY_TIMER = 9001;
+static constexpr UINT TRAY_TIP_TIMER = 9002;
 static constexpr int TRAY_READD_MAX_ATTEMPTS = 10;
 static int g_trayReaddAttempts = 0;
 
 static bool TryReAddTrayIcon(HWND hwnd)
 {
     std::lock_guard<std::mutex> lock(g_trayIconMutex);
+    if (g_isAfkStarted.load()) {
+        uint64_t last = g_lastAfkActionTimestamp.load();
+        if (last == 0) last = g_afkStartTime.load();
+        uint64_t interval = (uint64_t)g_selectedTime.load();
+        uint64_t elapsed = last > 0 ? (GetTickCount64() - last) / 1000 : 0;
+        uint64_t remain = elapsed < interval ? interval - elapsed : 0;
+        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"AntiAFK-RBX • Running • next %02llu:%02llu", remain / 60, remain % 60);
+    } else {
+        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"AntiAFK-RBX • Stopped");
+    }
     HICON oldIcon = g_nid.hIcon;
     g_nid.hIcon = CreateCustomIcon();
     bool ok = Shell_NotifyIcon(NIM_ADD, &g_nid) != FALSE;
@@ -14339,6 +16400,27 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 GetWindowInstanceSetting_Timer(g_instanceTimerTargetWindows[0], g_selectedTime.load(), val);
             }
             _itow_s(val, pData->inputText[0], 10);
+        } else if (pData->type == CustomInputDialogType::GlobalOpacityValue) {
+            int percent = g_globalOpacityPercent.load();
+            if (percent < 5) percent = 5;
+            if (percent > 100) percent = 100;
+            _itow_s(percent, pData->inputText[0], 10);
+        } else if (pData->type == CustomInputDialogType::InstanceOpacityValue) {
+            int alpha = 180;
+            if (!g_instanceOpacityTargetWindows.empty() && IsWindow(g_instanceOpacityTargetWindows[0])) {
+                GetWindowInstanceSetting_Opacity(g_instanceOpacityTargetWindows[0], false, alpha);
+            }
+            int percent = alpha * 100 / 255;
+            if (percent < 5) percent = 5;
+            if (percent > 100) percent = 100;
+            _itow_s(percent, pData->inputText[0], 10);
+        } else if (pData->type == CustomInputDialogType::InstanceFpsValue) {
+            int fpsVal = g_fpsLimit.load();
+            if (!g_instanceFpsTargetWindows.empty() && IsWindow(g_instanceFpsTargetWindows[0])) {
+                GetWindowInstanceSetting_FpsLimit(g_instanceFpsTargetWindows[0], false, fpsVal);
+            }
+            if (fpsVal <= 0) fpsVal = 30;
+            _itow_s(fpsVal, pData->inputText[0], 10);
         } else if (pData->type == CustomInputDialogType::MacroName) {
             wcsncpy_s(pData->inputText[0], g_wizardMacro.name.c_str(), _TRUNCATE);
         } else if (pData->type == CustomInputDialogType::MacroRename) {
@@ -14349,6 +16431,8 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     wcsncpy_s(pData->inputText[0], g_macros[sel].name.c_str(), _TRUNCATE);
                 }
             }
+        } else if (pData->type == CustomInputDialogType::PresetName && !g_presetRenameSourceName.empty()) {
+            wcsncpy_s(pData->inputText[0], g_presetRenameSourceName.c_str(), _TRUNCATE);
         } else if (pData->type == CustomInputDialogType::MacroInterval) {
             int sel = g_macroIntervalTargetIndex.load();
             if (sel < 0) sel = g_selectedMacroIndex.load();
@@ -14422,6 +16506,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 int val = _wtoi(pData->inputText[0]);
                 if (val <= 0) val = 1;
                 if (val > 1200) val = 1200; // limit to 20m
+                if (val > 1140) {
+                    ShowDarkMessageBox(hwnd, L"Roblox may disconnect at 20 minutes. Values above 19 minutes are not recommended.", L"AntiAFK-RBX • Interval", MB_OK | MB_ICONWARNING);
+                }
                 g_selectedTime = val;
                 g_updateInterval = true;
                 g_cv.notify_all();
@@ -14430,12 +16517,32 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             } else if (pData->type == CustomInputDialogType::FpsLimit) {
                 int val = _wtoi(pData->inputText[0]);
                 if (val < 0) val = 0;
-                if (val > 60) val = 60; // limit to 60
+                if (val > 60) {
+                    val = 60; // limit to 60
+                    ShowDarkMessageBox(hwnd, L"FPS limit was clamped to 60.", L"AntiAFK-RBX • FPS Limit", MB_OK | MB_ICONWARNING);
+                }
                 PostMessage(g_hwnd, WM_COMMAND, ID_FPS_CAP_CUSTOM_BASE + val, 0);
             } else if (pData->type == CustomInputDialogType::ProcessNames) {
+                std::wstring normalized = pData->inputText[0];
+                std::replace(normalized.begin(), normalized.end(), L',', L';');
+                std::vector<std::wstring> tokens = SplitAndTrim(normalized, L';');
+                if (!normalized.empty() && tokens.empty()) {
+                    ShowDarkMessageBox(hwnd, L"Enter at least one process name or window title substring.", L"AntiAFK-RBX • Custom Search Names", MB_OK | MB_ICONWARNING);
+                    return 0;
+                }
+                if (tokens.size() > 24) {
+                    tokens.resize(24);
+                    ShowDarkMessageBox(hwnd, L"Only the first 24 names will be used.", L"AntiAFK-RBX • Custom Search Names", MB_OK | MB_ICONWARNING);
+                }
+                std::wstring rebuilt;
+                for (const auto& token : tokens) {
+                    std::wstring trimmed = token.size() > 96 ? token.substr(0, 96) : token;
+                    if (!rebuilt.empty()) rebuilt += L";";
+                    rebuilt += trimmed;
+                }
                 {
                     std::lock_guard<std::mutex> lock(g_customProcessNamesMutex);
-                    g_customProcessNames = pData->inputText[0];
+                    g_customProcessNames = rebuilt;
                 }
                 SaveSettings();
             } else if (pData->type == CustomInputDialogType::GridModeValue) {
@@ -14581,7 +16688,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 if (val < 0) val = 0;
                 if (val > 86400) val = 86400;
                 g_reconnectCheckInterval = val;
-                if (g_isAfkStarted.load() && g_autoReconnect.load() && val > 0) StartReconnectMonitor();
+                if (g_isAfkStarted.load() && g_autoReconnect.load() && val > 0) RestartReconnectMonitor();
                 else if (val == 0) StopReconnectMonitor();
                 SaveSettings();
                 CreateTrayMenu(g_isAfkStarted.load());
@@ -14621,6 +16728,20 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 int h = _wtoi(pData->inputText[3]);
                 if (w < 100) w = 100;
                 if (h < 100) h = 100;
+                int vLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                int vTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                int vW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                int vH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                if (vW > 0 && vH > 0) {
+                    if (w > vW) w = vW;
+                    if (h > vH) h = vH;
+                    if (x < vLeft) x = vLeft;
+                    if (y < vTop) y = vTop;
+                    if (x + w > vLeft + vW) x = vLeft + vW - w;
+                    if (y + h > vTop + vH) y = vTop + vH - h;
+                    if (x < vLeft) x = vLeft;
+                    if (y < vTop) y = vTop;
+                }
                 if (w > 0 && h > 0) {
                     for (HWND hw : g_geometryTargetWindows) {
                         if (hw && IsWindow(hw)) {
@@ -14642,6 +16763,10 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     g_geometryTargetWindows.clear();
                 }
             } else if (pData->type == CustomInputDialogType::InstanceTitle) {
+                if (pData->inputText[0][0] == L'\0') {
+                    ShowDarkMessageBox(hwnd, L"Window title cannot be empty.", L"AntiAFK-RBX • Rename Window", MB_OK);
+                    return 0;
+                }
                 for (HWND hw : g_renameTargetWindows) {
                     if (hw && IsWindow(hw)) {
                         SetWindowTextW(hw, pData->inputText[0]);
@@ -14666,10 +16791,127 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
                     InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
                 }
+            } else if (pData->type == CustomInputDialogType::GlobalOpacityValue) {
+                int percent = _wtoi(pData->inputText[0]);
+                if (percent < 5) percent = 5;
+                if (percent > 100) percent = 100;
+                g_globalOpacityPercent = percent;
+                SaveSettings();
+                RefreshRobloxWindowOpacity(false);
+                CreateTrayMenu(g_isAfkStarted.load());
+                if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                    InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+                }
+                if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                    InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
+                }
+            } else if (pData->type == CustomInputDialogType::InstanceOpacityValue) {
+                int percent = _wtoi(pData->inputText[0]);
+                if (percent < 5) percent = 5;
+                if (percent > 100) percent = 100;
+                int alpha = percent * 255 / 100;
+                {
+                    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+                    for (HWND hw : g_instanceOpacityTargetWindows) {
+                        if (hw && IsWindow(hw)) {
+                            auto& s2 = g_instanceSettings[hw];
+                            s2.overrideOpacity = true;
+                            s2.enableOpacity = true;
+                            s2.opacityValue = alpha;
+                            s2.presetName = L"Custom";
+                        }
+                    }
+                }
+                g_instanceOpacityTargetWindows.clear();
+                RefreshRobloxWindowOpacity(false);
+                if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                    InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
+                }
+            } else if (pData->type == CustomInputDialogType::InstanceFpsValue) {
+                int fpsVal = _wtoi(pData->inputText[0]);
+                if (fpsVal < 1) fpsVal = 1;
+                if (fpsVal > 60) fpsVal = 60;
+                {
+                    std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+                    for (HWND hw : g_instanceFpsTargetWindows) {
+                        if (hw && IsWindow(hw)) {
+                            auto& s2 = g_instanceSettings[hw];
+                            s2.overrideFpsLimit = true;
+                            s2.enableFpsLimit = true;
+                            s2.fpsLimitValue = fpsVal;
+                            s2.presetName = L"Custom";
+                        }
+                    }
+                }
+                g_instanceFpsTargetWindows.clear();
+                RestartFpsCapperForEffectiveLimit();
+                if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                    InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
+                }
             } else if (pData->type == CustomInputDialogType::PresetName) {
-                if (wcslen(pData->inputText[0]) > 0) {
+                if (!g_presetRenameSourceName.empty()) {
+                    std::wstring oldName = g_presetRenameSourceName;
+                    std::wstring newName = pData->inputText[0];
+                    bool collision = false;
+                    bool renamed = false;
+                    if (!newName.empty()) {
+                        {
+                            std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
+                            for (const auto& pr : g_instancePresets) {
+                                if (_wcsicmp(pr.name.c_str(), oldName.c_str()) != 0 &&
+                                    _wcsicmp(pr.name.c_str(), newName.c_str()) == 0) {
+                                    collision = true;
+                                    break;
+                                }
+                            }
+                            if (!collision && _wcsicmp(oldName.c_str(), newName.c_str()) != 0) {
+                                for (auto& pr : g_instancePresets) {
+                                    if (_wcsicmp(pr.name.c_str(), oldName.c_str()) == 0) {
+                                        pr.name = newName;
+                                        renamed = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (renamed) {
+                            {
+                                std::lock_guard<std::mutex> settingsLock(g_instanceSettingsMutex);
+                                for (auto& kv : g_instanceSettings) {
+                                    if (_wcsicmp(kv.second.presetName.c_str(), oldName.c_str()) == 0) {
+                                        kv.second.presetName = newName;
+                                    }
+                                }
+                            }
+                            SaveSettings();
+                            if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                                InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
+                            }
+                            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                                InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+                            }
+                        } else if (collision) {
+                            ShowDarkMessageBox(hwnd, L"A preset with this name already exists. Choose a different name.", L"Rename Preset", MB_OK);
+                            return 0;
+                        }
+                    }
+                } else if (wcslen(pData->inputText[0]) > 0) {
                     std::wstring newName = pData->inputText[0];
                     bool exists = false;
+                    bool created = false;
+                    bool limitReached = false;
+                    RobloxInstanceSettings sourceSettings;
+                    bool hasSource = false;
+                    {
+                        std::lock_guard<std::mutex> settingsLock(g_instanceSettingsMutex);
+                        if (g_presetEditSource && IsWindow(g_presetEditSource)) {
+                            auto it = g_instanceSettings.find(g_presetEditSource);
+                            if (it != g_instanceSettings.end()) {
+                                sourceSettings = it->second;
+                                hasSource = true;
+                            }
+                        }
+                    }
                     {
                         std::lock_guard<std::mutex> presetsLock(g_instancePresetsMutex);
                         for (const auto& pr : g_instancePresets) {
@@ -14679,47 +16921,63 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                             }
                         }
                         if (!exists) {
-                        if (g_instancePresets.size() < 32) {
-                        RobloxInstancePreset newPreset;
-                        newPreset.name = newName;
-                        if (g_presetEditSource && IsWindow(g_presetEditSource)) {
-                            auto it = g_instanceSettings.find(g_presetEditSource);
-                            if (it != g_instanceSettings.end()) {
-                                const auto& s = it->second;
-                                newPreset.overrideAntiAfk = s.overrideAntiAfk;
-                                newPreset.enableAntiAfk = s.enableAntiAfk;
-                                newPreset.overrideMute = s.overrideMute;
-                                newPreset.enableMute = s.enableMute;
-                                newPreset.overrideOpacity = s.overrideOpacity;
-                                newPreset.enableOpacity = s.enableOpacity;
-                                newPreset.opacityValue = s.opacityValue;
-                                newPreset.overrideHide = s.overrideHide;
-                                newPreset.enableHide = s.enableHide;
-                                newPreset.overrideFpsLimit = s.overrideFpsLimit;
-                                newPreset.enableFpsLimit = s.enableFpsLimit;
-                                newPreset.fpsLimitValue = s.fpsLimitValue;
-                                newPreset.overrideReconnect = s.overrideReconnect;
-                                newPreset.enableReconnect = s.enableReconnect;
-                                newPreset.overrideReset = s.overrideReset;
-                                newPreset.enableReset = s.enableReset;
-                                newPreset.overrideMacro = s.overrideMacro;
-                                newPreset.enableMacro = s.enableMacro;
-                                newPreset.macroNames = s.macroNames;
-                                newPreset.enableReconnectMacro = s.enableReconnectMacro;
-                                newPreset.reconnectMacroNames = s.reconnectMacroNames;
-                                newPreset.enableIntervalMacro = s.enableIntervalMacro;
-                                newPreset.intervalMacroNames = s.intervalMacroNames;
-                                newPreset.overrideTimer = s.overrideTimer;
-                                newPreset.enableTimer = s.enableTimer;
-                                newPreset.timerSeconds = s.timerSeconds;
+                            if (g_instancePresets.size() >= 32) {
+                                limitReached = true;
+                            } else {
+                                RobloxInstancePreset newPreset;
+                                newPreset.name = newName;
+                                if (hasSource) {
+                                    const auto& s = sourceSettings;
+                                    newPreset.overrideAntiAfk = s.overrideAntiAfk;
+                                    newPreset.enableAntiAfk = s.enableAntiAfk;
+                                    newPreset.overrideMute = s.overrideMute;
+                                    newPreset.enableMute = s.enableMute;
+                                    newPreset.overrideOpacity = s.overrideOpacity;
+                                    newPreset.enableOpacity = s.enableOpacity;
+                                    newPreset.opacityValue = s.opacityValue;
+                                    newPreset.overrideHide = s.overrideHide;
+                                    newPreset.enableHide = s.enableHide;
+                                    newPreset.overrideFpsLimit = s.overrideFpsLimit;
+                                    newPreset.enableFpsLimit = s.enableFpsLimit;
+                                    newPreset.fpsLimitValue = s.fpsLimitValue;
+                                    newPreset.overrideReconnect = s.overrideReconnect;
+                                    newPreset.enableReconnect = s.enableReconnect;
+                                    newPreset.overrideReset = s.overrideReset;
+                                    newPreset.enableReset = s.enableReset;
+                                    newPreset.overrideMacro = s.overrideMacro;
+                                    newPreset.enableMacro = s.enableMacro;
+                                    newPreset.macroNames = s.macroNames;
+                                    newPreset.enableReconnectMacro = s.enableReconnectMacro;
+                                    newPreset.reconnectMacroNames = s.reconnectMacroNames;
+                                    newPreset.enableIntervalMacro = s.enableIntervalMacro;
+                                    newPreset.intervalMacroNames = s.intervalMacroNames;
+                                    newPreset.overrideTimer = s.overrideTimer;
+                                    newPreset.enableTimer = s.enableTimer;
+                                    newPreset.timerSeconds = s.timerSeconds;
+                                }
+                                g_instancePresets.push_back(newPreset);
+                                created = true;
                             }
                         }
-                        g_instancePresets.push_back(newPreset);
+                    }
+                    if (created) {
+                        if (g_presetEditSource && IsWindow(g_presetEditSource)) {
+                            std::lock_guard<std::mutex> settingsLock(g_instanceSettingsMutex);
+                            auto it = g_instanceSettings.find(g_presetEditSource);
+                            if (it != g_instanceSettings.end()) {
+                                it->second.presetName = newName;
+                            } else {
+                                RobloxInstanceSettings fresh = GetDefaultInstanceSettingsForWindow(g_presetEditSource);
+                                fresh.presetName = newName;
+                                g_instanceSettings[g_presetEditSource] = fresh;
+                            }
+                        }
                         SaveSettings();
-                        } else {
-                            ShowDarkMessageBox(hwnd, L"Preset limit reached (32). Delete an existing preset first.", L"Instance Presets", MB_OK);
+                        if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg)) {
+                            InvalidateRect(g_hInstanceManagerDlg, NULL, FALSE);
                         }
-                        }
+                    } else if (limitReached) {
+                        ShowDarkMessageBox(hwnd, L"Preset limit reached (32). Delete an existing preset first.", L"Instance Presets", MB_OK);
                     }
                 }
             } else if (pData->type == CustomInputDialogType::MacroName) {
@@ -14756,6 +17014,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                     }
                     if (collision) {
                         ShowDarkMessageBox(hwnd, L"A macro with this name already exists. Choose a different name.", L"Rename Macro", MB_OK);
+                        return 0;
                     }
                     if (saveNeeded) {
                         if (!MacroEngine_SaveMacros()) {
@@ -15019,7 +17278,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     case WM_NCHITTEST:
     {
         LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
-        if (hit == HTCLIENT) {
+        if (hit == HTCLIENT && pData) {
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             ScreenToClient(hwnd, &pt);
             RECT dragRect = { 0, 0, pData->closeButtonRect.left, 30 };
@@ -15066,8 +17325,11 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                    (pData->type == CustomInputDialogType::PostActionDelay) ? L"AntiAFK-RBX • Delay After Action (ms)" :
                                    (pData->type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
                                    (pData->type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
-                                   (pData->type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
+                                   (pData->type == CustomInputDialogType::PresetName) ? (g_presetRenameSourceName.empty() ? L"AntiAFK-RBX • Create New Preset" : L"AntiAFK-RBX • Rename Preset") :
                                    (pData->type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX • Custom AFK Timer (Instance)" :
+                                   (pData->type == CustomInputDialogType::GlobalOpacityValue) ? L"AntiAFK-RBX • Opacity %" :
+                                   (pData->type == CustomInputDialogType::InstanceOpacityValue) ? L"AntiAFK-RBX • Instance Opacity %" :
+                                   (pData->type == CustomInputDialogType::InstanceFpsValue) ? L"AntiAFK-RBX • Instance FPS Cap" :
                                    (pData->type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
                                    (pData->type == CustomInputDialogType::MacroRename) ? macroRenameTitlePaint.c_str() :
                                    (pData->type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" :
@@ -15099,6 +17361,9 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                                     (pData->type == CustomInputDialogType::InstanceGeometry) ? L"\uE740" :
                                     (pData->type == CustomInputDialogType::InstanceTitle) ? L"\uE8AC" :
                                     (pData->type == CustomInputDialogType::InstanceTimer) ? L"\uE916" :
+                                    (pData->type == CustomInputDialogType::GlobalOpacityValue) ? L"\uE727" :
+                                    (pData->type == CustomInputDialogType::InstanceOpacityValue) ? L"\uE727" :
+                                    (pData->type == CustomInputDialogType::InstanceFpsValue) ? L"\uE950" :
                                     (pData->type == CustomInputDialogType::PresetName) ? L"\uE8AC" :
                                     (pData->type == CustomInputDialogType::MacroName) ? L"\uE8AC" :
                                     (pData->type == CustomInputDialogType::MacroRename) ? L"\uE70F" :
@@ -15111,80 +17376,86 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         wchar_t dynamicBannerText[256] = { 0 };
         const wchar_t* bannerText = dynamicBannerText;
         if (pData->type == CustomInputDialogType::Interval) {
-            bannerText = L"Enter interval in seconds. Maximum value is 1200.";
+            bannerText = L"Interval in seconds (max 1200).";
         } else if (pData->type == CustomInputDialogType::InstanceTimer) {
-            bannerText = L"Enter AFK action interval in seconds for selected instance(s).";
+            bannerText = L"AFK interval in seconds for selected windows.";
+        } else if (pData->type == CustomInputDialogType::GlobalOpacityValue) {
+            bannerText = L"Global window opacity percent (5-100).";
+        } else if (pData->type == CustomInputDialogType::InstanceOpacityValue) {
+            bannerText = L"Opacity percent (5-100) for selected windows.";
+        } else if (pData->type == CustomInputDialogType::InstanceFpsValue) {
+            bannerText = L"FPS cap 1-60 for selected windows.";
         } else if (pData->type == CustomInputDialogType::FpsLimit) {
-            bannerText = L"Set FPS cap from 0 to 60. Use 0 to turn it off.";
+            bannerText = L"FPS cap 0-60. Use 0 to disable.";
         } else if (pData->type == CustomInputDialogType::ProcessNames) {
-            bannerText = L"Process names or window title substrings separated by semicolons (;)";
+            bannerText = L"Process names or title parts, separated by ;";
         } else if (pData->type == CustomInputDialogType::GridModeValue) {
             int mode = g_gridMode.load();
             if (mode == 1) {
-                bannerText = L"Enter custom window size in pixels (100 to 4000).";
+                bannerText = L"Window size in pixels (100-4000).";
             } else if (mode == 2) {
-                bannerText = L"Enter columns count (1 to 20).";
+                bannerText = L"Columns count (1-20).";
             } else if (mode == 3) {
-                bannerText = L"Enter rows count (1 to 20).";
+                bannerText = L"Rows count (1-20).";
             } else if (mode == 4) {
-                bannerText = L"Enter window width in pixels (100 to 4000).";
+                bannerText = L"Window width (100-4000 px).";
             } else if (mode == 5) {
-                bannerText = L"Enter window height in pixels (100 to 4000).";
+                bannerText = L"Window height (100-4000 px).";
             } else {
                 bannerText = L"Enter value for Grid Mode.";
             }
         } else if (pData->type == CustomInputDialogType::GridSpacingBetween) {
-            bannerText = L"Enter space between windows in pixels (0 to 200).";
+            bannerText = L"Space between windows (0-200 px).";
         } else if (pData->type == CustomInputDialogType::GridSpacingBorders) {
-            bannerText = L"Enter space from screen borders in pixels (0 to 200).";
+            bannerText = L"Space from borders (0-200 px).";
         } else if (pData->type == CustomInputDialogType::RamCleanInterval) {
-            bannerText = L"Enter cycle time in seconds. Default is 120.";
+            bannerText = L"Cycle time in seconds (default 300).";
         } else if (pData->type == CustomInputDialogType::RamCleanLimit) {
-            bannerText = L"Enter RAM limit threshold in MB. Default is 500.";
+            bannerText = L"RAM limit in MB (default 750).";
         } else if (pData->type == CustomInputDialogType::PreActionDelay) {
-            bannerText = L"Enter delay before each action in milliseconds (0 to 10000).";
+            bannerText = L"Delay before action (0-10000 ms).";
         } else if (pData->type == CustomInputDialogType::KeyPressDelay) {
-            bannerText = L"Enter key press duration in milliseconds (1 to 5000).";
+            bannerText = L"Key press duration (1-5000 ms).";
         } else if (pData->type == CustomInputDialogType::PostActionDelay) {
-            bannerText = L"Enter delay after each action in milliseconds (0 to 10000).";
+            bannerText = L"Delay after action (0-10000 ms).";
         } else if (pData->type == CustomInputDialogType::ActionRepeatCount) {
-            bannerText = L"Enter how many times to repeat the action per cycle (1 to 100).";
+            bannerText = L"Repeats per cycle (1-100).";
         } else if (pData->type == CustomInputDialogType::ReconnectInterval) {
-            bannerText = L"Independent reconnect check interval in seconds. 0 = only with main cycle.";
+            bannerText = L"Reconnect check interval (sec). 0 = main cycle.";
         } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
-            bannerText = L"Delay before reconnect macros run (0-3600 sec).";
+            bannerText = L"Reconnect macro delay (0-3600 sec).";
         } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
-            bannerText = L"Enter target CPU Limit percentage (1 to 99).";
+            bannerText = L"CPU limit percentage (1-99).";
         } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
-            bannerText = L"Enter limiter cycle duration in milliseconds (10 to 200).";
+            bannerText = L"Limiter cycle (10-200 ms).";
         } else if (pData->type == CustomInputDialogType::DiscordMentionTarget) {
-            bannerText = L"Usage examples: <@USER_ID> / <@&ROLE_ID> / @everyone";
+            bannerText = L"Usage: <@USER_ID> / <@&ROLE_ID> / @everyone";
         } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
-            bannerText = L"Enter geometry: X (left), Y (top), Width, Height in pixels.";
+            bannerText = L"Window geometry: X, Y, Width, Height (px).";
         } else if (pData->type == CustomInputDialogType::InstanceTitle) {
-            bannerText = L"Enter new title for this Roblox client window.";
+            bannerText = L"New title for this Roblox window.";
         } else if (pData->type == CustomInputDialogType::PresetName) {
-            bannerText = L"Enter a name for the new preset.";
+            bannerText = g_presetRenameSourceName.empty() ? L"Name for the new preset." : L"New name for this preset.";
         } else if (pData->type == CustomInputDialogType::MacroName) {
-            bannerText = L"Enter a descriptive name for your custom macro.";
+            bannerText = L"Name for your custom macro.";
         } else if (pData->type == CustomInputDialogType::MacroRename) {
-            bannerText = L"Enter a new name for this macro.";
+            bannerText = L"New name for this macro.";
         } else if (pData->type == CustomInputDialogType::MacroInterval) {
             bannerText = L"Interval in seconds for this macro.";
         } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
             bannerText = L"Paste or type a Discord webhook URL.";
         } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
-            bannerText = L"How often to send a status ping while Anti-AFK is running (5 to 1440 minutes).";
+            bannerText = L"Status ping interval (5-1440 min).";
         } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
-            bannerText = L"Delay between Roblox windows in milliseconds (50 to 60000).";
+            bannerText = L"Delay between windows (50-60000 ms).";
         }
 
         const wchar_t* placeholders[4] = { L"", L"", L"", L"" };
         placeholders[0] = (pData->type == CustomInputDialogType::Interval) ? L"60" :
                           (pData->type == CustomInputDialogType::FpsLimit) ? L"0" :
                           (pData->type == CustomInputDialogType::ProcessNames) ? L"eurotrucks2.exe;Roblox;Roblox Client" :
-                          (pData->type == CustomInputDialogType::RamCleanInterval) ? L"120" :
-                          (pData->type == CustomInputDialogType::RamCleanLimit) ? L"500" :
+                          (pData->type == CustomInputDialogType::RamCleanInterval) ? L"300" :
+                          (pData->type == CustomInputDialogType::RamCleanLimit) ? L"750" :
                           (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"@everyone" :
                           (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"90" :
                           (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"100" :
@@ -15257,11 +17528,13 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                  if (joinedInputs) labelW = 110;
              }
              Font inputFont(memDC, pData->hFontInput);
+             StringFormat sfCaret(StringFormat::GenericTypographic());
+             sfCaret.SetFormatFlags(sfCaret.GetFormatFlags() | StringFormatFlagsNoWrap | StringFormatFlagsMeasureTrailingSpaces);
              RectF size, layout((REAL)0, (REAL)0, (REAL)1000, (REAL)1000);
-             g.MeasureString(pData->inputText[pData->focusedInput], -1, &inputFont, layout, &size);
+             g.MeasureString(pData->inputText[pData->focusedInput], -1, &inputFont, layout, &sfCaret, &size);
 
-             int caretX = r.left + labelW + 12 + (int)size.Width;
-             int caretY = r.top + 5;
+             int caretX = min((int)r.right - 12, r.left + labelW + 12 + (int)size.Width);
+             int caretY = r.top + max(4, ((int)(r.bottom - r.top) - 16) / 2);
              SetCaretPos(caretX, caretY);
         }
 
@@ -15303,61 +17576,12 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                 SetForegroundWindow(owner);
             }
 
-            if (pData->type == CustomInputDialogType::Interval) {
-                g_hCustomIntervalWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::FpsLimit) {
-                g_hCustomFpsWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::ProcessNames) {
-                g_hCustomProcessWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::GridModeValue) {
-                g_hCustomGridValueWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::GridSpacingBetween) {
-                g_hCustomGridSpacingBetweenWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::GridSpacingBorders) {
-                g_hCustomGridSpacingBordersWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::RamCleanInterval) {
-                g_hCustomRamIntervalWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::RamCleanLimit) {
-                g_hCustomRamLimitWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::DiscordMentionTarget) {
-                g_hCustomMentionTargetWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::PreActionDelay) {
-                g_hCustomPreActionDelayWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::KeyPressDelay) {
-                g_hCustomKeyPressDelayWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::PostActionDelay) {
-                g_hCustomPostActionDelayWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::ActionRepeatCount) {
-                g_hCustomActionRepeatCountWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::ReconnectInterval) {
-                g_hCustomReconnectIntervalWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::ReconnectMacroDelay) {
-                g_hCustomReconnectMacroDelayWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::InstanceTimer) {
-                g_hCustomInstanceTimerWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::CpuLimitPercent) {
-                g_hCustomCpuLimitPercentWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::CpuLimitPeriod) {
-                g_hCustomCpuLimitPeriodWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::InstanceGeometry) {
-                g_hCustomGeometryWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::InstanceTitle) {
-                g_hCustomRenameWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::PresetName) {
-                g_hCustomPresetNameWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::MacroName) {
-                g_hCustomMacroNameWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::MacroRename) {
-                g_hCustomMacroRenameWnd = NULL;
+            if (pData->type == CustomInputDialogType::PresetName) {
+                g_presetRenameSourceName.clear();
             } else if (pData->type == CustomInputDialogType::MacroInterval) {
-                g_hCustomMacroIntervalWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::DiscordWebhookUrl) {
-                g_hCustomWebhookUrlWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::DiscordHeartbeatInterval) {
-                g_hCustomHeartbeatIntervalWnd = NULL;
-            } else if (pData->type == CustomInputDialogType::MultiInstanceInterval) {
-                g_hCustomMultiInstanceIntervalWnd = NULL;
+                g_macroIntervalTargetIndex = -1;
             }
+            g_customInputDialogWindows.erase(pData->type);
 
             if (owner)
             {
@@ -15374,40 +17598,13 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
 void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
 {
-    HWND* pGlobalWnd = nullptr;
-    if (type == CustomInputDialogType::Interval) pGlobalWnd = &g_hCustomIntervalWnd;
-    else if (type == CustomInputDialogType::FpsLimit) pGlobalWnd = &g_hCustomFpsWnd;
-    else if (type == CustomInputDialogType::ProcessNames) pGlobalWnd = &g_hCustomProcessWnd;
-    else if (type == CustomInputDialogType::GridModeValue) pGlobalWnd = &g_hCustomGridValueWnd;
-    else if (type == CustomInputDialogType::GridSpacingBetween) pGlobalWnd = &g_hCustomGridSpacingBetweenWnd;
-    else if (type == CustomInputDialogType::GridSpacingBorders) pGlobalWnd = &g_hCustomGridSpacingBordersWnd;
-    else if (type == CustomInputDialogType::RamCleanInterval) pGlobalWnd = &g_hCustomRamIntervalWnd;
-    else if (type == CustomInputDialogType::RamCleanLimit) pGlobalWnd = &g_hCustomRamLimitWnd;
-    else if (type == CustomInputDialogType::DiscordMentionTarget) pGlobalWnd = &g_hCustomMentionTargetWnd;
-    else if (type == CustomInputDialogType::PreActionDelay) pGlobalWnd = &g_hCustomPreActionDelayWnd;
-    else if (type == CustomInputDialogType::KeyPressDelay) pGlobalWnd = &g_hCustomKeyPressDelayWnd;
-    else if (type == CustomInputDialogType::PostActionDelay) pGlobalWnd = &g_hCustomPostActionDelayWnd;
-    else if (type == CustomInputDialogType::ActionRepeatCount) pGlobalWnd = &g_hCustomActionRepeatCountWnd;
-    else if (type == CustomInputDialogType::ReconnectInterval) pGlobalWnd = &g_hCustomReconnectIntervalWnd;
-    else if (type == CustomInputDialogType::ReconnectMacroDelay) pGlobalWnd = &g_hCustomReconnectMacroDelayWnd;
-    else if (type == CustomInputDialogType::CpuLimitPercent) pGlobalWnd = &g_hCustomCpuLimitPercentWnd;
-    else if (type == CustomInputDialogType::CpuLimitPeriod) pGlobalWnd = &g_hCustomCpuLimitPeriodWnd;
-    else if (type == CustomInputDialogType::InstanceGeometry) pGlobalWnd = &g_hCustomGeometryWnd;
-    else if (type == CustomInputDialogType::InstanceTitle) pGlobalWnd = &g_hCustomRenameWnd;
-    else if (type == CustomInputDialogType::PresetName) pGlobalWnd = &g_hCustomPresetNameWnd;
-    else if (type == CustomInputDialogType::InstanceTimer) pGlobalWnd = &g_hCustomInstanceTimerWnd;
-    else if (type == CustomInputDialogType::MacroName) pGlobalWnd = &g_hCustomMacroNameWnd;
-    else if (type == CustomInputDialogType::MacroRename) pGlobalWnd = &g_hCustomMacroRenameWnd;
-    else if (type == CustomInputDialogType::MacroInterval) pGlobalWnd = &g_hCustomMacroIntervalWnd;
-    else if (type == CustomInputDialogType::DiscordWebhookUrl) pGlobalWnd = &g_hCustomWebhookUrlWnd;
-    else if (type == CustomInputDialogType::DiscordHeartbeatInterval) pGlobalWnd = &g_hCustomHeartbeatIntervalWnd;
-    else if (type == CustomInputDialogType::MultiInstanceInterval) pGlobalWnd = &g_hCustomMultiInstanceIntervalWnd;
-
-    if (pGlobalWnd && *pGlobalWnd && IsWindow(*pGlobalWnd))
+    auto existingIt = g_customInputDialogWindows.find(type);
+    if (existingIt != g_customInputDialogWindows.end() && existingIt->second && IsWindow(existingIt->second))
     {
-        SetForegroundWindow(*pGlobalWnd);
+        SetForegroundWindow(existingIt->second);
         return;
     }
+    g_customInputDialogWindows.erase(type);
 
     static bool registered = false;
     const wchar_t CLASS_NAME[] = L"AntiAFK-RBX-CustomInput";
@@ -15466,23 +17663,29 @@ void ShowCustomInputDialog(HWND owner, CustomInputDialogType type)
                               (type == CustomInputDialogType::CpuLimitPeriod) ? L"AntiAFK-RBX • Set Cycle Period (ms)" :
                               (type == CustomInputDialogType::InstanceGeometry) ? L"AntiAFK-RBX • Change Window Geometry" :
                               (type == CustomInputDialogType::InstanceTitle) ? L"AntiAFK-RBX • Rename Roblox Window" :
-                              (type == CustomInputDialogType::PresetName) ? L"AntiAFK-RBX • Create New Preset" :
+                              (type == CustomInputDialogType::PresetName) ? (g_presetRenameSourceName.empty() ? L"AntiAFK-RBX • Create New Preset" : L"AntiAFK-RBX • Rename Preset") :
+                              (type == CustomInputDialogType::InstanceTimer) ? L"AntiAFK-RBX • Custom AFK Timer (Instance)" :
+                              (type == CustomInputDialogType::GlobalOpacityValue) ? L"AntiAFK-RBX • Opacity %" :
+                              (type == CustomInputDialogType::InstanceOpacityValue) ? L"AntiAFK-RBX • Instance Opacity %" :
+                              (type == CustomInputDialogType::InstanceFpsValue) ? L"AntiAFK-RBX • Instance FPS Cap" :
                               (type == CustomInputDialogType::MacroName) ? L"AntiAFK-RBX • Enter Macro Name" :
                               (type == CustomInputDialogType::MacroRename) ? macroRenameTitle.c_str() :
+                              (type == CustomInputDialogType::DiscordWebhookUrl) ? L"AntiAFK-RBX • Discord Webhook URL" :
+                              (type == CustomInputDialogType::DiscordHeartbeatInterval) ? L"AntiAFK-RBX • Status Ping Interval" :
+                              (type == CustomInputDialogType::MultiInstanceInterval) ? L"AntiAFK-RBX • Multi-Instance Interval" :
                               (type == CustomInputDialogType::MacroInterval) ? L"AntiAFK-RBX • Set Macro Interval" : L"AntiAFK-RBX • Set RAM Limit";
 
-    if (!pGlobalWnd) return;
-
-    *pGlobalWnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CLASS_NAME,
+    HWND hDialog = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, CLASS_NAME,
          titleStr, WS_POPUP,
          x, y, dlgW, dlgH, owner, NULL, g_hInst, (LPVOID)type);
 
-    if (*pGlobalWnd)
+    if (hDialog)
     {
-        SetLayeredWindowAttributes(*pGlobalWnd, 0, 255, LWA_ALPHA);
+        g_customInputDialogWindows[type] = hDialog;
+        SetLayeredWindowAttributes(hDialog, 0, 255, LWA_ALPHA);
         if (owner) EnableWindow(owner, FALSE);
-        ShowWindow(*pGlobalWnd, SW_SHOW);
-        UpdateWindow(*pGlobalWnd);
+        ShowWindow(hDialog, SW_SHOW);
+        UpdateWindow(hDialog);
     }
 }
 // ==========
@@ -15593,8 +17796,15 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                     }
                     s2.presetName = L"Custom";
                     g_instanceSettings[tWnd] = s2;
+                    wchar_t titleBuf[256] = { 0 };
+                    GetWindowTextW(tWnd, titleBuf, 256);
+                    if (titleBuf[0]) {
+                        std::lock_guard<std::mutex> savedLock(g_savedInstanceSettingsMutex);
+                        g_savedInstanceSettings[titleBuf] = s2;
+                    }
                 }
             }
+            SaveSettings();
             HWND owner = GetWindow(hwnd, GW_OWNER);
             if (owner && IsWindow(owner)) InvalidateRect(owner, NULL, FALSE);
             DestroyWindow(hwnd);
@@ -15627,7 +17837,7 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
     }
     case WM_MOUSEMOVE:
     {
-        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         bool oldClose = pData->isHoveringClose, oldOk = pData->isHoveringOk, oldCancel = pData->isHoveringCancel;
         int oldRow = pData->hoverIndex;
         pData->isHoveringClose = PtInRect(&pData->closeButtonRect, pt) != FALSE;
@@ -15689,8 +17899,15 @@ static LRESULT CALLBACK MacroOrderDialogProc(HWND hwnd, UINT msg, WPARAM wParam,
                     }
                     s2.presetName = L"Custom";
                     g_instanceSettings[tWnd] = s2;
+                    wchar_t titleBuf[256] = { 0 };
+                    GetWindowTextW(tWnd, titleBuf, 256);
+                    if (titleBuf[0]) {
+                        std::lock_guard<std::mutex> savedLock(g_savedInstanceSettingsMutex);
+                        g_savedInstanceSettings[titleBuf] = s2;
+                    }
                 }
             }
+            SaveSettings();
             HWND owner = GetWindow(hwnd, GW_OWNER);
             if (owner && IsWindow(owner)) InvalidateRect(owner, NULL, FALSE);
             DestroyWindow(hwnd);
@@ -16084,7 +18301,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
 
-        if (PtInRect(&pData->closeButtonRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_BTN_NEXT, 0); return 0; }
+        if (PtInRect(&pData->closeButtonRect, pt)) { PostMessage(hwnd, WM_CLOSE, 0, 0); return 0; }
         if (PtInRect(&pData->nextButtonRect, pt)) { PostMessage(hwnd, WM_COMMAND, ID_BTN_NEXT, 0); return 0; }
         if (PtInRect(&pData->discordLinkRect, pt)) {
             ShellExecute(NULL, L"open", L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
@@ -16130,7 +18347,9 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         case ID_BTN_NEXT:
         {
             g_firstWelcomeShown = true;
-            PostMessage(g_hwnd, WM_COMMAND, ID_OPEN_UI, 0);
+            if (!g_useLegacyUi.load()) {
+                PostMessage(g_hwnd, WM_COMMAND, ID_OPEN_UI, 0);
+            }
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             DestroyWindow(hwnd);
@@ -16175,12 +18394,16 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         {
             Region oldClip;
             g.GetClip(&oldClip);
-            g.SetClip(RectF(0.0f, 30.0f, (REAL)clientRect.right, (REAL)btnTop - 30.0f));
-
-            Splash_DrawPentagon(&g, -10.0f, 48.0f, 70.0f, 35.0f, Color(35, 55, 92, 245), Color(12, 66, 118, 255), 21.0f);
-            Splash_DrawPentagon(&g, 558.0f, 38.0f, 96.0f, -15.0f, Color(35, 238, 34, 28), Color(12, 255, 76, 70), 25.0f);
-            Splash_DrawPentagon(&g, 562.0f, 378.0f, 58.0f, 55.0f, Color(30, 52, 88, 240), Color(10, 76, 126, 255), 18.0f);
-            Splash_DrawPentagon(&g, 0.0f, 360.0f, 110.0f, -45.0f, Color(50, 190, 36, 30), Color(18, 255, 82, 78), 25.0f);
+            auto drawPentagons = [&](float alphaScale) {
+                Splash_DrawPentagon(&g, -10.0f, 48.0f, 70.0f, 35.0f, Color((BYTE)(35.0f * alphaScale), 55, 92, 245), Color((BYTE)(12.0f * alphaScale), 66, 118, 255), 21.0f);
+                Splash_DrawPentagon(&g, 558.0f, 38.0f, 96.0f, -15.0f, Color((BYTE)(35.0f * alphaScale), 238, 34, 28), Color((BYTE)(12.0f * alphaScale), 255, 76, 70), 25.0f);
+                Splash_DrawPentagon(&g, 562.0f, 378.0f, 58.0f, 55.0f, Color((BYTE)(30.0f * alphaScale), 52, 88, 240), Color((BYTE)(10.0f * alphaScale), 76, 126, 255), 18.0f);
+                Splash_DrawPentagon(&g, 0.0f, 360.0f, 110.0f, -45.0f, Color((BYTE)(50.0f * alphaScale), 190, 36, 30), Color((BYTE)(18.0f * alphaScale), 255, 82, 78), 25.0f);
+            };
+            g.SetClip(RectF(0.0f, 31.0f, (REAL)clientRect.right, (REAL)btnTop - 31.0f));
+            drawPentagons(1.0f);
+            g.SetClip(RectF(0.0f, 0.0f, (REAL)clientRect.right, 30.0f));
+            drawPentagons(0.35f);
 
             g.SetClip(&oldClip);
         }
@@ -16245,7 +18468,7 @@ LRESULT CALLBACK TutorialWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             }
 
             int y_desc = 92;
-            RectF rSub((REAL)margin + 1.0f, (REAL)y_desc, (REAL)colW, 22.0f);
+            RectF rSub((REAL)margin + 1.0f, (REAL)y_desc, (REAL)(colW + 28), 22.0f);
             g.DrawString(
                 L"Best utility and Anti-AFK for Roblox.",
                 -1, &font11, rSub, &typographicWrap, &textBrush);
@@ -16467,8 +18690,17 @@ void ShowTutorialDialog(HWND owner)
 
 // Main UI Window
 LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void OpenV4Welcome(HWND owner)
+{
+    ShowMainUIDialog(owner);
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        PostMessage(g_hMainUiWnd, WM_APP + 100, 0, 0);
+    }
+}
+
 void ShowMainUIDialog(HWND owner)
 {
+    (void)owner;
     if (g_hMainUiWnd && IsWindow(g_hMainUiWnd))
     {
         if (IsIconic(g_hMainUiWnd)) ShowWindow(g_hMainUiWnd, SW_RESTORE);
@@ -16491,7 +18723,7 @@ void ShowMainUIDialog(HWND owner)
         registered = RegisterClass(&wc) != 0;
     }
 
-    RECT targetRect = GetMainUIWindowRect();
+    RECT targetRect = GetDefaultMainUiRect();
     int x = targetRect.left;
     int y = targetRect.top;
     int winW = targetRect.right - targetRect.left;
@@ -16499,7 +18731,7 @@ void ShowMainUIDialog(HWND owner)
 
     g_hMainUiWnd = CreateWindowEx(WS_EX_APPWINDOW, MAINUI_CLASS_NAME,
         L"AntiAFK-RBX", WS_POPUP,
-        x, y, winW, winH, owner, NULL, g_hInst, NULL);
+        x, y, winW, winH, NULL, NULL, g_hInst, NULL);
 
     if (g_hMainUiWnd)
     {
@@ -16523,6 +18755,20 @@ struct MainUIData {
     RECT closeButtonRect = { 0 };
     RECT iconButtonRect = { 0 };
     RECT startButtonRect = { 0 };
+    RECT startInstanceInfoRect = { 0 };
+    RECT startNextInfoRect = { 0 };
+    RECT simpleExitBtnRect = { 0 };
+    RECT simpleUserSafeTileRect = { 0 };
+    RECT simpleHeaderRect = { 0 };
+    RECT simpleIntervalCardRect = { 0 };
+    RECT simpleActionCardRect = { 0 };
+    RECT simpleHelpRects[8] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+    RECT simpleFpsSettingsRect = { 0 };
+    RECT simpleRamSettingsRect = { 0 };
+    RECT simpleMutexStatusRect = { 0 };
+    float simpleTransitionAnim = 1.0f;
+    int simpleTransitionDirection = 0;
+    HBITMAP simplePrevSnapshotBmp = NULL;
 
     int currentPage = 0; // 0: General, 1: Auto+Utils, 2: Misc, 3: Advanced, 4: Statistics, 5: WebHook
     int prevPage = 0;
@@ -16550,6 +18796,7 @@ struct MainUIData {
     RECT showRobloxCompactRect = { 0 };
     RECT hideRobloxCompactRect = { 0 };
     RECT opacityCompactRect = { 0 };
+    RECT opacityEditCompactRect = { 0 };
     RECT gridRobloxCompactRect = { 0 };
     RECT gridSettingsCompactRect = { 0 };
     RECT muteRobloxCompactRect = { 0 };
@@ -16573,6 +18820,7 @@ struct MainUIData {
     RECT advancedReconnectLinkRect = { 0 };
     RECT autoResetToggleRect = { 0 };
     RECT autoHideToggleRect = { 0 };
+    RECT autoUtilsGuideRect = { 0 };
     RECT autoOpacityToggleRect = { 0 };
     RECT autoGridToggleRect = { 0 };
     RECT bloxstrapIntegrationToggleRect = { 0 };
@@ -16589,12 +18837,13 @@ struct MainUIData {
     RECT actionDelaysEditButtonRect = { 0 };
     RECT uiSettingsRowRect = { 0 };
     RECT uiSettingsBtnRect = { 0 };
-    RECT settingsSubToggleRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
-    bool isHoveringSettingsSubToggle[6] = { false, false, false, false, false, false };
-    float settingsSubToggleAnims[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    RECT settingsSubToggleRects[9] = {};
+    bool isHoveringSettingsSubToggle[9] = {};
+    float settingsSubToggleAnims[9] = {};
     RECT screenSaverRowRect = { 0 };
     RECT screenSaverButtonRect = { 0 };
     RECT ssAlwaysShowButtonRect = { 0 };
+    RECT ssAlwaysShowHintButtonRect = { 0 };
     RECT legacyUiToggleRect = { 0 };
     RECT statusBarToggleRect = { 0 };
     RECT statusBarPrimaryMonitorCompactRect = { 0 };
@@ -16667,6 +18916,7 @@ struct MainUIData {
     bool isHoveringAdvancedFpsCapperLink = false;
     bool isHoveringScreenSaverButton = false;
     bool isHoveringSsAlwaysShow = false;
+    bool isHoveringSsAlwaysShowHint = false;
     bool isHoveringAutoStartToggle = false;
     bool isHoveringAutoReconnectToggle = false;
     bool isHoveringReconnectManualCheck = false;
@@ -16676,6 +18926,7 @@ struct MainUIData {
     bool isHoveringAutoOpacityToggle = false;
     bool isHoveringAutoGridToggle = false;
     bool isHoveringAutoMuteToggle = false;
+    bool isHoveringAutoUtilsGuide = false;
     bool isHoveringFpsCapperToggle = false;
     bool isHoveringRamCleanerToggle = false;
     bool isHoveringRamCleanerSweepCompact = false;
@@ -16693,6 +18944,7 @@ bool isHoveringUiSettings = false;
     bool isHoveringShowRobloxCompact = false;
     bool isHoveringHideRobloxCompact = false;
     bool isHoveringOpacityCompact = false;
+    bool isHoveringOpacityEditCompact = false;
     bool isHoveringGridRobloxCompact = false;
     bool isHoveringGridSettingsCompact = false;
     bool isHoveringMuteRobloxCompact = false;
@@ -16714,13 +18966,18 @@ bool isHoveringUiSettings = false;
     bool isHoveringStatusBarContentCompact = false;
     bool isHoveringLegacyUiToggle = false;
     bool isHoveringSimpleModeToggle = false;
+    bool isHoveringSimpleExit = false;
+    bool isHoveringSimpleFpsSettings = false;
+    bool isHoveringSimpleRamSettings = false;
+    bool isHoveringSimpleMutexStatus = false;
+    int simpleHoverHelp = -1;
     bool isHoveringHotkeyToggle = false;
     bool isHoveringHotkeyBind = false;
     bool isHoveringAlphaInfoButton = false;
     bool isHoveringTimingsCompact = false;
     bool isHoveringTimingsBackIcon = false;
     bool isHoveringTimingsToggle = false;
-    bool isHoveringDisclaimerShowMore = false;
+    bool isHoveringDisclaimerSupport = false;
     bool isHoveringDisclaimerWiki = false;
     bool isHoveringDiscordWebhookEnableToggle = false;
     bool isHoveringDiscordNotifyStartToggle = false;
@@ -16832,6 +19089,8 @@ ULONGLONG startupOverlayShownTick = 0;
 
     bool previousAfkStartedState = false;
     float stateChangeProgress = 0.0f;
+    int cachedRobloxWindowCount = 0;
+    ULONGLONG cachedRobloxWindowCountTick = 0;
     int stateChangeDirection = 0;
 
 bool showingGridSettings = false;
@@ -16849,7 +19108,7 @@ RECT settingsSubDropdownRect = { 0 };
 RECT settingsSubOkButtonRect = { 0 };
 RECT settingsSubIntervalRect = { 0 };
 RECT settingsSubLimitRect = { 0 };
-RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+RECT settingsSubHelpRects[9] = {};
     int gridSettingsViewDirection = 0;
     bool isHoveringBackIcon = false;
     bool isHoveringGridForceSmall = false;
@@ -16990,8 +19249,20 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     RECT timingsBtnRect = { 0 };
     RECT timingsOkButtonRect = { 0 };
     bool isHoveringTimingsOkButton = false;
-    RECT disclaimerShowMoreRect = { 0 };
+    RECT disclaimerSupportRect = { 0 };
     RECT disclaimerWikiRect = { 0 };
+    RECT disclaimerVersionRect = { 0 };
+    RECT disclaimerGuideRect = { 0 };
+    bool isHoveringDisclaimerGuide = false;
+    bool isHoveringDisclaimerVersion = false;
+    bool showingAutoUtilsGuide = false;
+    int autoUtilsGuideStep = 0; // 0-2 - guide topics
+    RECT autoUtilsGuidePrevRect = { 0 };
+    RECT autoUtilsGuideNextRect = { 0 };
+    RECT autoUtilsGuideCloseRect = { 0 };
+    bool isHoveringAutoUtilsGuidePrev = false;
+    bool isHoveringAutoUtilsGuideNext = false;
+    bool isHoveringAutoUtilsGuideClose = false;
 
     bool showingTimings = false;
     float timingsViewAnim = 0.0f;
@@ -17009,10 +19280,15 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     bool isHoveringAlphaInfoGitHubLink = false;
     bool isHoveringAlphaInfoDiscordLink = false;
     bool isHoveringAlphaInfoReleasesLink = false;
-    bool isHoveringAlphaInfoWhatsNewLink = false;
+    bool isHoveringAlphaInfoSupportLink = false;
     int alphaInfoScrollOffset = 0;
+    int alphaInfoMaxScroll = 0;
+    int alphaInfoScrollPage = 0;
+    RECT alphaInfoScrollbarRect = { 0 };
     int webhookScrollOffset = 0;
     int webhookMaxScroll = 0;
+    int webhookScrollPage = 0;
+    RECT webhookScrollbarRect = { 0 };
     int webhookScrollAreaTop = 0;
     int webhookScrollAreaBottom = 0;
     int webhookFixedBottom = 0;
@@ -17024,7 +19300,7 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     RECT alphaInfoGitHubLinkRect = { 0 };
     RECT alphaInfoDiscordLinkRect = { 0 };
     RECT alphaInfoReleasesLinkRect = { 0 };
-    RECT alphaInfoWhatsNewLinkRect = { 0 };
+    RECT alphaInfoSupportLinkRect = { 0 };
 
     int disclaimerContext = -1;
     int prevDisclaimerContext = -1;
@@ -17045,6 +19321,7 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     RECT macrosBtnRectEdit = { 0 };
     RECT macrosBtnRectDelete = { 0 };
     RECT macrosBtnRectTest = { 0 };
+    RECT macrosBtnRectReview = { 0 };
     RECT macrosBtnRectNext = { 0 };
     RECT macrosBtnRectBack = { 0 };
     RECT macrosBtnRectRecord = { 0 };
@@ -17069,6 +19346,10 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     int macrosSelectedIndex = -1;
     int macrosHoveringItem = -1;
     int macrosScrollOffset = 0;
+    int macrosMaxScroll = 0;
+    int macrosScrollPage = 0;
+    int uiScrollDragMode = 0;
+    int uiScrollDragGrab = 0;
     bool macrosScrollDragging = false;
     RECT macrosScrollbarRect = { 0 };
     bool macrosHoverRenameIcon = false;
@@ -17079,6 +19360,7 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     bool macrosHoverEdit = false;
     bool macrosHoverDelete = false;
     bool macrosHoverTest = false;
+    bool macrosHoverReview = false;
     bool macrosHoverNext = false;
     bool macrosHoverBack = false;
     bool macrosHoverRecord = false;
@@ -17091,6 +19373,7 @@ RECT settingsSubHelpRects[6] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
     bool macrosHoverFinish = false;
     float macrosRecordMovementsAnim = 0.0f;
     bool macrosNameFocused = false;
+    size_t macrosNameCaretPos = 0;
     std::wstring macrosWizardName;
 
     bool isOffscreenRender = false;
@@ -17139,6 +19422,7 @@ static float g_ssTextH = 0.0f;
 static bool g_ssCursorVisible = true;
 static bool g_ssHoveringClose = false;
 std::atomic<bool> g_ssAlwaysShowExitUI(false);
+std::atomic<bool> g_ssAlwaysShowHintAndClose(false);
 static int g_ssStartupFrames = 0;
 static HHOOK g_ssKeyboardHook = NULL;
 
@@ -17146,11 +19430,16 @@ static LRESULT CALLBACK ScreenSaver_LLKeyboardProc(int nCode, WPARAM wParam, LPA
 {
     if (nCode >= 0 && g_screenSaverActive.load()) {
         KBDLLHOOKSTRUCT* pKb = (KBDLLHOOKSTRUCT*)lParam;
+        if ((pKb->flags & (LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED)) != 0)
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
         if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
             if (pKb->vkCode == VK_LWIN || pKb->vkCode == VK_RWIN || pKb->vkCode == VK_ESCAPE) {
                 g_screenSaverStopRequested.store(true);
-                return 1;
             }
+            return 1;
+        }
+        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+            return 1;
         }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
@@ -17160,7 +19449,11 @@ static void ScreenSaver_UpdateCursor()
 {
     bool want = g_ssShowExitUI;
     if (want != g_ssCursorVisible) {
-        ShowCursor(want);
+        if (want) {
+            while (ShowCursor(TRUE) < 0) {}
+        } else {
+            while (ShowCursor(FALSE) >= 0) {}
+        }
         g_ssCursorVisible = want;
     }
 }
@@ -17196,7 +19489,9 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 g_ssShowExitUI = true;
             } else {
                 g_ssInactiveFrames++;
-                if (g_ssInactiveFrames > 240) {
+                if (g_ssAlwaysShowHintAndClose.load()) {
+                    g_ssShowExitUI = true;
+                } else if (g_ssInactiveFrames > 240) {
                     g_ssShowExitUI = false;
                 }
             }
@@ -17254,8 +19549,10 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 if (g_ssShowExitUI && g_ssHintFont && g_ssHintSmallFont) {
                     Font hintFont(hdcMem, g_ssHintFont);
                     Font hintSmallFont(hdcMem, g_ssHintSmallFont);
-                    std::wstring hintMain = L"Press X in the top-right corner to close\nor press Esc or Win key to close";
-                    std::wstring hintSub = L"This hint auto-hides after inactivity";
+                    std::wstring hintMain = L"Click the X in the top-right corner to close\nor press Esc or Win key to close";
+                    std::wstring hintSub = g_ssAlwaysShowHintAndClose.load()
+                        ? L"Always visible (Screen Saver settings)"
+                        : L"This hint auto-hides after inactivity";
 
                     RectF mainBounds, subBounds;
                     g.MeasureString(hintMain.c_str(), -1, &hintFont, PointF(0, 0), &mainBounds);
@@ -17336,7 +19633,7 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         RECT rc;
         GetClientRect(hwnd, &rc);
-        if (pt.x >= rc.right - 36 && pt.x < rc.right - 9 && pt.y >= 8 && pt.y < 36) {
+        if (g_ssShowExitUI && pt.x >= rc.right - 36 && pt.x < rc.right - 9 && pt.y >= 8 && pt.y < 36) {
             g_screenSaverStopRequested.store(true);
             return 0;
         }
@@ -17356,7 +19653,10 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         bool nowHovering = (mx >= Wc - 36 && mx < Wc - 9 && my >= 8 && my < 36);
         if (nowHovering != g_ssHoveringClose) {
             g_ssHoveringClose = nowHovering;
-            InvalidateRect(hwnd, NULL, FALSE);
+            std::lock_guard<std::mutex> lock(g_screenSaverWindowsMutex);
+            for (HWND sw : g_screenSaverWindows) {
+                if (sw && IsWindow(sw)) InvalidateRect(sw, NULL, FALSE);
+            }
         }
         POINT pt = { mx, my };
         ClientToScreen(hwnd, &pt);
@@ -17369,12 +19669,26 @@ LRESULT CALLBACK ScreenSaverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     }
     case WM_DESTROY:
         KillTimer(hwnd, 1);
-        if (g_ssMasterHwnd == hwnd) g_ssMasterHwnd = NULL;
+        if (g_ssMasterHwnd == hwnd) {
+            while (ShowCursor(TRUE) < 0) {}
+            g_ssCursorVisible = true;
+            g_ssMasterHwnd = NULL;
+        }
         return 0;
     default:
         break;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static void SetScreenSaverOverlaysVisible(bool visible)
+{
+    std::lock_guard<std::mutex> lock(g_screenSaverWindowsMutex);
+    for (HWND h : g_screenSaverWindows) {
+        if (h && IsWindow(h)) {
+            ShowWindow(h, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        }
+    }
 }
 
 void ScreenSaver_Start(HWND owner)
@@ -17418,6 +19732,9 @@ void ScreenSaver_Start(HWND owner)
 
     if (!g_ssKeyboardHook) {
         g_ssKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, ScreenSaver_LLKeyboardProc, NULL, 0);
+        if (!g_ssKeyboardHook) {
+            ShowTrayNotification(kNotifyTitleError, L"Screen Saver could not install the keyboard hook. Use the X button to close.");
+        }
     }
 
     static bool registered = false;
@@ -17426,7 +19743,7 @@ void ScreenSaver_Start(HWND owner)
         wc.lpfnWndProc = ScreenSaverWndProc;
         wc.hInstance = g_hInst;
         wc.lpszClassName = L"AntiAFK-RBX-ScreenSaver";
-        wc.hCursor = NULL;
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
         wc.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_MAIN));
         RegisterClass(&wc);
@@ -17444,7 +19761,7 @@ void ScreenSaver_Start(HWND owner)
             int W = mi.rcMonitor.right - mi.rcMonitor.left;
             int H = mi.rcMonitor.bottom - mi.rcMonitor.top;
             HWND h = CreateWindowEx(
-                WS_EX_TOPMOST | WS_EX_APPWINDOW | WS_EX_NOACTIVATE,
+                WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 L"AntiAFK-RBX-ScreenSaver",
                 L"AntiAFK-RBX • Screen Saver",
                 WS_POPUP | WS_VISIBLE,
@@ -17459,6 +19776,10 @@ void ScreenSaver_Start(HWND owner)
     ed.hInst = g_hInst;
     EnumDisplayMonitors(NULL, NULL, enumProc, (LPARAM)&ed);
 
+    {
+        std::lock_guard<std::mutex> lock(g_screenSaverWindowsMutex);
+        g_screenSaverWindows = ed.handles;
+    }
     std::thread([handles = std::move(ed.handles)]() {
         while (!g_screenSaverStopRequested.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -17467,6 +19788,10 @@ void ScreenSaver_Start(HWND owner)
             if (h && IsWindow(h)) {
                 PostMessage(h, WM_CLOSE, 0, 0);
             }
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_screenSaverWindowsMutex);
+            g_screenSaverWindows.clear();
         }
         if (g_ssKeyboardHook) { UnhookWindowsHookEx(g_ssKeyboardHook); g_ssKeyboardHook = NULL; }
     if (g_hwnd && IsWindow(g_hwnd)) { PostMessage(g_hwnd, WM_APP + 50, 0, 0); }
@@ -17499,6 +19824,7 @@ HFONT hFontText = NULL;
 int fontDpi = 0;
 HICON hIcon = NULL;
 std::wstring message = L"Ready";
+HWND anchorWindow = NULL;
 RECT targetBounds = { 0 };
 BYTE currentAlpha = 0;
 BYTE targetAlpha = 0;
@@ -17507,13 +19833,11 @@ bool persistent = false;
 StatusBarEventType eventType = StatusBarEventType::Ui;
 };
 
-bool StatusBarHasAnyContent()
-{
-    return g_statusBarShowIcon.load() || g_statusBarShowBrand.load();
-}
-
 bool StatusBarEventEnabled(StatusBarEventType eventType)
 {
+    if (g_simpleMode.load()) {
+        return true;
+    }
     switch (eventType) {
     case StatusBarEventType::Session: return g_statusBarEventSession.load();
     case StatusBarEventType::Action: return g_statusBarEventAction.load();
@@ -17549,8 +19873,8 @@ int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY)
     HFONT brandFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     HFONT textFont = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 
-    const bool showIcon = g_statusBarShowIcon.load();
-    const bool showBrand = g_statusBarShowBrand.load();
+    const bool showIcon = g_simpleMode.load() ? true : g_statusBarShowIcon.load();
+    const bool showBrand = g_simpleMode.load() ? true : g_statusBarShowBrand.load();
 
     int width = MulDiv(12, dpiY, 96);
     if (showIcon) {
@@ -17571,17 +19895,17 @@ int MeasureStatusBarContentWidth(const std::wstring& message, int dpiY)
 
 HMONITOR ResolveStatusBarMonitor(HWND anchorWindow)
 {
-    if (g_statusBarPrimaryMonitor.load()) {
+    if (!g_simpleMode.load() && g_statusBarPrimaryMonitor.load()) {
         return MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
-    }
-
-    if (anchorWindow && IsWindow(anchorWindow)) {
-        return MonitorFromWindow(anchorWindow, MONITOR_DEFAULTTONEAREST);
     }
 
     POINT cursorPt = { 0 };
     if (GetCursorPos(&cursorPt)) {
         return MonitorFromPoint(cursorPt, MONITOR_DEFAULTTONEAREST);
+    }
+
+    if (anchorWindow && IsWindow(anchorWindow)) {
+        return MonitorFromWindow(anchorWindow, MONITOR_DEFAULTTONEAREST);
     }
 
     HWND fg = GetForegroundWindow();
@@ -17643,7 +19967,7 @@ GetMonitorDpi(hMon, dpiX, dpiY);
 
     int x = mi.rcWork.left + (workWidth - width) / 2;
     int y;
-    if (g_statusBarPositionBottom.load()) {
+    if (!g_simpleMode.load() && g_statusBarPositionBottom.load()) {
         y = mi.rcWork.bottom - height - MulDiv(14, dpiY, 96);
     } else {
         y = mi.rcWork.top + MulDiv(14, dpiY, 96);
@@ -17675,9 +19999,15 @@ void UpdateStatusBarWindowRegion(HWND hwnd)
     HDC wndDC = GetDC(hwnd);
     int dpiY = wndDC ? GetDeviceCaps(wndDC, LOGPIXELSY) : 96;
     if (wndDC) ReleaseDC(hwnd, wndDC);
+    if (g_disableWindowCorners.load()) {
+        SetWindowRgn(hwnd, NULL, TRUE);
+        return;
+    }
     int radius = (std::min)(MulDiv(10, dpiY, 96), height / 2);
     HRGN region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
-    if (region) SetWindowRgn(hwnd, region, TRUE);
+    if (region && !SetWindowRgn(hwnd, region, TRUE)) {
+        DeleteObject(region);
+    }
 }
 
 void UpdateStatusBarPlacement(HWND hwnd, StatusBarData* pData)
@@ -17758,7 +20088,7 @@ void EnsureStatusBarWindow()
 
 void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType)) {
         return;
     }
 
@@ -17774,7 +20104,7 @@ void QueueStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND an
 
 void QueueStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType)) {
         return;
     }
 
@@ -17815,7 +20145,7 @@ void QueueStatusBarHide(bool animate)
 
 void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType)) {
         HideStatusBarOverlay(false);
         return;
     }
@@ -17831,6 +20161,7 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
     }
 
     pData->message = message;
+    pData->anchorWindow = anchorWindow;
     pData->persistent = false;
     pData->eventType = eventType;
     if (pData->hIcon) {
@@ -17859,7 +20190,7 @@ void ShowStatusBarOverlay(const std::wstring& message, UINT durationMs, HWND anc
 
 void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWindow, StatusBarEventType eventType)
 {
-    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType) || !StatusBarHasAnyContent()) {
+    if (!g_statusBarEnabled.load() || !StatusBarEventEnabled(eventType)) {
         HideStatusBarOverlay(false);
         return;
     }
@@ -17875,6 +20206,7 @@ void ShowStatusBarOverlayPersistent(const std::wstring& message, HWND anchorWind
     }
 
     pData->message = message;
+    pData->anchorWindow = anchorWindow;
     pData->persistent = true;
     pData->eventType = eventType;
     if (pData->hIcon) {
@@ -17914,7 +20246,7 @@ void UpdateStatusBarMessage(const std::wstring& message)
     }
 
     pData->message = message;
-    pData->targetBounds = CalculateStatusBarBounds(NULL, message);
+    pData->targetBounds = CalculateStatusBarBounds(pData->anchorWindow, message);
     UpdateStatusBarPlacement(g_hStatusBarWnd, pData);
     InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
     UpdateWindow(g_hStatusBarWnd);
@@ -17944,8 +20276,7 @@ void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
     SolidBrush bodyBrush(Color(90, 16, 16, 16));
     Pen borderPen(Color(180, 56, 56, 56), 1.0f);
 
-    FillRoundedRectangle(&g, &bodyBrush, 0.0f, 0.0f, width, height, radius);
-    DrawRoundedRectangle(&g, &borderPen, 0.0f, 0.0f, width - 1.0f, height - 1.0f, radius);
+    DrawOverlayPillBackground(g, bodyBrush, borderPen, width, height, radius);
 
     Font brandFont(hdc, pData->hFontBrand);
     Font textFont(hdc, pData->hFontText);
@@ -17975,8 +20306,8 @@ void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
     int separatorWidthPx = MeasureTextWidth(hdc, pData->hFontText, separator);
     int messageWidthPx = MeasureTextWidth(hdc, pData->hFontText, pData->message);
 
-    const bool showIcon = g_statusBarShowIcon.load();
-    const bool showBrand = g_statusBarShowBrand.load();
+    const bool showIcon = g_simpleMode.load() ? true : g_statusBarShowIcon.load();
+    const bool showBrand = g_simpleMode.load() ? true : g_statusBarShowBrand.load();
 
     REAL contentLeft = (REAL)horizontalPaddingPx;
     if (showIcon) {
@@ -18000,7 +20331,7 @@ void StatusBar_Paint(HDC hdc, const RECT& clientRect, StatusBarData* pData)
         g.DrawString(brand, -1, &brandFont, brandRect, &sfFixed, &brandBrush);
         x += (REAL)brandWidthPx + brandSepGap;
 
-        RectF separatorRect(x, y, (REAL)separatorWidthPx, height);
+        RectF separatorRect(x, y, (REAL)separatorWidthPx + 8.0f, height);
         g.DrawString(separator, -1, &textFont, separatorRect, &sfFixed, &textBrush);
         x += (REAL)separatorWidthPx + sepMsgGap;
     }
@@ -18089,8 +20420,9 @@ pData->hIcon = CreateCustomIcon();
         }
         if (wParam == STATUS_BAR_POSITION_TIMER) {
             if (IsWindowVisible(hwnd)) {
-                RECT newBounds = CalculateStatusBarBounds(NULL, pData->message);
-                if (newBounds.left != pData->targetBounds.left || newBounds.top != pData->targetBounds.top) {
+                RECT newBounds = CalculateStatusBarBounds(pData->anchorWindow, pData->message);
+                if (newBounds.left != pData->targetBounds.left || newBounds.top != pData->targetBounds.top ||
+                    newBounds.right != pData->targetBounds.right || newBounds.bottom != pData->targetBounds.bottom) {
                     pData->targetBounds = newBounds;
                     UpdateStatusBarPlacement(hwnd, pData);
                 }
@@ -18334,7 +20666,7 @@ void MainUI_Paint_DrawCompactOptionButton(HDC hdc, const RECT& rect, HFONT font,
     g.DrawString(icon, -1, &iconFont, iconRectF, &sfIcon, &iconBrush);
     DeleteObject(iconFontH);
 }
-void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, const wchar_t* text, bool centerOverAnchor, int extraTopOffset) {
+void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, const wchar_t* text, bool centerOverAnchor, int extraTopOffset, int minTopY) {
     if (!text || text[0] == L'\0') return;
 
     Graphics g(hdc);
@@ -18364,16 +20696,16 @@ void MainUI_Paint_DrawHoverTooltip(HDC hdc, const RECT& anchorRect, HFONT font, 
     HWND hTooltipPaintWnd = WindowFromDC(hdc);
     if (hTooltipPaintWnd && IsWindow(hTooltipPaintWnd) && GetClientRect(hTooltipPaintWnd, &tooltipBoundsRect)) {
         screenW = tooltipBoundsRect.right;
-    } else if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg) && GetClientRect(g_hInstanceManagerDlg, &tooltipBoundsRect)) {
-        screenW = tooltipBoundsRect.right;
     } else if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && GetClientRect(g_hMainUiWnd, &tooltipBoundsRect)) {
+        screenW = tooltipBoundsRect.right;
+    } else if (g_hInstanceManagerDlg && IsWindow(g_hInstanceManagerDlg) && GetClientRect(g_hInstanceManagerDlg, &tooltipBoundsRect)) {
         screenW = tooltipBoundsRect.right;
     } else {
         screenW = GetSystemMetrics(SM_CXSCREEN);
     }
     if (tooltipX < 8) tooltipX = 8;
     if (tooltipX + tooltipW > screenW - 8) tooltipX = screenW - 8 - tooltipW;
-    if (tooltipY < 34) tooltipY = anchorRect.bottom + 6;
+    if (tooltipY < minTopY) tooltipY = anchorRect.bottom + 6;
     RECT tooltipRect = { tooltipX, tooltipY, tooltipX + tooltipW, tooltipY + tooltipH };
 
     SolidBrush bgBrush(Color(235, 30, 30, 30));
@@ -18515,7 +20847,7 @@ void MainUI_Paint_DrawDropdown(HDC hdc, const RECT& rect, HFONT font, const wcha
         delete pDrawG;
     }
 }
-void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary, bool drawBottomBorder) {
+void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const wchar_t* text, bool isHovering, bool isPrimary, bool drawBottomBorder, bool drawRightBorder) {
     Graphics g(hdc);
     g.SetSmoothingMode(SmoothingModeNone);
     g.SetPixelOffsetMode(PixelOffsetModeNone);
@@ -18532,10 +20864,9 @@ void MainUI_Paint_DrawActionButton(HDC hdc, const RECT& rect, HFONT font, const 
     int h = rect.bottom - rect.top;
     g.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
     g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
-    if (rect.left == 215 || rect.left == 15 || rect.left == 0) {
-        g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
+    if (drawRightBorder) {
+        g.FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     }
-    g.FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     if (drawBottomBorder) {
         g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
     }
@@ -18570,11 +20901,11 @@ float MainUI_Paint_DrawBadge(Graphics& g, float x, float y, float badgeH, const 
 
     SmoothingMode oldSM = g.GetSmoothingMode();
     g.SetSmoothingMode(SmoothingModeAntiAlias);
-    SolidBrush badgeBg(Color(textAlpha > 200 ? 60 : textAlpha, 120, 120, 120));
+    SolidBrush badgeBg(Color((BYTE)(textAlpha > 200 ? 60 : textAlpha), 120, 120, 120));
     g.FillPath(&badgeBg, &badgePath);
     g.SetSmoothingMode(oldSM);
 
-    SolidBrush badgeTextColor(Color(textAlpha, 200, 200, 200));
+    SolidBrush badgeTextColor(Color((BYTE)textAlpha, 200, 200, 200));
     RectF badgeRectF(x + 2.0f, y + 1.0f, badgeW - 2.0f, badgeH - 1.0f);
     g.DrawString(badgeText, -1, &badgeFont, badgeRectF, &sfText, &badgeTextColor);
     return badgeW;
@@ -18775,8 +21106,6 @@ void MainUI_Paint_DrawBackupButtonsRow(HDC hdc, const RECT& importRect, const RE
     int w = groupRect.right - groupRect.left;
     int h = groupRect.bottom - groupRect.top;
     g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)groupRect.top, (REAL)w, 1.0f);
-    g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)groupRect.top, 1.0f, (REAL)h);
-    g.FillRectangle(&borderBrush, (REAL)(groupRect.right - 1), (REAL)groupRect.top, 1.0f, (REAL)h);
     g.FillRectangle(&borderBrush, (REAL)exportRect.left, (REAL)groupRect.top, 1.0f, (REAL)h);
 
     HFONT iconFontH = CreateFontW(-MulDiv(11, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
@@ -18817,6 +21146,47 @@ void MainUI_Paint_DrawBackupButtonsRow(HDC hdc, const RECT& importRect, const RE
 
     DeleteObject(iconFontH);
 }
+static void MainUI_Paint_DrawSimpleModeSwitchRow(Graphics& g, HDC hdc, HFONT textFont, const RECT& sr, bool isHovering, bool drawTopBorder = false)
+{
+    const REAL bx = (REAL)sr.left;
+    const REAL by = (REAL)sr.top;
+    const REAL bw = (REAL)(sr.right - sr.left);
+    const REAL bh = (REAL)(sr.bottom - sr.top);
+    SolidBrush rowBg(isHovering ? Color(55, 50, 50, 50) : Color(30, 35, 35, 35));
+    g.FillRectangle(&rowBg, bx, by, bw, bh);
+
+    PixelOffsetMode oldP = g.GetPixelOffsetMode();
+    SmoothingMode oldS = g.GetSmoothingMode();
+    g.SetPixelOffsetMode(PixelOffsetModeNone);
+    g.SetSmoothingMode(SmoothingModeNone);
+    SolidBrush sepBrush(Color(180, 56, 56, 56));
+    if (drawTopBorder) g.FillRectangle(&sepBrush, bx, by, bw, 1.0f);
+    g.FillRectangle(&sepBrush, bx, by + bh - 1.0f, bw, 1.0f);
+    g.SetPixelOffsetMode(oldP);
+    g.SetSmoothingMode(oldS);
+
+    HFONT hBtnIcon = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font btnIconFont(hdc, hBtnIcon);
+    SolidBrush icoBrush(Color(255, 190, 190, 190));
+    StringFormat sfCenter;
+    sfCenter.SetAlignment(StringAlignmentCenter);
+    sfCenter.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE71B", -1, &btnIconFont, RectF(bx + 20.0f, by + 1.0f, 15.0f, bh), &sfCenter, &icoBrush);
+
+    Font btnTextFont(hdc, textFont);
+    SolidBrush textBrush(Color(255, 225, 225, 225));
+    StringFormat sfLeft;
+    sfLeft.SetAlignment(StringAlignmentNear);
+    sfLeft.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"Switch to Simple Mode", -1, &btnTextFont, RectF(bx + 45.0f, by, bw - 80.0f, bh), &sfLeft, &textBrush);
+
+    HFONT hArrow = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font arrowFont(hdc, hArrow);
+    SolidBrush arrowBrush(Color(255, 160, 160, 160));
+    g.DrawString(L"\uE76C", -1, &arrowFont, RectF(bx + bw - 33.0f, by + 1.0f, 13.0f, bh), &sfCenter, &arrowBrush);
+    DeleteObject(hBtnIcon);
+    DeleteObject(hArrow);
+}
 void MainUI_Paint_DrawTripleActionButtonsRow(HDC hdc, const RECT& leftRect, const RECT& middleRect, const RECT& rightRect, HFONT font,
     const wchar_t* leftText, const wchar_t* middleText, const wchar_t* rightText,
     bool leftHover, bool middleHover, bool rightHover, bool rightPrimary, bool isEnabled = true, bool drawTopBorder = true)
@@ -18848,8 +21218,6 @@ void MainUI_Paint_DrawTripleActionButtonsRow(HDC hdc, const RECT& leftRect, cons
     if (drawTopBorder) {
         g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)groupRect.top, (REAL)gw, 1.0f);
     }
-    g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)groupRect.top, 1.0f, (REAL)gh);
-    g.FillRectangle(&borderBrush, (REAL)(groupRect.right - 1), (REAL)groupRect.top, 1.0f, (REAL)gh);
     g.FillRectangle(&borderBrush, (REAL)groupRect.left, (REAL)(groupRect.bottom - 1), (REAL)gw, 1.0f);
     g.FillRectangle(&borderBrush, (REAL)middleRect.left, (REAL)(groupRect.top + 1), 1.0f, (REAL)(gh - 2));
     g.FillRectangle(&borderBrush, (REAL)rightRect.left, (REAL)(groupRect.top + 1), 1.0f, (REAL)(gh - 2));
@@ -18867,16 +21235,24 @@ void MainUI_Paint_DrawTripleActionButtonsRow(HDC hdc, const RECT& leftRect, cons
     g.DrawString(middleText, -1, &textFont, middleRectF, &sf, &textBrush);
     g.DrawString(rightText, -1, &textFont, rightRectF, &sf, &textBrush);
 }
-static int MainUI_MeasureTextWidth(HDC hdc, HFONT font, const std::wstring& text) {
-    if (text.empty()) {
-        return 0;
-    }
-
-    HGDIOBJ oldFont = SelectObject(hdc, font);
-    SIZE textSize = { 0 };
-    GetTextExtentPoint32W(hdc, text.c_str(), (int)text.size(), &textSize);
-    SelectObject(hdc, oldFont);
-    return textSize.cx;
+static void MainUI_Paint_VerticalScrollbar(Graphics& g, const RECT& track, int offset, int maxScroll, int pageSize)
+{
+    if (track.bottom - track.top < 8 || maxScroll <= 0 || pageSize <= 0) return;
+    PixelOffsetMode oldP = g.GetPixelOffsetMode();
+    SmoothingMode oldS = g.GetSmoothingMode();
+    g.SetPixelOffsetMode(PixelOffsetModeNone);
+    g.SetSmoothingMode(SmoothingModeNone);
+    SolidBrush trackBrush(Color(50, 255, 255, 255));
+    g.FillRectangle(&trackBrush, (REAL)track.left, (REAL)track.top, (REAL)(track.right - track.left), (REAL)(track.bottom - track.top));
+    int trackH = track.bottom - track.top;
+    int total = pageSize + maxScroll;
+    int thumbH = (std::max)(16, (pageSize * trackH) / total);
+    if (thumbH > trackH) thumbH = trackH;
+    int thumbY = track.top + (int)((int64_t)offset * (trackH - thumbH) / maxScroll);
+    SolidBrush thumbBrush(Color(240, 90, 90, 90));
+    g.FillRectangle(&thumbBrush, (REAL)track.left, (REAL)thumbY, (REAL)(track.right - track.left), (REAL)thumbH);
+    g.SetPixelOffsetMode(oldP);
+    g.SetSmoothingMode(oldS);
 }
 void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFONT inputFont, const wchar_t* label, const std::wstring& value, bool isHovering, bool isFocused, size_t* caretPos, size_t* viewOffset, const wchar_t* placeholder, bool isEnabled) {
     Graphics g(hdc);
@@ -18903,12 +21279,25 @@ void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFON
     int h = rect.bottom - rect.top;
     g.FillRectangle(&fillBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, (REAL)h);
     g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, (REAL)w, 1.0f);
-    g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)rect.top, 1.0f, (REAL)h);
-    g.FillRectangle(&borderBrush, (REAL)(rect.right - 1), (REAL)rect.top, 1.0f, (REAL)h);
     g.FillRectangle(&borderBrush, (REAL)rect.left, (REAL)(rect.bottom - 1), (REAL)w, 1.0f);
 
-    const int textPaddingX = 12;
+    const int textPaddingX = 14;
     const int textAreaWidth = max(0, rect.right - rect.left - textPaddingX * 2);
+
+    StringFormat sf(StringFormat::GenericTypographic());
+    sf.SetAlignment(StringAlignmentNear);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    sf.SetFormatFlags(sf.GetFormatFlags() | StringFormatFlagsNoWrap | StringFormatFlagsMeasureTrailingSpaces);
+    if (!isFocused) {
+        sf.SetTrimming(StringTrimmingEllipsisCharacter);
+    }
+
+    auto measureWidth = [&](const std::wstring& s) -> float {
+        if (s.empty()) return 0.0f;
+        RectF bounds;
+        g.MeasureString(s.c_str(), (INT)s.size(), &gdiInputFont, PointF(0.0f, 0.0f), &sf, &bounds);
+        return bounds.Width;
+    };
 
     size_t effectiveCaretPos = value.size();
     size_t effectiveViewOffset = 0;
@@ -18926,7 +21315,7 @@ void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFON
         }
         while (effectiveViewOffset < effectiveCaretPos) {
             std::wstring caretWindow = value.substr(effectiveViewOffset, effectiveCaretPos - effectiveViewOffset);
-            if (MainUI_MeasureTextWidth(hdc, inputFont, caretWindow) <= textAreaWidth - 2) {
+            if (measureWidth(caretWindow) <= (float)(textAreaWidth - 2)) {
                 break;
             }
             ++effectiveViewOffset;
@@ -18939,7 +21328,7 @@ void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFON
     std::wstring visibleValue = value;
     if (isFocused && effectiveViewOffset < value.size()) {
         visibleValue = value.substr(effectiveViewOffset);
-        while (!visibleValue.empty() && MainUI_MeasureTextWidth(hdc, inputFont, visibleValue) > textAreaWidth) {
+        while (!visibleValue.empty() && measureWidth(visibleValue) > (float)textAreaWidth) {
             visibleValue.pop_back();
         }
     }
@@ -18947,21 +21336,23 @@ void MainUI_Paint_DrawTextInput(HDC hdc, const RECT& rect, HFONT labelFont, HFON
     const wchar_t* effectivePlaceholder = placeholder ? placeholder : L"Enter webhook URL...";
     std::wstring displayText = value.empty() ? effectivePlaceholder : visibleValue;
     SolidBrush textBrush(value.empty() ? Color(isEnabled ? 255 : 110, 130, 130, 130) : Color(isEnabled ? 255 : 120, 255, 255, 255));
-    StringFormat sf;
-    sf.SetAlignment(StringAlignmentNear);
-    sf.SetLineAlignment(StringAlignmentCenter);
-    sf.SetFormatFlags(StringFormatFlagsNoWrap);
-    RectF textRect((REAL)(rect.left + textPaddingX), (REAL)rect.top, (REAL)(rect.right - rect.left - textPaddingX * 2), (REAL)(rect.bottom - rect.top));
-    g.DrawString(displayText.c_str(), -1, &gdiInputFont, textRect, &sf, &textBrush);
+    RectF textRect((REAL)(rect.left + textPaddingX), (REAL)rect.top, (REAL)textAreaWidth, (REAL)(rect.bottom - rect.top));
+    {
+        Region oldClip;
+        g.GetClip(&oldClip);
+        g.SetClip(textRect);
+        g.DrawString(displayText.c_str(), -1, &gdiInputFont, textRect, &sf, &textBrush);
+        g.SetClip(&oldClip);
+    }
 
     if (isFocused && isEnabled) {
         std::wstring caretPrefix;
         if (!value.empty() && effectiveCaretPos >= effectiveViewOffset) {
             caretPrefix = value.substr(effectiveViewOffset, effectiveCaretPos - effectiveViewOffset);
         }
-        REAL caretX = (REAL)(rect.left + textPaddingX) + min((REAL)textAreaWidth, (REAL)MainUI_MeasureTextWidth(hdc, inputFont, caretPrefix));
+        REAL caretX = (REAL)(rect.left + textPaddingX) + min((REAL)textAreaWidth, measureWidth(caretPrefix));
         SolidBrush caretBrush(Color(255, 255, 255, 255));
-        g.FillRectangle(&caretBrush, caretX, (REAL)rect.top + 8.0f, 1.0f, (REAL)(rect.bottom - rect.top - 16));
+        g.FillRectangle(&caretBrush, caretX, (REAL)rect.top + 7.0f, 1.0f, (REAL)(rect.bottom - rect.top - 14));
     }
 }
 void MainUI_Paint_DrawHelpButton(HDC hdc, const RECT& rect, HFONT font, bool isHovering, bool fullyRounded, Graphics* pG) {
@@ -19025,9 +21416,411 @@ static void FocusRobloxWindow(HWND hwnd) {
         ShowWindow(hwnd, SW_RESTORE);
         Sleep(80);
     }
-    ShowWindow(hwnd, SW_SHOW);
-    SetForegroundWindow(hwnd);
+    if (!IsWindowVisible(hwnd)) {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    }
+    TryActivateRobloxWindow(hwnd);
 }
+static UINT MainUI_GetPaintDpi() {
+    UINT paintDpi = 96;
+    typedef UINT(WINAPI* GetDpiForSystem_fn)();
+    auto dpiFn = (GetDpiForSystem_fn)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+    if (dpiFn) {
+        UINT systemDpi = dpiFn();
+        if (systemDpi > 0) paintDpi = systemDpi;
+    }
+    return paintDpi;
+}
+
+static void MainUI_Layout_SimpleMode(const RECT& clientRect, MainUIData* pData) {
+    if (!pData) return;
+    const UINT dpi = MainUI_GetPaintDpi();
+    auto S = [dpi](int v) { return MulDiv(v, (int)dpi, 96); };
+
+    const int w = clientRect.right;
+    const int h = clientRect.bottom;
+    const int startBtnH = S(40);
+    const int disclaimerH = S(26);
+    const int contentTop = (std::max)(31, S(31));
+
+    pData->startButtonRect = { 0, h - startBtnH, w, h };
+    pData->disclaimerRect = { 0, h - startBtnH - disclaimerH + 1, w, h - startBtnH + 1 };
+
+    pData->helpButtonRects.clear();
+    pData->rowRects.clear();
+    for (auto& nav : pData->navItems) nav.rect = { 0, 0, 0, 0 };
+    pData->testActionButtonRect = { 0, 0, 0, 0 };
+    pData->actionDelaysSettingsCompactRect = { 0, 0, 0, 0 };
+    pData->advancedMultiInstanceLinkRect = { 0, 0, 0, 0 };
+    pData->mutexStatusRect = { 0, 0, 0, 0 };
+    pData->macrosBtnRect = { 0, 0, 0, 0 };
+    pData->macrosIntervalToggleCompactRect = { 0, 0, 0, 0 };
+    pData->instanceManagerBtnRect = { 0, 0, 0, 0 };
+    pData->timingsBtnRect = { 0, 0, 0, 0 };
+    pData->simpleModeToggleRect = { 0, 0, 0, 0 };
+    pData->discordButtonRect = { 0, 0, 0, 0 };
+    pData->updateBannerRect = { 0, 0, 0, 0 };
+    pData->mutexBannerRect = { 0, 0, 0, 0 };
+
+    const int headerH = S(40);
+    const int outerPadX = S(10);
+    pData->simpleHeaderRect = { 0, contentTop, w, contentTop + headerH };
+
+    const int exitBtnW = S(136);
+    const int exitBtnH = S(26);
+    const int exitBtnY = pData->simpleHeaderRect.top + (headerH - exitBtnH) / 2;
+    pData->simpleExitBtnRect = { w - outerPadX - exitBtnW, exitBtnY, w - outerPadX, exitBtnY + exitBtnH };
+
+    const int annH = S(32);
+    pData->discordButtonRect = { 0, pData->disclaimerRect.top - annH, w, pData->disclaimerRect.top };
+    int bodyBottom = pData->discordButtonRect.top;
+    if (g_updateFound.load() || g_updateCheckFailed.load()) {
+        const int updH = S(28);
+        pData->updateBannerRect = { 0, bodyBottom - updH, w, bodyBottom };
+        bodyBottom = pData->updateBannerRect.top;
+    } else {
+        pData->updateBannerRect = { 0, 0, 0, 0 };
+    }
+
+    const int padY = S(8);
+    const int gap = S(8);
+    const int colGap = gap;
+    const int rowGap = gap;
+    const int sectionGap = gap;
+    const int innerW = w - outerPadX * 2;
+    const int colW = (innerW - colGap) / 2;
+    const int col1L = outerPadX;
+    const int col1R = col1L + colW;
+    const int col2L = col1R + colGap;
+    const int col2R = w - outerPadX;
+
+    const int gridTop = pData->simpleHeaderRect.bottom + 1 + padY;
+    const int availH = (std::max)(S(220), bodyBottom - padY - gridTop);
+
+    const int primaryH = S(68);
+    pData->simpleIntervalCardRect = { col1L, gridTop, col1R, gridTop + primaryH };
+    pData->simpleActionCardRect = { col2L, gridTop, col2R, gridTop + primaryH };
+
+    const int cardPadX = S(10);
+    const int primaryDdH = S(26);
+    const int primaryDdBottom = S(8);
+    pData->intervalDropdownRect = {
+        col1L + cardPadX,
+        pData->simpleIntervalCardRect.bottom - primaryDdBottom - primaryDdH,
+        col1R - cardPadX,
+        pData->simpleIntervalCardRect.bottom - primaryDdBottom
+    };
+    pData->actionDropdownRect = {
+        col2L + cardPadX,
+        pData->simpleActionCardRect.bottom - primaryDdBottom - primaryDdH,
+        col2R - cardPadX,
+        pData->simpleActionCardRect.bottom - primaryDdBottom
+    };
+
+    const int tilesAvailH = availH - primaryH - sectionGap - rowGap * 2;
+    const int tileH = (std::max)(S(64), tilesAvailH / 3);
+    const int row1Y = gridTop + primaryH + sectionGap;
+    const int row2Y = row1Y + tileH + rowGap;
+    const int row3Y = row2Y + tileH + rowGap;
+
+    pData->multiInstanceToggleRect = { col1L, row1Y, col1R, row1Y + tileH };
+    pData->autoReconnectToggleRect = { col2L, row1Y, col2R, row1Y + tileH };
+    pData->fpsCapperToggleRect = { col1L, row2Y, col1R, row2Y + tileH };
+    pData->ramCleanerToggleRect = { col2L, row2Y, col2R, row2Y + tileH };
+    pData->skipActiveToggleRect = { col1L, row3Y, col1R, row3Y + tileH };
+    pData->simpleUserSafeTileRect = { col2L, row3Y, col2R, row3Y + tileH };
+
+    const int userSafeDdH = (tileH < S(76)) ? S(21) : S(24);
+    const int userSafeDdBottom = (tileH < S(76)) ? S(6) : S(8);
+    pData->userSafeDropdownRect = {
+        col2L + cardPadX,
+        pData->simpleUserSafeTileRect.bottom - userSafeDdBottom - userSafeDdH,
+        col2R - cardPadX,
+        pData->simpleUserSafeTileRect.bottom - userSafeDdBottom
+    };
+
+    const int helpSize = S(18);
+    const int helpPadR = S(10);
+    const int helpPadT = (tileH < S(74)) ? S(6) : S(8);
+    const RECT* helpCards[8] = {
+        &pData->simpleIntervalCardRect,
+        &pData->simpleActionCardRect,
+        &pData->multiInstanceToggleRect,
+        &pData->autoReconnectToggleRect,
+        &pData->fpsCapperToggleRect,
+        &pData->ramCleanerToggleRect,
+        &pData->skipActiveToggleRect,
+        &pData->simpleUserSafeTileRect
+    };
+    for (int i = 0; i < 8; ++i) {
+        const RECT& c = *helpCards[i];
+        pData->simpleHelpRects[i] = {
+            c.right - helpPadR - helpSize,
+            c.top + helpPadT,
+            c.right - helpPadR,
+            c.top + helpPadT + helpSize
+        };
+    }
+
+    const int chipGap = S(4);
+    if (g_multiSupport.load()) {
+        pData->simpleMutexStatusRect = {
+            pData->simpleHelpRects[2].left - chipGap - helpSize,
+            pData->simpleHelpRects[2].top,
+            pData->simpleHelpRects[2].left - chipGap,
+            pData->simpleHelpRects[2].bottom
+        };
+    } else {
+        pData->simpleMutexStatusRect = { 0, 0, 0, 0 };
+    }
+    pData->simpleFpsSettingsRect = {
+        pData->simpleHelpRects[4].left - chipGap - helpSize,
+        pData->simpleHelpRects[4].top,
+        pData->simpleHelpRects[4].left - chipGap,
+        pData->simpleHelpRects[4].bottom
+    };
+    pData->simpleRamSettingsRect = {
+        pData->simpleHelpRects[5].left - chipGap - helpSize,
+        pData->simpleHelpRects[5].top,
+        pData->simpleHelpRects[5].left - chipGap,
+        pData->simpleHelpRects[5].bottom
+    };
+}
+
+static bool MainUI_HandleSimpleModeClick(HWND hwnd, POINT pt, MainUIData* pData) {
+    if (!pData) return false;
+
+    if (pData->disclaimerVersionRect.right > pData->disclaimerVersionRect.left && PtInRect(&pData->disclaimerVersionRect, pt)) {
+        PostMessage(hwnd, WM_APP + 100, 0, 0);
+        return true;
+    }
+    if (pData->disclaimerWikiRect.right > 0 && PtInRect(&pData->disclaimerWikiRect, pt)) {
+        ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/wiki", NULL, NULL, SW_SHOWNORMAL);
+        return true;
+    }
+    if (pData->disclaimerSupportRect.right > 0 && PtInRect(&pData->disclaimerSupportRect, pt)) {
+        ShellExecute(NULL, L"open", L"https://agzes.github.io/donate", NULL, NULL, SW_SHOWNORMAL);
+        return true;
+    }
+    if (PtInRect(&pData->simpleExitBtnRect, pt)) {
+        PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_SIMPLE_MODE, 0);
+        return true;
+    }
+    if (pData->discordButtonRect.bottom > pData->discordButtonRect.top && PtInRect(&pData->discordButtonRect, pt)) {
+        AnnouncementInfo ann = GetAnnouncementCopy();
+        ShellExecute(NULL, L"open", ann.enabled ? GetAnnouncementLink() : L"https://agzes.github.io/go/to/discord", NULL, NULL, SW_SHOWNORMAL);
+        return true;
+    }
+    if ((g_updateFound.load() || g_updateCheckFailed.load()) && pData->updateBannerRect.bottom > pData->updateBannerRect.top && PtInRect(&pData->updateBannerRect, pt)) {
+        if (g_updateFound.load()) {
+            PostMessage(g_hwnd, WM_COMMAND, ID_UPDATE_AVAILABLE, 0);
+        } else if (g_updateCheckFailed.load()) {
+            g_updateCheckFailed = false;
+            InvalidateRect(hwnd, &pData->updateBannerRect, FALSE);
+            std::thread([]() {
+                CheckForUpdates(false);
+            }).detach();
+        }
+        return true;
+    }
+    if (g_multiSupport.load() && pData->simpleMutexStatusRect.right > pData->simpleMutexStatusRect.left && PtInRect(&pData->simpleMutexStatusRect, pt)) {
+        bool mutexOk = IsMultiInstanceMutexValid();
+        bool hasError = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
+        bool ignored = g_mutexIgnored && !mutexOk;
+        if (hasError) {
+            int msgResult = ShowMutexErrorDialog(hwnd);
+            if (msgResult == 1 || msgResult == 3) {
+                ClearMutexBanner();
+            } else if (msgResult == 2) {
+                g_mutexIgnored = true;
+                ClearMutexBanner();
+            }
+        } else if (ignored) {
+            ShowDarkMessageBox(hwnd, L"The Multi-Instance mutex check is currently ignored.\n\nToggle Multi-Instance Bypass off and on (after closing all Roblox windows) to re-acquire the mutex.", L"Multi-Instance Status • Ignored", MB_OK);
+        } else if (mutexOk) {
+            ShowDarkMessageBox(hwnd, L"Multi-Instance mutex is active.\n\nAntiAFK-RBX is holding ROBLOX_singletonMutex so multiple Roblox clients can be launched at the same time.", L"Multi-Instance Status • Active", MB_OK);
+        } else {
+            ShowDarkMessageBox(hwnd, L"Multi-Instance mutex is not currently active.\n\nClose all open Roblox windows and toggle Multi-Instance Bypass off and on.", L"Multi-Instance Status • Inactive", MB_OK);
+        }
+        return true;
+    }
+
+    static const wchar_t* const helpTitles[8] = {
+        L"Interval",
+        L"Action",
+        L"Multi-Instance Bypass",
+        L"Auto-Reconnect",
+        L"FPS Capper (CPU Limiter)",
+        L"RAM Cleaner",
+        L"Skip Active",
+        L"User-Safe Mode"
+    };
+    static const wchar_t* const helpTexts[8] = {
+        L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so keep the interval below 20 min.\n\nRecommended: 9 minutes.",
+        L"Which input AntiAFK-RBX simulates to prevent idle kick.\n\n- Space (Jump): presses Space (works in most games)\n- W/S: moves forward and back\n- Zoom (I/O): zooms camera in and out\n- Left / Right: taps Left and Right arrows\n- Random: randomly picks Space, W/S, Zoom, or Arrows each cycle",
+        L"Allows launching multiple Roblox windows at once by holding the system mutex.\n\nAnti-AFK still works on every open Roblox window even when this is off.\n\nClose all Roblox windows before toggling.",
+        L"Automatically tries to click Roblox's Reconnect button after an idle kick or disconnect.",
+        L"Lowers Roblox CPU usage and heat by capping FPS (or limiting CPU %) while active.\n\nToggle here to enable or disable using your configured target.",
+        L"Automatically reduces Roblox memory usage during Anti-AFK sessions.",
+        L"Skips the Anti-AFK action in Roblox windows where keyboard input was detected in the last 3 seconds.\n\nPlay in one window while idle windows stay protected.",
+        L"Pauses Anti-AFK actions while your input is detected so they don't interrupt gameplay.\n\n- Off: always run actions on schedule\n- Legacy: pauses on held keys or mouse clicks\n- Beta: pauses on all input including mouse movement (Recommended)"
+    };
+    for (int i = 0; i < 8; ++i) {
+        if (PtInRect(&pData->simpleHelpRects[i], pt)) {
+            ShowDarkMessageBox(hwnd, helpTexts[i], helpTitles[i], MB_OK);
+            return true;
+        }
+    }
+
+    if (PtInRect(&pData->intervalDropdownRect, pt)) {
+        HMENU hMenu = CreatePopupMenu();
+        AppendMenu(hMenu, MF_STRING, ID_TIME_CUSTOM, L"Custom interval...");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 3 * 60 ? MF_CHECKED : 0), ID_TIME_3, L"3 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 6 * 60 ? MF_CHECKED : 0), ID_TIME_6, L"6 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 9 * 60 ? MF_CHECKED : 0), ID_TIME_9, L"9 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 11 * 60 ? MF_CHECKED : 0), ID_TIME_11, L"11 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 13 * 60 ? MF_CHECKED : 0), ID_TIME_13, L"13 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 15 * 60 ? MF_CHECKED : 0), ID_TIME_15, L"15 minutes");
+        AppendMenu(hMenu, MF_STRING | (g_selectedTime.load() == 18 * 60 ? MF_CHECKED : 0), ID_TIME_18, L"18 minutes");
+        POINT menuPt = { pData->intervalDropdownRect.left, pData->intervalDropdownRect.bottom };
+        ClientToScreen(hwnd, &menuPt);
+        TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+        PostMessage(g_hwnd, WM_NULL, 0, 0);
+        DestroyMenu(hMenu);
+        return true;
+    }
+
+    if (PtInRect(&pData->actionDropdownRect, pt)) {
+        HMENU hMenu = CreatePopupMenu();
+        AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
+        AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
+        AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
+        AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 5 ? MF_CHECKED : 0), ID_ACTION_ARROWS, L"<- / ->");
+        AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random");
+        POINT menuPt = { pData->actionDropdownRect.left, pData->actionDropdownRect.bottom };
+        ClientToScreen(hwnd, &menuPt);
+        TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+        PostMessage(g_hwnd, WM_NULL, 0, 0);
+        DestroyMenu(hMenu);
+        return true;
+    }
+
+    if (PtInRect(&pData->userSafeDropdownRect, pt) || PtInRect(&pData->simpleUserSafeTileRect, pt)) {
+        HMENU hMenu = CreatePopupMenu();
+        AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 0 ? MF_CHECKED : 0), ID_USER_SAFE_OFF, L"Off");
+        AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 1 ? MF_CHECKED : 0), ID_USER_SAFE_LEGACY, L"Legacy (Keys/Clicks)");
+        AppendMenu(hMenu, MF_STRING | (g_userSafeMode.load() == 2 ? MF_CHECKED : 0), ID_USER_SAFE_BETA, L"Beta (All Input)");
+        POINT menuPt = { pData->userSafeDropdownRect.left, pData->userSafeDropdownRect.bottom };
+        ClientToScreen(hwnd, &menuPt);
+        TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN, menuPt.x, menuPt.y, 0, g_hwnd, NULL);
+        PostMessage(g_hwnd, WM_NULL, 0, 0);
+        DestroyMenu(hMenu);
+        return true;
+    }
+
+    if (PtInRect(&pData->simpleFpsSettingsRect, pt)) {
+        HMENU hMenu = CreatePopupMenu();
+        const bool cpuMode = g_cpuLimitMode.load();
+        AppendMenu(hMenu, MF_STRING | (cpuMode ? MF_CHECKED : 0), 1001, L"Mode: CPU Limiter");
+        AppendMenu(hMenu, MF_STRING | (!cpuMode ? MF_CHECKED : 0), 1002, L"Mode: FPS Cap");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        if (cpuMode) {
+            const int curPct = g_cpuLimitPercent.load();
+            const int pcts[5] = { 5, 10, 15, 25, 50 };
+            for (int p : pcts) {
+                wchar_t buf[32];
+                swprintf_s(buf, L"CPU Limit: %d%%", p);
+                AppendMenu(hMenu, MF_STRING | (curPct == p ? MF_CHECKED : 0), 1100 + p, buf);
+            }
+            AppendMenu(hMenu, MF_STRING, 1004, L"Custom CPU Limit...");
+        } else {
+            const int curFps = (g_fpsLimit.load() > 0) ? g_fpsLimit.load() : g_fpsLastActiveLimit.load();
+            AppendMenu(hMenu, MF_STRING | (curFps == 3 ? MF_CHECKED : 0), ID_FPS_CAP_3, L"3 FPS");
+            AppendMenu(hMenu, MF_STRING | (curFps == 5 ? MF_CHECKED : 0), ID_FPS_CAP_5, L"5 FPS");
+            AppendMenu(hMenu, MF_STRING | (curFps == 7 ? MF_CHECKED : 0), ID_FPS_CAP_7, L"7 FPS");
+            AppendMenu(hMenu, MF_STRING | (curFps == 10 ? MF_CHECKED : 0), ID_FPS_CAP_10, L"10 FPS");
+            AppendMenu(hMenu, MF_STRING | (curFps == 15 ? MF_CHECKED : 0), ID_FPS_CAP_15, L"15 FPS");
+            AppendMenu(hMenu, MF_STRING, ID_FPS_CAP_CUSTOM, L"Custom FPS...");
+        }
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING | (g_unlockFpsOnFocus.load() ? MF_CHECKED : 0), 1003, L"Unlock FPS on focus");
+        AppendMenu(hMenu, MF_STRING, ID_ADVANCED_FPS_CAPPER, L"More settings...");
+
+        POINT menuPt = { pData->simpleFpsSettingsRect.left, pData->simpleFpsSettingsRect.bottom };
+        ClientToScreen(hwnd, &menuPt);
+        UINT cmd = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
+        PostMessage(hwnd, WM_NULL, 0, 0);
+        DestroyMenu(hMenu);
+        if (cmd == 1001 || cmd == 1002) {
+            g_cpuLimitMode = (cmd == 1001);
+            if (g_fpsLimit.load() > 0) RestartFpsCapperForEffectiveLimit();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (cmd >= 1101 && cmd <= 1199) {
+            g_cpuLimitMode = true;
+            g_cpuLimitPercent = (int)(cmd - 1100);
+            if (g_fpsLimit.load() <= 0) g_fpsLimit = (g_fpsLastActiveLimit.load() > 0) ? g_fpsLastActiveLimit.load() : 5;
+            RestartFpsCapperForEffectiveLimit();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (cmd == 1004) {
+            ShowCustomInputDialog(hwnd, CustomInputDialogType::CpuLimitPercent);
+        } else if (cmd == 1003) {
+            g_unlockFpsOnFocus = !g_unlockFpsOnFocus.load();
+            SaveSettings();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (cmd != 0) {
+            PostMessage(g_hwnd, WM_COMMAND, cmd, 0);
+        }
+        return true;
+    }
+
+    if (PtInRect(&pData->simpleRamSettingsRect, pt)) {
+        HMENU hMenu = CreatePopupMenu();
+        const int ramMode = g_ramCleanerMode.load();
+        wchar_t intBuf[64], limBuf[64];
+        swprintf_s(intBuf, L"Set Interval (%ds)...", g_ramCleanerInterval.load());
+        swprintf_s(limBuf, L"Set RAM Limit (%d MB)...", g_ramCleanerLimit.load());
+        AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_SWEEP, L"Clean RAM Now");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING | (ramMode == 0 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_TIME, L"Mode: Timer");
+        AppendMenu(hMenu, MF_STRING | (ramMode == 1 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_SMART, L"Mode: RAM Limit");
+        AppendMenu(hMenu, MF_STRING | (ramMode == 2 ? MF_CHECKED : 0), ID_RAM_CLEAN_MODE_HYBRID, L"Mode: Timer + Limit");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_INTERVAL_CUSTOM, intBuf);
+        AppendMenu(hMenu, MF_STRING, ID_RAM_CLEAN_LIMIT_CUSTOM, limBuf);
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING, 2001, L"More settings...");
+
+        POINT menuPt = { pData->simpleRamSettingsRect.left, pData->simpleRamSettingsRect.bottom };
+        ClientToScreen(hwnd, &menuPt);
+        UINT cmd = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RETURNCMD, menuPt.x, menuPt.y, 0, hwnd, NULL);
+        PostMessage(hwnd, WM_NULL, 0, 0);
+        DestroyMenu(hMenu);
+        if (cmd == 2001) {
+            pData->settingsSubKind = 2;
+            pData->showingSettingsSub = false;
+            pData->settingsSubViewDirection = 1;
+            pData->settingsSubViewAnim = 0.0f;
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (cmd != 0) {
+            PostMessage(g_hwnd, WM_COMMAND, cmd, 0);
+        }
+        return true;
+    }
+
+    if (PtInRect(&pData->multiInstanceToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_MULTI_SUPPORT, 0); return true; }
+    if (PtInRect(&pData->autoReconnectToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_AUTO_RECONNECT, 0); return true; }
+    if (PtInRect(&pData->fpsCapperToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_FPS_CAP_TOGGLE, 0); return true; }
+    if (PtInRect(&pData->ramCleanerToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_RAM_CLEANER_TOGGLE, 0); return true; }
+    if (PtInRect(&pData->skipActiveToggleRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_SKIP_ACTIVE, 0); return true; }
+
+    return false;
+}
+
 void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
     if (pData->showingActionDelays || pData->actionDelaysViewAnim > 0.5f) {
 
@@ -19127,12 +21920,12 @@ void MainUI_HandleClick(HWND hwnd, POINT pt, MainUIData* pData) {
                 if (i == 0) {
                     title = L"Capper Mode";
                     text = L"Select capper technique:\n\n"
-                           L" Legacy (FPS target): Limits Roblox frame rates to decrease CPU and GPU load.\n"
-                           L" Beta (CPU limit %): Suspends Roblox execution threads for a percentage of time to lower CPU utilization.";
+                           L" FPS Target: Limits Roblox frame rates to decrease CPU and GPU load.\n"
+                           L" CPU Limit %: Suspends Roblox threads for part of each cycle to keep the process near a target CPU usage.";
                 } else if (i == 1) {
                     if (g_cpuLimitMode.load()) {
 title = L"CPU Limit %";
-                text = L"The percentage of execution time to deny the Roblox threads (1% to 99%). Higher values mean less CPU used by Roblox.";
+                text = L"Target CPU usage for the Roblox process (1% to 99%). Higher values allow more CPU; lower values freeze the threads for a larger part of each cycle and throttle harder.";
                     } else {
                         title = L"FPS Limit Preset";
                         text = L"Select FPS Target limit for the Legacy capper mode. Choose 'Custom...' to type in a custom integer.";
@@ -19153,8 +21946,8 @@ title = L"CPU Limit %";
 
         if (PtInRect(&pData->fpsCapperModeDropdownRect, pt)) {
             HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), 2001, L"Legacy (FPS Target)");
-            AppendMenu(hMenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), 2002, L"Beta (CPU Limit %)");
+            AppendMenu(hMenu, MF_STRING | (!g_cpuLimitMode.load() ? MF_CHECKED : 0), 2001, L"FPS Target");
+            AppendMenu(hMenu, MF_STRING | (g_cpuLimitMode.load() ? MF_CHECKED : 0), 2002, L"CPU Limit % (BES-style)");
             POINT menuPt;
             menuPt.x = pData->fpsCapperModeDropdownRect.left;
             menuPt.y = pData->fpsCapperModeDropdownRect.bottom;
@@ -19254,8 +22047,8 @@ title = L"CPU Limit %";
             ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/releases/", NULL, NULL, SW_SHOWNORMAL);
             return;
         }
-        if (pData->alphaInfoWhatsNewLinkRect.right > 0 && PtInRect(&pData->alphaInfoWhatsNewLinkRect, pt)) {
-            ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/releases/", NULL, NULL, SW_SHOWNORMAL);
+        if (pData->alphaInfoSupportLinkRect.right > 0 && PtInRect(&pData->alphaInfoSupportLinkRect, pt)) {
+            ShellExecute(NULL, L"open", L"https://agzes.github.io/donate", NULL, NULL, SW_SHOWNORMAL);
             return;
         }
         return;
@@ -19278,7 +22071,7 @@ title = L"CPU Limit %";
 
         if (PtInRect(&pData->macrosBackIconRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(L"Recording in progress • Press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (pData->macrosViewMode > 0) {
@@ -19299,7 +22092,7 @@ title = L"CPU Limit %";
         }
         if (PtInRect(&pData->macrosOkButtonRect, pt)) {
             if (g_isRecording && pData->macrosViewMode == 5) {
-                QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(L"Recording in progress • Press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (g_mainUiOpenedForMacros.load()) {
@@ -19339,6 +22132,8 @@ title = L"CPU Limit %";
             }
             if (PtInRect(&pData->macrosBtnRectNew, pt)) {
                 MacroEngine_ShowWizard(hwnd);
+                pData->macrosNameFocused = true;
+                pData->macrosNameCaretPos = pData->macrosWizardName.size();
                 return;
             }
             if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectFocus, pt)) {
@@ -19361,7 +22156,11 @@ title = L"CPU Limit %";
                 return;
             }
             if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectTest, pt)) {
-                if (g_macroTestRunning) return;
+                if (g_macroTestRunning) {
+                    g_macroAbortRequested = true;
+                    QueueStatusBarOverlay(L"Stopping test run...", 1500, hwnd, StatusBarEventType::Macro);
+                    return;
+                }
                 int sel = pData->macrosSelectedIndex;
                 if (sel >= 0 && sel < (int)g_macros.size()) {
                     g_selectedMacroIndex = sel;
@@ -19384,18 +22183,76 @@ title = L"CPU Limit %";
                         }
                         g_macroTestTargetWnd.store(targetHwnd);
                         g_macroTestRunning = true;
+                        g_macroAbortRequested = false;
+                        g_macroTestProgress = 0;
+                        g_macroTestTotal = (int)testCopy.actions.size();
                         QueueStatusBarOverlay(L"Test run: " + testCopy.name + L"...", 3000, hwnd, StatusBarEventType::Macro);
+                        SetTimer(hwnd, 1004, 250, NULL);
                         std::thread([testCopy, targetHwnd, hwnd]() {
                             MacroEngine_ExecuteMacro(testCopy, targetHwnd, true);
+                            g_macroAbortRequested = false;
                             g_macroTestTargetWnd.store(nullptr);
                             g_macroTestRunning = false;
                             if (hwnd && IsWindow(hwnd)) {
                                 QueueStatusBarOverlay(L"Test run complete", 1500, hwnd, StatusBarEventType::Macro);
+                                InvalidateRect(hwnd, NULL, FALSE);
                             }
                         }).detach();
                     } else {
                         QueueStatusBarOverlay(L"No Roblox window found", 2000, hwnd, StatusBarEventType::Macro);
                     }
+                }
+                return;
+            }
+            if (pData->macrosSelectedIndex >= 0 && PtInRect(&pData->macrosBtnRectReview, pt)) {
+                int sel = pData->macrosSelectedIndex;
+                Macro reviewMacro;
+                bool found = false;
+                {
+                    std::lock_guard<std::mutex> lock(g_macrosMutex);
+                    if (sel >= 0 && sel < (int)g_macros.size()) {
+                        reviewMacro = g_macros[sel];
+                        found = true;
+                    }
+                }
+                if (found) {
+                    std::wstring text = L"Macro: " + reviewMacro.name + L"\n";
+                    text += L"Actions: " + std::to_wstring((int)reviewMacro.actions.size()) + L"\n\n";
+                    int shown = 0;
+                    int total = (int)reviewMacro.actions.size();
+                    int maxShow = 18;
+                    for (int i = 0; i < total && shown < maxShow; ++i, ++shown) {
+                        const auto& a = reviewMacro.actions[i];
+                        const wchar_t* typeStr = L"Action";
+                        switch (a.type) {
+                            case MacroStepType::ImageClick: typeStr = L"Image click"; break;
+                            case MacroStepType::KeyPress: typeStr = L"Key press"; break;
+                            case MacroStepType::KeyDown: typeStr = L"Key down"; break;
+                            case MacroStepType::KeyUp: typeStr = L"Key up"; break;
+                            case MacroStepType::MouseMove: typeStr = L"Mouse move"; break;
+                            case MacroStepType::MouseClick: typeStr = L"Mouse click"; break;
+                            case MacroStepType::Sleep: typeStr = L"Sleep"; break;
+                            case MacroStepType::RandomSleep: typeStr = L"Random sleep"; break;
+                            case MacroStepType::MouseDown: typeStr = L"Mouse down"; break;
+                            case MacroStepType::MouseUp: typeStr = L"Mouse up"; break;
+                            case MacroStepType::MouseWheel: typeStr = L"Mouse wheel"; break;
+                        }
+                        wchar_t line[192];
+                        if (a.type == MacroStepType::KeyPress || a.type == MacroStepType::KeyDown || a.type == MacroStepType::KeyUp) {
+                            swprintf_s(line, L"%d. %s [0x%02X] +%d ms\n", i + 1, typeStr, a.vkCode, a.delayBeforeMs);
+                        } else if (a.type == MacroStepType::MouseMove) {
+                            swprintf_s(line, L"%d. %s (%d points) +%d ms\n", i + 1, typeStr, (int)a.path.size(), a.delayBeforeMs);
+                        } else if (a.type == MacroStepType::ImageClick || a.type == MacroStepType::MouseClick || a.type == MacroStepType::MouseDown || a.type == MacroStepType::MouseUp) {
+                            swprintf_s(line, L"%d. %s (%d, %d) +%d ms\n", i + 1, typeStr, a.x, a.y, a.delayBeforeMs);
+                        } else {
+                            swprintf_s(line, L"%d. %s +%d ms\n", i + 1, typeStr, a.delayBeforeMs);
+                        }
+                        text += line;
+                    }
+                    if (total > maxShow) {
+                        text += L"\n... and " + std::to_wstring(total - maxShow) + L" more actions.";
+                    }
+                    ShowDarkMessageBox(hwnd, text.c_str(), L"AntiAFK-RBX • Review Macro", MB_OK);
                 }
                 return;
             }
@@ -19408,6 +22265,9 @@ title = L"CPU Limit %";
                         if (!wins.empty()) targetHwnd = wins[0];
                     }
                     if (targetHwnd && IsWindow(targetHwnd)) {
+                        if (ShowDarkMessageBox(hwnd, L"Re-record this macro? The existing recording will be replaced when you stop recording.", L"AntiAFK-RBX • Re-record Macro", MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+                            return;
+                        }
                         {
                             std::lock_guard<std::mutex> lock(g_macrosMutex);
                             g_wizardMacro = g_macros[sel];
@@ -19501,19 +22361,25 @@ title = L"CPU Limit %";
                 }
                 if (needSave) {
                     if (!MacroEngine_SaveMacros())
-                        QueueStatusBarOverlay(L"Failed to save macro - file locked or corrupt", 3000, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(kMsgMacroSaveFailed, 3000, hwnd, StatusBarEventType::Macro);
                 }
                 if (deleted) {
                     bool macroSaved = MacroEngine_SaveMacros();
-                    QueueStatusBarOverlay(macroSaved ? std::wstring(L"Macro deleted") : std::wstring(L"Failed to save macro - file locked or corrupt"), 1500, hwnd, StatusBarEventType::Macro);
+                    QueueStatusBarOverlay(macroSaved ? std::wstring(L"Macro deleted") : std::wstring(kMsgMacroSaveFailed), 1500, hwnd, StatusBarEventType::Macro);
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
             }
         } else if (pData->macrosViewMode == 1) {
             if (PtInRect(&pData->macrosBtnRectNameEdit, pt)) {
-                ShowCustomInputDialog(hwnd, CustomInputDialogType::MacroName);
+                pData->macrosNameFocused = true;
+                pData->macrosNameCaretPos = pData->macrosWizardName.size();
+                InvalidateRect(hwnd, NULL, FALSE);
                 return;
+            }
+            if (pData->macrosNameFocused) {
+                pData->macrosNameFocused = false;
+                InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
             }
             if (PtInRect(&pData->macrosBtnRectFocus, pt)) {
                 HWND fw = g_wizardTargetHwnd;
@@ -19548,6 +22414,7 @@ title = L"CPU Limit %";
             if (PtInRect(&pData->macrosBtnRectBack, pt)) {
                 pData->macrosViewMode = 0;
                 g_macroWizardActive = false;
+                g_macroReRecording = false;
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
             }
@@ -19566,7 +22433,7 @@ title = L"CPU Limit %";
                     InvalidateRect(hwnd, NULL, FALSE);
                     SetTimer(hwnd, 1003, 250, NULL);
                     if (!MacroEngine_StartRecording(targetHwnd, g_wizardMacro.name)) {
-                        pData->macrosViewMode = 1;
+                        pData->macrosViewMode = g_macroReRecording ? 2 : 1;
                         KillTimer(hwnd, 1003);
                         InvalidateRect(hwnd, NULL, FALSE);
                         QueueStatusBarOverlay(L"Could not start recording", 2000, hwnd, StatusBarEventType::Macro);
@@ -19583,6 +22450,8 @@ title = L"CPU Limit %";
                     pData->macrosViewMode = 0;
                 } else {
                     pData->macrosViewMode = 1;
+                    pData->macrosNameFocused = true;
+                    pData->macrosNameCaretPos = pData->macrosWizardName.size();
                 }
                 InvalidateRect(hwnd, NULL, FALSE);
                 return;
@@ -19632,13 +22501,12 @@ title = L"CPU Limit %";
                     }
                     g_macros.push_back(g_wizardMacro);
                     g_selectedMacroIndex = (int)g_macros.size() - 1;
-                    g_selectedAction = 4;
                 }
                 bool macroSaved = MacroEngine_SaveMacros();
                 pData->macrosViewMode = 0;
                 g_macroWizardActive = false;
                 InvalidateRect(hwnd, NULL, FALSE);
-                QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(L"Failed to save macro - file locked or corrupt"), 2000, hwnd, StatusBarEventType::Macro);
+                QueueStatusBarOverlay(macroSaved ? (L"Macro saved: " + g_wizardMacro.name) : std::wstring(kMsgMacroSaveFailed), 2000, hwnd, StatusBarEventType::Macro);
                 return;
             }
             if (PtInRect(&pData->macrosBtnRectBack, pt)) {
@@ -19669,7 +22537,7 @@ title = L"CPU Limit %";
             InvalidateRect(hwnd, NULL, FALSE);
             return;
         }
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < 9; ++i) {
             if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
                 const wchar_t* title = L"Help";
                 const wchar_t* text = L"No help text available for this setting.";
@@ -19690,13 +22558,16 @@ title = L"CPU Limit %";
                     else if (i == 3) { title = L"Disable Tray Notifications"; text = L"Hides balloon notifications shown near the tray icon (start/stop, errors, update found).\n\nThe Status Bar overlay and Discord webhooks are not affected and stay independent."; }
                     else if (i == 4) { title = L"Keep Window On Top"; text = L"Places the main window above all other windows so it stays visible while you work or game.\n\nCan be toggled at any time; takes effect immediately."; }
                     else if (i == 5) { title = L"Disable Rounded Corners"; text = L"Draws windows with square corners instead of the rounded Windows 11 style.\n\nApplies to the main window and dialogs; takes effect immediately."; }
+                    else if (i == 6) { title = L"Hide \"Next action in\" Text"; text = L"Hides the countdown text ('Next action in ...') on the Stop button while Anti-AFK is running."; }
+                    else if (i == 7) { title = L"Hide \"Instances\" Text"; text = L"Hides the active Roblox instance count ('1 Instance' / 'N Instances') on the Stop button while Anti-AFK is running."; }
+                    else if (i == 8) { title = L"Hide Simple Mode Switch"; text = L"Hides the 'Switch to Simple Mode' bar on the General tab."; }
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
             }
         }
         if (pData->settingsSubKind == 4) {
-            for (int i = 0; i < 6; ++i) {
+            for (int i = 0; i < 9; ++i) {
                 if (PtInRect(&pData->settingsSubToggleRects[i], pt)) {
                     bool target = false;
                     if (i == 0) { g_disableSplash = !g_disableSplash.load(); target = g_disableSplash.load(); }
@@ -19704,7 +22575,10 @@ title = L"CPU Limit %";
                     else if (i == 2) { g_disableAnimations = !g_disableAnimations.load(); target = g_disableAnimations.load(); }
                     else if (i == 3) { g_notificationsDisabled = !g_notificationsDisabled.load(); target = g_notificationsDisabled.load(); }
                     else if (i == 4) { g_keepWindowOnTop = !g_keepWindowOnTop.load(); target = g_keepWindowOnTop.load(); ApplyWindowOnTopSetting(); }
-                    else { g_disableWindowCorners = !g_disableWindowCorners.load(); target = g_disableWindowCorners.load(); ApplyWindowCornersSetting(); }
+                    else if (i == 5) { g_disableWindowCorners = !g_disableWindowCorners.load(); target = g_disableWindowCorners.load(); ApplyWindowCornersSetting(); }
+                    else if (i == 6) { g_uiHideNextActionText = !g_uiHideNextActionText.load(); target = g_uiHideNextActionText.load(); }
+                    else if (i == 7) { g_uiHideInstancesText = !g_uiHideInstancesText.load(); target = g_uiHideInstancesText.load(); }
+                    else { g_uiHideSimpleModeSwitch = !g_uiHideSimpleModeSwitch.load(); target = g_uiHideSimpleModeSwitch.load(); }
                     pData->settingsSubToggleAnims[i] = target ? 0.0f : 1.0f;
                     SaveSettings();
                     InvalidateRect(hwnd, NULL, FALSE);
@@ -19834,7 +22708,7 @@ title = L"CPU Limit %";
                     text = L"Sets the outer margin (in pixels) around the edges of the screen.";
                 } else if (i == 7) {
                     title = L"Grid Hotkey";
-                    text = L"Global hotkey to apply the window grid layout to all Roblox windows instantly.\n\nSame effect as Grid Snap Roblox*. Click the pencil to record a new key combination.";
+                    text = L"Global hotkey to apply the window grid layout to all Roblox windows instantly.\n\nSame effect as Grid Snap Roblox. Click the pencil to record a new key combination.";
                 }
                 ShowDarkMessageBox(hwnd, text, title, MB_OK);
                 return;
@@ -19949,7 +22823,7 @@ title = L"CPU Limit %";
                     text = L"Session lifecycle messages:\n\n- Anti-AFK started / stopped manually\n- Auto-started when Roblox opens or after inactivity\n- Auto-stopped when Roblox closes or window is not found";
                 } else if (i == 3) {
                     title = L"Events: Actions";
-                    text = L"Messages around each anti-AFK action cycle:\n\n- Waiting countdown while User-Safe mode holds the action\n- Performing anti-AFK action\n- Action cancelled\n\nTurn off if you only care about session events.";
+                    text = L"Messages around each Anti-AFK action cycle:\n\n- Waiting countdown while User-Safe mode holds the action\n- Performing Anti-AFK action\n- Action cancelled\n\nTurn off if you only care about session events.";
                 } else if (i == 4) {
                     title = L"Events: Auto-Reconnect";
                     text = L"Shown when Auto Reconnect detects a kick/disconnect dialog and presses the Reconnect button, and when a manual reconnect check runs.";
@@ -20017,6 +22891,11 @@ title = L"CPU Limit %";
         return;
     }
 
+    if (g_simpleMode.load()) {
+        MainUI_HandleSimpleModeClick(hwnd, pt, pData);
+        return;
+    }
+
     auto toggleDiscordFlag = [&](std::atomic<bool>& flag) {
         flag = !flag.load();
         if (&flag == &g_discordWebhookEnabled && !g_discordWebhookEnabled.load()) {
@@ -20045,7 +22924,7 @@ title = L"CPU Limit %";
         if (webhookEnabled && PtInRect(&pData->discordWebhookPasteRect, pt)) {
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(hwnd, clipboardText)) {
-                ShowDarkMessageBox(hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
+                ShowDarkMessageBox(hwnd, L"Clipboard is empty or contains no text.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 return;
             }
 
@@ -20053,7 +22932,7 @@ title = L"CPU Limit %";
             SaveSettings();
             pData->isDiscordWebhookInputFocused = true;
             pData->discordWebhookCaretPos = GetDiscordWebhookUrlCopy().size();
-            pData->discordWebhookViewOffset = pData->discordWebhookCaretPos;
+            pData->discordWebhookViewOffset = 0;
             SetFocus(hwnd);
             InvalidateRect(hwnd, NULL, FALSE);
             return;
@@ -20082,16 +22961,17 @@ title = L"CPU Limit %";
             return;
         }
 
-        if (webhookEnabled && PtInRect(&pData->discordMentionTargetSettingsRect, pt)) {
+        if (webhookEnabled && pt.y >= pData->webhookFixedBottom && pt.y <= pData->webhookScrollAreaBottom &&
+            PtInRect(&pData->discordMentionTargetSettingsRect, pt)) {
             ShowCustomInputDialog(hwnd, CustomInputDialogType::DiscordMentionTarget);
             return;
         }
 
         if (webhookEnabled) {
             RECT toggleHitboxLocal;
-            if (pt.y >= pData->webhookFixedBottom) {
+            if (pt.y >= pData->webhookFixedBottom && pt.y <= pData->webhookScrollAreaBottom) {
                 MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyStartToggleRect, &toggleHitboxLocal);
-                if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyStart); g_discordNotifyStop = g_discordNotifyStart.load(); return; }
+                if (PtInRect(&toggleHitboxLocal, pt)) { g_discordNotifyStop = !g_discordNotifyStart.load(); toggleDiscordFlag(g_discordNotifyStart); return; }
                 MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyActionToggleRect, &toggleHitboxLocal);
                 if (PtInRect(&toggleHitboxLocal, pt)) { toggleDiscordFlag(g_discordNotifyAction); return; }
                 MainUI_Paint_DrawToggleGetHitbox(pData->discordNotifyReconnectToggleRect, &toggleHitboxLocal);
@@ -20125,41 +23005,44 @@ title = L"CPU Limit %";
     }
 
     for (int i = 0; i < pData->helpButtonRects.size(); ++i) {
+        if (pData->currentPage == 5 && i >= 1 && (pt.y < pData->webhookFixedBottom || pt.y > pData->webhookScrollAreaBottom)) {
+            continue;
+        }
         if (PtInRect(&pData->helpButtonRects[i], pt)) {
             const wchar_t* title = L"Help";
             const wchar_t* text = L"No help text available for this setting.";
             if (pData->currentPage == 0) { // General
                 if (i == 0) { title = L"Interval"; text = L"How often AntiAFK-RBX performs Anti-AFK actions.\n\nRoblox kicks after 20 minutes of inactivity, so the interval must stay below 20 min. \nLower = more actions \nHigher = fewer actions \n\nRecommended: 9 minutes."; }
-                if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random*: randomly picks Space, W/S, or Zoom each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
-                if (i == 2) { title = L"Multi-Instance bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
-                if (i == 3) { title = L"Macros"; text = L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Custom Macro*' in the Action menu."; }
-                if (i == 4) { title = L"Instance Manager (Beta)"; text = L"Per-instance Anti-AFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for multi-instance setups."; }
+                if (i == 1) { title = L"Action"; text = L"Which input AntiAFK-RBX simulates to keep active.\n\n- Space (Jump): press Space - works in most games.\n- W/S: forward/back - good where Space does nothing.\n- Zoom (I/O): press I and O - good for no-move games.\n- Random: randomly picks Space, W/S, Zoom, or Arrows each cycle without repeats (experimental).\n\nSwitch if one is ignored or causes unwanted behavior.\n\nRecommended: Space or W/S"; }
+                if (i == 2) { title = L"Multi-Instance Bypass"; text = L"Lets you run multiple Roblox windows at once by holding a system mutex.\n\nAnti-AFK still works on EVERY opened Roblox window even when bypass is off - it just doesn't unlock multi-launch.\n\nClose all Roblox windows before toggling."; }
+                if (i == 3) { title = L"Macros"; text = L"Create and manage custom macro actions.\n\nMacros can record clicks, key presses, and mouse movements. When triggered on AFK cooldown or after reconnect, the game window is temporarily resized to 800x600 for perfect playback, then restored.\n\nClick 'New' to open the macro wizard, select a macro to use as 'Macros Only' in the Action menu."; }
+                if (i == 4) { title = L"Instance Manager"; text = L"Per-instance Anti-AFK, mute, opacity, FPS cap, hide, reconnect & reset settings.\n\nCreate presets with custom overrides per Roblox window (identified by title). Powerful for multi-instance setups. Presets are included in settings export/import."; }
                 if (i == 5) { title = L"Timings"; text = L"Opens an in-UI overlay showing live session stats: next action countdown, last action, session time, actions performed, and auto-reconnects.\n\nUpdates in real-time. Click the back arrow to close."; }
-                if (i == 6) { title = L"Simple Mode"; text = L"Simplifies the interface by hiding farming and multi-window settings.\n\nHidden elements are dimmed - hover to see a hint, click to jump to the Simple Mode toggle.\n\nShown in Simple Mode: AFK interval/action, User-Safe, Auto-Start, Auto-Reconnect, Multi-Instance, Do Not Sleep, FPS Capper, RAM Cleaner, CPU Limiter, Unlock FPS on Focus, Webhook (basic).\n\nHidden: Hide/Show, Opacity, Grid, Mute, Auto Reset, Restore Window, I can forget, Skip active, Bloxstrap, Instance Manager, Custom Process Search, Multi-Instance Delay, Action Delays, and all advanced settings.\n\nTurn it off to see all options."; }
+                if (i == 6) { title = L"Simple Mode"; text = L"Switches to a compact 2-column Simple Mode layout showing only the 8 essential controls: Interval, Action, Multi-Instance Bypass, Auto-Reconnect, FPS Capper, RAM Cleaner, Skip Active, and User-Safe.\n\nAdvanced features (Macros, Instance Manager, Grid, Opacity, Mute, Auto Reset, Discord Webhook, etc.) are paused while Simple Mode is active without losing your saved settings.\n\nClick Advanced Mode in the Simple Mode header at any time to restore the full 6-tab interface."; }
             } else if (pData->currentPage == 1) { // Auto+Utils
-                if (i == 0) { title = L"Auto-Start Anti-AFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I can forget' for full hands-off protection."; }
-                if (i == 1) { title = L"Auto Reconnect*"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it brings the window to front only to click the Reconnect button.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
-                if (i == 2) { title = L"Reset in all"; text = L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/. Use only in games where respawning is harmless (obby, simulator, etc.)."; }
+                if (i == 0) { title = L"Auto-Start Anti-AFK"; text = L"Auto-starts Anti-AFK when a Roblox window is detected, and stops it when the last one closes.\n\nNo need to press Start manually each session. Works together with 'I Can Forget' for full hands-off protection."; }
+                if (i == 1) { title = L"Auto Reconnect"; text = L"Experimental: tries to press Roblox's reconnect button after an idle kick or similar disconnect.\n\nUseful for unattended sessions, but depends on the reconnect screen being visible and detected correctly. May fail on custom dialogs or when Roblox UI changes.\n\nFocus behavior:\n- Independent interval check: detects the kick dialog WITHOUT stealing focus. If detected, it restores the window if hidden and clicks the Reconnect button without foregrounding.\n- Manual check (button / tray) and the check during the main Anti-AFK cycle: works WITH focus on the Roblox window, same as the Anti-AFK action itself.\n\nSet an independent interval to check more frequently than the main cycle (e.g. every 2 min instead of every 9 min)."; }
+                if (i == 2) { title = L"Auto Reset (Esc+R+Enter)"; text = L"Sends Esc > R > Enter each Anti-AFK cycle to respawn your character.\n\nUsed in unique situations, so no recommendations :/. Use only in games where respawning is harmless (obby, simulator, etc.)."; }
                 if (i == 3) { title = L"Hide/Show Roblox"; text = L"Hides Roblox windows (not minimizes) when Anti-AFK starts, so they run in the background without stealing focus or cluttering the taskbar.\n\nShow them again from the tray menu or the Show Roblox button. Windows are not closed - they keep running."; }
-                if (i == 4) { title = L"Enable Opacity"; text = L"Applies 70% opacity to all current and future Roblox windows during the Anti-AFK session.\n\nVisual reminder that AntiAFK-RBX is in control. New Roblox windows opened later automatically match, so you don't have to toggle it manually each time.\n\nWarning: when combined with Auto-Reconnect, the kick-dialog screen-grabber may mis-read the dark transparent window as the kick dialog and skip the reconnect. If Reconnect stops working reliably, disable Opacity first."; }
-                if (i == 5) { title = L"Grid Roblox*"; text = L"Experimental: auto-arranges Roblox windows in a grid layout whenever the set of detected windows changes (a window opens, closes, or moves).\n\nEspecially helpful for multi-instance setups. Click the gear icon to choose columns, screen, padding, and which monitor to use."; }
-                if (i == 6) { title = L"Mute Roblox"; text = L"Mutes every detected Roblox window when Anti-AFK starts, restores audio when it stops."; }
+                if (i == 4) { title = L"Enable Opacity"; text = L"Applies configured opacity (default 70%, editable with the pencil button) to all current and future Roblox windows during the Anti-AFK session.\n\nVisual reminder that AntiAFK-RBX is in control. New Roblox windows opened later automatically match, so you don't have to toggle it manually each time.\n\nWarning: when combined with Auto-Reconnect, the kick-dialog screen-grabber may mis-read the dark transparent window as the kick dialog and skip the reconnect. If Reconnect stops working reliably, disable Opacity first."; }
+                if (i == 5) { title = L"Grid Roblox"; text = L"Experimental: auto-arranges Roblox windows in a grid layout whenever the set of detected windows changes (a window opens or closes).\n\nEspecially helpful for multi-instance setups. Click the gear icon to choose columns, screen, padding, and which monitor to use."; }
+                if (i == 6) { title = L"Auto-Mute Roblox"; text = L"Mutes every detected Roblox window when Anti-AFK starts, restores audio when it stops. Enable Unmute on Focus to hear the active window."; }
                 if (i == 7) { title = L"FPS Capper (CPU Limiter)"; text = L"Lowers Roblox's CPU usage by suspending threads in a duty cycle (like BES), capping the FPS to reduce heat.\n\nPresets: 3, 5, 7, 10, 15 FPS or a custom value (0-60). Works by influencing process timing, so the actual FPS may fluctuate around the cap."; }
                 if (i == 8) { title = L"RAM Cleaner"; text = L"Automatically optimizes Roblox's RAM usage to keep clients low-RAM during long sessions.\n\nChoose the strategy and thresholds in Advanced > RAM Cleaner Mode. Smart Clean reacts to RAM spikes, Time Cycle runs on a fixed timer, Hybrid does both."; };
             } else if (pData->currentPage == 2) { // Misc
                 if (i == 0) { title = L"Update/Announcement Checker"; text = L"Checks for AntiAFK-RBX updates and announcements on startup.\n\nManual check is still available from About window. Disable only if you're on a restricted/offline setup - disabling means you won't get critical bug-fix or security notices."; }
                 if (i == 1) { title = L"Close All Roblox"; text = L"Closes every running Roblox window at once.\n\nSends a normal close request first, then force-terminates any that ignore it."; }
-                if (i == 2) { title = L"Do Not Sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. Disables itself automatically when Anti-AFK stops."; }
+                if (i == 2) { title = L"Do Not Sleep"; text = L"Prevents Windows from putting the PC to sleep (and the monitor too) while Anti-AFK is active.\n\nHelpful for long unattended sessions and laptops that would otherwise sleep mid-game. When Anti-AFK stops, the sleep block is released, but this option stays enabled for the next session."; }
                 if (i == 3) { title = L"I Can Forget"; text = L"Safety net for people who often forget to start Anti-AFK manually.\n\nWhile Roblox is open, the app watches for inactivity: shows a reminder at 18 min, auto-starts Anti-AFK at 19 min to beat the 20-min idle kick. Combine with Auto-Start Anti-AFK for full hands-off.\n\nInactivity is detected only by Roblox window input - typing in Discord or moving the mouse over other apps does not pause the timer."; }
-                if (i == 4) { title = L"Skip Active"; text = L"Skips the anti-AFK action in Roblox windows where you were recently active (keyboard input with that window focused, within the last action interval).\n\nUseful for multi-instance setups: play in one window and the anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
+                if (i == 4) { title = L"Skip Active"; text = L"Skips the Anti-AFK action in Roblox windows where keyboard input was detected within the last 3 seconds.\n\nUseful for multi-instance setups: play in one window and the Anti-AFK action will be skipped in it, while it still runs in the idle windows. The window is skipped entirely - focus is not stolen and no action/reset/reconnect is sent to it.\n\nThe detection uses foreground window + keyboard input polling, so very brief key presses (faster than ~250 ms) may not be detected."; }
                 if (i == 5) { title = L"Fish/Void/Bloxstrap Integration"; text = L"Runs and auto-starts AntiAFK-RBX when Roblox is launched through Fishstrap, Voidstrap, or Bloxstrap.\n\nAntiAFK-RBX uses a CustomIntegrations feature for this function."; }
-                if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX returns focus to the Roblox window after each action.\n\n- SetForeground (recommended): standard focus restore.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the background."; }
-                if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse or press any key to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. It passes all clicks (except escape/win) through itself, so it does not interfere with the Anti-AFK function."; }
+                if (i == 6) { title = L"Restore Window"; text = L"How AntiAFK-RBX restores the window you were using before the Anti-AFK action.\n\n- SetForeground (recommended): standard restore of the previous user window.\n- Alt+Tab (Legacy): single Alt+Tab. May not bring back the right window in multi-instance setups.\n- Smart Alt+Tab: tabs through ALL detected Roblox windows before releasing Alt. Best for multi-instance.\n- Off: leaves focus unchanged - Roblox may stay in the foreground."; }
+                if (i == 7) { title = L"Screen Saver"; text = L"Black full-screen overlay with a slow DVD-style bouncing text :) animation on all monitors.\n\nUseful as a quick privacy/break screen. Move the mouse to reveal the exit hint. Press Escape / Win to close, or click the X in the top-right corner. Clicks are handled by the overlay and do not reach the game underneath; only your real Escape / Win presses close it."; }
             } else if (pData->currentPage == 3) { // Advanced
                 if (i == 0) { title = L"User Interface"; text = L"Interface preferences that don't affect Anti-AFK behaviour.\n\n- Disable Splash-Screen: skip the startup loading window.\n- Disable Acrylic Blur: solid window background instead of the acrylic blur effect (applied immediately).\n- Disable UI Animations: all interface transitions become instant.\n- Disable Tray Notifications: no balloon tips near the tray icon.\n- Keep Window On Top: keep the main window above all other windows.\n- Disable Rounded Corners: square window corners instead of the rounded Windows 11 style."; }
-                if (i == 1) { title = L"Status Bar*"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
+                if (i == 1) { title = L"Status Bar"; text = L"Experimental: shows a small on-screen overlay for important Anti-AFK events (start, stop, reconnect, errors).\n\nDisable for tray-only notifications if you want a quieter experience or are recording/streaming and don't want the overlay in captures.\n\nClick the gear icon to open Status Bar settings and choose what it shows:\n- Elements: app icon and program name (event text is always shown).\n- Events: Start & Stop, Actions, Auto-Reconnect, Macros and interface feedback - turn off what you don't need."; }
                 if (i == 2) { title = L"Custom Process Search"; text = L"Targets custom processes/windows instead of Roblox for Anti-AFK actions.\n\nClick the gear icon to specify executable file names or window title substrings separated by semicolons (;).\n\nWhen active, all actions (move, click, mute, opacity, FPS cap) redirect to these targets. Full functionality on custom processes/windows is not guaranteed."; }
-                if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended)."; }
+                if (i == 3) { title = L"User-Safe Mode"; text = L"Pauses Anti-AFK actions when user input (your input) is detected, so they don't interrupt active gameplay.\n\n- Off: no detection, actions always run on schedule.\n- Legacy: pauses on held keys/mouse buttons.\n- Beta: pauses on all input including mouse movement (Recommended).\n\nThe wait is capped so the action fires by ~19:50 after the last input, possibly immediately, so an action may run while you are still active."; }
                 if (i == 4) { title = L"Action Delays & Repeats"; text = L"Customize Anti-AFK speed timings.\n\nClick 'edit' to set pre-action delays (wait before acting), key holds (how long a key is pressed), post-action delays (wait after), and sequential repetition counts. Use 'Default' for safe values or 'Safe' for slower, less noticeable actions. After making the changes, be sure to check that it works. If it works more than 99% of the time and the timings are lower than 'Default', you can share them on Discord to improve AntiAFK-RBX :)."; }
                 if (i == 5) { title = L"Hotkey"; text = L"Global hotkey to toggle Anti-AFK Start/Stop from anywhere.\n\nEnable the toggle and click the pencil icon to record a new key combination. Single keys (F1, Space, etc.) and multi-modifier combos (Ctrl+Shift+F1, Ctrl+Alt+X) are supported."; }
             } else if (pData->currentPage == 5) { // Discord
@@ -20186,8 +23069,10 @@ title = L"CPU Limit %";
     if (pData->currentPage == 0) {
         RECT toggleHitbox; MainUI_Paint_DrawToggleGetHitbox(pData->multiInstanceToggleRect, &toggleHitbox);
         if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_MULTI_SUPPORT, 0); return; }
-        MainUI_Paint_DrawToggleGetHitbox(pData->simpleModeToggleRect, &toggleHitbox);
-        if (PtInRect(&toggleHitbox, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_SIMPLE_MODE, 0); return; }
+    }
+    if ((pData->currentPage == 0 || pData->currentPage == 3) && PtInRect(&pData->simpleModeToggleRect, pt)) {
+        PostMessage(g_hwnd, WM_COMMAND, ID_TOGGLE_SIMPLE_MODE, 0);
+        return;
     }
     if (pData->currentPage == 1) {
         RECT toggleHitbox;
@@ -20361,7 +23246,8 @@ title = L"CPU Limit %";
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 0 ? MF_CHECKED : 0), ID_ACTION_SPACE, L"Space (Jump)");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 1 ? MF_CHECKED : 0), ID_ACTION_WS, L"W/S");
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 2 ? MF_CHECKED : 0), ID_ACTION_ZOOM, L"Zoom (I/O)");
-            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random*");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 5 ? MF_CHECKED : 0), ID_ACTION_ARROWS, L"<- / ->");
+            AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 3 ? MF_CHECKED : 0), ID_ACTION_RANDOM, L"Random");
             AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
             AppendMenu(hMenu, MF_STRING | (g_selectedAction.load() == 4 ? MF_CHECKED : 0), ID_MACROS_SELECT, L"Macros Only");
             POINT menuPt;
@@ -20374,6 +23260,18 @@ title = L"CPU Limit %";
             return;
         }
         if (PtInRect(&pData->advancedMultiInstanceLinkRect, pt)) {
+            if (g_simpleMode.load()) {
+                if (pData->currentPage != 0) {
+                    pData->prevPage = pData->currentPage;
+                    pData->currentPage = 0;
+                    pData->pageTransitionDirection = 1;
+                    pData->pageTransitionAnim = 0.0f;
+                }
+                pData->highlightElement = 6;
+                pData->highlightStartTime = GetTickCount64();
+                InvalidateRect(hwnd, NULL, FALSE);
+                return;
+            }
             pData->settingsSubKind = 1;
             pData->showingSettingsSub = false;
             pData->settingsSubViewDirection = 1;
@@ -20456,8 +23354,8 @@ title = L"CPU Limit %";
             pData->settingsSubViewDirection = 1;
             pData->settingsSubViewAnim = 0.0f;
             {
-                const bool uiSnapValues[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
-                for (int k = 0; k < 6; ++k) pData->settingsSubToggleAnims[k] = uiSnapValues[k] ? 1.0f : 0.0f;
+                const bool uiSnapValues[9] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load(), g_uiHideNextActionText.load(), g_uiHideInstancesText.load(), g_uiHideSimpleModeSwitch.load() };
+                for (int k = 0; k < 9; ++k) pData->settingsSubToggleAnims[k] = uiSnapValues[k] ? 1.0f : 0.0f;
             }
             InvalidateRect(hwnd, NULL, FALSE);
             return;
@@ -20545,15 +23443,25 @@ title = L"CPU Limit %";
         }
         return;
     }
+    if (pData->disclaimerGuideRect.right > 0 && PtInRect(&pData->disclaimerGuideRect, pt)) {
+        pData->showingAutoUtilsGuide = true;
+        pData->autoUtilsGuideStep = 0;
+        pData->isHoveringAutoUtilsGuidePrev = false;
+        pData->isHoveringAutoUtilsGuideNext = false;
+        pData->isHoveringAutoUtilsGuideClose = false;
+        InvalidateRect(hwnd, NULL, FALSE);
+        return;
+    }
+    if (pData->disclaimerVersionRect.right > pData->disclaimerVersionRect.left && PtInRect(&pData->disclaimerVersionRect, pt)) {
+        PostMessage(hwnd, WM_APP + 100, 0, 0);
+        return;
+    }
     if (pData->disclaimerWikiRect.right > 0 && PtInRect(&pData->disclaimerWikiRect, pt)) {
         ShellExecute(NULL, L"open", L"https://github.com/Agzes/AntiAFK-RBX/wiki", NULL, NULL, SW_SHOWNORMAL);
         return;
     }
-    if (pData->disclaimerShowMoreRect.right > 0 && PtInRect(&pData->disclaimerShowMoreRect, pt)) {
-        pData->alphaInfoPreviousPage = pData->currentPage;
-        pData->alphaInfoViewDirection = 1;
-        pData->alphaInfoViewAnim = 0.0f;
-        InvalidateRect(hwnd, NULL, FALSE);
+    if (pData->disclaimerSupportRect.right > 0 && PtInRect(&pData->disclaimerSupportRect, pt)) {
+        ShellExecute(NULL, L"open", L"https://agzes.github.io/donate", NULL, NULL, SW_SHOWNORMAL);
         return;
     }
     if (pData->currentPage == 0 && PtInRect(&pData->discordButtonRect, pt)) {
@@ -20587,6 +23495,7 @@ title = L"CPU Limit %";
         if (PtInRect(&pData->showRobloxCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_SHOW_ALL, 0); return; }
         if (PtInRect(&pData->hideRobloxCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_HIDE_ALL, 0); return; }
         if (PtInRect(&pData->opacityCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TOGGLE_WINDOW_OPACITY, 0); return; }
+        if (PtInRect(&pData->opacityEditCompactRect, pt)) { if (smRedirectCompact()) return; ShowCustomInputDialog(g_hwnd, CustomInputDialogType::GlobalOpacityValue); return; }
         if (PtInRect(&pData->gridRobloxCompactRect, pt)) { if (smRedirectCompact()) return; PostMessage(g_hwnd, WM_COMMAND, ID_GRID_SNAP, 0); return; }
         if (PtInRect(&pData->gridSettingsCompactRect, pt)) {
             if (smRedirectCompact()) return;
@@ -20625,6 +23534,7 @@ title = L"CPU Limit %";
         if (PtInRect(&pData->closeAllRobloxButtonRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_CLOSE_ALL, 0); return; }
         if (PtInRect(&pData->screenSaverButtonRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_SCREEN_SAVER, 0); return; }
         if (PtInRect(&pData->ssAlwaysShowButtonRect, pt)) { g_ssAlwaysShowExitUI = !g_ssAlwaysShowExitUI.load(); SaveSettings(); InvalidateRect(hwnd, NULL, FALSE); return; }
+        if (PtInRect(&pData->ssAlwaysShowHintButtonRect, pt)) { g_ssAlwaysShowHintAndClose = !g_ssAlwaysShowHintAndClose.load(); SaveSettings(); InvalidateRect(hwnd, NULL, FALSE); return; }
         if (PtInRect(&pData->importSettingsRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_IMPORT_SETTINGS, 0); return; }
         if (PtInRect(&pData->exportSettingsRect, pt)) { PostMessage(g_hwnd, WM_COMMAND, ID_EXPORT_SETTINGS, 0); return; }
     }
@@ -20703,6 +23613,653 @@ static inline float MainUI_AnimFactor(float dtMs, float baseRate)
     if (s < 0.0f) s = 0.0f;
     if (s > 4.0f) s = 4.0f;
     return 1.0f - powf(1.0f - baseRate, s);
+}
+
+void MainUI_Paint_DrawAutoUtilsGuide(HDC hdc, const RECT& clientRect, MainUIData* pData)
+{
+    if (!pData || !pData->showingAutoUtilsGuide) return;
+    if (pData->currentPage != 1 || pData->rowRects.size() < 9) {
+        pData->showingAutoUtilsGuide = false;
+        return;
+    }
+
+    static const wchar_t* titles[3] = {
+        L"Toggle = Auto, buttons = now",
+        L"Gear = settings, icon = action",
+        L"Help, Guide and Simple Mode"
+    };
+    static const wchar_t* bodies[3] = {
+        L"Big toggle = AUTO: runs when Anti-AFK starts and reverts when it stops. Small icons = NOW: run immediately for this session, no Anti-AFK needed.",
+        L"Gear = settings. The other icon = action right now (snap, clean, check, mute). Auto and NOW use the same saved settings.",
+        L"? = detailed help. Simple Mode opens a compact 8-tile view (switch anytime via Switch to Simple Mode / Advanced Mode). Reopen this Guide from the bottom bar."
+    };
+    static const int guideRows[3] = { 3, 5, 8 }; // Hide/Show, Grid, RAM
+
+    int step = pData->autoUtilsGuideStep;
+    if (step < 0) step = 0;
+    if (step > 2) step = 2;
+    pData->autoUtilsGuideStep = step;
+
+    int highlightRow = guideRows[step];
+    RECT hl = pData->rowRects[highlightRow];
+
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(PixelOffsetModeHalf);
+    g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+
+    const int dimStartY = 0;
+    SolidBrush dimBrush(Color(200, 0, 0, 0));
+    g.FillRectangle(&dimBrush, 0.0f, (REAL)dimStartY, (REAL)clientRect.right, (REAL)(std::max)(0, (int)(hl.top - dimStartY)));
+    g.FillRectangle(&dimBrush, 0.0f, (REAL)hl.bottom, (REAL)clientRect.right, (REAL)(clientRect.bottom - hl.bottom));
+    g.FillRectangle(&dimBrush, 0.0f, (REAL)hl.top, (REAL)hl.left, (REAL)(hl.bottom - hl.top));
+    g.FillRectangle(&dimBrush, (REAL)hl.right, (REAL)hl.top, (REAL)(clientRect.right - hl.right), (REAL)(hl.bottom - hl.top));
+
+    const Color guideAccent(255, 0, 122, 204);
+    const Color guideAccentLight(255, 20, 142, 224);
+    {
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        SolidBrush accentBrush(guideAccent);
+        g.FillRectangle(&accentBrush, (REAL)hl.left, (REAL)hl.top, 2.0f, (REAL)(hl.bottom - hl.top));
+        g.FillRectangle(&accentBrush, (REAL)(hl.right - 2), (REAL)hl.top, 2.0f, (REAL)(hl.bottom - hl.top));
+        g.FillRectangle(&accentBrush, (REAL)hl.left, (REAL)hl.top, (REAL)(hl.right - hl.left), 2.0f);
+        g.FillRectangle(&accentBrush, (REAL)hl.left, (REAL)(hl.bottom - 2), (REAL)(hl.right - hl.left), 2.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    const int panelTop = 31;
+    const int panelH = 102;
+    const int panelBottom = panelTop + panelH;
+    const int actionH = 40;
+    const int actionTop = clientRect.bottom - actionH;
+    const int pad = 16;
+
+    HFONT titleFontH = CreateFontW(-MulDiv(11, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    HFONT bodyFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    HFONT smallFontH = CreateFontW(-MulDiv(7, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    HFONT iconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    HFONT bigFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    Font titleFont(hdc, titleFontH);
+    Font bodyFont(hdc, bodyFontH);
+    Font smallFont(hdc, smallFontH);
+    Font iconFont(hdc, iconFontH);
+    Font bigFont(hdc, bigFontH);
+
+    StringFormat sfNear;
+    sfNear.SetAlignment(StringAlignmentNear);
+    sfNear.SetLineAlignment(StringAlignmentCenter);
+    StringFormat sfCenter;
+    sfCenter.SetAlignment(StringAlignmentCenter);
+    sfCenter.SetLineAlignment(StringAlignmentCenter);
+    StringFormat sfWrap;
+    sfWrap.SetAlignment(StringAlignmentNear);
+    sfWrap.SetLineAlignment(StringAlignmentNear);
+    sfWrap.SetTrimming(StringTrimmingWord);
+    sfWrap.SetFormatFlags(StringFormatFlagsNoClip);
+
+    auto drawGuideTag = [&](const wchar_t* text, int centerX, int y) {
+        RectF tagText;
+        g.MeasureString(text, -1, &smallFont, PointF(0, 0), StringFormat::GenericTypographic(), &tagText);
+        int tagW = (int)ceil(tagText.Width) + 10;
+        RectF tagRect((REAL)(centerX - tagW / 2), (REAL)y, (REAL)tagW, 14.0f);
+        SolidBrush tagBrush(guideAccentLight);
+        g.DrawString(text, -1, &smallFont, tagRect, &sfCenter, &tagBrush);
+        Pen tagLine(guideAccent, 1.0f);
+        g.DrawLine(&tagLine, (REAL)(centerX - 7), (REAL)(y + 13), (REAL)(centerX + 7), (REAL)(y + 13));
+    };
+
+    int tagY = hl.top - 16;
+    if (step == 0) {
+        RECT toggleHitbox;
+        MainUI_Paint_DrawToggleGetHitbox(pData->autoHideToggleRect, &toggleHitbox);
+        drawGuideTag(L"AUTO", (toggleHitbox.left + toggleHitbox.right) / 2, tagY);
+        drawGuideTag(L"NOW", (pData->showRobloxCompactRect.left + pData->hideRobloxCompactRect.right) / 2, tagY);
+    } else if (step == 1) {
+        RECT toggleHitbox;
+        MainUI_Paint_DrawToggleGetHitbox(pData->autoGridToggleRect, &toggleHitbox);
+        drawGuideTag(L"AUTO", (toggleHitbox.left + toggleHitbox.right) / 2, tagY);
+        drawGuideTag(L"NOW", (pData->gridRobloxCompactRect.left + pData->gridRobloxCompactRect.right) / 2, tagY);
+    } else {
+        RECT toggleHitbox;
+        MainUI_Paint_DrawToggleGetHitbox(pData->ramCleanerToggleRect, &toggleHitbox);
+        drawGuideTag(L"AUTO", (toggleHitbox.left + toggleHitbox.right) / 2, tagY);
+        drawGuideTag(L"NOW", (pData->ramCleanerSweepCompactRect.left + pData->ramCleanerToggleCompactRect.right) / 2, tagY);
+    }
+
+    {
+        SolidBrush panelBg(Color(248, GetRValue(DARK_BG), GetGValue(DARK_BG), GetBValue(DARK_BG)));
+        g.FillRectangle(&panelBg, 0.0f, (REAL)panelTop, (REAL)clientRect.right, (REAL)panelH);
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        SolidBrush borderBrush(Color(180, 56, 56, 56));
+        g.FillRectangle(&borderBrush, 0.0f, (REAL)panelTop, (REAL)clientRect.right, 1.0f);
+        g.FillRectangle(&borderBrush, 0.0f, (REAL)(panelBottom - 1), (REAL)clientRect.right, 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    pData->autoUtilsGuideCloseRect = { clientRect.right - 34, panelTop + 6, clientRect.right - 10, panelTop + 30 };
+    SolidBrush closeBrush(pData->isHoveringAutoUtilsGuideClose ? Color(255, 235, 235, 235) : Color(255, 150, 150, 150));
+    RectF closeRect((REAL)pData->autoUtilsGuideCloseRect.left, (REAL)pData->autoUtilsGuideCloseRect.top, (REAL)(pData->autoUtilsGuideCloseRect.right - pData->autoUtilsGuideCloseRect.left), (REAL)(pData->autoUtilsGuideCloseRect.bottom - pData->autoUtilsGuideCloseRect.top));
+    g.DrawString(L"\uE711", -1, &iconFont, closeRect, &sfCenter, &closeBrush);
+
+    SolidBrush titleBrush(Color(255, 245, 245, 245));
+    RectF titleRect((REAL)pad, (REAL)(panelTop + 14), (REAL)(clientRect.right - pad * 2), 18.0f);
+    g.DrawString(titles[step], -1, &titleFont, titleRect, &sfNear, &titleBrush);
+
+    SolidBrush bodyBrush(Color(255, 190, 190, 190));
+    RectF bodyRect((REAL)pad, (REAL)(panelTop + 38), (REAL)(clientRect.right - pad * 2), (REAL)(panelH - 44));
+    g.DrawString(bodies[step], -1, &bodyFont, bodyRect, &sfWrap, &bodyBrush);
+
+    int halfW = clientRect.right / 2;
+    pData->autoUtilsGuidePrevRect = { 0, actionTop, halfW, clientRect.bottom };
+    pData->autoUtilsGuideNextRect = { halfW, actionTop, clientRect.right, clientRect.bottom };
+
+    {
+        Color leftBg = pData->isHoveringAutoUtilsGuidePrev ? Color(255, 44, 44, 44) : Color(255, 26, 26, 26);
+        Color rightBg = pData->isHoveringAutoUtilsGuideNext ? Color(255, 0, 112, 172) : Color(255, 0, 88, 136);
+        SolidBrush leftBrush(leftBg);
+        SolidBrush rightBrush(rightBg);
+        g.FillRectangle(&leftBrush, 0.0f, (REAL)actionTop, (REAL)halfW, (REAL)actionH);
+        g.FillRectangle(&rightBrush, (REAL)halfW, (REAL)actionTop, (REAL)(clientRect.right - halfW), (REAL)actionH);
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        SolidBrush lineBrush(Color(180, 56, 56, 56));
+        g.FillRectangle(&lineBrush, 0.0f, (REAL)actionTop, (REAL)clientRect.right, 1.0f);
+        g.FillRectangle(&lineBrush, (REAL)halfW, (REAL)actionTop, 1.0f, (REAL)actionH);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    const wchar_t* leftText = (step > 0) ? L"BACK" : L"CLOSE";
+    const wchar_t* rightText = (step == 2) ? L"DONE" : L"NEXT";
+    SolidBrush leftTextBrush(Color(255, 255, 255, 255));
+    SolidBrush rightTextBrush(Color(255, 255, 255, 255));
+    RectF leftRectF(0.0f, (REAL)actionTop, (REAL)halfW, (REAL)actionH);
+    RectF rightRectF((REAL)halfW, (REAL)actionTop, (REAL)(clientRect.right - halfW), (REAL)actionH);
+    g.DrawString(leftText, -1, &bigFont, leftRectF, &sfCenter, &leftTextBrush);
+    g.DrawString(rightText, -1, &bigFont, rightRectF, &sfCenter, &rightTextBrush);
+
+    DeleteObject(titleFontH);
+    DeleteObject(bodyFontH);
+    DeleteObject(smallFontH);
+    DeleteObject(iconFontH);
+    DeleteObject(bigFontH);
+}
+
+static void MainUI_Paint_SimpleMode(HDC hdc, const RECT& clientRect, MainUIData* pData) {
+    if (!pData) return;
+
+    const UINT dpi = MainUI_GetPaintDpi();
+    auto S = [dpi](int v) { return MulDiv(v, (int)dpi, 96); };
+    const int dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+    const bool opaque = g_disableAcrylic.load();
+
+    Graphics g(hdc);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(PixelOffsetModeHalf);
+    g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+
+    Font titleFont(hdc, pData->hFontSection);
+    Font textFont(hdc, pData->hFontText);
+    Font smallFont(hdc, pData->hFontSmall);
+
+    HFONT hIconHeader = CreateFontW(-MulDiv(11, dpiY, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    HFONT hIconCard = CreateFontW(-MulDiv(10, dpiY, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    HFONT hIconBtn = CreateFontW(-MulDiv(9, dpiY, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    HFONT hIconChevron = CreateFontW(-MulDiv(8, dpiY, 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font iconHeaderFont(hdc, hIconHeader);
+    Font iconCardFont(hdc, hIconCard);
+    Font iconBtnFont(hdc, hIconBtn);
+    Font iconChevronFont(hdc, hIconChevron);
+
+    StringFormat sfLeft;
+    sfLeft.SetAlignment(StringAlignmentNear);
+    sfLeft.SetLineAlignment(StringAlignmentCenter);
+    sfLeft.SetFormatFlags(StringFormatFlagsNoWrap);
+    sfLeft.SetTrimming(StringTrimmingEllipsisCharacter);
+
+    StringFormat sfCenter;
+    sfCenter.SetAlignment(StringAlignmentCenter);
+    sfCenter.SetLineAlignment(StringAlignmentCenter);
+    sfCenter.SetFormatFlags(StringFormatFlagsNoWrap);
+
+    auto clamp01 = [](float v) {
+        if (v < 0.0f) return 0.0f;
+        if (v > 1.0f) return 1.0f;
+        return v;
+    };
+    auto lerpByte = [&](int a, int b, float t) -> BYTE {
+        float ct = clamp01(t);
+        return (BYTE)(a + (b - a) * ct + 0.5f);
+    };
+    auto drawBox = [&](const RECT& r, Color fill, Color border, REAL radius) {
+        REAL rw = (REAL)(r.right - r.left);
+        REAL rh = (REAL)(r.bottom - r.top);
+        if (rw <= 2.0f || rh <= 2.0f) return;
+        SolidBrush fillBrush(fill);
+        Pen borderPen(border, 1.0f);
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.SetPixelOffsetMode(PixelOffsetModeHalf);
+        FillRoundedRectangle(&g, &fillBrush, (REAL)r.left, (REAL)r.top, rw, rh, radius);
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        DrawRoundedRectangle(&g, &borderPen, (REAL)r.left, (REAL)r.top, rw - 1.0f, rh - 1.0f, radius);
+        g.SetPixelOffsetMode(PixelOffsetModeHalf);
+    };
+
+    const int outerPadX = S(10);
+    const BYTE cardAlpha = opaque ? 255 : 185;
+    const BYTE ddAlpha = opaque ? 255 : 195;
+
+    {
+        const RECT& hr = pData->simpleHeaderRect;
+        SolidBrush headerBg(Color(opaque ? 255 : 115, 24, 24, 24));
+        g.FillRectangle(&headerBg, (REAL)hr.left, (REAL)hr.top, (REAL)(hr.right - hr.left), (REAL)(hr.bottom - hr.top));
+
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        SolidBrush sepBrush(Color(180, 56, 56, 56));
+        g.FillRectangle(&sepBrush, 0.0f, (REAL)hr.bottom, (REAL)clientRect.right, 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+
+        const int iconBoxSize = S(20);
+        const int iconX = outerPadX + S(4);
+        const int iconBoxY = hr.top + (hr.bottom - hr.top - iconBoxSize) / 2;
+        SolidBrush badgeIconBrush(Color(255, 96, 188, 255));
+        RectF badgeRectF((REAL)iconX, (REAL)iconBoxY + 1.0f, (REAL)iconBoxSize, (REAL)iconBoxSize);
+        g.DrawString(L"\uE71B", -1, &iconHeaderFont, badgeRectF, &sfCenter, &badgeIconBrush);
+
+        const int textLeft = iconX + iconBoxSize + S(8);
+        const int textW = (std::max)(S(60), (int)(pData->simpleExitBtnRect.left - S(8) - textLeft));
+        SolidBrush titleBrush(Color(255, 244, 244, 244));
+        RectF titleRectF((REAL)textLeft, (REAL)hr.top, (REAL)textW, (REAL)(hr.bottom - hr.top));
+        g.DrawString(L"Simple Mode", -1, &titleFont, titleRectF, &sfLeft, &titleBrush);
+
+        const RECT& er = pData->simpleExitBtnRect;
+        Color exitFill = pData->isHoveringSimpleExit
+            ? Color(235, 0, 122, 204)
+            : Color(opaque ? 255 : 195, 30, 52, 72);
+        Color exitBorder = pData->isHoveringSimpleExit
+            ? Color(255, 72, 178, 250)
+            : Color(215, 0, 122, 204);
+        drawBox(er, exitFill, exitBorder, 4.0f);
+
+        const wchar_t* exitLabel = L"Advanced Mode";
+        RectF exitMeasure;
+        g.MeasureString(exitLabel, -1, &textFont, PointF(0, 0), &sfLeft, &exitMeasure);
+        const REAL iconW = (REAL)S(14);
+        const REAL iconGap = (REAL)S(5);
+        const REAL totalW = iconW + iconGap + exitMeasure.Width;
+        const REAL startX = (REAL)er.left + ((REAL)(er.right - er.left) - totalW) * 0.5f;
+        const REAL erH = (REAL)(er.bottom - er.top);
+        SolidBrush exitTextBrush(Color(255, 245, 245, 245));
+        RectF exitIconRectF(startX, (REAL)er.top + 1.0f, iconW, erH);
+        RectF exitTextRectF(startX + iconW + iconGap, (REAL)er.top, exitMeasure.Width + 4.0f, erH);
+        g.DrawString(L"\uE713", -1, &iconBtnFont, exitIconRectF, &sfCenter, &exitTextBrush);
+        g.DrawString(exitLabel, -1, &textFont, exitTextRectF, &sfLeft, &exitTextBrush);
+    }
+
+    auto drawSmallChip = [&](const RECT& r, const wchar_t* glyph, Font& f, bool hovered, Color customBorder = Color(170, 70, 70, 70), Color customIcon = Color(255, 172, 172, 172), bool useCustomColors = false) {
+        Color fill = hovered ? Color(225, 68, 68, 68) : Color(opaque ? 255 : 145, 44, 44, 44);
+        Color border = hovered ? Color(230, 0, 122, 204) : (useCustomColors ? customBorder : Color(170, 70, 70, 70));
+        drawBox(r, fill, border, 4.0f);
+        Color iconC = hovered ? Color(255, 248, 248, 248) : (useCustomColors ? customIcon : Color(255, 172, 172, 172));
+        SolidBrush qBrush(iconC);
+        const bool isMdl2 = (glyph && glyph[0] >= 0xE000);
+        const REAL xOff = isMdl2 ? 0.5f : 0.0f;
+        const REAL yOff = isMdl2 ? 1.0f : 0.5f;
+        RectF qRectF((REAL)r.left + xOff, (REAL)r.top + yOff, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+        g.DrawString(glyph, -1, &f, qRectF, &sfCenter, &qBrush);
+    };
+
+    auto drawHelpChip = [&](int idx) {
+        drawSmallChip(pData->simpleHelpRects[idx], L"?", smallFont, (pData->simpleHoverHelp == idx));
+    };
+
+    auto drawDropdownBox = [&](const RECT& r, const wchar_t* value, bool hovered) {
+        Color fill = hovered ? Color(opaque ? 255 : 220, 56, 56, 56) : Color(ddAlpha, 42, 42, 42);
+        Color border = hovered ? Color(235, 0, 122, 204) : Color(195, 72, 72, 72);
+        drawBox(r, fill, border, 4.0f);
+
+        const int textPadL = S(9);
+        const int chevAreaW = S(24);
+        RectF valRectF((REAL)(r.left + textPadL), (REAL)r.top, (REAL)((std::max)(S(20), (int)(r.right - r.left - textPadL - chevAreaW))), (REAL)(r.bottom - r.top));
+        SolidBrush valBrush(Color(255, 240, 240, 240));
+        g.DrawString(value, -1, &textFont, valRectF, &sfLeft, &valBrush);
+
+        RectF chevRectF((REAL)(r.right - chevAreaW), (REAL)r.top + 1.0f, (REAL)S(18), (REAL)(r.bottom - r.top));
+        SolidBrush chevBrush(hovered ? Color(255, 225, 225, 225) : Color(255, 160, 160, 160));
+        g.DrawString(L"\uE70D", -1, &iconChevronFont, chevRectF, &sfCenter, &chevBrush);
+    };
+
+    auto drawPrimaryCard = [&](const RECT& card, const RECT& ddRect, const wchar_t* icon, const wchar_t* label, const wchar_t* value, bool ddHover, int helpIdx) {
+        drawBox(card, Color(cardAlpha, 30, 30, 30), ddHover ? Color(205, 86, 86, 86) : Color(185, 58, 58, 58), 4.0f);
+
+        const int padX = S(10);
+        const int topY = card.top + S(8);
+        const int hdrH = S(18);
+        const int iconW = S(16);
+        SolidBrush iconBrush(Color(255, 104, 186, 248));
+        RectF iconRectF((REAL)(card.left + padX), (REAL)topY + 1.0f, (REAL)iconW, (REAL)hdrH);
+        g.DrawString(icon, -1, &iconCardFont, iconRectF, &sfCenter, &iconBrush);
+
+        const int labelX = card.left + padX + iconW + S(6);
+        const int labelW = (std::max)(S(20), (int)(pData->simpleHelpRects[helpIdx].left - S(6) - labelX));
+        SolidBrush labelBrush(Color(255, 232, 232, 232));
+        RectF labelRectF((REAL)labelX, (REAL)topY, (REAL)labelW, (REAL)hdrH);
+        g.DrawString(label, -1, &textFont, labelRectF, &sfLeft, &labelBrush);
+
+        drawHelpChip(helpIdx);
+        drawDropdownBox(ddRect, value, ddHover);
+    };
+
+    {
+        int sec = g_selectedTime.load();
+        wchar_t intervalBuf[64];
+        if (sec >= 60) swprintf_s(intervalBuf, L"%d sec (%d min)", sec, sec / 60);
+        else swprintf_s(intervalBuf, L"%d sec", sec);
+        drawPrimaryCard(
+            pData->simpleIntervalCardRect,
+            pData->intervalDropdownRect,
+            L"\uE916",
+            L"Interval",
+            intervalBuf,
+            pData->isHoveringInterval && pData->simpleHoverHelp != 0,
+            0
+        );
+
+        const wchar_t* simpleActionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random", L"Macros Only", L"<- / ->" };
+        int simpleAction = g_selectedAction.load();
+        if (simpleAction < 0 || simpleAction > 5) simpleAction = 0;
+        drawPrimaryCard(
+            pData->simpleActionCardRect,
+            pData->actionDropdownRect,
+            L"\uE7C9",
+            L"Action",
+            simpleActionNames[simpleAction],
+            pData->isHoveringAction && pData->simpleHoverHelp != 1,
+            1
+        );
+    }
+
+    auto drawToggleTile = [&](const RECT& tile, const wchar_t* icon, const wchar_t* title, const wchar_t* statusText, float anim, bool hoveringTile, int helpIdx, bool hasStatusColor = false, Color customStatusColor = Color(255, 138, 138, 138), bool showStatusDot = false, const RECT* extraGearRect = nullptr, bool extraGearHover = false) {
+        const float t = clamp01(anim);
+        const bool hover = hoveringTile && (pData->simpleHoverHelp != helpIdx) && !extraGearHover;
+
+        BYTE bgR = lerpByte(30, 25, t);
+        BYTE bgG = lerpByte(30, 39, t);
+        BYTE bgB = lerpByte(30, 52, t);
+        if (hover) {
+            bgR = (BYTE)(std::min)(255, (int)bgR + 10);
+            bgG = (BYTE)(std::min)(255, (int)bgG + 10);
+            bgB = (BYTE)(std::min)(255, (int)bgB + 10);
+        }
+        BYTE bdR = lerpByte(58, 0, t);
+        BYTE bdG = lerpByte(58, 122, t);
+        BYTE bdB = lerpByte(58, 204, t);
+        if (hover) {
+            bdR = (BYTE)(std::min)(255, (int)bdR + 28);
+            bdG = (BYTE)(std::min)(255, (int)bdG + 28);
+            bdB = (BYTE)(std::min)(255, (int)bdB + 28);
+        }
+        drawBox(tile, Color(cardAlpha, bgR, bgG, bgB), Color(hover ? 230 : 190, bdR, bdG, bdB), 4.0f);
+
+        const int tileH = tile.bottom - tile.top;
+        const int padX = S(10);
+        const int topY = tile.top + (tileH < S(74) ? S(6) : S(8));
+        const int iconBox = S(18);
+        SolidBrush iconBrush(Color(255, lerpByte(155, 72, t), lerpByte(155, 178, t), lerpByte(155, 252, t)));
+        RectF iconRectF((REAL)(tile.left + padX), (REAL)topY + 1.0f, (REAL)iconBox, (REAL)iconBox);
+        g.DrawString(icon, -1, &iconCardFont, iconRectF, &sfCenter, &iconBrush);
+
+        if (extraGearRect) {
+            drawSmallChip(*extraGearRect, L"\uE713", iconChevronFont, extraGearHover);
+        }
+        drawHelpChip(helpIdx);
+
+        const int titleY = tile.top + (tileH < S(74) ? S(24) : S(27));
+        SolidBrush titleBrush(Color(255, 238, 238, 238));
+        RectF titleRectF((REAL)(tile.left + padX), (REAL)titleY, (REAL)(tile.right - tile.left - padX * 2), (REAL)S(17));
+        g.DrawString(title, -1, &textFont, titleRectF, &sfLeft, &titleBrush);
+
+        const int swW = S(50);
+        const int swH = S(24);
+        const int swBottom = (tileH < S(74)) ? S(5) : S(7);
+        RECT sw = {
+            tile.right - padX - swW,
+            tile.bottom - swBottom - swH,
+            tile.right - padX,
+            tile.bottom - swBottom
+        };
+
+        Color stColor = hasStatusColor
+            ? customStatusColor
+            : Color(255, lerpByte(138, 104, t), lerpByte(138, 192, t), lerpByte(138, 255, t));
+        SolidBrush statusBrush(stColor);
+        int statusLeft = tile.left + padX;
+        if (showStatusDot) {
+            const REAL dotD = (REAL)S(6);
+            const REAL dotY = (REAL)sw.top + ((REAL)swH - dotD) * 0.5f;
+            g.SetSmoothingMode(SmoothingModeAntiAlias);
+            g.FillEllipse(&statusBrush, (REAL)statusLeft, dotY, dotD, dotD);
+            statusLeft += S(10);
+        }
+        RectF statusRectF((REAL)statusLeft, (REAL)sw.top + 1.5f, (REAL)(sw.left - S(6) - statusLeft), (REAL)swH);
+        g.DrawString(statusText, -1, &smallFont, statusRectF, &sfLeft, &statusBrush);
+
+        Color trackFill = hover ? Color(165, 65, 65, 65) : Color(165, 45, 45, 45);
+        Color trackBorder(lerpByte(180, 200, t), lerpByte(56, 0, t), lerpByte(56, 122, t), lerpByte(56, 204, t));
+        drawBox(sw, trackFill, trackBorder, 5.0f);
+
+        const int knobPad = S(4);
+        const int knobD = swH - knobPad * 2;
+        const REAL knobX = (REAL)(sw.left + knobPad) + (REAL)(swW - knobPad * 2 - knobD) * t;
+        const REAL knobY = (REAL)(sw.top + knobPad);
+        SolidBrush knobBrush(Color(255, lerpByte(140, 0, t), lerpByte(140, 122, t), lerpByte(140, 204, t)));
+        g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.FillEllipse(&knobBrush, knobX, knobY, (REAL)knobD, (REAL)knobD);
+    };
+
+    const bool multiOn = g_multiSupport.load();
+    const bool reconnectOn = g_autoReconnect.load();
+    const bool fpsOn = g_fpsLimit.load() > 0;
+    const bool ramOn = g_ramCleanerAutoStart.load();
+    const bool skipOn = g_skipActiveEnabled.load();
+
+    const bool mutexOk = IsMultiInstanceMutexValid();
+    const bool mutexErr = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
+    const bool mutexIgnored = g_mutexIgnored && !mutexOk;
+
+    wchar_t fpsStatusBuf[48];
+    if (fpsOn) {
+        if (g_cpuLimitMode.load()) swprintf_s(fpsStatusBuf, L"CPU \u2022 %d%%", g_cpuLimitPercent.load());
+        else swprintf_s(fpsStatusBuf, L"Cap \u2022 %d FPS", g_fpsLimit.load());
+    } else {
+        wcscpy_s(fpsStatusBuf, g_cpuLimitMode.load() ? L"CPU Limiter" : L"FPS Cap");
+    }
+
+    wchar_t ramStatusBuf[48];
+    if (ramOn) {
+        int rm = g_ramCleanerMode.load();
+        if (rm == 0) swprintf_s(ramStatusBuf, L"Timer \u2022 %ds", g_ramCleanerInterval.load());
+        else if (rm == 1) swprintf_s(ramStatusBuf, L"Limit \u2022 %d MB", g_ramCleanerLimit.load());
+        else swprintf_s(ramStatusBuf, L"%ds \u2022 %d MB", g_ramCleanerInterval.load(), g_ramCleanerLimit.load());
+    } else {
+        wcscpy_s(ramStatusBuf, L"Disabled");
+    }
+
+    drawToggleTile(pData->multiInstanceToggleRect, L"\uE81E", L"Multi-Instance Bypass", multiOn ? L"Enabled" : L"Disabled", pData->multiInstanceAnim, pData->isHoveringMultiInstanceToggle && !pData->isHoveringSimpleMutexStatus, 2);
+    if (multiOn && pData->simpleMutexStatusRect.right > pData->simpleMutexStatusRect.left) {
+        const wchar_t* stGlyph = mutexIgnored ? L"\uEA84" : (mutexOk ? L"\uE73E" : L"\uE711");
+        Color stBorder = mutexErr ? Color(200, 220, 90, 90) : (mutexIgnored || !mutexOk ? Color(200, 220, 170, 70) : Color(190, 70, 185, 115));
+        Color stIcon = mutexErr ? Color(255, 240, 118, 118) : (mutexIgnored || !mutexOk ? Color(255, 232, 184, 92) : Color(255, 102, 208, 138));
+        drawSmallChip(pData->simpleMutexStatusRect, stGlyph, iconChevronFont, pData->isHoveringSimpleMutexStatus, stBorder, stIcon, true);
+    }
+    drawToggleTile(pData->autoReconnectToggleRect, L"\uE8AF", L"Auto-Reconnect", reconnectOn ? L"Enabled" : L"Disabled", pData->autoReconnectAnim, pData->isHoveringAutoReconnectToggle, 3);
+    drawToggleTile(pData->fpsCapperToggleRect, L"\uE950", L"FPS Capper", fpsStatusBuf, pData->fpsCapperAnim, pData->isHoveringFpsCapperToggle, 4, false, Color(255, 138, 138, 138), false, &pData->simpleFpsSettingsRect, pData->isHoveringSimpleFpsSettings);
+    drawToggleTile(pData->ramCleanerToggleRect, L"\uE964", L"RAM Cleaner", ramStatusBuf, pData->ramCleanerAnim, pData->isHoveringRamCleanerToggle, 5, false, Color(255, 138, 138, 138), false, &pData->simpleRamSettingsRect, pData->isHoveringSimpleRamSettings);
+    drawToggleTile(pData->skipActiveToggleRect, L"\uE893", L"Skip Active", skipOn ? L"Enabled" : L"Disabled", pData->skipActiveAnim, pData->isHoveringSkipActiveToggle, 6);
+
+    {
+        const RECT& tile = pData->simpleUserSafeTileRect;
+        const int userSafeMode = ClampInt(g_userSafeMode.load(), 0, 2);
+        const bool usOn = (userSafeMode > 0);
+        const bool usDdHover = pData->isHoveringUserSafe && (pData->simpleHoverHelp != 7);
+        const float t = usOn ? 1.0f : 0.0f;
+
+        BYTE bgR = lerpByte(30, 25, t);
+        BYTE bgG = lerpByte(30, 39, t);
+        BYTE bgB = lerpByte(30, 52, t);
+        BYTE bdR = lerpByte(58, 0, t);
+        BYTE bdG = lerpByte(58, 122, t);
+        BYTE bdB = lerpByte(58, 204, t);
+        drawBox(tile, Color(cardAlpha, bgR, bgG, bgB), Color(190, bdR, bdG, bdB), 4.0f);
+
+        const int tileH = tile.bottom - tile.top;
+        const int padX = S(10);
+        const int topY = tile.top + (tileH < S(74) ? S(6) : S(8));
+        const int iconBox = S(18);
+        SolidBrush iconBrush(Color(255, lerpByte(155, 72, t), lerpByte(155, 178, t), lerpByte(155, 252, t)));
+        RectF iconRectF((REAL)(tile.left + padX), (REAL)topY + 1.0f, (REAL)iconBox, (REAL)iconBox);
+        g.DrawString(L"\uE72E", -1, &iconCardFont, iconRectF, &sfCenter, &iconBrush);
+
+        drawHelpChip(7);
+
+        const int titleY = tile.top + (tileH < S(74) ? S(23) : S(26));
+        SolidBrush titleBrush(Color(255, 238, 238, 238));
+        RectF titleRectF((REAL)(tile.left + padX), (REAL)titleY, (REAL)(tile.right - tile.left - padX * 2), (REAL)S(17));
+        g.DrawString(L"User-Safe", -1, &textFont, titleRectF, &sfLeft, &titleBrush);
+
+        const wchar_t* simpleUserSafeNames[] = { L"Off", L"Legacy", L"Beta" };
+        drawDropdownBox(pData->userSafeDropdownRect, simpleUserSafeNames[userSafeMode], usDdHover);
+    }
+
+    if ((g_updateFound.load() || g_updateCheckFailed.load()) && pData->updateBannerRect.bottom > pData->updateBannerRect.top) {
+        const RECT& ur = pData->updateBannerRect;
+        const bool checkFailed = g_updateCheckFailed.load() && !g_updateFound.load();
+        Color updBg = checkFailed
+            ? (pData->isHoveringUpdateBanner ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40))
+            : (pData->isHoveringUpdateBanner ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40));
+        SolidBrush updBgBrush(updBg);
+        g.FillRectangle(&updBgBrush, (REAL)ur.left, (REAL)ur.top, (REAL)(ur.right - ur.left), (REAL)(ur.bottom - ur.top));
+        {
+            PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+            SmoothingMode oldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            SolidBrush updSepBrush(Color(180, 56, 56, 56));
+            g.FillRectangle(&updSepBrush, (REAL)ur.left, (REAL)ur.top, (REAL)(ur.right - ur.left), 1.0f);
+            g.SetPixelOffsetMode(oldOffset);
+            g.SetSmoothingMode(oldSmooth);
+        }
+        SolidBrush updIconBrush(checkFailed ? Color(255, 210, 120, 80) : Color(255, 80, 200, 120));
+        const int icoSz = S(16);
+        const int icoX = ur.left + outerPadX + S(2);
+        const int icoY = ur.top + (ur.bottom - ur.top - icoSz) / 2;
+        g.DrawString(checkFailed ? L"\uEA39" : L"\uE896", -1, &iconBtnFont, RectF((REAL)icoX, (REAL)icoY + 1.0f, (REAL)icoSz, (REAL)icoSz), &sfCenter, &updIconBrush);
+
+        const int txtX = icoX + icoSz + S(8);
+        const int txtW = (std::max)(S(40), (int)(ur.right - S(28) - txtX));
+        SolidBrush updTextBrush(Color(255, 224, 224, 224));
+        if (!checkFailed) {
+            wchar_t versionText[64];
+            FormatVersionReadable(g_updateServerVersion.load(), versionText, 64);
+            wchar_t updLine[160];
+            swprintf_s(updLine, L"Update Available \u2022 %s %s", GetReleaseChannelName(), versionText);
+            g.DrawString(updLine, -1, &textFont, RectF((REAL)txtX, (REAL)ur.top, (REAL)txtW, (REAL)(ur.bottom - ur.top)), &sfLeft, &updTextBrush);
+        } else {
+            g.DrawString(L"Failed to check updates", -1, &textFont, RectF((REAL)txtX, (REAL)ur.top, (REAL)txtW, (REAL)(ur.bottom - ur.top)), &sfLeft, &updTextBrush);
+        }
+        SolidBrush arrowBrush(Color(255, 152, 152, 152));
+        g.DrawString(L"\uE76C", -1, &iconChevronFont, RectF((REAL)(ur.right - S(24)), (REAL)ur.top + 1.0f, (REAL)S(16), (REAL)(ur.bottom - ur.top)), &sfCenter, &arrowBrush);
+    }
+
+    {
+        AnnouncementInfo announcement = GetAnnouncementCopy();
+        if (pData->discordButtonRect.bottom > pData->discordButtonRect.top) {
+            const RECT& ar = pData->discordButtonRect;
+            Color annBg = pData->isHoveringDiscord ? Color(55, 62, 62, 62) : Color(32, 38, 38, 38);
+            SolidBrush annBgBrush(annBg);
+            g.FillRectangle(&annBgBrush, (REAL)ar.left, (REAL)ar.top, (REAL)(ar.right - ar.left), (REAL)(ar.bottom - ar.top));
+            {
+                PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+                SmoothingMode oldSmooth = g.GetSmoothingMode();
+                g.SetPixelOffsetMode(PixelOffsetModeNone);
+                g.SetSmoothingMode(SmoothingModeNone);
+                SolidBrush annSepBrush(Color(180, 56, 56, 56));
+                g.FillRectangle(&annSepBrush, (REAL)ar.left, (REAL)ar.top, (REAL)(ar.right - ar.left), 1.0f);
+                g.SetPixelOffsetMode(oldOffset);
+                g.SetSmoothingMode(oldSmooth);
+            }
+            SolidBrush annIconBrush(announcement.enabled
+                ? Color(255, GetRValue(announcement.iconColor), GetGValue(announcement.iconColor), GetBValue(announcement.iconColor))
+                : Color(255, 88, 101, 242));
+            const int icoSz = S(16);
+            const int icoX = ar.left + outerPadX + S(2);
+            const int icoY = ar.top + (ar.bottom - ar.top - icoSz) / 2;
+            g.DrawString(announcement.enabled ? announcement.icon.c_str() : L"\uE8BD", -1, &iconBtnFont, RectF((REAL)icoX, (REAL)icoY + 1.0f, (REAL)icoSz, (REAL)icoSz), &sfCenter, &annIconBrush);
+
+            const int txtX = icoX + icoSz + S(8);
+            const int txtW = (std::max)(S(40), (int)(ar.right - S(28) - txtX));
+            SolidBrush annTitleBrush(Color(255, 224, 224, 224));
+            if (announcement.enabled && !announcement.description.empty()) {
+                StringFormat sfAnnTop;
+                sfAnnTop.SetAlignment(StringAlignmentNear);
+                sfAnnTop.SetLineAlignment(StringAlignmentFar);
+                sfAnnTop.SetFormatFlags(StringFormatFlagsNoWrap);
+                sfAnnTop.SetTrimming(StringTrimmingEllipsisCharacter);
+                g.DrawString(announcement.title.c_str(), -1, &textFont, RectF((REAL)txtX, (REAL)ar.top, (REAL)txtW, (REAL)S(16)), &sfAnnTop, &annTitleBrush);
+                SolidBrush annDescBrush(Color(255, 152, 152, 152));
+                StringFormat sfAnnBot;
+                sfAnnBot.SetAlignment(StringAlignmentNear);
+                sfAnnBot.SetLineAlignment(StringAlignmentNear);
+                sfAnnBot.SetFormatFlags(StringFormatFlagsNoWrap);
+                sfAnnBot.SetTrimming(StringTrimmingEllipsisCharacter);
+                g.DrawString(announcement.description.c_str(), -1, &smallFont, RectF((REAL)txtX, (REAL)(ar.top + S(16)), (REAL)txtW, (REAL)S(15)), &sfAnnBot, &annDescBrush);
+            } else {
+                g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &textFont, RectF((REAL)txtX, (REAL)ar.top, (REAL)txtW, (REAL)(ar.bottom - ar.top)), &sfLeft, &annTitleBrush);
+            }
+            SolidBrush arrowBrush(Color(255, 152, 152, 152));
+            g.DrawString(L"\uE76C", -1, &iconChevronFont, RectF((REAL)(ar.right - S(24)), (REAL)ar.top + 1.0f, (REAL)S(16), (REAL)(ar.bottom - ar.top)), &sfCenter, &arrowBrush);
+        }
+    }
+
+    if (pData->simpleHoverHelp >= 0 && pData->simpleHoverHelp < 8) {
+        static const wchar_t* const simpleHelpTips[8] = {
+            L"How often Anti-AFK runs (stay under 20 min)",
+            L"Input sent to Roblox to prevent idle kick",
+            L"Allow launching multiple Roblox windows",
+            L"Auto-click Reconnect after idle kick/disconnect",
+            L"Lower Roblox CPU load by capping FPS",
+            L"Automatically reduce Roblox RAM usage",
+            L"Skip Roblox windows you are actively typing in",
+            L"Pause Anti-AFK while your input is detected"
+        };
+        MainUI_Paint_DrawHoverTooltip(hdc, pData->simpleHelpRects[pData->simpleHoverHelp], pData->hFontSmall, simpleHelpTips[pData->simpleHoverHelp], true, 0, pData->simpleHeaderRect.bottom + 4);
+    } else if (multiOn && pData->isHoveringSimpleMutexStatus) {
+        const wchar_t* stTip = mutexErr ? L"Mutex registration failed • Click for details" : (mutexIgnored ? L"Mutex ignored • Click for details" : (mutexOk ? L"Mutex active • Multi-Instance active" : L"Mutex invalid • Click for details"));
+        MainUI_Paint_DrawHoverTooltip(hdc, pData->simpleMutexStatusRect, pData->hFontSmall, stTip, true);
+    } else if (pData->isHoveringSimpleFpsSettings) {
+        MainUI_Paint_DrawHoverTooltip(hdc, pData->simpleFpsSettingsRect, pData->hFontSmall, L"Quick FPS / CPU Limiter settings", true);
+    } else if (pData->isHoveringSimpleRamSettings) {
+        MainUI_Paint_DrawHoverTooltip(hdc, pData->simpleRamSettingsRect, pData->hFontSmall, L"Quick RAM Cleaner settings", true);
+    }
+
+    DeleteObject(hIconHeader);
+    DeleteObject(hIconCard);
+    DeleteObject(hIconBtn);
+    DeleteObject(hIconChevron);
 }
 
 bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData)
@@ -20795,8 +24352,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
     if (wasShowingSettingsSub || pData->settingsSubViewAnim > 0.0f) {
         if (pData->settingsSubKind == 4) {
-            const bool uiToggleStates[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
-            for (int i = 0; i < 6; ++i) animateToggle(pData->settingsSubToggleAnims[i], uiToggleStates[i]);
+            const bool uiToggleStates[9] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load(), g_uiHideNextActionText.load(), g_uiHideInstancesText.load(), g_uiHideSimpleModeSwitch.load() };
+            for (int i = 0; i < 9; ++i) animateToggle(pData->settingsSubToggleAnims[i], uiToggleStates[i]);
         }
     }
 
@@ -20915,7 +24472,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
                 pData->alphaInfoGitHubLinkRect = { 0, 0, 0, 0 };
                 pData->alphaInfoDiscordLinkRect = { 0, 0, 0, 0 };
                 pData->alphaInfoReleasesLinkRect = { 0, 0, 0, 0 };
-                pData->alphaInfoWhatsNewLinkRect = { 0, 0, 0, 0 };
+                pData->alphaInfoSupportLinkRect = { 0, 0, 0, 0 };
+                pData->isHoveringAlphaInfoSupportLink = false;
             }
             needsRedraw = true;
         }
@@ -21182,16 +24740,16 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             else if (pData->macrosViewMode == 5) titleText = L"AntiAFK-RBX • Recording...";
             g.DrawString(titleText, -1, &gdiFont, titleRect, &sf, &textBrushMacros);
         }
-        float badgeAnim = pData->badgeRevealAnim;
+        int releaseType = (currentVersion / 100) % 10;
+        bool hasPreviewBadge = (releaseType != STABLE && releaseType != 0);
+        float badgeAnim = hasPreviewBadge ? pData->badgeRevealAnim : 0.0f;
         float mainTitleFade = 1.0f - (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, statusBarSettingsAnim), actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), badgeAnim), settingsSubAnim);
         if (mainTitleFade > 0.0f) {
             SolidBrush textBrushNormal(Color((BYTE)(255 * mainTitleFade), GetRValue(DARK_TEXT), GetGValue(DARK_TEXT), GetBValue(DARK_TEXT)));
             g.DrawString(L"AntiAFK-RBX", -1, &gdiFont, titleRect, &sf, &textBrushNormal);
         }
 
-
-        int releaseType = (currentVersion / 100) % 10;
-        if (badgeAnim > 0.0f && releaseType != STABLE && releaseType != 0) {
+        if (badgeAnim > 0.0f && hasPreviewBadge) {
             Font badgeFont(L"Segoe UI", 7.0f);
             StringFormat sfBadgeText;
             sfBadgeText.SetAlignment(StringAlignmentNear);
@@ -21215,6 +24773,43 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     }
 
     bool isStarted = g_isAfkStarted.load();
+    g.ResetClip();
+
+    ULONGLONG countNow = GetTickCount64();
+    if (pData->cachedRobloxWindowCountTick == 0 || countNow - pData->cachedRobloxWindowCountTick > 1000) {
+        pData->cachedRobloxWindowCount = (int)FindAllRobloxWindows(true).size();
+        pData->cachedRobloxWindowCountTick = countNow;
+    }
+
+    uint64_t remainSec = 0;
+    if (isStarted) {
+        uint64_t lastAction = g_lastAfkActionTimestamp.load();
+        if (lastAction == 0) lastAction = g_afkStartTime.load();
+        uint64_t intervalSec = (uint64_t)g_selectedTime.load();
+        uint64_t elapsedSec = lastAction > 0 ? (GetTickCount64() - lastAction) / 1000 : 0;
+        remainSec = elapsedSec < intervalSec ? intervalSec - elapsedSec : 0;
+    }
+
+    wchar_t startLeftText[48] = L"";
+    wchar_t startRightText[64] = L"";
+    wchar_t startLeftHoverText[48] = L"";
+    wchar_t startRightHoverText[64] = L"";
+    if (isStarted) {
+        if (!g_uiHideInstancesText.load()) {
+            swprintf_s(startLeftText, L"%d", pData->cachedRobloxWindowCount);
+            if (pData->cachedRobloxWindowCount == 1) wcscpy_s(startLeftHoverText, L"1 Instance");
+            else swprintf_s(startLeftHoverText, L"%d Instances", pData->cachedRobloxWindowCount);
+        }
+        if (!g_uiHideNextActionText.load()) {
+            if (remainSec >= 3600) {
+                swprintf_s(startRightText, L"%llu:%02llu", remainSec / 3600, (remainSec / 60) % 60);
+                swprintf_s(startRightHoverText, L"Next action in %llu:%02llu", remainSec / 3600, (remainSec / 60) % 60);
+            } else {
+                swprintf_s(startRightText, L"%02llu:%02llu", remainSec / 60, remainSec % 60);
+                swprintf_s(startRightHoverText, L"Next action in %02llu:%02llu", remainSec / 60, remainSec % 60);
+            }
+        }
+    }
 
     const wchar_t* startText = isStarted ? L"Stop" : L"Start";
     const wchar_t* prevText = pData->previousAfkStartedState ? L"Stop" : L"Start";
@@ -21261,13 +24856,11 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     Font gdiSectionFont2(hdc, pData->hFontSection);
 
     if (overlayAnim > 0.0f) {
-        const wchar_t* overlayBtnText = isContinueBtn ? L"continue" : L"BACK";
+        const wchar_t* overlayBtnText = isContinueBtn ? L"Continue" : L"BACK";
         SolidBrush overlayBrush(Color((BYTE)(255 * overlayAnim * (1.0f - progress)), 255, 255, 255));
         if (isContinueBtn) {
-            HFONT hContinueFont = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-            Font continueFont(hdc, hContinueFont);
+            Font continueFont(hdc, pData->hFontSection);
             g.DrawString(overlayBtnText, -1, &continueFont, startTextRectF, &sfStart, &overlayBrush);
-            DeleteObject(hContinueFont);
         } else {
             Font backBtnFont(hdc, pData->hFontTitle);
             g.DrawString(overlayBtnText, -1, &backBtnFont, startTextRectF, &sfStart, &overlayBrush);
@@ -21283,6 +24876,30 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             SolidBrush currentTextBrush(Color((BYTE)(255 * stateProgress * (1.0f - progress) * (1.0f - overlayAnim)), 255, 255, 255));
             g.DrawString(startText, -1, &gdiSectionFont2, startTextRectF, &sfStart, &currentTextBrush);
         }
+    }
+
+    if (overlayAnim < 0.01f && progress < 0.01f) {
+        Font sideFont(hdc, pData->hFontSmall);
+        SolidBrush sideBrush(Color(215, 230, 230, 230));
+        int sbCenterX = (pData->startButtonRect.left + pData->startButtonRect.right) / 2;
+        RECT leftRc = { pData->startButtonRect.left + 16, pData->startButtonRect.top + 3, sbCenterX - 55, pData->startButtonRect.bottom - 3 };
+        RECT rightRc = { sbCenterX + 55, pData->startButtonRect.top + 3, pData->startButtonRect.right - 16, pData->startButtonRect.bottom - 3 };
+        pData->startInstanceInfoRect = isStarted ? leftRc : RECT{ 0, 0, 0, 0 };
+        pData->startNextInfoRect = isStarted ? rightRc : RECT{ 0, 0, 0, 0 };
+        RectF leftRcF((REAL)leftRc.left, (REAL)leftRc.top, (REAL)(leftRc.right - leftRc.left), (REAL)(leftRc.bottom - leftRc.top));
+        RectF rightRcF((REAL)rightRc.left, (REAL)rightRc.top, (REAL)(rightRc.right - rightRc.left), (REAL)(rightRc.bottom - rightRc.top));
+        StringFormat sfSideLeft;
+        sfSideLeft.SetAlignment(StringAlignmentCenter);
+        sfSideLeft.SetLineAlignment(StringAlignmentCenter);
+        StringFormat sfSideRight;
+        sfSideRight.SetAlignment(StringAlignmentCenter);
+        sfSideRight.SetLineAlignment(StringAlignmentCenter);
+        bool hoverLeftInfo = isStarted && PtInRect(&leftRc, pData->hoverPoint);
+        bool hoverRightInfo = isStarted && PtInRect(&rightRc, pData->hoverPoint);
+        const wchar_t* leftDrawText = hoverLeftInfo ? startLeftHoverText : startLeftText;
+        const wchar_t* rightDrawText = hoverRightInfo ? startRightHoverText : startRightText;
+        if (leftDrawText[0] != L'\0') g.DrawString(leftDrawText, -1, &sideFont, leftRcF, &sfSideLeft, &sideBrush);
+        if (rightDrawText[0] != L'\0') g.DrawString(rightDrawText, -1, &sideFont, rightRcF, &sfSideRight, &sideBrush);
     }
 
     if (progress > 0.0f && !pData->startButtonErrorText.empty()) {
@@ -21304,17 +24921,32 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     }
 
     if (renderMainPrimary) {
+        if (g_simpleMode.load()) {
+            pData->currentPage = 0;
+            MainUI_Layout_SimpleMode(clientRect, pData);
+        } else {
+        UINT paintDpi = 96;
         {
-            RECT navBarRect = { 0, 31, clientRect.right, 61 };
+            typedef UINT(WINAPI* GetDpiForSystem_fn)();
+            auto dpiFn = (GetDpiForSystem_fn)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+            if (dpiFn) {
+                UINT systemDpi = dpiFn();
+                if (systemDpi > 0) paintDpi = systemDpi;
+            }
+        }
+        auto S = [paintDpi](int v) { return MulDiv(v, (int)paintDpi, 96); };
+        {
+            RECT navBarRect = { 0, g_simpleMode.load() ? -1000 : S(31), clientRect.right, g_simpleMode.load() ? -970 : S(61) };
         SolidBrush navBrush(Color(100, 35, 35, 35));
         g.FillRectangle(&navBrush, (REAL)navBarRect.left, (REAL)navBarRect.top, (REAL)(navBarRect.right - navBarRect.left), (REAL)(navBarRect.bottom - navBarRect.top));
 
-        const int margin = 20, rowH = 32, vGap = 10;
-    const int nav_bar_y = 31, nav_bar_h = 30;
-    const int startBtnH = 40;
-    const int content_y_start = nav_bar_y + nav_bar_h;
-    const int disclaimerH = 26;
-    int help_btn_size = 24;
+        const bool simpleModeNow = g_simpleMode.load();
+        const int margin = S(20), rowH = S(32), vGap = S(10);
+    const int nav_bar_y = simpleModeNow ? -1000 : S(31), nav_bar_h = S(30);
+    const int startBtnH = S(40);
+    const int content_y_start = simpleModeNow ? S(31) : nav_bar_y + nav_bar_h;
+    const int disclaimerH = S(26);
+    int help_btn_size = S(24);
     int ctrlStartX = margin;
     int ctrlEndX = clientRect.right - 20;
     int y = content_y_start;
@@ -21326,9 +24958,17 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
     pData->disclaimerRect = { 0, clientRect.bottom - startBtnH - disclaimerH + 1, clientRect.right, clientRect.bottom - startBtnH + 1 };
 
     if (pData->currentPage == 0) { // General
-        int ddW_interval = 166, ddW_action = 144;
+        const int simpleBarH = S(30);
+        if (!g_uiHideSimpleModeSwitch.load()) {
+            pData->simpleModeToggleRect = { 0, y, clientRect.right, y + simpleBarH };
+            y += simpleBarH;
+        } else {
+            pData->simpleModeToggleRect = { 0, 0, 0, 0 };
+        }
+
+        int ddW_interval = S(166), ddW_action = S(144);
         int inlineGap = 4;
-        int btnW = 48, btnH = 22;
+        int btnW = S(48), btnH = S(22);
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->testActionButtonRect = {
@@ -21348,15 +24988,19 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->actionDelaysSettingsCompactRect = { pData->actionDropdownRect.left - inlineGap - compactW, y + 8, pData->actionDropdownRect.left - inlineGap, y + rowH };
         y += rowH + vGap;
 
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        int controlTop = y + (rowH - help_btn_size) / 2 + 4;
-        int controlBottom = controlTop + help_btn_size;
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
-        pData->multiInstanceToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
-        int toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
-        pData->advancedMultiInstanceLinkRect = { toggleSwitchLeft - inlineGap - help_btn_size, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
-        pData->mutexStatusRect = { pData->advancedMultiInstanceLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedMultiInstanceLinkRect.left - inlineGap, controlBottom };
-        y += rowH + vGap;
+        if (!g_simpleMode.load()) {
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            int controlTop = y + (rowH - help_btn_size) / 2 + 4;
+            int controlBottom = controlTop + help_btn_size;
+            pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, controlTop, ctrlEndX, controlBottom });
+            pData->multiInstanceToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
+            int toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
+            pData->advancedMultiInstanceLinkRect = { toggleSwitchLeft - inlineGap - help_btn_size, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+            pData->mutexStatusRect = { pData->advancedMultiInstanceLinkRect.left - inlineGap - help_btn_size, controlTop, pData->advancedMultiInstanceLinkRect.left - inlineGap, controlBottom };
+            y += rowH + vGap;
+        } else {
+            pData->rowRects.push_back({ 0, y, clientRect.right, y });
+        }
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         {
@@ -21376,19 +25020,17 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
         y += rowH + vGap;
 
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        {
-            int timingsBtnW = 58, timingsBtnH = 24;
-            pData->timingsBtnRect = { clientRect.right - help_btn_size - 20 - timingsBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + timingsBtnH };
-            pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+        if (!g_simpleMode.load()) {
+            pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
+            {
+                int timingsBtnW = 58, timingsBtnH = 24;
+                pData->timingsBtnRect = { clientRect.right - help_btn_size - 20 - timingsBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4 + timingsBtnH };
+                pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
+            }
+            y += rowH + vGap;
+        } else {
+            pData->rowRects.push_back({ 0, y, clientRect.right, y });
         }
-        y += rowH + vGap;
-
-        int genCtrlW = ctrlEndX - ctrlStartX - help_btn_size;
-        pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
-        pData->simpleModeToggleRect = { ctrlStartX, y, ctrlStartX + genCtrlW, y + rowH };
-        pData->helpButtonRects.push_back({ ctrlEndX - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, ctrlEndX, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
-        y += rowH + vGap;
 
         pData->discordButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
         pData->updateBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
@@ -21398,6 +25040,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
             } else {
                 pData->mutexBannerRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH * 2, clientRect.right, clientRect.bottom - startBtnH - disclaimerH - rowH };
             }
+        } else {
+            pData->mutexBannerRect = { 0, 0, 0, 0 };
         }
     } else if (pData->currentPage == 1) { // Auto+Utils
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
@@ -21445,6 +25089,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->autoOpacityToggleRect = { ctrlStartX, y, pData->helpButtonRects.back().left, y + rowH };
         toggleSwitchLeft = pData->helpButtonRects.back().left - 50;
         pData->opacityCompactRect = { toggleSwitchLeft - inlineGap - compactW, controlTop, toggleSwitchLeft - inlineGap, controlBottom };
+        pData->opacityEditCompactRect = { pData->opacityCompactRect.left - inlineGap - compactW, controlTop, pData->opacityCompactRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -21488,7 +25133,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->ramCleanerSweepCompactRect = { pData->ramCleanerToggleCompactRect.left - inlineGap - compactW, controlTop, pData->ramCleanerToggleCompactRect.left - inlineGap, controlBottom };
         y += rowH + vGap;
     } else if (pData->currentPage == 2) { // Misc
-        int ddW_restore = 161;
+        int ddW_restore = S(161);
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -21498,8 +25143,8 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
 
         pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
         pData->closeAllRobloxRect = { 0, y, clientRect.right, y + rowH + vGap };
-        int closeBtnW = 58;
-        int closeBtnH = 24;
+        int closeBtnW = S(58);
+        int closeBtnH = S(24);
         int closeGap = 0;
         pData->closeAllRobloxButtonRect = { clientRect.right - help_btn_size - 20 - closeGap - closeBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - help_btn_size - 20 - closeGap, y + (rowH - help_btn_size) / 2 + 4 + closeBtnH };
         pData->helpButtonRects.push_back({ clientRect.right - help_btn_size - 20, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
@@ -21537,6 +25182,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         int ssAlwaysW = 24;
         int btnGap = 4;
         pData->ssAlwaysShowButtonRect = { clientRect.right - 20 - help_btn_size - ssBtnW - btnGap - ssAlwaysW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20 - help_btn_size - ssBtnW - btnGap, y + (rowH - help_btn_size) / 2 + 4 + ssBtnH };
+        pData->ssAlwaysShowHintButtonRect = { pData->ssAlwaysShowButtonRect.left - btnGap - ssAlwaysW, pData->ssAlwaysShowButtonRect.top, pData->ssAlwaysShowButtonRect.left - btnGap, pData->ssAlwaysShowButtonRect.bottom };
         pData->screenSaverButtonRect = { clientRect.right - 20 - help_btn_size - ssBtnW, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20 - help_btn_size, y + (rowH - help_btn_size) / 2 + 4 + ssBtnH };
         pData->helpButtonRects.push_back({ clientRect.right - 20 - help_btn_size, y + (rowH - help_btn_size) / 2 + 4, clientRect.right - 20, y + (rowH - help_btn_size) / 2 + help_btn_size + 4 });
         y += rowH + vGap;
@@ -21545,7 +25191,7 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         pData->importSettingsRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, halfX, clientRect.bottom - startBtnH - disclaimerH + 1 };
         pData->exportSettingsRect = { halfX, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
     } else if (pData->currentPage == 3) { // Advanced
-        int ddW_userSafe = 110;
+        int ddW_userSafe = S(110);
         int ctrlW = ctrlEndX - ctrlStartX - help_btn_size;
         int compactW = help_btn_size;
         int inlineGap = 4;
@@ -21603,6 +25249,12 @@ bool MainUI_Paint_DrawContent(HDC hdc, const RECT& clientRect, MainUIData* pData
         }
 
 pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimerH - rowH, clientRect.right, clientRect.bottom - startBtnH - disclaimerH + 1 };
+if (!g_simpleMode.load()) {
+    const int simpleBarH = S(30);
+    pData->simpleModeToggleRect = { 0, pData->resetSettingsButtonRect.top - simpleBarH, clientRect.right, pData->resetSettingsButtonRect.top + 1 };
+} else {
+    pData->simpleModeToggleRect = { 0, 0, 0, 0 };
+}
 } else if (pData->currentPage == 4) { // Statistics
         for (int i = 0; i < 8; i++) {
             pData->rowRects.push_back({ 0, y, clientRect.right, y + rowH + vGap });
@@ -21814,6 +25466,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         g.FillRectangle(&underlineBrush, (REAL)navUnderlineRect.left, (REAL)navUnderlineRect.top, (REAL)(navUnderlineRect.right - navUnderlineRect.left), (REAL)(navUnderlineRect.bottom - navUnderlineRect.top));
         g.SetPixelOffsetMode(oldOffset);
         g.SetSmoothingMode(oldSmooth);
+    }
     }
     }
     }
@@ -22038,7 +25691,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
             }
 
-            const wchar_t* modeLabel = g_cpuLimitMode.load() ? L"Beta (CPU Limit %)" : L"Legacy (FPS Target)";
+            const wchar_t* modeLabel = g_cpuLimitMode.load() ? L"CPU Limit % (BES-style)" : L"FPS Target";
             MainUI_Paint_DrawDropdown(hdc, pData->fpsCapperModeDropdownRect, pData->hFontText, L"Capper Mode", modeLabel, pData->isHoveringFpsCapperModeDropdown, true, L"\uE950", true, useOffsetG ? &dg : nullptr, 1);
 
             if (g_cpuLimitMode.load()) {
@@ -22454,7 +26107,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         int ss_ddW = (pData->settingsSubKind == 1) ? 155 : ((pData->settingsSubKind == 3) ? 154 : 156);
 
         std::vector<RECT> ssRowRects;
-        int ssRowCount = (pData->settingsSubKind == 2) ? 3 : ((pData->settingsSubKind == 4) ? 6 : 1);
+        int ssRowCount = (pData->settingsSubKind == 2) ? 3 : ((pData->settingsSubKind == 4) ? 9 : 1);
 
         for (int r = 0; r < ssRowCount; ++r) {
             ssRowRects.push_back({ 0, ss_y, clientRect.right, ss_y + ss_rowH + ss_vGap });
@@ -22462,11 +26115,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
         ss_y = ss_content_y;
 
+        for (int r = 0; r < 9; ++r) { pData->settingsSubHelpRects[r] = { 0, 0, 0, 0 }; }
+
         if (pData->settingsSubKind == 4) {
             pData->settingsSubDropdownRect = { 0, 0, 0, 0 };
             pData->settingsSubIntervalRect = { 0, 0, 0, 0 };
             pData->settingsSubLimitRect = { 0, 0, 0, 0 };
-            for (int r = 0; r < 6; ++r) {
+            for (int r = 0; r < 9; ++r) {
                 pData->settingsSubToggleRects[r] = { 20, ss_y, ss_ctrlEndX - ss_help, ss_y + ss_rowH };
                 pData->settingsSubHelpRects[r] = { ss_ctrlEndX - ss_help, ss_y + (ss_rowH - ss_help) / 2 + 4, ss_ctrlEndX, ss_y + (ss_rowH - ss_help) / 2 + ss_help + 4 };
                 ss_y += ss_rowH + ss_vGap;
@@ -22572,15 +26227,25 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 }
                 MainUI_Paint_DrawDropdown(hdc, pData->settingsSubDropdownRect, pData->hFontText, L"Reconnect Interval", riDisp, pData->isHoveringSettingsSubDropdown, true, L"\uE8AF", true, &dg, 1);
             } else if (pData->settingsSubKind == 4) {
-                const wchar_t* uiLabels[6] = { L"Disable Splash-Screen", L"Disable Acrylic Blur", L"Disable UI Animations", L"Disable Tray Notifications", L"Keep Window On Top", L"Disable Rounded Corners" };
-                const wchar_t* uiIcons[6] = { L"\uE823", L"\uE727", L"\uE916", L"\uEA8F", L"\uE718", L"\uE72E" };
-                const bool uiValues[6] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load() };
-                for (int k = 0; k < 6; ++k) {
+                const wchar_t* uiLabels[9] = {
+                    L"Disable Splash-Screen",
+                    L"Disable Acrylic Blur",
+                    L"Disable UI Animations",
+                    L"Disable Tray Notifications",
+                    L"Keep Window On Top",
+                    L"Disable Rounded Corners",
+                    L"Hide \"Next action in\"",
+                    L"Hide \"Instances\"",
+                    L"Hide Simple Mode Switch"
+                };
+                const wchar_t* uiIcons[9] = { L"\uE823", L"\uE727", L"\uE916", L"\uEA8F", L"\uE718", L"\uE72E", L"\uE916", L"\uE737", L"\uE8AB" };
+                const bool uiValues[9] = { g_disableSplash.load(), g_disableAcrylic.load(), g_disableAnimations.load(), g_notificationsDisabled.load(), g_keepWindowOnTop.load(), g_disableWindowCorners.load(), g_uiHideNextActionText.load(), g_uiHideInstancesText.load(), g_uiHideSimpleModeSwitch.load() };
+                for (int k = 0; k < 9; ++k) {
                     MainUI_Paint_DrawToggle(hdc, pData->settingsSubToggleRects[k], pData->hFontText, uiLabels[k], uiValues[k], pData->isHoveringSettingsSubToggle[k], pData->settingsSubToggleAnims[k], false, uiIcons[k], true, &dg);
                 }
             }
 
-            for (int i = 0; i < 6; ++i) {
+            for (int i = 0; i < 9; ++i) {
                 if (pData->settingsSubHelpRects[i].left != 0) {
                     MainUI_Paint_DrawHelpButton(hdc, pData->settingsSubHelpRects[i], pData->hFontText, pData->hoveringSettingsSubHelp == i, false, &dg);
                 }
@@ -22610,13 +26275,18 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
     }
     if (renderMainPrimary) {
-    if (pData->currentPage == 0) { // General
-    int rowCount = (int)pData->rowRects.size();
+    if (g_simpleMode.load()) {
+        MainUI_Paint_SimpleMode(hdc, clientRect, pData);
+    }
+    else if (pData->currentPage == 0) { // General
+    int rowCount = g_simpleMode.load() ? 0 : (int)pData->rowRects.size();
     int rowLeft = 0;
     int rowRight = clientRect.right;
+    bool hasSimpleSwitch = !g_uiHideSimpleModeSwitch.load() && pData->simpleModeToggleRect.bottom > pData->simpleModeToggleRect.top;
     for (int i = 0; i < rowCount; i++) {
+    if (g_simpleMode.load() && (i == 2 || i == 5 || i == 6)) continue;
     RECT rr = pData->rowRects[i];
-    Color rowBgColor = (i % 2 == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
+    Color rowBgColor = (((i + (hasSimpleSwitch ? 1 : 0)) % 2) == 0) ? Color(30, 35, 35, 35) : Color(50, 50, 50, 50);
     SolidBrush rowBrush(rowBgColor);
     g.FillRectangle(&rowBrush, (REAL)rowLeft, (REAL)rr.top, (REAL)(rowRight - rowLeft), (REAL)(rr.bottom - rr.top));
     SolidBrush sepBrush(Color(180, 56, 56, 56));
@@ -22636,15 +26306,16 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         MainUI_Paint_DrawCompactButton(hdc, pData->testActionButtonRect, pData->hFontText, L"\uE768", pData->isHoveringTestAction, L"\uE768", false);
         MainUI_Paint_DrawDropdown(hdc, pData->intervalDropdownRect, pData->hFontText, L"Interval", buffer, pData->isHoveringInterval, true, L"\uE916", true, nullptr, 1, -1);
 
-    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random*", L"Macros Only" };
+    const wchar_t* actionNames[] = { L"Space (Jump)", L"W/S", L"Zoom (I/O)", L"Random", L"Macros Only", L"<- / ->" };
         int curAction = g_selectedAction.load();
-        if (curAction < 0 || curAction > 4) curAction = 0;
+        if (curAction < 0 || curAction > 5) curAction = 0;
         MainUI_Paint_DrawDropdown(hdc, pData->actionDropdownRect, pData->hFontText, L"Action", actionNames[curAction], pData->isHoveringAction, true, L"\uE7C9");
         MainUI_Paint_DrawCompactButton(hdc, pData->actionDelaysSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringActionDelaysSettingsCompact, L"\uE713", false);
 
-        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance bypass", g_multiSupport.load(), pData->isHoveringMultiInstanceToggle, pData->multiInstanceAnim, true, L"\uE81E");
+        if (!g_simpleMode.load()) {
+        MainUI_Paint_DrawToggle(hdc, pData->multiInstanceToggleRect, pData->hFontText, L"Multi-Instance Bypass", g_multiSupport.load(), pData->isHoveringMultiInstanceToggle, pData->multiInstanceAnim, true, L"\uE81E");
 
-        MainUI_Paint_DrawCompactButton(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedMultiInstanceLink, L"\uE713", false);
+        MainUI_Paint_DrawCompactButton(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedMultiInstanceLink, L"\uE713", false, 0, !g_simpleMode.load());
 
         if (pData->mutexStatusAnim > 0.01f) {
             bool mutexOk = IsMultiInstanceMutexValid();
@@ -22697,17 +26368,25 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
             DeleteObject(iconFontH);
         }
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, L"Macros", false, pData->isHoveringMacros, L"\uE7C9", false, &pData->macrosBtnRect, L"open", true, L"PREVIEW");
+        }
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[3], pData->hFontText, L"Macros", false, pData->isHoveringMacros, L"\uE7C9", false, &pData->macrosBtnRect, L"open", true);
         if (pData->macrosIntervalToggleCompactRect.left != 0) {
             MainUI_Paint_DrawCompactOptionButton(hdc, pData->macrosIntervalToggleCompactRect, pData->hFontText, L"\uE916", g_intervalMacroEnabled.load(), pData->isHoveringMacrosIntervalToggle && !g_isAfkStarted.load(), pData->macrosIntervalToggleAnim, true);
         }
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, L"Instance Manager", false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, L"open", !g_simpleMode.load(), L"PREVIEW");
-        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
-        MainUI_Paint_DrawToggle(hdc, pData->simpleModeToggleRect, pData->hFontText, L"Simple Mode", g_simpleMode.load(), pData->isHoveringSimpleModeToggle, pData->simpleModeAnim, true, L"\uE71B");
+        MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[4], pData->hFontText, L"Instance Manager", false, pData->isHoveringInstanceManager, L"\uE8A7", false, &pData->instanceManagerBtnRect, L"open", true);
+        if (!g_simpleMode.load()) {
+            MainUI_Paint_DrawListActionRow(hdc, pData->rowRects[5], pData->hFontText, L"Timings", false, pData->isHoveringTimingsToggle, L"\uE823", false, &pData->timingsBtnRect, L"open");
+            if (!g_uiHideSimpleModeSwitch.load() && pData->simpleModeToggleRect.bottom > pData->simpleModeToggleRect.top)
+            {
+                MainUI_Paint_DrawSimpleModeSwitchRow(g, hdc, pData->hFontText, pData->simpleModeToggleRect, pData->isHoveringSimpleModeToggle, false);
+            }
+        }
 
-        for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
-            bool isButtonElement = false;
-            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
+        if (!g_simpleMode.load()) {
+            for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
+                bool isButtonElement = false;
+                MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
+            }
         }
 
         if (g_updateFound.load() || g_updateCheckFailed.load()) {
@@ -22914,7 +26593,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         g.DrawString(L"\uE76C", -1, &discordArrowFont, discordArrowRect, &sfDiscordArrow, &discordArrowBrush);
         DeleteObject(discordArrowFontH);
 
-        if (pData->isHoveringAdvancedMultiInstanceLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontSmall, L"Configure multi-instance", false);
+        if (pData->isHoveringAdvancedMultiInstanceLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontSmall, g_simpleMode.load() ? L"Simple Mode is on • disable it to use this setting" : L"Configure multi-instance delay", false);
         if (pData->isHoveringMutexStatus && pData->mutexStatusAnim > 0.01f) {
             bool mutexOk = IsMultiInstanceMutexValid();
             bool hasError = !g_mutexBannerMessage.empty() && !g_mutexBannerIsSuccess;
@@ -22952,21 +26631,26 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         MainUI_Paint_DrawCompactButton(hdc, pData->reconnectManualCheckCompactRect, pData->hFontText, L"\uE72C", pData->isHoveringReconnectManualCheck, L"\uE72C", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->advancedReconnectLinkRect, pData->hFontText, L"\uE713", pData->isHoveringAdvancedReconnectLink, L"\uE713", false);
         bool simpleModeHidden = g_simpleMode.load();
-        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Reset in all (Esc+R+Enter)", g_autoReset.load(), pData->isHoveringAutoResetToggle, pData->autoResetAnim, true, L"\uE81C", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoResetToggleRect, pData->hFontText, L"Auto Reset (Esc+R+Enter)", g_autoReset.load(), pData->isHoveringAutoResetToggle, pData->autoResetAnim, true, L"\uE81C", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->resetAllCompactRect, pData->hFontText, L"\uE81C", pData->isHoveringResetAllCompact, L"\uE81C", false, 0, !simpleModeHidden);
 
         MainUI_Paint_DrawToggle(hdc, pData->autoHideToggleRect, pData->hFontText, L"Hide/Show Roblox", g_autoHideRoblox.load(), pData->isHoveringAutoHideToggle, pData->autoHideAnim, true, L"\uEE47", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->showRobloxCompactRect, pData->hFontText, L"\uF19D", pData->isHoveringShowRobloxCompact, L"\uF19D", g_autoHideRoblox.load() && g_isAfkStarted.load(), 0, !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->hideRobloxCompactRect, pData->hFontText, L"\uEE47", pData->isHoveringHideRobloxCompact, L"\uEE47", g_autoHideRoblox.load() && g_isAfkStarted.load(), 0, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoOpacityToggleRect, pData->hFontText, L"Enable Opacity (70%)", g_autoOpacity.load(), pData->isHoveringAutoOpacityToggle, pData->autoOpacityAnim, true, L"\uE727", !simpleModeHidden);
+        {
+            wchar_t opacityLabel[48];
+            swprintf_s(opacityLabel, L"Enable Opacity (%d%%)", g_globalOpacityPercent.load());
+            MainUI_Paint_DrawToggle(hdc, pData->autoOpacityToggleRect, pData->hFontText, opacityLabel, g_autoOpacity.load(), pData->isHoveringAutoOpacityToggle, pData->autoOpacityAnim, true, L"\uE727", !simpleModeHidden);
+        }
+        MainUI_Paint_DrawCompactButton(hdc, pData->opacityEditCompactRect, pData->hFontText, L"\uE70F", pData->isHoveringOpacityEditCompact, L"\uE70F", false, 0, !simpleModeHidden);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->opacityCompactRect, pData->hFontText, L"\uE727", IsUtilsWindowOpacityEnabled(), pData->isHoveringOpacityCompact, pData->utilsWindowOpacityAnim, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoGridToggleRect, pData->hFontText, L"Grid Roblox*", g_autoGrid.load(), pData->isHoveringAutoGridToggle, pData->autoGridAnim, true, L"\uE80A", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoGridToggleRect, pData->hFontText, L"Grid Roblox", g_autoGrid.load(), pData->isHoveringAutoGridToggle, pData->autoGridAnim, true, L"\uE80A", !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->gridSettingsCompactRect, pData->hFontText, L"\uE713", pData->isHoveringGridSettingsCompact, L"\uE713", false, 0, !simpleModeHidden);
         MainUI_Paint_DrawCompactButton(hdc, pData->gridRobloxCompactRect, pData->hFontText, L"\uE80A", pData->isHoveringGridRobloxCompact, L"\uE80A", false, 0, !simpleModeHidden);
 
-        MainUI_Paint_DrawToggle(hdc, pData->autoMuteToggleRect, pData->hFontText, L"Mute Roblox", g_autoMute.load(), pData->isHoveringAutoMuteToggle, pData->autoMuteAnim, true, L"\uE74F", !simpleModeHidden);
+        MainUI_Paint_DrawToggle(hdc, pData->autoMuteToggleRect, pData->hFontText, L"Auto-Mute Roblox", g_autoMute.load(), pData->isHoveringAutoMuteToggle, pData->autoMuteAnim, true, L"\uE74F", !simpleModeHidden);
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->muteRobloxSubCompactRect, pData->hFontText, L"\uE7ED", g_unmuteOnFocus.load(), pData->isHoveringMuteRobloxSubCompact, pData->unmuteOnFocusAnim, simpleModeHidden ? false : g_autoMute.load());
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->muteRobloxCompactRect, pData->hFontText, L"\uE74F", ShouldMuteRobloxNow(), pData->isHoveringMuteRobloxCompact, pData->utilsMuteAnim, !simpleModeHidden, 1);
 
@@ -23008,9 +26692,13 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         } else {
             drawToggleTooltip(pData->autoResetToggleRect, pData->isHoveringAutoResetToggle, L"Auto-reset character");
             drawToggleTooltip(pData->autoHideToggleRect, pData->isHoveringAutoHideToggle, L"Auto-hide Roblox");
-            drawToggleTooltip(pData->autoOpacityToggleRect, pData->isHoveringAutoOpacityToggle, L"Auto opacity (70%)");
+            {
+                wchar_t autoOpacityTooltip[48];
+                swprintf_s(autoOpacityTooltip, L"Auto opacity (%d%%)", g_globalOpacityPercent.load());
+                drawToggleTooltip(pData->autoOpacityToggleRect, pData->isHoveringAutoOpacityToggle, autoOpacityTooltip);
+            }
             drawToggleTooltip(pData->autoGridToggleRect, pData->isHoveringAutoGridToggle, L"Auto grid arrange");
-            drawToggleTooltip(pData->autoMuteToggleRect, pData->isHoveringAutoMuteToggle, L"Auto mute Roblox");
+            drawToggleTooltip(pData->autoMuteToggleRect, pData->isHoveringAutoMuteToggle, L"Auto-Mute during Anti-AFK");
         }
         drawToggleTooltip(pData->fpsCapperToggleRect, pData->isHoveringFpsCapperToggle, L"Auto FPS Capper (CPU Limiter)");
         drawToggleTooltip(pData->ramCleanerToggleRect, pData->isHoveringRamCleanerToggle, L"Auto-start RAM Cleaner when Anti-AFK starts");
@@ -23023,6 +26711,8 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         if (pData->isHoveringHideRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->hideRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
         smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Toggle opacity";
         if (pData->isHoveringOpacityCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->opacityCompactRect, pData->hFontSmall, smCompactMsg, false);
+        smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Change opacity %";
+        if (pData->isHoveringOpacityEditCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->opacityEditCompactRect, pData->hFontSmall, smCompactMsg, false);
         smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Grid snap windows";
         if (pData->isHoveringGridRobloxCompact) MainUI_Paint_DrawHoverTooltip(hdc, pData->gridRobloxCompactRect, pData->hFontSmall, smCompactMsg, false);
         smCompactMsg = g_simpleMode.load() ? simpleModeMsg : L"Grid settings";
@@ -23062,10 +26752,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         MainUI_Paint_DrawToggle(hdc, pData->updateCheckerToggleRect, pData->hFontText, L"Update/Announcement Checker", g_autoUpdate.load(), pData->isHoveringUpdateCheckerToggle, pData->autoUpdateAnim, true, L"\uE777");
         MainUI_Paint_DrawListActionRow(hdc, pData->closeAllRobloxRect, pData->hFontText, L"Close All Roblox", false, pData->isHoveringCloseAllRoblox, L"\uE711", false, &pData->closeAllRobloxButtonRect, L"close");
-        MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, L"Do not sleep", g_doNotSleep.load(), pData->isHoveringDoNotSleepToggle, pData->doNotSleepAnim, true, L"\uE708");
+        MainUI_Paint_DrawToggle(hdc, pData->doNotSleepToggleRect, pData->hFontText, L"Do Not Sleep", g_doNotSleep.load(), pData->isHoveringDoNotSleepToggle, pData->doNotSleepAnim, true, L"\uE708");
         bool smPage2 = g_simpleMode.load();
-        MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, L"I can forget (smart auto-start)", g_afkReminderEnabled.load(), pData->isHoveringICanForgetToggle, pData->iCanForgetAnim, true, L"\uE916", !smPage2);
-        MainUI_Paint_DrawToggle(hdc, pData->skipActiveToggleRect, pData->hFontText, L"Skip active", g_skipActiveEnabled.load(), pData->isHoveringSkipActiveToggle, pData->skipActiveAnim, true, L"\uE893", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->iCanForgetToggleRect, pData->hFontText, L"I Can Forget (smart auto-start)", g_afkReminderEnabled.load(), pData->isHoveringICanForgetToggle, pData->iCanForgetAnim, true, L"\uE916", !smPage2);
+        MainUI_Paint_DrawToggle(hdc, pData->skipActiveToggleRect, pData->hFontText, L"Skip Active", g_skipActiveEnabled.load(), pData->isHoveringSkipActiveToggle, pData->skipActiveAnim, true, L"\uE893", !smPage2);
 
         MainUI_Paint_DrawToggle(hdc, pData->bloxstrapIntegrationToggleRect, pData->hFontText, L"Fish/Void/Bloxstrap Integration", g_bloxstrapIntegration.load(), pData->isHoveringBloxstrapIntegrationToggle, pData->bloxstrapIntegrationAnim, true, L"\uE71B", !smPage2);
 
@@ -23074,14 +26764,18 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         const wchar_t* ssBtnText = g_screenSaverActive.load() ? L"stop" : L"start";
         MainUI_Paint_DrawListActionRow(hdc, pData->screenSaverRowRect, pData->hFontText, L"Screen Saver", false, pData->isHoveringScreenSaverButton, L"\uE708", false, &pData->screenSaverButtonRect, ssBtnText);
+        MainUI_Paint_DrawCompactButton(hdc, pData->ssAlwaysShowHintButtonRect, pData->hFontText, L"\uE946", pData->isHoveringSsAlwaysShowHint, L"", g_ssAlwaysShowHintAndClose.load(), 0, true);
         MainUI_Paint_DrawCompactButton(hdc, pData->ssAlwaysShowButtonRect, pData->hFontText, L"\uED55", pData->isHoveringSsAlwaysShow, L"", g_ssAlwaysShowExitUI.load(), 0, true);
 
-        for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
-            bool isButtonElement = false;
-            MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
+        if (!g_simpleMode.load()) {
+            for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
+                bool isButtonElement = false;
+                MainUI_Paint_DrawHelpButton(hdc, pData->helpButtonRects[i], pData->hFontText, pData->hoveringHelpButton == i, isButtonElement);
+            }
         }
 
         if (pData->isHoveringSsAlwaysShow) MainUI_Paint_DrawHoverTooltip(hdc, pData->ssAlwaysShowButtonRect, pData->hFontSmall, L"Always show bouncing text in screen saver", false);
+        if (pData->isHoveringSsAlwaysShowHint) MainUI_Paint_DrawHoverTooltip(hdc, pData->ssAlwaysShowHintButtonRect, pData->hFontSmall, L"Always show hint & close button in screen saver", false);
 
         if (g_simpleMode.load()) {
             const wchar_t* smPage2Msg = L"Simple Mode is on - disable it to use this setting";
@@ -23125,7 +26819,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
         bool smAdvanced = g_simpleMode.load();
         MainUI_Paint_DrawListActionRow(hdc, pData->uiSettingsRowRect, pData->hFontText, L"User Interface", false, pData->isHoveringUiSettings, L"\uE713", false, &pData->uiSettingsBtnRect, L"open", true);
-        MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar*", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
+        MainUI_Paint_DrawToggle(hdc, pData->statusBarToggleRect, pData->hFontText, L"Status Bar", g_statusBarEnabled.load(), pData->isHoveringStatusBarToggle, pData->statusBarAnim, true, L"\uE7F4");
         MainUI_Paint_DrawCompactOptionButton(hdc, pData->statusBarPrimaryMonitorCompactRect, pData->hFontText, L"\uE7F4", g_statusBarPrimaryMonitor.load(), pData->isHoveringStatusBarPrimaryMonitorCompact, pData->statusBarPrimaryMonitorCompactAnim, true, 1, 1);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarPositionBottomCompactRect, pData->hFontText, g_statusBarPositionBottom.load() ? L"\uE70D" : L"\uE70E", pData->isHoveringStatusBarPositionBottomCompact, L"", false);
         MainUI_Paint_DrawCompactButton(hdc, pData->statusBarContentCompactRect, pData->hFontText, L"\uE713", pData->isHoveringStatusBarContentCompact, L"\uE713", false);
@@ -23215,6 +26909,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 MainUI_Paint_DrawHoverTooltip(hdc, anchor, pData->hFontSmall, smAdvMsg);
             };
             drawAdvTt(pData->customProcessSearchToggleRect, pData->isHoveringCustomProcessSearchToggle, { pData->customProcessSearchToggleRect.right - 50, pData->customProcessSearchToggleRect.top + 4, pData->customProcessSearchToggleRect.right, pData->customProcessSearchToggleRect.top + 28 });
+        }
+
+        if (!g_simpleMode.load() && pData->simpleModeToggleRect.bottom > pData->simpleModeToggleRect.top) {
+            MainUI_Paint_DrawSimpleModeSwitchRow(g, hdc, pData->hFontText, pData->simpleModeToggleRect, pData->isHoveringSimpleModeToggle, true);
         }
 
         Color resetBgColor = pData->isHoveringReset ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
@@ -23525,22 +27223,17 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             MainUI_Paint_DrawCompactButton(hdc, pData->discordHeartbeatIntervalBtnRect, pData->hFontText, L"\uE916", pData->isHoveringDiscordHeartbeatIntervalBtn, L"\uE916", false, 0, webhookEnabled);
             MainUI_Paint_DrawToggle(hdc, pData->discordNotifyUtilsRamToggleRect, pData->hFontText, L"RAM Cleaner", g_discordNotifyUtilsRam.load(), pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamAnim, false, L"\uE964", webhookEnabled);
             RestoreDC(hdc, savedDC);
+            if (pData->webhookMaxScroll > 0) {
+                RECT sbRc = { clientRect.right - 3, webhookClipTop - 1, clientRect.right - 1, webhookClipBottom };
+                pData->webhookScrollbarRect = sbRc;
+                pData->webhookScrollPage = webhookClipBottom - webhookClipTop;
+                MainUI_Paint_VerticalScrollbar(g, sbRc, pData->webhookScrollOffset, pData->webhookMaxScroll, pData->webhookScrollPage);
+            }
         }
 
         SolidBrush infoBgBrush(Color(60, 45, 45, 45));
-        SolidBrush infoBorderBrush(Color(180, 56, 56, 56));
         int infoH = pData->discordPayloadInfoRect.bottom - pData->discordPayloadInfoRect.top;
         g.FillRectangle(&infoBgBrush, (REAL)pData->discordPayloadInfoRect.left, (REAL)pData->discordPayloadInfoRect.top, (REAL)(pData->discordPayloadInfoRect.right - pData->discordPayloadInfoRect.left), (REAL)infoH);
-        {
-            PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-            SmoothingMode oldSmooth = g.GetSmoothingMode();
-            g.SetPixelOffsetMode(PixelOffsetModeNone);
-            g.SetSmoothingMode(SmoothingModeNone);
-            g.FillRectangle(&infoBorderBrush, (REAL)pData->discordPayloadInfoRect.left, (REAL)pData->discordPayloadInfoRect.top, 1.0f, (REAL)infoH);
-            g.FillRectangle(&infoBorderBrush, (REAL)(pData->discordPayloadInfoRect.right - 1), (REAL)pData->discordPayloadInfoRect.top, 1.0f, (REAL)infoH);
-            g.SetPixelOffsetMode(oldOffset);
-            g.SetSmoothingMode(oldSmooth);
-        }
 
         HFONT discordInfoIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
         Font discordInfoIconFont(hdc, discordInfoIconFontH);
@@ -23563,6 +27256,16 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         std::wstring webhookUrl = GetDiscordWebhookUrlCopy();
         MainUI_Paint_DrawToggle(hdc, pData->discordWebhookEnableToggleRect, pData->hFontText, L"Enable webhook", webhookEnabled, pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableAnim, true, L"\uE8BD");
         MainUI_Paint_DrawTextInput(hdc, pData->discordWebhookInputRect, pData->hFontSmall, pData->hFontText, L"", webhookUrl, pData->isHoveringDiscordWebhookInput, pData->isDiscordWebhookInputFocused, &pData->discordWebhookCaretPos, &pData->discordWebhookViewOffset, L"Enter webhook URL...", webhookEnabled);
+        if (!pData->isDiscordWebhookInputFocused && !webhookUrl.empty() && !IsDiscordWebhookUrl(webhookUrl)) {
+            Font webhookErrFont(hdc, pData->hFontSmall);
+            SolidBrush webhookErrBrush(Color(255, 235, 90, 90));
+            RectF webhookErrRect((REAL)pData->discordWebhookInputRect.left + 4, (REAL)pData->discordWebhookInputRect.top, (REAL)(pData->discordWebhookInputRect.right - pData->discordWebhookInputRect.left - 12), (REAL)(pData->discordWebhookInputRect.bottom - pData->discordWebhookInputRect.top));
+            StringFormat webhookErrSf;
+            webhookErrSf.SetAlignment(StringAlignmentFar);
+            webhookErrSf.SetLineAlignment(StringAlignmentCenter);
+            webhookErrSf.SetFormatFlags(StringFormatFlagsNoWrap);
+            g.DrawString(L"Invalid URL", -1, &webhookErrFont, webhookErrRect, &webhookErrSf, &webhookErrBrush);
+        }
 
         MainUI_Paint_DrawTripleActionButtonsRow(
             hdc,
@@ -23614,7 +27317,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 pData->discordHeartbeatIntervalBtnRect
             };
             for (const RECT& disabledRect : disabledWebhookRects) {
-                if (PtInRect(&disabledRect, pData->hoverPoint)) {
+                bool inVisibleArea = pData->hoverPoint.y < pData->webhookFixedBottom ||
+                                     (pData->hoverPoint.y <= pData->webhookScrollAreaBottom && !PtInRect(&pData->startButtonRect, pData->hoverPoint));
+                if (inVisibleArea && PtInRect(&disabledRect, pData->hoverPoint)) {
                     MainUI_Paint_DrawHoverTooltip(hdc, disabledRect, pData->hFontSmall, L"Enable webhook first");
                     break;
                 }
@@ -23628,23 +27333,20 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         float aiAnimVal = pData->alphaInfoViewAnim;
         int aiW = clientRect.right;
         int aiH = clientRect.bottom;
-        const int startBtnH = 40;
+        const int startBtnH = (pData->startButtonRect.bottom > pData->startButtonRect.top) ? (pData->startButtonRect.bottom - pData->startButtonRect.top) : 40;
 
         HFONT hFontTitleH = CreateFontW(-MulDiv(14, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
         HFONT hFontSectionH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
         HFONT hFontBodyH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
         HFONT hFontLinkH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-        HFONT hFontBadgeH = CreateFontW(-MulDiv(7, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
         Font fontTitle(hdc, hFontTitleH);
         Font fontSection(hdc, hFontSectionH);
         Font fontBody(hdc, hFontBodyH);
         Font fontLink(hdc, hFontLinkH);
-        Font fontBadge(hdc, hFontBadgeH);
         DeleteObject(hFontTitleH);
         DeleteObject(hFontSectionH);
         DeleteObject(hFontBodyH);
         DeleteObject(hFontLinkH);
-        DeleteObject(hFontBadgeH);
 
         int footerH = 0;
         int footerTop = 0;
@@ -23652,7 +27354,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             Graphics tmpG(hdc);
             const wchar_t* ghText = L"GitHub";
             const wchar_t* dcText = L"Discord";
-            const wchar_t* chText = L"Changelog";
+            const wchar_t* chText = L"Releases";
             StringFormat sf;
             sf.SetFormatFlags(StringFormatFlagsNoClip);
             RectF ghB, dcB, chB;
@@ -23665,6 +27367,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
         int extraGap = 0;
+        const int alphaInfoPinnedH = 30;
 
         auto drawAlphaInfoContent = [&](Graphics& gTarget, bool measureOnly) {
             {
@@ -23684,7 +27387,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             StringFormat sfTypo;
             sfTypo.SetAlignment(StringAlignmentNear);
             sfTypo.SetLineAlignment(StringAlignmentNear);
-            sfTypo.SetTrimming(StringTrimmingWord);
+            sfTypo.SetTrimming(StringTrimmingNone);
             sfTypo.SetFormatFlags(StringFormatFlagsNoClip);
 
             StringFormat sfMeasure;
@@ -23694,18 +27397,25 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             {
                 Region oldClip;
                 gTarget.GetClip(&oldClip);
+                auto drawCubeSet = [&](float alphaScale) {
+                    Splash_DrawPentagon(&gTarget, -10.0f, 64.0f, 52.0f, 30.0f, Color((BYTE)(35.0f * aiAnimVal * alphaScale), 55, 92, 245), Color((BYTE)(12.0f * aiAnimVal * alphaScale), 66, 118, 255), 14.0f);
+                    Splash_DrawPentagon(&gTarget, (REAL)aiW + 5.0f, 56.0f, 68.0f, -15.0f, Color((BYTE)(35.0f * aiAnimVal * alphaScale), 238, 34, 28), Color((BYTE)(12.0f * aiAnimVal * alphaScale), 255, 76, 70), 18.0f);
+                    Splash_DrawPentagon(&gTarget, (REAL)aiW, (REAL)(aiH - startBtnH - 24), 52.0f, 45.0f, Color((BYTE)(30.0f * aiAnimVal * alphaScale), 52, 88, 240), Color((BYTE)(10.0f * aiAnimVal * alphaScale), 76, 126, 255), 12.0f);
+                    Splash_DrawPentagon(&gTarget, 18.0f, (REAL)(aiH - startBtnH - 24), 56.0f, -35.0f, Color((BYTE)(50.0f * aiAnimVal * alphaScale), 190, 36, 30), Color((BYTE)(18.0f * aiAnimVal * alphaScale), 255, 82, 78), 16.0f);
+                };
                 gTarget.SetClip(Rect(0, 31, aiW, footerTop - 31));
-                Splash_DrawPentagon(&gTarget, -10.0f, 64.0f, 52.0f, 30.0f, Color((BYTE)(35.0f * aiAnimVal), 55, 92, 245), Color((BYTE)(12.0f * aiAnimVal), 66, 118, 255), 14.0f);
-                Splash_DrawPentagon(&gTarget, (REAL)aiW + 5.0f, 56.0f, 68.0f, -15.0f, Color((BYTE)(35.0f * aiAnimVal), 238, 34, 28), Color((BYTE)(12.0f * aiAnimVal), 255, 76, 70), 18.0f);
-                Splash_DrawPentagon(&gTarget, (REAL)aiW, (REAL)(footerTop - 5), 46.0f, 45.0f, Color((BYTE)(30.0f * aiAnimVal), 52, 88, 240), Color((BYTE)(10.0f * aiAnimVal), 76, 126, 255), 12.0f);
-                Splash_DrawPentagon(&gTarget, 18.0f, (REAL)(footerTop - 5), 50.0f, -35.0f, Color((BYTE)(50.0f * aiAnimVal), 190, 36, 30), Color((BYTE)(18.0f * aiAnimVal), 255, 82, 78), 16.0f);
+                drawCubeSet(1.0f);
+                gTarget.SetClip(Rect(0, 0, aiW, 31));
+                drawCubeSet(0.35f);
+                gTarget.SetClip(Rect(0, footerTop, aiW, aiH - startBtnH - footerTop));
+                drawCubeSet(0.35f);
                 gTarget.SetClip(&oldClip);
             }
 
-            auto drawWrapped = [&](Font* font, const wchar_t* text, int x, int y, int w, Color color) -> int {
+            auto drawWrapped = [&](Font* font, const wchar_t* text, int x, int y, int w, Color color, float extraHeight = 6.0f) -> int {
                 RectF bounds;
                 gTarget.MeasureString(text, -1, font, SizeF((REAL)w, 9999.0f), &sfTypo, &bounds);
-                int drawnH = (int)(bounds.Height + 6.0f + 0.99f);
+                int drawnH = (int)(bounds.Height + extraHeight + 0.99f);
                 if (!measureOnly) {
                     SolidBrush brush(color);
                     RectF rectF((REAL)x, (REAL)y, (REAL)w, (REAL)drawnH);
@@ -23715,7 +27425,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             };
 
             auto drawBody = [&](const wchar_t* text, int y, int indent) -> int {
-                return drawWrapped(&fontBody, text, contentX + indent, y, contentW - indent * 2, Color(255, 200, 200, 200));
+                return drawWrapped(&fontBody, text, contentX + indent, y, contentW - indent * 2, Color(255, 200, 200, 200), 22.0f);
             };
 
             auto drawLink = [&](const wchar_t* text, int y, int indent, bool isHover, RECT& outRect, Color normalColor) -> int {
@@ -23741,31 +27451,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
             if (!measureOnly) {
                 SolidBrush whiteBrush(Color(255, 255, 255, 255));
-                RectF titleBounds;
-                gTarget.MeasureString(L"AntiAFK-RBX", -1, &fontTitle, PointF(0, 0), &sfMeasure, &titleBounds);
-                gTarget.DrawString(L"AntiAFK-RBX", -1, &fontTitle, PointF((REAL)contentX, (REAL)fixedY), &sfMeasure, &whiteBrush);
-
-                const wchar_t* badgeText = L"PREVIEW";
-                RectF badgeBounds;
-                gTarget.MeasureString(badgeText, -1, &fontBadge, PointF(0, 0), &sfMeasure, &badgeBounds);
-                REAL badgeH = 12.0f;
-                REAL badgeX = (REAL)contentX + titleBounds.Width + 3.0f;
-                REAL badgeY = (REAL)fixedY + (titleBounds.Height - badgeH) / 2.0f - 0.5f;
-
-                MainUI_Paint_DrawBadge(gTarget, badgeX, badgeY, badgeH, badgeText);
+                const wchar_t* pageTitle = L"Welcome to AntiAFK-RBX v4";
+                gTarget.DrawString(pageTitle, -1, &fontTitle, PointF((REAL)contentX, (REAL)fixedY), &sfMeasure, &whiteBrush);
             }
             fixedY += (int)(fontTitle.GetHeight(&gTarget) + 2.0f);
 
-            wchar_t verStr[64];
-            swprintf_s(verStr, L"%ls", g_Version);
+            wchar_t verStr[128];
+            swprintf_s(verStr, L"%ls - the full changelog from v.3.2.1 to v.4.0.0.", g_Version);
             fixedY += drawWrapped(&fontBody, verStr, contentX, fixedY, contentW, Color(255, 160, 160, 160)) + 8;
 
             int scrollAreaTop = fixedY + 4;
             if (!measureOnly) {
-                gTarget.SetClip(Rect(0, scrollAreaTop, aiW, footerTop - 6 - scrollAreaTop));
+                gTarget.SetClip(Rect(0, scrollAreaTop, aiW, footerTop - alphaInfoPinnedH - 6 - scrollAreaTop));
             }
 
-            int contentY = scrollAreaTop - pData->alphaInfoScrollOffset;
+            int contentY = scrollAreaTop - (measureOnly ? 0 : pData->alphaInfoScrollOffset);
 
             auto drawSection = [&](const wchar_t* header, const wchar_t* body, Color headerColor) {
                 int yStart = contentY;
@@ -23781,66 +27481,100 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     gTarget.SetPixelOffsetMode(oldOffset);
                     gTarget.SetSmoothingMode(oldSmooth);
                 }
-                contentY += 8 + extraGap;
+                contentY += 14 + extraGap;
             };
 
-            drawSection(L"About this build", L"Pre-release version with new features still being tested. Some functionality may be incomplete or unstable.", Color(255, 120, 190, 255));
+            const Color colorNew(255, 120, 190, 255);
+            const Color colorUi(255, 130, 200, 255);
+            const Color colorPerf(255, 120, 215, 160);
+            const Color colorFix(255, 255, 190, 90);
+            const Color colorData(255, 200, 170, 255);
 
-            {
-                int yStart = contentY;
-                contentY += drawWrapped(&fontSection, L"Known Issues", contentX, contentY, contentW, Color(255, 255, 190, 90)) + 3;
-                contentY += drawBody(L"Information about known issues and planned fixes can be found on the Releases page.", contentY, 10) + 13;
-                contentY += drawLink(L"View known issues on Releases →", contentY, 10, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 120, 185, 250));
-                if (!measureOnly) {
-                    PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
-                    SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
-                    gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
-                    gTarget.SetSmoothingMode(SmoothingModeNone);
-                    SolidBrush barBrush(Color(120, 255, 190, 90));
-                    gTarget.FillRectangle(&barBrush, (REAL)(contentX - 10), (REAL)yStart, 2.0f, (REAL)(contentY - yStart));
-                    gTarget.SetPixelOffsetMode(oldOffset);
-                    gTarget.SetSmoothingMode(oldSmooth);
-                }
-                contentY += 4 + extraGap;
-            }
 
-            drawSection(L"Reporting Issues", L"Found a bug? Report it on GitHub or Discord with details and steps to reproduce. (links below)", Color(255, 120, 190, 255));
+                drawSection(L"Welcome to v4.0.0",
+                    L"Rebuilt dark UI with default Simple Mode, Macros, Instance Manager, Grid V2, Discord Webhooks, Status Bar, RAM Cleaner, and Screen Saver.",
+                    colorNew);
 
-            drawSection(L"Stay Updated", L"Follow releases on GitHub to get the latest updates and fixes. Updates will also be displayed in the UI.", Color(255, 120, 190, 255));
+                drawSection(L"Simple Mode",
+                    L"Compact 2-column grid for core options, quick FPS/CPU (5%-50%) and RAM menus, Multi-Instance badge, and one-click Advanced switching.",
+                    colorUi);
 
-            {
-                int yStart = contentY;
-                const wchar_t* headerText = L"What’s New in v.4.0.0 →";
-                RectF headerBounds;
-                gTarget.MeasureString(headerText, -1, &fontSection, SizeF((REAL)contentW, 9999.0f), &sfTypo, &headerBounds);
-                int headerH = (int)(headerBounds.Height + 4.0f);
-                if (!measureOnly) {
-                    Color normalColor = Color(255, 120, 185, 250);
-                    Color hoverColor = Color(255, 170, 210, 255);
-                    Color c = pData->isHoveringAlphaInfoWhatsNewLink ? hoverColor : normalColor;
-                    SolidBrush brush(c);
-                    RectF r((REAL)contentX, (REAL)contentY, (REAL)contentW, (REAL)headerH);
-                    gTarget.DrawString(headerText, -1, &fontSection, r, &sfTypo, &brush);
-                    Pen underlinePen(c, 1.0f);
-                    gTarget.DrawLine(&underlinePen, (REAL)contentX, (REAL)(contentY + headerH - 2), (REAL)(contentX + headerBounds.Width), (REAL)(contentY + headerH - 2));
-                    pData->alphaInfoWhatsNewLinkRect = { contentX, contentY, contentX + (int)headerBounds.Width + 4, contentY + headerH };
-                }
-                contentY += headerH;
-                if (!measureOnly) {
-                    PixelOffsetMode oldOffset = gTarget.GetPixelOffsetMode();
-                    SmoothingMode oldSmooth = gTarget.GetSmoothingMode();
-                    gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
-                    gTarget.SetSmoothingMode(SmoothingModeNone);
-                    SolidBrush barBrush(Color(120, 130, 220, 140));
-                    gTarget.FillRectangle(&barBrush, (REAL)(contentX - 10), (REAL)yStart, 2.0f, (REAL)(contentY - yStart));
-                    gTarget.SetPixelOffsetMode(oldOffset);
-                    gTarget.SetSmoothingMode(oldSmooth);
-                }
-                contentY += 8 + extraGap;
-            }
+                drawSection(L"New main window",
+                    L"6-page navigation with smooth transitions, contextual help, and inline sub-views. Click v.4.0.0 • Stable in the footer anytime to reopen this window.",
+                    colorUi);
+
+                drawSection(L"Macros",
+                    L"Record keys, clicks, wheel steps, and mouse paths. Inline wizard, editor, trigger order, Test Run, interval/reconnect triggers, and JSON Import/Export.",
+                    colorNew);
+
+                drawSection(L"Instance Manager",
+                    L"Standalone window for per-client overrides (Anti-AFK, Mute, Opacity %, Hide, FPS Cap, Reconnect, Reset, Macros) and reusable window presets.",
+                    colorNew);
+
+                drawSection(L"Grid Snap",
+                    L"6 layout modes, multi-monitor work areas, spacing/margins, 4:3 lock, DWM frame compensation, and custom global hotkey.",
+                    colorUi);
+
+                drawSection(L"Auto-Reconnect",
+                    L"Background reconnect monitor with configurable interval, focus-free checking, and per-instance reconnect macros.",
+                    colorNew);
+
+                drawSection(L"Performance",
+                    L"FPS Capper (FPS Target + BES-style CPU Limit %), per-instance FPS overrides, and RAM Cleaner (Time / Smart / Hybrid, default 300s / 750 MB).",
+                    colorPerf);
+
+                drawSection(L"Automation",
+                    L"<- / -> (default), Random (Space, W/S, Zoom, Arrows), User-Safe instant action after inactivity wait, Skip Active, and I Can Forget v2.",
+                    colorNew);
+
+                drawSection(L"Window management",
+                    L"Flash-free Hide/Show Roblox (skips tray-closed clients), configurable Opacity % (5-100%), Auto-Mute, Smart Alt+Tab, Do Not Sleep, and Screen Saver.",
+                    colorUi);
+
+                drawSection(L"Status Bar",
+                    L"Follow Cursor or Primary Monitor, Top/Bottom placement, content/event filters, multi-monitor DPI scaling, and basic defaults in Simple Mode.",
+                    colorUi);
+
+                drawSection(L"Discord webhooks",
+                    L"Session, Action, Reconnect, Reset, Macro, Interval Macro, RAM Cleaner, Heartbeat (5-1440 min), embeds, mentions, and async test.",
+                    colorData);
+
+                drawSection(L"Customization",
+                    L"UI Settings (splash, acrylic, animations, notifications, top-most, No Round Borders, hide General rows), Legacy UI, and tray icons.",
+                    colorUi);
+
+                drawSection(L"Data and tools",
+                    L"CLI flags (--help, --self-test), full JSON settings export/import, crash-safe macros.json, and Custom Process Search.",
+                    colorData);
+
+                drawSection(L"Fixes and hardening",
+                    L"Tray recovery, second-launch focus, Escape navigation, UIPI admin warning, guaranteed key release, safer focus activation, and clean popup borders.",
+                    colorFix);
+
+                drawSection(L"Known notes",
+                    L"CPU Limiter may use extra CPU depending on target %. Custom Process Search does not guarantee full feature support on non-Roblox apps.",
+                    colorFix);
+
+                drawSection(L"Thank you",
+                    L"Thanks for using AntiAFK-RBX. The project stays free and open source. Use Support in the bottom bar to help development.",
+                    colorNew);
 
             if (!measureOnly) {
                 gTarget.ResetClip();
+                int pinTop = footerTop - alphaInfoPinnedH;
+                Color pinBgColor = pData->isHoveringAlphaInfoReleasesLink ? Color(165, 42, 42, 42) : Color(140, 28, 28, 28);
+                SolidBrush pinBg(pinBgColor);
+                gTarget.FillRectangle(&pinBg, 0.0f, (REAL)pinTop, (REAL)aiW, (REAL)alphaInfoPinnedH);
+                PixelOffsetMode pinOldOffset = gTarget.GetPixelOffsetMode();
+                SmoothingMode pinOldSmooth = gTarget.GetSmoothingMode();
+                gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                gTarget.SetSmoothingMode(SmoothingModeNone);
+                SolidBrush pinBorder(Color(180, 56, 56, 56));
+                gTarget.FillRectangle(&pinBorder, 0.0f, (REAL)pinTop, (REAL)aiW, 1.0f);
+                gTarget.SetPixelOffsetMode(pinOldOffset);
+                gTarget.SetSmoothingMode(pinOldSmooth);
+                drawLink(L"Open full release notes on GitHub ->", pinTop + 6, 0, pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect, Color(255, 150, 205, 255));
+                pData->alphaInfoReleasesLinkRect = { 0, pinTop, aiW, footerTop };
             }
 
             pData->alphaInfoContentHeight = contentY - scrollAreaTop + 8;
@@ -23861,25 +27595,28 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
             const wchar_t* ghText = L"GitHub";
             const wchar_t* dcText = L"Discord";
-            const wchar_t* chText = L"Changelog";
+            const wchar_t* chText = L"Releases";
+            const wchar_t* spText = L"Support";
             int linkGap = 12;
 
             StringFormat sfCenter;
             sfCenter.SetAlignment(StringAlignmentCenter);
             sfCenter.SetLineAlignment(StringAlignmentCenter);
 
-            RectF ghBounds, dcBounds, chBounds;
+            RectF ghBounds, dcBounds, chBounds, spBounds;
             gTarget.MeasureString(ghText, -1, &fontLink, SizeF(9999.0f, 20.0f), &sfCenter, &ghBounds);
             gTarget.MeasureString(dcText, -1, &fontLink, SizeF(9999.0f, 20.0f), &sfCenter, &dcBounds);
             gTarget.MeasureString(chText, -1, &fontLink, SizeF(9999.0f, 20.0f), &sfCenter, &chBounds);
+            gTarget.MeasureString(spText, -1, &fontLink, SizeF(9999.0f, 20.0f), &sfCenter, &spBounds);
 
-            int linkH = (int)(max(max(ghBounds.Height, dcBounds.Height), chBounds.Height) + 0.5f) + 2;
+            int linkH = (int)(max(max(max(ghBounds.Height, dcBounds.Height), chBounds.Height), spBounds.Height) + 0.5f) + 2;
             int linkY = footerTop + (footerH - linkH) / 2;
 
             int ghW = (int)(ghBounds.Width + 0.5f) + 4;
             int dcW = (int)(dcBounds.Width + 0.5f) + 4;
             int chW = (int)(chBounds.Width + 0.5f) + 4;
-            int totalW = ghW + linkGap + dcW + linkGap + chW;
+            int spW = (int)(spBounds.Width + 0.5f) + 4;
+            int totalW = ghW + linkGap + dcW + linkGap + chW + linkGap + spW;
             int startX = (aiW - totalW) / 2;
 
             if (!measureOnly) {
@@ -23898,21 +27635,24 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 Color ghColor = pData->isHoveringAlphaInfoGitHubLink ? Color(255, 255, 255, 255) : Color(255, 160, 160, 160);
                 Color dcColor = pData->isHoveringAlphaInfoDiscordLink ? Color(255, 255, 255, 255) : Color(255, 160, 160, 160);
                 Color chColor = pData->isHoveringAlphaInfoLink ? Color(255, 170, 210, 255) : Color(255, 120, 185, 250);
+                Color spColor = pData->isHoveringAlphaInfoSupportLink ? Color(255, 255, 190, 200) : Color(255, 226, 120, 140);
 
                 drawFooterLink(ghText, startX, ghW, ghColor, Color(255, 255, 255, 255), pData->isHoveringAlphaInfoGitHubLink, pData->alphaInfoGitHubLinkRect);
                 drawFooterLink(dcText, startX + ghW + linkGap, dcW, dcColor, Color(255, 255, 255, 255), pData->isHoveringAlphaInfoDiscordLink, pData->alphaInfoDiscordLinkRect);
                 drawFooterLink(chText, startX + ghW + linkGap + dcW + linkGap, chW, chColor, Color(255, 200, 230, 255), pData->isHoveringAlphaInfoLink, pData->alphaInfoLinkRect);
+                drawFooterLink(spText, startX + ghW + linkGap + dcW + linkGap + chW + linkGap, spW, spColor, Color(255, 255, 190, 200), pData->isHoveringAlphaInfoSupportLink, pData->alphaInfoSupportLinkRect);
             } else {
                 pData->alphaInfoGitHubLinkRect = { startX, linkY, startX + ghW, linkY + linkH };
                 pData->alphaInfoDiscordLinkRect = { startX + ghW + linkGap, linkY, startX + ghW + linkGap + dcW, linkY + linkH };
-                pData->alphaInfoLinkRect = { startX + ghW + linkGap + dcW + linkGap, linkY, startX + totalW, linkY + linkH };
+                pData->alphaInfoLinkRect = { startX + ghW + linkGap + dcW + linkGap, linkY, startX + ghW + linkGap + dcW + linkGap + chW, linkY + linkH };
+                pData->alphaInfoSupportLinkRect = { startX + ghW + linkGap + dcW + linkGap + chW + linkGap, linkY, startX + totalW, linkY + linkH };
             }
         };
 
         {
             Graphics baseMeasureG(hdc);
             drawAlphaInfoContent(baseMeasureG, true);
-            int availableHeight = footerTop - 6 - pData->alphaInfoScrollAreaTop;
+            int availableHeight = footerTop - alphaInfoPinnedH - 6 - pData->alphaInfoScrollAreaTop;
             int baseContentHeight = pData->alphaInfoContentHeight;
             if (baseContentHeight < availableHeight) {
                 extraGap = (availableHeight - baseContentHeight) / 5;
@@ -23922,8 +27662,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         {
             Graphics measureG(hdc);
             drawAlphaInfoContent(measureG, true);
-            int maxScroll = pData->alphaInfoContentHeight - (footerTop - 6 - pData->alphaInfoScrollAreaTop);
+            int maxScroll = pData->alphaInfoContentHeight - (footerTop - alphaInfoPinnedH - 6 - pData->alphaInfoScrollAreaTop);
             if (maxScroll < 0) maxScroll = 0;
+            pData->alphaInfoMaxScroll = maxScroll;
             if (pData->alphaInfoScrollOffset > maxScroll) pData->alphaInfoScrollOffset = maxScroll;
             if (pData->alphaInfoScrollOffset < 0) pData->alphaInfoScrollOffset = 0;
         }
@@ -23950,6 +27691,14 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         } else {
             drawAlphaInfoContent(g, false);
             drawAlphaInfoFooter(g, false);
+            if (pData->alphaInfoMaxScroll > 0) {
+                int sbTop = 31;
+                int sbBottom = footerTop - alphaInfoPinnedH - 1;
+                RECT sbRc = { aiW - 3, sbTop, aiW - 1, sbBottom };
+                pData->alphaInfoScrollbarRect = sbRc;
+                pData->alphaInfoScrollPage = sbBottom - sbTop;
+                MainUI_Paint_VerticalScrollbar(g, sbRc, pData->alphaInfoScrollOffset, pData->alphaInfoMaxScroll, pData->alphaInfoScrollPage);
+            }
         }
     }
     if (renderTimingsPrimary) {
@@ -23979,7 +27728,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
             int64_t sinceActionSec = (lastActionMs > 0) ? (int64_t)((now - lastActionMs) / 1000) : -1;
             int64_t sessionSec = (afkStarted && startTimeMs > 0) ? (int64_t)((now - startTimeMs) / 1000) : 0;
-            int64_t sinceActionTotal = afkStarted ? sinceActionSec : 0;
+            int64_t sinceActionTotal = afkStarted ? ((sinceActionSec >= 0) ? sinceActionSec : sessionSec) : 0;
             int64_t nextActionSec = afkStarted ? (int64_t)g_selectedTime.load() - sinceActionTotal : 0;
             if (nextActionSec < 0) nextActionSec = 0;
 
@@ -24192,7 +27941,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             drawTimingsContent(g);
         }
     }
-    if (wasShowingGrid && gridAnim < 1.0f) {
+    if (!renderGridPrimary && wasShowingGrid && gridAnim < 1.0f) {
             const int startBtnH = 40;
             const int grid_margin = 20;
             const int grid_rowH = 32;
@@ -24362,15 +28111,25 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             }
     }
 
-        float overlayAlphaInner = (std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim);
+        float overlayAlphaInner = (std::max)((std::max)((std::max)((std::max)((std::max)((std::max)((std::max)(gridAnim, actionDelaysAnim), fpsCapperSettingsAnim), alphaInfoAnim), timingsAnim), macrosAnim), statusBarSettingsAnim), settingsSubAnim);
 
+        pData->disclaimerVersionRect = { 0, 0, 0, 0 };
         if (alphaInfoAnim > 0.001f && pData->alphaInfoViewDirection != -1) {
-            pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
+            pData->disclaimerSupportRect = { 0, 0, 0, 0 };
             pData->disclaimerWikiRect = { 0, 0, 0, 0 };
             return needsRedraw;
         }
 
         auto getDisclaimerText = [&](int ctx) -> const wchar_t* {
+            if (g_isAfkStarted.load()) {
+                static wchar_t liveStatus[160];
+                int phase = g_mainUiActivityPhase.load();
+                if (phase == 2) wcscpy_s(liveStatus, L"[User-Safe] Waiting...");
+                else if (phase == 3) wcscpy_s(liveStatus, L"[Action] Working...");
+                else if (phase == 4) wcscpy_s(liveStatus, L"[Focus] Retrying...");
+                else wcscpy_s(liveStatus, L"[Anti-AFK] Active - waiting");
+                return liveStatus;
+            }
             if (ctx >= 100) {
                 if (ctx == 101) return L"Arrange Roblox windows";
             if (ctx == 107) {
@@ -24386,9 +28145,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 return L"Customize action delays";
             }
             switch (ctx) {
-                case 2: case 4: return L"Statistics are saved only when the app is closed correctly.";
-                case 1: return L"Hover over toggle/button for info";
-                case 5: return L"Webhook URL is stored locally in your Windows user profile.";
+                case 2: return L"Backup, updates, utilities.";
+                case 4: return L"Stats auto-save every 60s.";
+                case 1: return L"Hover for details.";
+                case 5: return L"Webhook URL stored locally.";
                 default: {
                     int relType = (currentVersion / 100) % 10;
                     if (relType != STABLE && relType != 0) {
@@ -24396,7 +28156,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         swprintf_s(buildInfo, L"Pre-release build • %s", g_Version);
                         return buildInfo;
                     }
-                    return L"Closing this window minimizes it to the system tray.";
+                    static wchar_t versionInfo[64];
+                    swprintf_s(versionInfo, L"%s  \u2022  Stable", g_Version);
+                    return versionInfo;
                 }
             }
         };
@@ -24434,8 +28196,6 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         int discIconPadding = 4;
         Font discFont(hdc, pData->hFontSmall);
 
-        int relType = (currentVersion / 100) % 10;
-        bool isPreRelease = (relType != STABLE && relType != 0);
         float homeAlpha = 0.0f;
         if (overlayAlphaInner > 0.0f) {
             if (pData->currentPage == 0) {
@@ -24451,40 +28211,62 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         if (homeAlpha < 0.0f) homeAlpha = 0.0f;
         if (homeAlpha > 1.0f) homeAlpha = 1.0f;
 
-        bool showMoreVisible = isPreRelease && homeAlpha > 0.001f;
-        bool wikiVisible = homeAlpha > 0.001f;
-        int showMoreReservedW = 0;
+        const int supportIconW = 14;
+        const int supportIconGap = 5;
+        const wchar_t* supportText = L"Support";
+        bool supportVisible = pData->currentPage == 0 && homeAlpha > 0.001f && !g_isAfkStarted.load();
+        bool wikiVisible = pData->currentPage == 0 && homeAlpha > 0.001f && !g_isAfkStarted.load();
+        float guideAlpha = 0.0f;
+        if (pData->currentPage == 1 && overlayAlphaInner < 0.001f) {
+            guideAlpha = pData->disclaimerTextAnim;
+        }
+        bool guideVisible = guideAlpha > 0.001f;
+        int supportReservedW = 0;
         {
-            const wchar_t* showMoreText = L"preview info";
             RectF smBounds;
-            g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
-            showMoreReservedW = (int)smBounds.Width + 22;
+            g.MeasureString(supportText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
+            supportReservedW = supportIconW + supportIconGap + (int)smBounds.Width + 22;
+            if (!supportVisible) supportReservedW = 0;
         }
         int wikiReservedW = 0;
         {
-            const wchar_t* wikiText = L"wiki";
+            const wchar_t* wikiText = L"Wiki";
             RectF wikiBounds;
             g.MeasureString(wikiText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &wikiBounds);
             wikiReservedW = (int)wikiBounds.Width + 44;
+            if (!wikiVisible) wikiReservedW = 0;
+        }
+        int guideReservedW = 0;
+        {
+            const wchar_t* guideText = L"Guide";
+            RectF guideBounds;
+            g.MeasureString(guideText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &guideBounds);
+            guideReservedW = (int)guideBounds.Width + 44;
         }
 
         auto drawDisclaimerIconAndText = [&](const wchar_t* text, float alpha, bool homeCenter) {
             BYTE discAlpha = (BYTE)(255 * alpha);
             HFONT discIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
             Font discIconFont(hdc, discIconFontH);
-            SolidBrush discIconBrush(Color(discAlpha, 150, 150, 150));
+            const bool isClickableVersion = (!g_isAfkStarted.load() && overlayAlphaInner <= 0.001f && alpha > 0.5f && (pData->currentPage == 0 || pData->currentPage == 3));
+            const BYTE vC = (BYTE)((isClickableVersion && pData->isHoveringDisclaimerVersion) ? 205 : 150);
+            const BYTE tC = (BYTE)((isClickableVersion && pData->isHoveringDisclaimerVersion) ? 200 : 140);
+            SolidBrush discIconBrush(Color(discAlpha, vC, vC, vC));
 
             RectF discTextBounds;
             g.MeasureString(text, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &discTextBounds);
             int textWidth = (int)discTextBounds.Width;
 
             int discContentWidth = discIconSize + discIconGap + textWidth;
-            int availableLeft = pData->disclaimerRect.left + (homeCenter ? wikiReservedW : 0);
-            int availableRight = pData->disclaimerRect.right - (homeCenter && isPreRelease ? showMoreReservedW : 0);
+            int availableLeft = pData->disclaimerRect.left + (homeCenter ? wikiReservedW : 0) + (guideVisible ? guideReservedW : 0);
+            int availableRight = pData->disclaimerRect.right - (homeCenter ? supportReservedW : 0);
             int centerX = (availableLeft + availableRight) / 2;
             int discStartX = centerX - discContentWidth / 2;
-            if (discStartX < availableLeft + 6) discStartX = availableLeft + 6;
-            if (discStartX + discContentWidth > availableRight - 6) discStartX = availableRight - 6 - discContentWidth;
+            if (discStartX < availableLeft + 10) discStartX = availableLeft + 10;
+            if (discStartX + discContentWidth > availableRight - 10) discStartX = availableRight - 10 - discContentWidth;
+            if (isClickableVersion) {
+                pData->disclaimerVersionRect = { discStartX - 6, pData->disclaimerRect.top, discStartX + discContentWidth + 6, pData->disclaimerRect.bottom };
+            }
             int discIconX = discStartX - discIconPadding;
             int discIconY = pData->disclaimerRect.top + (pData->disclaimerRect.bottom - pData->disclaimerRect.top - discIconSize) / 2 - discIconPadding + 1;
             RectF discIconRectF((REAL)discIconX, (REAL)discIconY, (REAL)(discIconSize + discIconPadding * 2), (REAL)(discIconSize + discIconPadding * 2));
@@ -24494,10 +28276,10 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             g.DrawString(L"\uE946", -1, &discIconFont, discIconRectF, &sfDiscIcon, &discIconBrush);
             DeleteObject(discIconFontH);
 
-            SolidBrush disclaimerBrush(Color(discAlpha, 140, 140, 140));
+            SolidBrush disclaimerBrush(Color(discAlpha, tC, tC, tC));
             int discTextX = discStartX + discIconSize + discIconGap;
             int discTextWidth = availableRight - discTextX;
-            if (discTextWidth < textWidth + 10) discTextWidth = textWidth + 10;
+            if (discTextWidth < 10) discTextWidth = 10;
             RectF disclaimerRectF((REAL)discTextX, (REAL)pData->disclaimerRect.top, (REAL)discTextWidth, (REAL)(pData->disclaimerRect.bottom - pData->disclaimerRect.top));
             StringFormat sfDisclaimer;
             sfDisclaimer.SetAlignment(StringAlignmentNear);
@@ -24531,8 +28313,58 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
 
     {
+        if (guideVisible) {
+            const wchar_t* guideText = L"Guide";
+            int gW = guideReservedW;
+            int gH = discH;
+            int gX = pData->disclaimerRect.left;
+            int gY = pData->disclaimerRect.top;
+            pData->disclaimerGuideRect = (guideAlpha > 0.5f) ? RECT{ gX, gY, gX + gW, gY + gH } : RECT{ 0, 0, 0, 0 };
+            PixelOffsetMode guideOldOffset = g.GetPixelOffsetMode();
+            SmoothingMode guideOldSmooth = g.GetSmoothingMode();
+            g.SetPixelOffsetMode(PixelOffsetModeNone);
+            g.SetSmoothingMode(SmoothingModeNone);
+            BYTE gBgAlpha = (BYTE)((pData->isHoveringDisclaimerGuide ? 80 : 40) * guideAlpha);
+            Color gBg = pData->isHoveringDisclaimerGuide ? Color(gBgAlpha, 60, 60, 60) : Color(gBgAlpha, 50, 50, 50);
+            SolidBrush gBgBrush(gBg);
+            g.FillRectangle(&gBgBrush, (REAL)gX, (REAL)gY, (REAL)gW, (REAL)gH);
+            BYTE gSepAlpha = (BYTE)(180 * guideAlpha);
+            SolidBrush gSepBrush(Color(gSepAlpha, 56, 56, 56));
+            g.FillRectangle(&gSepBrush, (REAL)(gX + gW - 1), (REAL)gY, 1.0f, (REAL)gH);
+            g.SetPixelOffsetMode(guideOldOffset);
+            g.SetSmoothingMode(guideOldSmooth);
+
+            HFONT guideIconFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font guideIconFont(hdc, guideIconFontH);
+            BYTE gTextA = (BYTE)(255 * guideAlpha);
+            int gTextC = pData->isHoveringDisclaimerGuide ? 200 : 150;
+            SolidBrush gTextBrush(Color(gTextA, (BYTE)gTextC, (BYTE)gTextC, (BYTE)gTextC));
+
+            RectF guideTextBounds;
+            g.MeasureString(guideText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &guideTextBounds);
+            int gTextW = (int)ceil(guideTextBounds.Width);
+            int gTotalW = discIconSize + discIconGap + gTextW;
+            int gContentX = gX + (gW - gTotalW) / 2;
+            int gIconX = gContentX - discIconPadding;
+            int gIconY = gY + (gH - discIconSize) / 2 - discIconPadding + 1;
+            RectF gIconRect((REAL)gIconX, (REAL)gIconY, (REAL)(discIconSize + discIconPadding * 2), (REAL)(discIconSize + discIconPadding * 2));
+            StringFormat sfGuideIcon;
+            sfGuideIcon.SetAlignment(StringAlignmentCenter);
+            sfGuideIcon.SetLineAlignment(StringAlignmentCenter);
+            g.DrawString(L"\uE946", -1, &guideIconFont, gIconRect, &sfGuideIcon, &gTextBrush);
+            DeleteObject(guideIconFontH);
+
+            StringFormat sfGuideText;
+            sfGuideText.SetAlignment(StringAlignmentNear);
+            sfGuideText.SetLineAlignment(StringAlignmentCenter);
+            RectF gTextRect((REAL)(gContentX + discIconSize + discIconGap), (REAL)gY, (REAL)(gTextW + 10), (REAL)gH);
+            g.DrawString(guideText, -1, &discFont, gTextRect, &sfGuideText, &gTextBrush);
+        } else {
+            pData->disclaimerGuideRect = { 0, 0, 0, 0 };
+        }
+
         if (wikiVisible) {
-            const wchar_t* wikiText = L"wiki";
+            const wchar_t* wikiText = L"Wiki";
             int wW = wikiReservedW;
             int wH = discH;
             int wX = pData->disclaimerRect.left;
@@ -24556,7 +28388,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             Font wikiIconFont(hdc, wikiIconFontH);
             BYTE wTextA = (BYTE)(255 * homeAlpha);
             int wTextC = pData->isHoveringDisclaimerWiki ? 200 : 150;
-            SolidBrush wTextBrush(Color(wTextA, wTextC, wTextC, wTextC));
+            SolidBrush wTextBrush(Color(wTextA, (BYTE)wTextC, (BYTE)wTextC, (BYTE)wTextC));
 
             int iconSize = discIconSize;
             int iconGap = discIconGap;
@@ -24586,21 +28418,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             pData->disclaimerWikiRect = { 0, 0, 0, 0 };
         }
 
-        if (showMoreVisible) {
-            const wchar_t* showMoreText = L"preview info";
+        if (supportVisible) {
             RectF smBounds;
-            g.MeasureString(showMoreText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
-            int smW = (int)smBounds.Width + 22;
+            g.MeasureString(supportText, -1, &discFont, PointF(0, 0), StringFormat::GenericTypographic(), &smBounds);
+            int smTextW = (int)ceil(smBounds.Width);
+            int smW = supportReservedW;
             int smH = discH;
             int smX = pData->disclaimerRect.right - smW;
             int smY = pData->disclaimerRect.top;
-            pData->disclaimerShowMoreRect = (homeAlpha > 0.5f) ? RECT{ smX, smY, smX + smW, smY + smH } : RECT{ 0, 0, 0, 0 };
+            pData->disclaimerSupportRect = (homeAlpha > 0.5f) ? RECT{ smX, smY, smX + smW, smY + smH } : RECT{ 0, 0, 0, 0 };
             PixelOffsetMode smOldOffset = g.GetPixelOffsetMode();
             SmoothingMode smOldSmooth = g.GetSmoothingMode();
             g.SetPixelOffsetMode(PixelOffsetModeNone);
             g.SetSmoothingMode(SmoothingModeNone);
-            BYTE smBgAlpha = (BYTE)((pData->isHoveringDisclaimerShowMore ? 80 : 40) * homeAlpha);
-            Color smBg = pData->isHoveringDisclaimerShowMore ? Color(smBgAlpha, 60, 60, 60) : Color(smBgAlpha, 50, 50, 50);
+            BYTE smBgAlpha = (BYTE)((pData->isHoveringDisclaimerSupport ? 80 : 40) * homeAlpha);
+            Color smBg = pData->isHoveringDisclaimerSupport ? Color(smBgAlpha, 60, 60, 60) : Color(smBgAlpha, 50, 50, 50);
             SolidBrush smBgBrush(smBg);
             g.FillRectangle(&smBgBrush, (REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
             BYTE smSepAlpha = (BYTE)(180 * homeAlpha);
@@ -24608,16 +28440,33 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
             g.FillRectangle(&smSepBrush, (REAL)smX, (REAL)smY, 1.0f, (REAL)smH);
             g.SetPixelOffsetMode(smOldOffset);
             g.SetSmoothingMode(smOldSmooth);
+
             BYTE smTextA = (BYTE)(255 * homeAlpha);
-            int smTextC = pData->isHoveringDisclaimerShowMore ? 200 : 150;
-            SolidBrush smTextBrush(Color(smTextA, smTextC, smTextC, smTextC));
-            StringFormat sfSm;
-            sfSm.SetAlignment(StringAlignmentCenter);
-            sfSm.SetLineAlignment(StringAlignmentCenter);
-            RectF smTextRect((REAL)smX, (REAL)smY, (REAL)smW, (REAL)smH);
-            g.DrawString(showMoreText, -1, &discFont, smTextRect, &sfSm, &smTextBrush);
+            int smTextC = pData->isHoveringDisclaimerSupport ? 205 : 155;
+            SolidBrush smTextBrush(Color(smTextA, (BYTE)smTextC, (BYTE)smTextC, (BYTE)smTextC));
+
+            int contentW = supportIconW + supportIconGap + smTextW;
+            int contentX = smX + (smW - contentW) / 2;
+            int iconY = smY + (smH - supportIconW) / 2;
+
+            StringFormat sfCenter;
+            sfCenter.SetAlignment(StringAlignmentCenter);
+            sfCenter.SetLineAlignment(StringAlignmentCenter);
+            sfCenter.SetFormatFlags(StringFormatFlagsNoClip);
+            HFONT heartFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font heartFont(hdc, heartFontH);
+            SolidBrush heartBrush(Color(smTextA, 226, 86, 108));
+            RectF heartRect((REAL)(contentX - 1), (REAL)iconY, (REAL)(supportIconW + 2), (REAL)(supportIconW + 2));
+            g.DrawString(L"\uEB51", -1, &heartFont, heartRect, &sfCenter, &heartBrush);
+            DeleteObject(heartFontH);
+
+            StringFormat sfNear;
+            sfNear.SetAlignment(StringAlignmentNear);
+            sfNear.SetLineAlignment(StringAlignmentCenter);
+            RectF smTextRect((REAL)(contentX + supportIconW + supportIconGap), (REAL)smY, (REAL)(smTextW + 10), (REAL)smH);
+            g.DrawString(supportText, -1, &discFont, smTextRect, &sfNear, &smTextBrush);
         } else {
-            pData->disclaimerShowMoreRect = { 0, 0, 0, 0 };
+            pData->disclaimerSupportRect = { 0, 0, 0, 0 };
         }
     }
 
@@ -24673,8 +28522,8 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 int w = r.right - r.left;
                 int h = r.bottom - r.top;
                 gTarget.FillRectangle(&b, (REAL)r.left, (REAL)r.top, (REAL)w, 1.0f);
-                gTarget.FillRectangle(&b, (REAL)r.left, (REAL)r.top, 1.0f, (REAL)h);
-                gTarget.FillRectangle(&b, (REAL)(r.right - 1), (REAL)r.top, 1.0f, (REAL)h);
+                if (r.left > 0) gTarget.FillRectangle(&b, (REAL)r.left, (REAL)r.top, 1.0f, (REAL)h);
+                if (r.right < mW) gTarget.FillRectangle(&b, (REAL)(r.right - 1), (REAL)r.top, 1.0f, (REAL)h);
                 gTarget.FillRectangle(&b, (REAL)r.left, (REAL)(r.bottom - 1), (REAL)w, 1.0f);
             };
 
@@ -24732,6 +28581,16 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 int listStartNewY = mcy;
                 int listVisibleBottom = safeBottom - btnH;
                 int listVisibleH = listVisibleBottom - listStartNewY;
+                {
+                    PixelOffsetMode oldP = gTarget.GetPixelOffsetMode();
+                    SmoothingMode oldS = gTarget.GetSmoothingMode();
+                    gTarget.SetPixelOffsetMode(PixelOffsetModeNone);
+                    gTarget.SetSmoothingMode(SmoothingModeNone);
+                    SolidBrush listTopSep(Color(180, 56, 56, 56));
+                    gTarget.FillRectangle(&listTopSep, 0.0f, (REAL)(listStartNewY - 1), (REAL)mW, 1.0f);
+                    gTarget.SetPixelOffsetMode(oldP);
+                    gTarget.SetSmoothingMode(oldS);
+                }
                 std::lock_guard<std::mutex> lock(g_macrosMutex);
 
                 auto buildOrder = [&](bool (Macro::*onFlag), int (Macro::*orderField), std::vector<int>& outPos) {
@@ -24755,6 +28614,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
                 int contentH = (int)g_macros.size() * rowH;
                 int maxScroll = (std::max)(0, contentH - listVisibleH);
+                pData->macrosMaxScroll = maxScroll;
                 if (pData->macrosScrollOffset > maxScroll) pData->macrosScrollOffset = maxScroll;
                 if (pData->macrosScrollOffset < 0) pData->macrosScrollOffset = 0;
                 pData->macrosListRect = { 0, listStartNewY, mW, listVisibleBottom };
@@ -24835,8 +28695,8 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                             FillRoundedRectangle(&gTarget, &bgBrush, (REAL)bx, (REAL)by, (REAL)bw, (REAL)bh, (REAL)4);
                             gTarget.SetPixelOffsetMode(oldOffset);
                             gTarget.SetSmoothingMode(oldSmooth);
-                            SolidBrush tBrush(enabled ? Color(255, 255, 255, 255) : Color(150, 150, 150, 150));
-                            if (hovered && runNum > 0) {
+                            SolidBrush tBrush(enabled ? Color(255, 255, 255, 255) : Color(190, 185, 185, 185));
+                            if (runNum > 0) {
                                 Font numFont9(L"Segoe UI", 9.0f);
                                 RectF nRect((REAL)(bx + 1), (REAL)(by + 1), (REAL)(bw - 2), (REAL)(bh - 2));
                                 wchar_t num[8];
@@ -24867,6 +28727,12 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     }
                 }
                 gTarget.ResetClip();
+                {
+                    RECT sbRc = { mW - 3, listStartNewY, mW - 1, listVisibleBottom };
+                    pData->macrosScrollbarRect = sbRc;
+                    pData->macrosScrollPage = listVisibleH;
+                    MainUI_Paint_VerticalScrollbar(gTarget, sbRc, pData->macrosScrollOffset, maxScroll, listVisibleH);
+                }
 
                 int splitX = mW / 2;
                 auto drawBorderedBtn = [&](const RECT& rect, const wchar_t* text, bool hovered, bool primary, bool enabled = true) {
@@ -24899,8 +28765,6 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                         gTarget.SetSmoothingMode(SmoothingModeNone);
                         SolidBrush twBorderBrush(twHovered ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
                         gTarget.FillRectangle(&twBorderBrush, (REAL)twRc.left, (REAL)twRc.top, (REAL)(twRc.right - twRc.left), 1.0f);
-                        gTarget.FillRectangle(&twBorderBrush, (REAL)twRc.left, (REAL)twRc.top, 1.0f, (REAL)(twRc.bottom - twRc.top));
-                        gTarget.FillRectangle(&twBorderBrush, (REAL)(twRc.right - 1), (REAL)twRc.top, 1.0f, (REAL)(twRc.bottom - twRc.top));
                         gTarget.SetPixelOffsetMode(oldP);
                         gTarget.SetSmoothingMode(oldS);
                     }
@@ -24947,8 +28811,18 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
                     int splitX2 = mW / 2;
                     pData->macrosBtnRectTest = { 0, safeBottom, splitX2, safeBottom + btnH };
+                    pData->macrosBtnRectReview = { 0, 0, 0, 0 };
                     pData->macrosBtnRectEdit = { splitX2, safeBottom, mW, safeBottom + btnH };
-                    drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", pData->macrosHoverRecord, false);
+                    std::wstring testRunLabel = L"Test Run";
+                    if (g_macroTestRunning.load()) {
+                        int testProg = g_macroTestProgress.load();
+                        int testTotal = g_macroTestTotal.load();
+                        wchar_t testBuf[64];
+                        if (testTotal > 0) swprintf_s(testBuf, L"Stop Test %d/%d", testProg, testTotal);
+                        else wcscpy_s(testBuf, L"Stop Test");
+                        testRunLabel = testBuf;
+                    }
+                    drawBorderedBtn(pData->macrosBtnRectTest, testRunLabel.c_str(), pData->macrosHoverRecord, false);
                     drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", pData->macrosHoverEdit, true);
                 } else {
                     RECT hintRc = { 0, safeBottom - btnH, mW, safeBottom };
@@ -24970,6 +28844,7 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     pData->macrosBtnRectTestWin = hintRc;
                     pData->macrosBtnRectFocus = {0};
                     pData->macrosBtnRectTest = { 0, safeBottom, splitX, safeBottom + btnH };
+                    pData->macrosBtnRectReview = { 0, 0, 0, 0 };
                     pData->macrosBtnRectEdit = { splitX, safeBottom, mW, safeBottom + btnH };
                     drawBorderedBtn(pData->macrosBtnRectTest, L"Test Run", false, false, false);
                     drawBorderedBtn(pData->macrosBtnRectEdit, L"Re-record", false, true, false);
@@ -25025,15 +28900,42 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
                     RECT editRc = { 0, mcy, mW, mcy + 32 };
                     bool isHoveredName = pData->macrosHoverNew;
-                    SolidBrush editBg(Color(40, 50, 50, 50));
+                    bool isFocusedName = pData->macrosNameFocused;
+                    SolidBrush editBg(isFocusedName ? Color(140, 55, 55, 55) : (isHoveredName ? Color(130, 50, 50, 50) : Color(120, 45, 45, 45)));
                     gTarget.FillRectangle(&editBg, (REAL)editRc.left, (REAL)editRc.top, (REAL)(editRc.right - editRc.left), (REAL)(editRc.bottom - editRc.top));
-                    drawCrispBorder(editRc, isHoveredName ? Color(255, 100, 150, 255) : Color(80, 80, 80, 80));
+                    drawCrispBorder(editRc, isFocusedName ? Color(180, 0, 122, 204) : (isHoveredName ? Color(255, 100, 150, 255) : Color(180, 56, 56, 56)));
 
                     std::wstring displayName = pData->macrosWizardName;
-                    const Brush& nb = displayName.empty() ? (const Brush&)dimColor : (const Brush&)textColor;
-                    RectF textRect((REAL)14, (REAL)editRc.top, (REAL)(mW - 28), 32.0f);
-                    gTarget.DrawString(displayName.empty() ? L"(click to enter name)" : displayName.c_str(),
-                        -1, &rowFont, textRect, &sfLeft, displayName.empty() ? &dimColor : &nb);
+                    StringFormat sfInput(StringFormat::GenericTypographic());
+                    sfInput.SetAlignment(StringAlignmentNear);
+                    sfInput.SetLineAlignment(StringAlignmentCenter);
+                    sfInput.SetFormatFlags(sfInput.GetFormatFlags() | StringFormatFlagsNoWrap | StringFormatFlagsMeasureTrailingSpaces);
+                    if (!isFocusedName) sfInput.SetTrimming(StringTrimmingEllipsisCharacter);
+
+                    const REAL padX = 14.0f;
+                    const REAL areaW = (REAL)max(0, mW - 28);
+                    RectF textRect(padX, (REAL)editRc.top, areaW, 32.0f);
+                    {
+                        Region oldClip;
+                        gTarget.GetClip(&oldClip);
+                        gTarget.SetClip(textRect);
+                        gTarget.DrawString(displayName.empty() ? L"Enter macro name..." : displayName.c_str(),
+                            -1, &rowFont, textRect, &sfInput, displayName.empty() ? &dimColor : &textColor);
+                        gTarget.SetClip(&oldClip);
+                    }
+                    if (isFocusedName) {
+                        size_t cp = min(pData->macrosNameCaretPos, displayName.size());
+                        pData->macrosNameCaretPos = cp;
+                        float prefixW = 0.0f;
+                        if (cp > 0) {
+                            RectF mb;
+                            gTarget.MeasureString(displayName.c_str(), (INT)cp, &rowFont, PointF(0.0f, 0.0f), &sfInput, &mb);
+                            prefixW = mb.Width;
+                        }
+                        REAL caretX = padX + min(areaW, prefixW);
+                        SolidBrush caretBrush(Color(255, 255, 255, 255));
+                        gTarget.FillRectangle(&caretBrush, caretX, (REAL)editRc.top + 7.0f, 1.0f, 18.0f);
+                    }
 
                     pData->macrosBtnRectNameEdit = editRc;
                     mcy += 32;
@@ -25055,9 +28957,9 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     int wizFocusW = 30;
                     RECT wizFocusRc = { mW - wizFocusW - 8, winRc.top + 5, mW - 8, winRc.bottom - 3 };
                     if (!wins.empty()) {
-                        HWND targetWin = g_wizardTargetHwnd ? g_wizardTargetHwnd : wins[0];
-                        if (!g_wizardTargetHwnd) g_wizardTargetHwnd = targetWin;
-                        wchar_t title[256];
+                        HWND targetWin = (g_wizardTargetHwnd && IsWindow(g_wizardTargetHwnd)) ? g_wizardTargetHwnd : wins[0];
+                        if (g_wizardTargetHwnd != targetWin) g_wizardTargetHwnd = targetWin;
+                        wchar_t title[256] = { 0 };
                         GetWindowTextW(targetWin, title, 256);
                         DWORD targetPid = 0;
                         GetWindowThreadProcessId(targetWin, &targetPid);
@@ -25530,6 +29432,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         pData->discordMentionOnErrorsAnim = g_discordMentionOnErrors.load() ? 1.0f : 0.0f;
         pData->customProcessSearchAnim = g_useCustomProcessSearch.load() ? 1.0f : 0.0f;
         pData->customProcessSearchExcludeAnim = g_excludeBuiltinNames.load() ? 1.0f : 0.0f;
+        pData->simpleModeAnim = g_simpleMode.load() ? 1.0f : 0.0f;
         pData->instanceManagerAnim = 0.0f;
 
         return 0;
@@ -25541,12 +29444,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 InvalidateRect(hwnd, NULL, FALSE);
             }
         } else if (wParam == 1001) {
-            if (pData && g_hMainUiWnd && IsWindow(g_hMainUiWnd) && pData->currentPage == 2) {
+            if (pData && g_hMainUiWnd && IsWindow(g_hMainUiWnd) && pData->currentPage == 4) {
                 InvalidateRect(hwnd, NULL, FALSE);
             }
         } else if (wParam == 1002) {
             KillTimer(hwnd, 1002);
-            bool anyInlineViewOpen = pData && (pData->showingGridSettings || pData->showingFpsCapperSettings || pData->showingMacros || pData->showingStatusBarSettings);
+            bool anyInlineViewOpen = pData && (pData->showingGridSettings || pData->showingFpsCapperSettings || pData->showingMacros || pData->showingStatusBarSettings || pData->showingActionDelays || pData->showingTimings || pData->showingSettingsSub);
             if (pData && !anyInlineViewOpen && !pData->showingAlphaInfo && pData->alphaInfoViewDirection == 0) {
                 pData->alphaInfoPreviousPage = pData->currentPage;
                 pData->alphaInfoViewDirection = 1;
@@ -25559,6 +29462,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 InvalidateRect(hwnd, NULL, FALSE);
             } else {
                 KillTimer(hwnd, 1003);
+            }
+        } else if (wParam == 1004) {
+            if (pData && g_macroTestRunning.load()) {
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else {
+                KillTimer(hwnd, 1004);
             }
         }
         break;
@@ -25642,6 +29551,7 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         return 0;
 
     case WM_APP_SHOW_MACROS:
+        if (g_isRecording) return 0;
         if (pData) {
             KillTimer(hwnd, 1003);
             pData->macrosPreviousPage = pData->currentPage;
@@ -25659,7 +29569,10 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
                 pData->macrosViewMode = 0;
             }
             pData->macrosWizardName = g_wizardMacro.name;
-            pData->macrosNameFocused = false;
+            pData->macrosNameFocused = (pData->macrosViewMode == 1);
+            if (pData->macrosNameFocused) {
+                pData->macrosNameCaretPos = pData->macrosWizardName.size();
+            }
             InvalidateRect(hwnd, NULL, FALSE);
         }
         return 0;
@@ -25702,6 +29615,12 @@ LRESULT CALLBACK MainUIWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         if (!pData) break;
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
+        if (g_simpleMode.load()) {
+            pData->currentPage = 0;
+            MainUI_Layout_SimpleMode(clientRect, pData);
+            InvalidateRect(hwnd, NULL, FALSE);
+            break;
+        }
         const int margin = 20, rowH = 32, vGap = 10;
         const int nav_bar_y = 31, nav_bar_h = 30;
         const int startBtnH = 40;
@@ -26007,8 +29926,21 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
         }
         break;
     case WM_KEYDOWN:
+        if (pData && pData->showingAutoUtilsGuide) {
+            if (wParam == VK_ESCAPE) {
+                pData->showingAutoUtilsGuide = false;
+            } else if (wParam == VK_LEFT && pData->autoUtilsGuideStep > 0) {
+                --pData->autoUtilsGuideStep;
+            } else if (wParam == VK_RIGHT) {
+                if (pData->autoUtilsGuideStep >= 2) pData->showingAutoUtilsGuide = false;
+                else ++pData->autoUtilsGuideStep;
+            }
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
         if (wParam == VK_ESCAPE) {
-            if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
+            if (pData && pData->startupOverlayVisible) return 0;
+        if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
                 pData->isDiscordWebhookInputFocused = false;
                 InvalidateRect(hwnd, &pData->discordWebhookInputRect, FALSE);
                 return 0;
@@ -26024,10 +29956,11 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                     pData->timingsViewDirection = -1;
                 } else if (pData->showingMacros || pData->macrosViewAnim > 0.5f) {
                     if (g_isRecording && pData->macrosViewMode == 5) {
-                        QueueStatusBarOverlay(L"Recording in progress • press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
+                        QueueStatusBarOverlay(L"Recording in progress • Press Ctrl+Shift+R to stop", 1500, hwnd, StatusBarEventType::Macro);
                         return 0;
                     }
                     if (pData->macrosViewMode > 0) {
+                        pData->macrosNameFocused = false;
                         pData->macrosViewMode = 0;
                         g_macroWizardActive = false;
                         g_macroReRecording = false;
@@ -26055,6 +29988,40 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             return 0;
+        }
+        if (pData && pData->startupOverlayVisible) return 0;
+        if (pData && pData->showingMacros && pData->macrosViewMode == 1 && pData->macrosNameFocused) {
+            std::wstring& nameRef = pData->macrosWizardName;
+            size_t& cp = pData->macrosNameCaretPos;
+            cp = min(cp, nameRef.size());
+            if ((GetKeyState(VK_CONTROL) & 0x8000) && wParam == 'V') {
+                std::wstring clip;
+                if (ReadUnicodeTextFromClipboard(hwnd, clip) && !clip.empty()) {
+                    for (wchar_t& ch : clip) { if (iswcntrl(ch)) ch = L' '; }
+                    size_t avail = (nameRef.size() < 64) ? (64 - nameRef.size()) : 0;
+                    size_t ins = min(clip.size(), avail);
+                    if (ins > 0) {
+                        nameRef.insert(cp, clip.substr(0, ins));
+                        cp += ins;
+                        InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
+                    }
+                }
+                return 0;
+            }
+            if (wParam == VK_LEFT) { if (cp > 0) { --cp; InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE); } return 0; }
+            if (wParam == VK_RIGHT) { if (cp < nameRef.size()) { ++cp; InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE); } return 0; }
+            if (wParam == VK_HOME) { cp = 0; InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE); return 0; }
+            if (wParam == VK_END) { cp = nameRef.size(); InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE); return 0; }
+            if (wParam == VK_DELETE) {
+                if (cp < nameRef.size()) {
+                    nameRef.erase(cp, 1);
+                    InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
+                }
+                return 0;
+            }
+            if (wParam == VK_RETURN) {
+                return 0;
+            }
         }
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
@@ -26120,32 +30087,108 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
                 return 0;
             }
         }
+        if (pData && (wParam == VK_TAB || wParam == VK_RETURN || wParam == VK_SPACE)) {
+            bool overlayShown = pData->showingActionDelays || pData->actionDelaysViewAnim > 0.0f ||
+                                pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f ||
+                                pData->showingStatusBarSettings || pData->statusBarSettingsViewAnim > 0.0f ||
+                                pData->showingFpsCapperSettings || pData->fpsCapperSettingsViewAnim > 0.0f ||
+                                pData->showingAlphaInfo || pData->alphaInfoViewAnim > 0.0f ||
+                                pData->showingTimings || pData->timingsViewAnim > 0.0f ||
+                                pData->showingMacros || pData->macrosViewAnim > 0.0f ||
+                                pData->showingSettingsSub || pData->settingsSubViewAnim > 0.0f;
+            if (!overlayShown && !pData->isDiscordWebhookInputFocused && !pData->macrosNameFocused) {
+                if (!g_simpleMode.load() && wParam == VK_TAB && !pData->navItems.empty()) {
+                    int count = (int)pData->navItems.size();
+                    int start = pData->hoveringNavItem >= 0 ? pData->hoveringNavItem : pData->currentPage;
+                    int step = (GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1;
+                    pData->hoveringNavItem = ((start + step) % count + count) % count;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+                if (!g_simpleMode.load() && wParam == VK_RETURN && pData->hoveringNavItem >= 0) {
+                    int target = pData->hoveringNavItem;
+                    if (target != pData->currentPage) {
+                        pData->prevPage = pData->currentPage;
+                        pData->currentPage = target;
+                        pData->pageTransitionDirection = 1;
+                        pData->pageTransitionAnim = 0.0f;
+                    }
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+                if (wParam == VK_SPACE) {
+                    bool isErrorActive = !pData->startButtonErrorText.empty() && (GetTickCount64() - pData->startButtonErrorTime < 3000);
+                    if (!isErrorActive) {
+                        PostMessage(g_hwnd, WM_COMMAND, g_isAfkStarted.load() ? ID_STOP_AFK : ID_START_AFK, 0);
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    }
+                    return 0;
+                }
+            }
+        }
+        if (pData && (wParam == VK_PRIOR || wParam == VK_NEXT || wParam == VK_HOME || wParam == VK_END)) {
+            bool handled = false;
+            auto scrollKey = [&](int& offset, int maxOffset, int pageStep) {
+                if (maxOffset <= 0) return;
+                if (wParam == VK_HOME) offset = 0;
+                else if (wParam == VK_END) offset = maxOffset;
+                else if (wParam == VK_PRIOR) offset -= pageStep;
+                else if (wParam == VK_NEXT) offset += pageStep;
+                if (offset < 0) offset = 0;
+                if (offset > maxOffset) offset = maxOffset;
+                handled = true;
+            };
+            if (pData->showingMacros && pData->macrosViewMode == 0) {
+                int page = (std::max)(32, (int)(pData->macrosListRect.bottom - pData->macrosListRect.top) - 32);
+                scrollKey(pData->macrosScrollOffset, pData->macrosMaxScroll, page);
+            } else if (pData->showingAlphaInfo) {
+                RECT keyClientRect;
+                GetClientRect(hwnd, &keyClientRect);
+                int page = (std::max)(80, (int)(keyClientRect.bottom - pData->alphaInfoScrollAreaTop) - 120);
+                scrollKey(pData->alphaInfoScrollOffset, pData->alphaInfoMaxScroll, page);
+            } else if (pData->currentPage == 5) {
+                scrollKey(pData->webhookScrollOffset, pData->webhookMaxScroll, 120);
+            }
+            if (handled) {
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+        }
         break;
     case WM_CHAR:
-        if (pData && pData->macrosNameFocused) {
+        if (pData && pData->showingMacros && pData->macrosViewMode == 1 && pData->macrosNameFocused) {
+            std::wstring& nameRef = pData->macrosWizardName;
+            size_t& cp = pData->macrosNameCaretPos;
+            cp = min(cp, nameRef.size());
             if (wParam == VK_BACK) {
-                if (!pData->macrosWizardName.empty())
-                    pData->macrosWizardName.pop_back();
-                InvalidateRect(hwnd, NULL, FALSE);
+                if (cp > 0 && !nameRef.empty()) {
+                    nameRef.erase(cp - 1, 1);
+                    --cp;
+                    InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
+                }
             } else if (wParam == VK_RETURN) {
-                pData->macrosNameFocused = false;
-                if (!pData->macrosWizardName.empty()) {
-                    g_wizardMacro.name = pData->macrosWizardName;
+                if (!nameRef.empty()) {
+                    pData->macrosNameFocused = false;
+                    g_wizardMacro.name = nameRef;
                     g_macroWizardStep = 2;
                     pData->macrosViewMode = 2;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                } else {
+                    QueueStatusBarOverlay(L"Enter a macro name", 1500, hwnd, StatusBarEventType::Macro);
                 }
-                InvalidateRect(hwnd, NULL, FALSE);
             } else if (wParam == VK_ESCAPE) {
                 pData->macrosNameFocused = false;
-                InvalidateRect(hwnd, NULL, FALSE);
+                InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
             } else if (wParam >= 0x20 && !iswcntrl((wchar_t)wParam)) {
-                if (pData->macrosWizardName.size() < 64) {
-                    pData->macrosWizardName.push_back((wchar_t)wParam);
-                    InvalidateRect(hwnd, NULL, FALSE);
+                if (nameRef.size() < 64) {
+                    nameRef.insert(nameRef.begin() + (ptrdiff_t)cp, (wchar_t)wParam);
+                    ++cp;
+                    InvalidateRect(hwnd, &pData->macrosBtnRectNameEdit, FALSE);
                 }
             }
             return 0;
         }
+        if (pData && pData->startupOverlayVisible) return 0;
         if (pData && pData->currentPage == 5 && pData->isDiscordWebhookInputFocused) {
             std::wstring currentValue = GetDiscordWebhookUrlCopy();
             size_t* caretPos = &pData->discordWebhookCaretPos;
@@ -26181,8 +30224,33 @@ pData->resetSettingsButtonRect = { 0, clientRect.bottom - startBtnH - disclaimer
 
     case WM_MOUSEMOVE:
     {
-        POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        if (!pData) break;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         pData->hoverPoint = pt;
+        if (pData->uiScrollDragMode != 0) {
+            RECT track = { 0 };
+            int* offset = nullptr;
+            int maxScroll = 0, pageSize = 0;
+            if (pData->uiScrollDragMode == 1) { track = pData->macrosScrollbarRect; offset = &pData->macrosScrollOffset; maxScroll = pData->macrosMaxScroll; pageSize = pData->macrosScrollPage; }
+            else if (pData->uiScrollDragMode == 2) { track = pData->alphaInfoScrollbarRect; offset = &pData->alphaInfoScrollOffset; maxScroll = pData->alphaInfoMaxScroll; pageSize = pData->alphaInfoScrollPage; }
+            else if (pData->uiScrollDragMode == 3) { track = pData->webhookScrollbarRect; offset = &pData->webhookScrollOffset; maxScroll = pData->webhookMaxScroll; pageSize = pData->webhookScrollPage; }
+            if (offset && maxScroll > 0) {
+                int trackH = track.bottom - track.top;
+                int thumbH = (std::max)(16, (pageSize * trackH) / (pageSize + maxScroll));
+                if (thumbH > trackH) thumbH = trackH;
+                int newThumbY = pt.y - pData->uiScrollDragGrab;
+                if (newThumbY < track.top) newThumbY = track.top;
+                if (newThumbY > track.top + trackH - thumbH) newThumbY = track.top + trackH - thumbH;
+                *offset = (trackH > thumbH) ? (int)((int64_t)(newThumbY - track.top) * maxScroll / (trackH - thumbH)) : 0;
+                if (*offset < 0) *offset = 0;
+                if (*offset > maxScroll) *offset = maxScroll;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+            return 0;
+        }
+        if (PtInRect(&pData->startButtonRect, pt)) {
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
 auto checkHover = [&](bool& flag, const RECT& rect) {
 bool now = PtInRect(&rect, pt);
 if (now != flag) { flag = now; InvalidateRect(hwnd, NULL, FALSE); }
@@ -26193,6 +30261,15 @@ return now;
             MainUI_Paint_DrawToggleGetHitbox(rowRect, &toggleHitbox);
             return checkHover(flag, toggleHitbox);
         };
+
+        if (pData->showingAutoUtilsGuide) {
+            checkHover(pData->isHoveringAutoUtilsGuidePrev, pData->autoUtilsGuidePrevRect);
+            checkHover(pData->isHoveringAutoUtilsGuideNext, pData->autoUtilsGuideNextRect);
+            checkHover(pData->isHoveringAutoUtilsGuideClose, pData->autoUtilsGuideCloseRect);
+            bool hand = pData->isHoveringAutoUtilsGuidePrev || pData->isHoveringAutoUtilsGuideNext || pData->isHoveringAutoUtilsGuideClose;
+            SetCursor(hand ? pData->hCursorHand : pData->hCursorArrow);
+            return 0;
+        }
 
         bool anyHover = false;
         bool anyTextHover = false;
@@ -26278,7 +30355,7 @@ pData->showingSettingsSub || pData->settingsSubViewAnim > 0.0f;
             anyHover |= checkHover(pData->isHoveringAlphaInfoGitHubLink, pData->alphaInfoGitHubLinkRect);
             anyHover |= checkHover(pData->isHoveringAlphaInfoDiscordLink, pData->alphaInfoDiscordLinkRect);
             anyHover |= checkHover(pData->isHoveringAlphaInfoReleasesLink, pData->alphaInfoReleasesLinkRect);
-            anyHover |= checkHover(pData->isHoveringAlphaInfoWhatsNewLink, pData->alphaInfoWhatsNewLinkRect);
+            anyHover |= checkHover(pData->isHoveringAlphaInfoSupportLink, pData->alphaInfoSupportLinkRect);
         }
 
         if (pData->showingTimings || pData->timingsViewAnim > 0.0f) {
@@ -26362,14 +30439,14 @@ anyHover |= checkHover(pData->isHoveringSettingsSubOk, pData->startButtonRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubDropdown, pData->settingsSubDropdownRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubInterval, pData->settingsSubIntervalRect);
 anyHover |= checkHover(pData->isHoveringSettingsSubLimit, pData->settingsSubLimitRect);
-if (pData->settingsSubKind == 4) {
-for (int i = 0; i < 6; ++i) {
-anyHover |= checkToggleHover(pData->isHoveringSettingsSubToggle[i], pData->settingsSubToggleRects[i]);
-}
-}
+        for (int i = 0; i < 9; ++i) {
+            if (pData->settingsSubToggleRects[i].right > pData->settingsSubToggleRects[i].left) {
+                anyHover |= checkToggleHover(pData->isHoveringSettingsSubToggle[i], pData->settingsSubToggleRects[i]);
+            }
+        }
 
 int newHoveringSettingsSubHelp = -1;
-for (int i = 0; i < 6; ++i) {
+for (int i = 0; i < 9; ++i) {
 if (pData->settingsSubHelpRects[i].left != 0 && PtInRect(&pData->settingsSubHelpRects[i], pt)) {
 newHoveringSettingsSubHelp = i;
 break;
@@ -26447,11 +30524,56 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
 
         anyHover |= checkHover(pData->isHoveringClose, pData->closeButtonRect);
         anyHover |= checkHover(pData->isHoveringDisclaimerWiki, pData->disclaimerWikiRect);
-        anyHover |= checkHover(pData->isHoveringDisclaimerShowMore, pData->disclaimerShowMoreRect);
+        anyHover |= checkHover(pData->isHoveringDisclaimerSupport, pData->disclaimerSupportRect);
+        anyHover |= checkHover(pData->isHoveringDisclaimerGuide, pData->disclaimerGuideRect);
+        anyHover |= checkHover(pData->isHoveringDisclaimerVersion, pData->disclaimerVersionRect);
 
         if (!overlayActive) {
             anyHover |= checkHover(pData->isHoveringIcon, pData->iconButtonRect);
             anyHover |= checkHover(pData->isHoveringStart, pData->startButtonRect);
+            if (g_simpleMode.load()) {
+                int newSimpleHelp = -1;
+                for (int i = 0; i < 8; ++i) {
+                    if (PtInRect(&pData->simpleHelpRects[i], pt)) {
+                        newSimpleHelp = i;
+                        break;
+                    }
+                }
+                if (newSimpleHelp != pData->simpleHoverHelp) {
+                    pData->simpleHoverHelp = newSimpleHelp;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                anyHover |= (newSimpleHelp != -1);
+
+                anyHover |= checkHover(pData->isHoveringSimpleExit, pData->simpleExitBtnRect);
+                anyHover |= (pData->discordButtonRect.bottom > pData->discordButtonRect.top && checkHover(pData->isHoveringDiscord, pData->discordButtonRect));
+                anyHover |= ((g_updateFound.load() || g_updateCheckFailed.load()) && pData->updateBannerRect.bottom > pData->updateBannerRect.top && checkHover(pData->isHoveringUpdateBanner, pData->updateBannerRect));
+
+                bool nowMutexChip = (newSimpleHelp == -1) && g_multiSupport.load() && (pData->simpleMutexStatusRect.right > pData->simpleMutexStatusRect.left) && PtInRect(&pData->simpleMutexStatusRect, pt);
+                if (nowMutexChip != pData->isHoveringSimpleMutexStatus) { pData->isHoveringSimpleMutexStatus = nowMutexChip; InvalidateRect(hwnd, NULL, FALSE); }
+                bool nowFpsGear = (newSimpleHelp == -1) && PtInRect(&pData->simpleFpsSettingsRect, pt);
+                if (nowFpsGear != pData->isHoveringSimpleFpsSettings) { pData->isHoveringSimpleFpsSettings = nowFpsGear; InvalidateRect(hwnd, NULL, FALSE); }
+                bool nowRamGear = (newSimpleHelp == -1) && PtInRect(&pData->simpleRamSettingsRect, pt);
+                if (nowRamGear != pData->isHoveringSimpleRamSettings) { pData->isHoveringSimpleRamSettings = nowRamGear; InvalidateRect(hwnd, NULL, FALSE); }
+                anyHover |= nowMutexChip || nowFpsGear || nowRamGear;
+
+                auto checkSimpleRectHover = [&](bool& flag, const RECT& r, int helpIdx) {
+                    bool now = (newSimpleHelp != helpIdx) && PtInRect(&r, pt);
+                    if (helpIdx == 2 && nowMutexChip) now = false;
+                    if (helpIdx == 4 && nowFpsGear) now = false;
+                    if (helpIdx == 5 && nowRamGear) now = false;
+                    if (now != flag) { flag = now; InvalidateRect(hwnd, NULL, FALSE); }
+                    return now;
+                };
+                anyHover |= checkSimpleRectHover(pData->isHoveringInterval, pData->intervalDropdownRect, 0);
+                anyHover |= checkSimpleRectHover(pData->isHoveringAction, pData->actionDropdownRect, 1);
+                anyHover |= checkSimpleRectHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect, 7);
+                anyHover |= checkSimpleRectHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect, 2);
+                anyHover |= checkSimpleRectHover(pData->isHoveringAutoReconnectToggle, pData->autoReconnectToggleRect, 3);
+                anyHover |= checkSimpleRectHover(pData->isHoveringFpsCapperToggle, pData->fpsCapperToggleRect, 4);
+                anyHover |= checkSimpleRectHover(pData->isHoveringRamCleanerToggle, pData->ramCleanerToggleRect, 5);
+                anyHover |= checkSimpleRectHover(pData->isHoveringSkipActiveToggle, pData->skipActiveToggleRect, 6);
+            } else {
             if (pData->currentPage == 4) {
                 anyHover |= checkHover(pData->isHoveringResetStats, pData->resetStatsButtonRect);
             }
@@ -26470,11 +30592,12 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringRestore, pData->restoreMethodDropdownRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringScreenSaverButton, pData->screenSaverButtonRect));
             anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringSsAlwaysShow, pData->ssAlwaysShowButtonRect));
+            anyHover |= (pData->currentPage == 2 && checkHover(pData->isHoveringSsAlwaysShowHint, pData->ssAlwaysShowHintButtonRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUserSafe, pData->userSafeDropdownRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringUiSettings, pData->uiSettingsBtnRect));
             anyHover |= (pData->currentPage == 3 && checkHover(pData->isHoveringActionDelaysEdit, pData->actionDelaysEditButtonRect));
             anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringMultiInstanceToggle, pData->multiInstanceToggleRect));
-            anyHover |= (pData->currentPage == 0 && checkToggleHover(pData->isHoveringSimpleModeToggle, pData->simpleModeToggleRect));
+            anyHover |= ((pData->currentPage == 0 || pData->currentPage == 3) && checkHover(pData->isHoveringSimpleModeToggle, pData->simpleModeToggleRect));
             anyHover |= (pData->currentPage == 0 && pData->mutexStatusAnim > 0.01f && checkHover(pData->isHoveringMutexStatus, pData->mutexStatusRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoStartToggle, pData->autoStartToggleRect));
             anyHover |= (pData->currentPage == 1 && checkToggleHover(pData->isHoveringAutoReconnectToggle, pData->autoReconnectToggleRect));
@@ -26491,6 +30614,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringShowRobloxCompact, pData->showRobloxCompactRect));
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringHideRobloxCompact, pData->hideRobloxCompactRect));
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringOpacityCompact, pData->opacityCompactRect));
+            anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringOpacityEditCompact, pData->opacityEditCompactRect));
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringGridRobloxCompact, pData->gridRobloxCompactRect));
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringGridSettingsCompact, pData->gridSettingsCompactRect));
             anyHover |= (pData->currentPage == 1 && checkHover(pData->isHoveringMuteRobloxCompact, pData->muteRobloxCompactRect));
@@ -26528,8 +30652,17 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
                 bool webhookPasteHover = checkHover(pData->isHoveringDiscordWebhookPaste, pData->discordWebhookPasteRect);
                 bool webhookClearHover = checkHover(pData->isHoveringDiscordWebhookClear, pData->discordWebhookClearRect);
                 bool webhookTestHover = checkHover(pData->isHoveringDiscordWebhookTest, pData->discordWebhookTestRect);
-                bool mentionTargetSettingsHover = checkHover(pData->isHoveringDiscordMentionTargetSettings, pData->discordMentionTargetSettingsRect);
-                bool heartbeatIntervalHover = checkHover(pData->isHoveringDiscordHeartbeatIntervalBtn, pData->discordHeartbeatIntervalBtnRect);
+                bool mentionTargetVisible = pt.y >= pData->webhookFixedBottom && pt.y <= pData->webhookScrollAreaBottom && !PtInRect(&pData->startButtonRect, pt);
+                bool mentionTargetSettingsHover = mentionTargetVisible && checkHover(pData->isHoveringDiscordMentionTargetSettings, pData->discordMentionTargetSettingsRect);
+                if (!mentionTargetVisible && pData->isHoveringDiscordMentionTargetSettings) {
+                    pData->isHoveringDiscordMentionTargetSettings = false;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                bool heartbeatIntervalHover = mentionTargetVisible && checkHover(pData->isHoveringDiscordHeartbeatIntervalBtn, pData->discordHeartbeatIntervalBtnRect);
+                if (!mentionTargetVisible && pData->isHoveringDiscordHeartbeatIntervalBtn) {
+                    pData->isHoveringDiscordHeartbeatIntervalBtn = false;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
                 anyTextHover |= webhookEnabled && webhookInputHover;
                 anyHover |= webhookEnabled && webhookPasteHover;
                 anyHover |= webhookEnabled && webhookClearHover;
@@ -26538,7 +30671,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
                 anyHover |= webhookEnabled && heartbeatIntervalHover;
                 anyDisabledHover |= !webhookEnabled && (webhookInputHover || webhookPasteHover || webhookClearHover || webhookTestHover || mentionTargetSettingsHover || heartbeatIntervalHover);
                 anyHover |= checkToggleHover(pData->isHoveringDiscordWebhookEnableToggle, pData->discordWebhookEnableToggleRect);
-                bool webhookDependentToggleHover =
+                bool webhookDependentToggleHover = mentionTargetVisible && (
                     checkToggleHover(pData->isHoveringDiscordNotifyStartToggle, pData->discordNotifyStartToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyActionToggle, pData->discordNotifyActionToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyReconnectToggle, pData->discordNotifyReconnectToggleRect) ||
@@ -26551,7 +30684,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
                     checkToggleHover(pData->isHoveringDiscordUseDefaultAvatarToggle, pData->discordUseDefaultAvatarToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordUseTimestampToggle, pData->discordUseTimestampToggleRect) ||
                     checkToggleHover(pData->isHoveringDiscordNotifyHeartbeatToggle, pData->discordNotifyHeartbeatToggleRect) ||
-                    checkToggleHover(pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamToggleRect);
+                    checkToggleHover(pData->isHoveringDiscordNotifyUtilsRamToggle, pData->discordNotifyUtilsRamToggleRect));
                 anyHover |= webhookEnabled && webhookDependentToggleHover;
                 anyDisabledHover |= !webhookEnabled && webhookDependentToggleHover;
             }
@@ -26568,6 +30701,8 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
 
             int newHoveringHelpButton = -1;
             for (size_t i = 0; i < pData->helpButtonRects.size(); ++i) {
+                if (g_simpleMode.load()) break;
+                if (pData->currentPage == 5 && i >= 1 && (pt.y < pData->webhookFixedBottom || pt.y > pData->webhookScrollAreaBottom)) continue;
                 if (PtInRect(&pData->helpButtonRects[i], pt)) {
                     newHoveringHelpButton = static_cast<int>(i);
                     break;
@@ -26585,6 +30720,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
                     pData->isHoveringCloseAllRoblox = false;
                     InvalidateRect(hwnd, &pData->closeAllRobloxButtonRect, FALSE);
                 }
+            }
             }
         }
 
@@ -26604,6 +30740,12 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
         break;
     }
     case WM_MOUSELEAVE:
+        pData->hoverPoint = { -1, -1 };
+        pData->isHoveringSimpleExit = false;
+        pData->isHoveringSimpleFpsSettings = false;
+        pData->isHoveringSimpleRamSettings = false;
+        pData->isHoveringSimpleMutexStatus = false;
+        pData->simpleHoverHelp = -1;
         pData->isHoveringIcon = pData->isHoveringClose = pData->isHoveringStart = pData->isHoveringReset = pData->isHoveringInterval = pData->isHoveringAction = pData->isHoveringRestore = false;
         pData->isHoveringMultiInstanceInterval = false;
         pData->hoveringNavItem = -1; pData->isHoveringResetStats = false; pData->isPressingResetStats = false;
@@ -26635,7 +30777,7 @@ pData->isHoveringSettingsSubInterval = false;
 pData->isHoveringSettingsSubLimit = false;
 pData->isHoveringSettingsSubOk = false;
 pData->hoveringSettingsSubHelp = -1;
-for (int i = 0; i < 6; ++i) { pData->isHoveringSettingsSubToggle[i] = false; }
+for (int i = 0; i < 9; ++i) { pData->isHoveringSettingsSubToggle[i] = false; }
 pData->isHoveringDiscord = false;
         pData->isHoveringUpdateBanner = false;
         pData->isHoveringMutexBanner = false;
@@ -26647,7 +30789,7 @@ pData->isHoveringDiscord = false;
         pData->isHoveringAlphaInfoGitHubLink = false;
         pData->isHoveringAlphaInfoDiscordLink = false;
         pData->isHoveringAlphaInfoReleasesLink = false;
-        pData->isHoveringAlphaInfoWhatsNewLink = false;
+        pData->isHoveringAlphaInfoSupportLink = false;
         pData->isHoveringTimingsBackIcon = false;
         pData->isHoveringTimingsOkButton = false;
         pData->isHoveringTimingsToggle = false;
@@ -26655,6 +30797,7 @@ pData->isHoveringDiscord = false;
         pData->isHoveringMacrosOkButton = false;
         pData->macrosHoverNew = false;
         pData->macrosHoverEdit = false;
+        pData->macrosHoverReview = false;
         pData->macrosHoverDelete = false;
         pData->macrosHoverTest = false;
         pData->macrosHoverNext = false;
@@ -26666,8 +30809,10 @@ pData->isHoveringDiscord = false;
         pData->macrosHoverInterval = false;
         pData->macrosHoverFinish = false;
         pData->macrosHoveringItem = -1;
-        pData->isHoveringDisclaimerShowMore = false;
+        pData->isHoveringDisclaimerSupport = false;
         pData->isHoveringDisclaimerWiki = false;
+        pData->isHoveringDisclaimerGuide = false;
+        pData->isHoveringDisclaimerVersion = false;
         pData->isHoveringFpsCapperSettingsOkButton = false;
         pData->isHoveringFpsCapperModeDropdown = false;
         pData->isHoveringFpsCapperLimitDropdown = false;
@@ -26709,6 +30854,7 @@ pData->isHoveringDiscord = false;
         pData->isHoveringShowRobloxCompact = false;
         pData->isHoveringHideRobloxCompact = false;
         pData->isHoveringOpacityCompact = false;
+        pData->isHoveringOpacityEditCompact = false;
         pData->isHoveringGridRobloxCompact = false;
         pData->isHoveringGridSettingsCompact = false;
         pData->isHoveringMuteRobloxCompact = false;
@@ -26717,6 +30863,7 @@ pData->isHoveringDiscord = false;
         pData->isHoveringCloseAllRoblox = false;
         pData->isHoveringScreenSaverButton = false;
         pData->isHoveringSsAlwaysShow = false;
+        pData->isHoveringSsAlwaysShowHint = false;
         pData->isHoveringMultiInstanceToggle = false;
         pData->isHoveringUpdateCheckerToggle = false;
         pData->isHoveringDoNotSleepToggle = false;
@@ -26772,6 +30919,23 @@ pData->isHoveringDiscord = false;
     case WM_LBUTTONDOWN:
     {
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+        if (pData->showingAutoUtilsGuide) {
+            bool changed = false;
+            if (PtInRect(&pData->autoUtilsGuideCloseRect, pt)) {
+                pData->showingAutoUtilsGuide = false;
+                changed = true;
+            } else if (PtInRect(&pData->autoUtilsGuidePrevRect, pt)) {
+                if (pData->autoUtilsGuideStep > 0) --pData->autoUtilsGuideStep;
+                else pData->showingAutoUtilsGuide = false;
+                changed = true;
+            } else if (PtInRect(&pData->autoUtilsGuideNextRect, pt)) {
+                if (pData->autoUtilsGuideStep >= 2) pData->showingAutoUtilsGuide = false;
+                else ++pData->autoUtilsGuideStep;
+                changed = true;
+            }
+            if (changed) InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
         if (PtInRect(&pData->closeButtonRect, pt)) {
             PostMessage(hwnd, WM_CLOSE, 0, 0);
             return 0;
@@ -26779,11 +30943,41 @@ pData->isHoveringDiscord = false;
         if (pData->startupOverlayVisible) {
             return 0;
         }
+        if (pData) {
+            auto startScrollDrag = [&](int mode, const RECT& track, int& offset, int maxScroll, int pageSize) -> bool {
+                if (maxScroll <= 0 || track.bottom <= track.top) return false;
+                if (pt.x < track.left - 5 || pt.x > track.right + 5 || pt.y < track.top || pt.y > track.bottom) return false;
+                int trackH = track.bottom - track.top;
+                int thumbH = (std::max)(16, (pageSize * trackH) / (pageSize + maxScroll));
+                if (thumbH > trackH) thumbH = trackH;
+                int thumbY = track.top + (int)((int64_t)offset * (trackH - thumbH) / maxScroll);
+                pData->uiScrollDragMode = mode;
+                if (pt.y >= thumbY && pt.y <= thumbY + thumbH) {
+                    pData->uiScrollDragGrab = pt.y - thumbY;
+                } else {
+                    pData->uiScrollDragGrab = thumbH / 2;
+                    int newThumbY = pt.y - pData->uiScrollDragGrab;
+                    if (newThumbY < track.top) newThumbY = track.top;
+                    if (newThumbY > track.top + trackH - thumbH) newThumbY = track.top + trackH - thumbH;
+                    offset = (trackH > thumbH) ? (int)((int64_t)(newThumbY - track.top) * maxScroll / (trackH - thumbH)) : 0;
+                }
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return true;
+            };
+            if (pData->showingMacros && pData->macrosViewMode == 0 &&
+                startScrollDrag(1, pData->macrosScrollbarRect, pData->macrosScrollOffset, pData->macrosMaxScroll, pData->macrosScrollPage)) return 0;
+            if (pData->showingAlphaInfo &&
+                startScrollDrag(2, pData->alphaInfoScrollbarRect, pData->alphaInfoScrollOffset, pData->alphaInfoMaxScroll, pData->alphaInfoScrollPage)) return 0;
+            if (pData->currentPage == 5 &&
+                startScrollDrag(3, pData->webhookScrollbarRect, pData->webhookScrollOffset, pData->webhookMaxScroll, pData->webhookScrollPage)) return 0;
+        }
         MainUI_HandleClick(hwnd, pt, pData);
         break;
     }
     case WM_RBUTTONDOWN:
     {
+        if (!pData) break;
         POINT pt = { LOWORD(lParam), HIWORD(lParam) };
         if (PtInRect(&pData->closeButtonRect, pt))
         {
@@ -26794,6 +30988,12 @@ pData->isHoveringDiscord = false;
     }
     case WM_LBUTTONUP:
     {
+        if (pData && pData->uiScrollDragMode != 0) {
+            pData->uiScrollDragMode = 0;
+            ReleaseCapture();
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
         if (pData && pData->isPressingStart) {
             pData->isPressingStart = false;
             InvalidateRect(hwnd, NULL, FALSE);
@@ -26810,6 +31010,7 @@ pData->isHoveringDiscord = false;
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
             pData->macrosScrollOffset -= zDelta / 3;
             if (pData->macrosScrollOffset < 0) pData->macrosScrollOffset = 0;
+            if (pData->macrosScrollOffset > pData->macrosMaxScroll) pData->macrosScrollOffset = pData->macrosMaxScroll;
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
@@ -26817,21 +31018,17 @@ pData->isHoveringDiscord = false;
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
             pData->alphaInfoScrollOffset -= zDelta / 3;
             if (pData->alphaInfoScrollOffset < 0) pData->alphaInfoScrollOffset = 0;
+            if (pData->alphaInfoScrollOffset > pData->alphaInfoMaxScroll) pData->alphaInfoScrollOffset = pData->alphaInfoMaxScroll;
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
         if (pData && pData->currentPage == 5) {
-            POINT pt;
-            GetCursorPos(&pt);
-            ScreenToClient(hwnd, &pt);
-            if (pt.y >= pData->webhookFixedBottom) {
-                int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-                pData->webhookScrollOffset -= zDelta / WHEEL_DELTA * 30;
-                if (pData->webhookScrollOffset < 0) pData->webhookScrollOffset = 0;
-                if (pData->webhookScrollOffset > pData->webhookMaxScroll) pData->webhookScrollOffset = pData->webhookMaxScroll;
-                InvalidateRect(hwnd, NULL, FALSE);
-                return 0;
-            }
+            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+            pData->webhookScrollOffset -= zDelta / WHEEL_DELTA * 30;
+            if (pData->webhookScrollOffset < 0) pData->webhookScrollOffset = 0;
+            if (pData->webhookScrollOffset > pData->webhookMaxScroll) pData->webhookScrollOffset = pData->webhookMaxScroll;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
         }
         break;
     }
@@ -26841,7 +31038,7 @@ pData->isHoveringDiscord = false;
     case WM_NCHITTEST:
     {
         LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
-        if (hit == HTCLIENT) {
+        if (hit == HTCLIENT && pData) {
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             ScreenToClient(hwnd, &pt);
             RECT dragRect = { pData->iconButtonRect.right, 0, pData->closeButtonRect.left, 30 };
@@ -27033,7 +31230,42 @@ pData->isHoveringDiscord = false;
             needsRedraw = true;
         }
 
-        if (pData->pageTransitionAnim < 1.0f) {
+        if (pData->simpleTransitionDirection == 1) {
+            pData->simpleTransitionAnim += (1.0f - pData->simpleTransitionAnim) * animSpeed;
+            if (pData->simpleTransitionAnim > 0.995f) {
+                pData->simpleTransitionAnim = 1.0f;
+                pData->simpleTransitionDirection = 0;
+                if (pData->simplePrevSnapshotBmp) {
+                    DeleteObject(pData->simplePrevSnapshotBmp);
+                    pData->simplePrevSnapshotBmp = NULL;
+                }
+            }
+            needsRedraw = true;
+        }
+
+        if (pData->simpleTransitionAnim < 1.0f && pData->simplePrevSnapshotBmp) {
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
+            SetBkMode(memDC, TRANSPARENT);
+            if (MainUI_Paint_DrawContent(memDC, clientRect, pData)) {
+                needsRedraw = true;
+            }
+            HDC snapDC = CreateCompatibleDC(memDC);
+            HGDIOBJ oldSnapBmp = SelectObject(snapDC, pData->simplePrevSnapshotBmp);
+            const int contentTop = 31;
+            const int startBtnH = 40;
+            const int disclaimerH = 26;
+            int contentH = clientRect.bottom - startBtnH - disclaimerH - contentTop;
+            if (contentH > 0) {
+                float oldAlpha = 1.0f - pData->simpleTransitionAnim;
+                BLENDFUNCTION bf = { AC_SRC_OVER, 0, (BYTE)(255 * oldAlpha), 0 };
+                AlphaBlend(memDC, 0, contentTop, clientRect.right, contentH,
+                           snapDC, 0, contentTop, clientRect.right, contentH, bf);
+            }
+            SelectObject(snapDC, oldSnapBmp);
+            DeleteDC(snapDC);
+        } else if (pData->pageTransitionAnim < 1.0f) {
+            FillRect(memDC, &clientRect, AcrylicBaseBgBrush());
+            SetBkMode(memDC, TRANSPARENT);
             if (MainUI_Paint_DrawContent(memDC, clientRect, pData)) {
                 needsRedraw = true;
             }
@@ -27093,10 +31325,13 @@ pData->isHoveringDiscord = false;
             }
         }
 
-        if (!pData->startupOverlayVisible) {
+        if (!pData->startupOverlayVisible && !pData->showingAutoUtilsGuide) {
             MainUI_Paint_DrawCloseButton(memDC, pData->closeButtonRect, pData->isHoveringClose);
-        } else {
+        } else if (pData->startupOverlayVisible) {
             MainUI_Paint_DrawStartupOverlay(memDC, clientRect, pData);
+        }
+        if (pData->showingAutoUtilsGuide) {
+            MainUI_Paint_DrawAutoUtilsGuide(memDC, clientRect, pData);
         }
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
@@ -27112,7 +31347,7 @@ pData->isHoveringDiscord = false;
         }
 
 
-        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && pData->currentPage == 2) {
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && pData->currentPage == 4) {
             if (!pData->statsTimerActive) {
                 SetTimer(hwnd, 1001, 1000, NULL);
                 pData->statsTimerActive = true;
@@ -27136,15 +31371,34 @@ pData->isHoveringDiscord = false;
             pData->alphaInfoViewDirection = 1;
             pData->alphaInfoViewAnim = 0.0f;
             pData->alphaInfoAutoShown = true;
+            pData->alphaInfoScrollOffset = 0;
+            pData->alphaInfoReleasesLinkRect = { 0, 0, 0, 0 };
+            g_v4WelcomeShown = true;
+            SaveSettings();
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+
+    case WM_CAPTURECHANGED:
+        if (pData && (pData->uiScrollDragMode != 0 || pData->isPressingStart || pData->isPressingResetStats)) {
+            pData->uiScrollDragMode = 0;
+            pData->isPressingStart = false;
+            pData->isPressingResetStats = false;
             InvalidateRect(hwnd, NULL, FALSE);
         }
         return 0;
 
     case WM_DESTROY:
+        if (g_hotkeyCaptureActive.load()) {
+            if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
+            g_hotkeyCaptureActive = false;
+            if (g_hwnd && IsWindow(g_hwnd)) PostMessage(g_hwnd, WM_APP + 10, 0, 0);
+        }
         if (pData) {
             if (pData->uTimerId != 0) {
                 KillTimer(hwnd, pData->uTimerId);
             }
+            if (pData->simplePrevSnapshotBmp) { DeleteObject(pData->simplePrevSnapshotBmp); pData->simplePrevSnapshotBmp = NULL; }
             DeleteObject(pData->hFontTitle); DeleteObject(pData->hFontSection);
             DeleteObject(pData->hFontText); DeleteObject(pData->hFontSmall);
             DeleteObject(pData->hFontNav); DeleteObject(pData->hFontNavSelected); DeleteObject(pData->hFontNavIcon);
@@ -27187,6 +31441,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     bool isHoveringClose = false;
     bool isHoveringMinimize = false;
         int hoveringButton = -1;
+        int focusedButton = -1;
         bool isTrackingMouse = false;
         HCURSOR hCursorHand = NULL, hCursorArrow = NULL;
         HICON hIcon = NULL;
@@ -27220,7 +31475,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         const int button_margin = 10;
         const int icon_size = 32;
         const int icon_text_gap = 15;
-        const int btnH = 30;
+        const int btnDrawH = 40;
         int dlgW = 380;
 
         UINT iconType = pData->params->type & 0xF0;
@@ -27247,7 +31502,20 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
         bool hasBanner = pData->params->description && pData->params->bannerIcon;
         int textTop = hasBanner ? 56 : 46;
-        int dlgH = textTop + contentH + button_margin + btnH + 17;
+        int dlgH = textTop + contentH + button_margin + btnDrawH + 17;
+
+        RECT waLimit = { 0 };
+        HWND ownerForLimit = GetParent(hwnd);
+        HMONITOR monLimit = ownerForLimit && IsWindow(ownerForLimit) ? MonitorFromWindow(ownerForLimit, MONITOR_DEFAULTTONEAREST) : NULL;
+        MONITORINFO miLimit = { sizeof(MONITORINFO) };
+        if (!(monLimit && GetMonitorInfo(monLimit, &miLimit) && (waLimit = miLimit.rcWork, true))) {
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &waLimit, 0);
+        }
+        int maxDlgH = (waLimit.bottom - waLimit.top) - 40;
+        if (maxDlgH >= 200 && dlgH > maxDlgH) {
+            dlgH = maxDlgH;
+            textH = max(20, dlgH - textTop - button_margin - btnDrawH - 17);
+        }
 
         pData->textHeight = textH;
 
@@ -27292,8 +31560,16 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             buttons.push_back({ IDOK, L"OK" });
         }
 
+        {
+            UINT defBtn = pData->params->type & MB_DEFMASK;
+            int defId = IDOK;
+            if (btnType == MB_OKCANCEL) defId = (defBtn == MB_DEFBUTTON2) ? IDCANCEL : IDOK;
+            else if (btnType == MB_YESNO) defId = (defBtn == MB_DEFBUTTON2) ? IDNO : IDYES;
+            else if (btnType == MB_YESNOCANCEL) defId = (defBtn == MB_DEFBUTTON2) ? IDNO : ((defBtn == MB_DEFBUTTON3) ? IDCANCEL : IDYES);
+            pData->focusedButton = defId;
+        }
+
         const int btnGap = 10;
-        const int btnDrawH = 40;
         int btnY = dlgH - btnDrawH;
         int currentX = 0;
 
@@ -27329,10 +31605,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         HMONITOR mon = ownerHwnd && IsWindow(ownerHwnd) ? MonitorFromWindow(ownerHwnd, MONITOR_DEFAULTTONEAREST) : NULL;
         RECT wa = { 0 };
         if (mon) {
-            MONITORINFO mi;
-            mi.rcMonitor = { 0 };
-            mi.rcWork = { 0 };
-            mi.dwFlags = 0;
+            MONITORINFO mi = { sizeof(MONITORINFO) };
             if (GetMonitorInfo(mon, &mi)) wa = mi.rcWork;
             else SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
         } else {
@@ -27350,7 +31623,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     case WM_NCHITTEST:
     {
         LRESULT hit = DefWindowProc(hwnd, msg, wParam, lParam);
-        if (hit == HTCLIENT) {
+        if (hit == HTCLIENT && pData) {
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             ScreenToClient(hwnd, &pt);
             RECT dragRect = { 0, 0, pData->closeButtonRect.left, 30 };
@@ -27427,6 +31700,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         for (const auto& btn : pData->buttonRects) {
             if (PtInRect(&btn.second, pt)) {
+                pData->focusedButton = btn.first;
                 PostMessage(hwnd, WM_COMMAND, btn.first, 0);
                 return 0;
             }
@@ -27441,7 +31715,6 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         PAINTSTRUCT ps;
         RECT clientRect;
         GetClientRect(hwnd, &clientRect);
-        EnableAcrylic(hwnd);
         HDC hdc = BeginPaint(hwnd, &ps);
 
         HDC memDC = CreateCompatibleDC(hdc);
@@ -27457,7 +31730,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         g.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
         wchar_t caption[256];
-        GetWindowTextW(hwnd, caption, 128);
+        GetWindowTextW(hwnd, caption, 256);
         Popup_DrawChrome(&g, memDC, clientRect, pData->closeButtonRect, pData->hFontTitle, caption, pData->isHoveringClose);
 
         int textY = 46;
@@ -27471,7 +31744,21 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
 
         if (pData->hIcon) {
-            DrawIconEx(memDC, 20, iconDrawY, pData->hIcon, 32, 32, 0, NULL, DI_NORMAL);
+            UINT iconTypePaint = pData->params->type & 0xF0;
+            const wchar_t* glyph = L"\uE946";
+            Color glyphColor(255, 90, 170, 255);
+            if (iconTypePaint == MB_ICONWARNING) { glyph = L"\uE7BA"; glyphColor = Color(255, 235, 175, 70); }
+            else if (iconTypePaint == MB_ICONERROR) { glyph = L"\uE783"; glyphColor = Color(255, 235, 95, 95); }
+            else if (iconTypePaint == MB_ICONQUESTION) { glyph = L"\uE897"; glyphColor = Color(255, 120, 180, 255); }
+            HFONT glyphFontH = CreateFontW(-MulDiv(22, GetDeviceCaps(memDC, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+            Font glyphFont(memDC, glyphFontH);
+            SolidBrush glyphBrush(glyphColor);
+            StringFormat sfGlyph;
+            sfGlyph.SetAlignment(StringAlignmentCenter);
+            sfGlyph.SetLineAlignment(StringAlignmentCenter);
+            RectF glyphRect(20.0f, (REAL)(iconDrawY + 3), 32.0f, 32.0f);
+            g.DrawString(glyph, -1, &glyphFont, glyphRect, &sfGlyph, &glyphBrush);
+            DeleteObject(glyphFontH);
         }
 
         int textLeft = pData->hIcon ? (20 + 32 + 15) : 20;
@@ -27494,7 +31781,8 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             else if (btn.first == IDNO) text = L"No";
 
             bool isPrimary = (btn.first == IDOK || btn.first == IDYES);
-            Popup_DrawActionButton(&g, memDC, btn.second, pData->hFontText, text, pData->hoveringButton == btn.first, isPrimary);
+            Popup_DrawActionButton(&g, memDC, btn.second, pData->hFontText, text,
+                pData->hoveringButton == btn.first || pData->focusedButton == btn.first, isPrimary);
         }
 
         BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memDC, 0, 0, SRCCOPY);
@@ -27513,6 +31801,28 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         DestroyWindow(hwnd);
         break;
     case WM_KEYDOWN:
+        if (pData && !pData->buttonRects.empty() &&
+            (wParam == VK_TAB || wParam == VK_LEFT || wParam == VK_RIGHT || wParam == VK_UP || wParam == VK_DOWN)) {
+            int idx = -1;
+            for (size_t i = 0; i < pData->buttonRects.size(); ++i) {
+                if (pData->buttonRects[i].first == pData->focusedButton) { idx = (int)i; break; }
+            }
+            int delta = (wParam == VK_LEFT || wParam == VK_UP) ? -1 : 1;
+            idx = (idx + delta + (int)pData->buttonRects.size()) % (int)pData->buttonRects.size();
+            pData->focusedButton = pData->buttonRects[idx].first;
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+        if (pData && (wParam == VK_SPACE || wParam == VK_RETURN) && pData->focusedButton != -1) {
+            bool exists = false;
+            for (const auto& btn : pData->buttonRects) {
+                if (btn.first == pData->focusedButton) { exists = true; break; }
+            }
+            if (exists) {
+                PostMessage(hwnd, WM_COMMAND, pData->focusedButton, 0);
+                return 0;
+            }
+        }
         if (wParam == VK_ESCAPE)
         {
             if (pData && pData->params && pData->params->result)
@@ -27552,7 +31862,7 @@ LRESULT CALLBACK DarkMessageBoxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         if (pData) {
             if (pData->hFontTitle) DeleteObject(pData->hFontTitle);
             if (pData->hFontText) DeleteObject(pData->hFontText);
-            if (pData->hIcon) DestroyIcon(pData->hIcon);
+            pData->hIcon = NULL;
             delete pData;
             SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)NULL);
         }
@@ -27579,7 +31889,13 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
     }
 
     int result = 0;
-    UINT btnType = type & 0x0F;
+    UINT effectiveType = type;
+    if ((effectiveType & 0xF0) == 0) {
+        bool looksLikeWarning = (caption && (wcsstr(caption, L"Error") || wcsstr(caption, L"Warning") || wcsstr(caption, L"Failed") || wcsstr(caption, L"Invalid"))) ||
+                                (text && (wcsstr(text, L"Failed") || wcsstr(text, L"Invalid") || wcsstr(text, L"cannot") || wcsstr(text, L"may disconnect") || wcsstr(text, L"not found") || wcsstr(text, L"locked")));
+        if (looksLikeWarning) effectiveType |= MB_ICONWARNING;
+    }
+    UINT btnType = effectiveType & 0x0F;
     if (btnType == MB_OKCANCEL || btnType == MB_YESNOCANCEL)
         result = IDCANCEL;
     else if (btnType == MB_YESNO)
@@ -27587,18 +31903,25 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
     else
         result = IDOK;
 
-    DarkMessageBoxParams params = { text, type, &result, description, bannerIcon };
+    DarkMessageBoxParams params = { text, effectiveType, &result, description, bannerIcon };
 
-    HWND hDialog = CreateWindowEx(WS_EX_TOPMOST | WS_EX_APPWINDOW, DLG_CLASS_NAME, caption, WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, owner, NULL, g_hInst, &params);
+    if (owner == g_hwnd) {
+        owner = (g_hMainUiWnd && IsWindow(g_hMainUiWnd) && IsWindowVisible(g_hMainUiWnd)) ? g_hMainUiWnd : NULL;
+    }
+    DWORD exStyle = WS_EX_TOPMOST;
+    if (!(owner && IsWindow(owner) && IsWindowVisible(owner))) {
+        exStyle |= WS_EX_APPWINDOW;
+    }
+    HWND hDialog = CreateWindowEx(exStyle, DLG_CLASS_NAME, caption, WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT, 100, 100, owner, NULL, g_hInst, &params);
     if (hDialog)
     {
         ShowWindow(hDialog, SW_SHOW);
         UpdateWindow(hDialog);
         SetForegroundWindow(hDialog);
-        if (owner)
-            EnableWindow(owner, FALSE);
-    MSG msg;
-    while (IsWindow(hDialog) && GetMessage(&msg, NULL, 0, 0) > 0)
+        ModalSetOwnerEnabled(owner, false);
+    MSG msg = { 0 };
+    BOOL gmRes = 1;
+    while (IsWindow(hDialog) && (gmRes = GetMessage(&msg, NULL, 0, 0)) > 0)
         {
             if (!IsDialogMessage(hDialog, &msg))
             {
@@ -27606,9 +31929,12 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
                 DispatchMessage(&msg);
             }
         }
+        if (gmRes == 0) {
+            PostQuitMessage((int)msg.wParam);
+        }
         if (owner)
         {
-            EnableWindow(owner, TRUE);
+            ModalSetOwnerEnabled(owner, true);
             EnableAcrylic(owner);
             SetForegroundWindow(owner);
         }
@@ -27618,9 +31944,8 @@ int ShowDarkMessageBox(HWND owner, const wchar_t* text, const wchar_t* caption, 
 // ==========
 
 struct FpsCapperPauseGuard {
-    bool wasPaused;
-    FpsCapperPauseGuard() : wasPaused(PauseFpsCapperBeforeAction(FPS_CAPPER_PRE_ACTION_PAUSE_MS, true)) {}
-    ~FpsCapperPauseGuard() { ResumeFpsCapperAfterAction(wasPaused); }
+    FpsCapperPauseGuard() { PauseFpsCapperNested(); }
+    ~FpsCapperPauseGuard() { ResumeFpsCapperNested(); }
     FpsCapperPauseGuard(const FpsCapperPauseGuard&) = delete;
     FpsCapperPauseGuard& operator=(const FpsCapperPauseGuard&) = delete;
 };
@@ -27645,6 +31970,7 @@ static void FlushSessionStatsToRegistry()
     uint64_t discordWebhooksSent = g_discordWebhooksSent.load();
     uint64_t programLaunches = g_programLaunches.load();
     uint64_t afkSessionsCompleted = g_afkSessionsCompleted.load();
+    uint64_t macroRunsPerformed = g_macroRunsPerformed.load();
     RegSetValueEx(hKey, L"TotalAfkTime", 0, REG_QWORD, (const BYTE*)&totalAfkTime, sizeof(totalAfkTime));
     RegSetValueEx(hKey, L"AfkActions", 0, REG_QWORD, (const BYTE*)&afkActions, sizeof(afkActions));
     RegSetValueEx(hKey, L"AutoReconnects", 0, REG_QWORD, (const BYTE*)&autoReconnects, sizeof(autoReconnects));
@@ -27652,10 +31978,141 @@ static void FlushSessionStatsToRegistry()
     RegSetValueEx(hKey, L"DiscordWebhooksSent", 0, REG_QWORD, (const BYTE*)&discordWebhooksSent, sizeof(discordWebhooksSent));
     RegSetValueEx(hKey, L"ProgramLaunches", 0, REG_QWORD, (const BYTE*)&programLaunches, sizeof(programLaunches));
     RegSetValueEx(hKey, L"AfkSessionsCompleted", 0, REG_QWORD, (const BYTE*)&afkSessionsCompleted, sizeof(afkSessionsCompleted));
+    RegSetValueEx(hKey, L"MacroRunsPerformed", 0, REG_QWORD, (const BYTE*)&macroRunsPerformed, sizeof(macroRunsPerformed));
     RegCloseKey(hKey);
 }
 
-void main_thread(bool arg_tray)
+static HWND FindRobloxWindowForPid(const std::vector<HWND>& wins, DWORD pid)
+{
+    for (HWND w : wins) {
+        if (!IsWindow(w)) continue;
+        DWORD wPid = 0;
+        GetWindowThreadProcessId(w, &wPid);
+        if (wPid == pid) return w;
+    }
+    return NULL;
+}
+
+static void UpdateUnmuteOnFocus(const std::vector<HWND>& wins)
+{
+    if (!g_unmuteOnFocus.load() || !g_autoMute.load())
+        return;
+    int muteOverride = g_utilsMuteOverride.load();
+    if (muteOverride == 0) return;
+    if (muteOverride == 1 && !g_muteOverrideAuto.load()) return;
+
+    HWND fg = GetForegroundWindow();
+    HWND fgRoot = fg ? GetAncestor(fg, GA_ROOT) : NULL;
+    if (!fgRoot) fgRoot = fg;
+    HWND fgRoblox = NULL;
+    DWORD fgPid = 0;
+    for (HWND w : wins) {
+        if (!IsWindow(w)) continue;
+        if (w == fg || w == fgRoot) {
+            fgRoblox = w;
+            GetWindowThreadProcessId(w, &fgPid);
+            break;
+        }
+    }
+
+    DWORD previousPid = g_unmutedPid.load();
+    if (!fgRoblox || fgPid == 0) {
+        if (previousPid > 0) {
+            HWND previousWnd = FindRobloxWindowForPid(wins, previousPid);
+            if (!previousWnd || GetWindowInstanceSetting_Mute(previousWnd, true))
+                MuteProcessByPid(previousPid, true);
+            g_unmutedPid = 0;
+        }
+        return;
+    }
+
+    if (previousPid > 0 && previousPid != fgPid) {
+        HWND previousWnd = FindRobloxWindowForPid(wins, previousPid);
+        if (!previousWnd || GetWindowInstanceSetting_Mute(previousWnd, true))
+            MuteProcessByPid(previousPid, true);
+        g_unmutedPid = 0;
+    }
+
+    if (GetWindowInstanceSetting_Mute(fgRoblox, false)) {
+        MuteProcessByPid(fgPid, true);
+        g_unmutedPid = 0;
+        return;
+    }
+
+    if (g_unmutedPid.load() != fgPid) {
+        MuteProcessByPid(fgPid, false);
+        g_unmutedPid = fgPid;
+    }
+}
+
+static void RunPendingStartupUtilityActions()
+{
+    if (g_pendingUtilityTestAction.exchange(false))
+        PostMessage(g_hwnd, WM_COMMAND, ID_UTILS_TEST_ACTION, 0);
+    if (g_pendingUtilityReconnectCheck.exchange(false))
+        PostMessage(g_hwnd, WM_COMMAND, ID_RECONNECT_MANUAL_CHECK, 0);
+}
+
+static void ApplySavedInstanceSettingsToWindow(HWND w)
+{
+    if (!w || !IsWindow(w)) return;
+    wchar_t title[256] = { 0 };
+    GetWindowTextW(w, title, 256);
+    if (!title[0]) return;
+
+    RobloxInstanceSettings saved;
+    {
+        std::lock_guard<std::mutex> lock(g_savedInstanceSettingsMutex);
+        auto it = g_savedInstanceSettings.find(title);
+        if (it == g_savedInstanceSettings.end()) {
+            std::wstring sanitized = SanitizePersistToken(title);
+            if (!sanitized.empty()) it = g_savedInstanceSettings.find(sanitized);
+        }
+        if (it == g_savedInstanceSettings.end()) return;
+        saved = it->second;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_instanceSettingsMutex);
+        if (g_instanceSettings.find(w) == g_instanceSettings.end()) {
+            g_instanceSettings[w] = saved;
+        }
+    }
+}
+
+static void RefreshMainUiAfkState()
+{
+    if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+        PostMessage(g_hMainUiWnd, WM_APP_MAINUI_STATE_ANIM, 0, 0);
+        InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+    }
+}
+
+static void StartAfkWhenRobloxAppears()
+{
+    if (g_bloxstrapStartPending.exchange(true)) return;
+    std::thread([]() {
+        for (int i = 0; i < 240 && !g_stopThread.load(); ++i) {
+            if (g_isAfkStarted.load()) {
+                g_bloxstrapStartPending = false;
+                return;
+            }
+            auto wins = FindAllRobloxWindows(true);
+            wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
+            if (!wins.empty()) {
+                g_bloxstrapStartPending = false;
+                PostMessage(g_hwnd, WM_COMMAND, ID_START_AFK, 0);
+                return;
+            }
+            Sleep(500);
+        }
+        g_bloxstrapStartPending = false;
+        if (!g_stopThread.load()) {
+            ShowTrayNotification(kNotifyTitleError, L"Bloxstrap start: Roblox window not found within 2 minutes.");
+        }
+    }).detach();
+}
+
+void main_thread(bool arg_tray, bool startAfkOnce)
 {
     if (g_autoUpdate.load())
     {
@@ -27689,26 +32146,70 @@ void main_thread(bool arg_tray)
         StartActivityMonitor();
     }
 
+    if (startAfkOnce)
+    {
+        UpdateSplashStatus(L"Waiting for Roblox...");
+        uint64_t waitStart = GetTickCount64();
+        auto wins = FindAllRobloxWindows(true);
+        wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
+        while (!g_stopThread.load() && wins.empty() && GetTickCount64() - waitStart < 120000)
+        {
+            Sleep(500);
+            wins = FindAllRobloxWindows(true);
+            wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
+        }
+        if (!g_stopThread.load() && !wins.empty() && !g_isAfkStarted.exchange(true))
+        {
+            g_afkEffectsReady = false;
+                    g_macroAbortRequested = false;
+            g_afkStartTime = GetTickCount64();
+            QueueRefreshTrayMenu(true);
+            UpdateTrayIcon();
+            RefreshMainUiAfkState();
+            ActivateAutoUtilsOnAfkStart();
+            ApplyAutoUtilsStartEffects();
+            g_afkEffectsReady = true;
+            StartIntervalMacroForAfkSession();
+            QueueStatusBarOverlay(L"Anti-AFK started", 1800, wins.front(), StatusBarEventType::Session);
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started via CLI.", false);
+        }
+        else if (!g_stopThread.load() && wins.empty())
+        {
+            ShowTrayNotification(kNotifyTitleError, L"Roblox not found within 2 minutes. Anti-AFK was not started.");
+            QueueStatusBarOverlay(L"Roblox not found: start cancelled", 2500, g_hwnd);
+            QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"CLI start failed: Roblox not found.", false);
+        }
+    }
+
     UpdateSplashStatus(L"Finalizing setup...");
-    if (g_autoStartAfk.load())
+    if (g_autoStartAfk.load() && !g_isAfkStarted.load())
     {
         auto wins = FindAllRobloxWindows(true);
         wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
         if (!wins.empty())
         {
             UpdateSplashStatus(L"Auto-starting Anti-AFK...");
+            g_afkEffectsReady = false;
+                    g_macroAbortRequested = false;
             g_afkStartTime = GetTickCount64();
             g_isAfkStarted = true;
             QueueRefreshTrayMenu(true);
             UpdateTrayIcon();
+            RefreshMainUiAfkState();
             ActivateAutoUtilsOnAfkStart();
             QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started on launch.", false);
             ApplyAutoUtilsStartEffects();
+            g_afkEffectsReady = true;
+            StartIntervalMacroForAfkSession();
         }
         else
         {
             UpdateSplashStatus(L"Roblox not found for auto-start.");
         }
+    }
+
+    if (g_isAfkStarted.load()) {
+        RunPendingStartupUtilityActions();
     }
 
     if (GetEffectiveFpsLimit() > 0) {
@@ -27739,73 +32240,172 @@ void main_thread(bool arg_tray)
 
     if (!arg_tray) {
         int releaseType = (currentVersion / 100) % 10;
+        bool previewInfoScheduled = false;
         if (!g_previewAlphaNotify.load() && (releaseType == ALPHA || releaseType == BETA || releaseType == RC)) {
             PostMessage(g_hwnd, WM_APP + 51, 0, 0);
+            previewInfoScheduled = true;
         }
         if (!g_firstWelcomeShown.load()) {
             PostMessage(g_hwnd, WM_APP + 2, 0, 0);
         } else if (!g_useLegacyUi.load()) {
             PostMessage(g_hwnd, WM_COMMAND, ID_OPEN_UI, 0);
+            if (!previewInfoScheduled && !g_v4WelcomeShown.load()) {
+                PostMessage(g_hwnd, WM_COMMAND, ID_WHATS_NEW, 0);
+            }
         }
     }
+
+    uint64_t trackingSessionStart = 0;
+    std::vector<std::pair<HWND, DWORD>> pendingFocusRetries;
+    std::map<HWND, int> focusRetryCounts;
+    bool retryDeadlineWarned = false;
 
     while (!g_stopThread.load())
     {
         std::unique_lock<std::mutex> lock(g_cv_m);
         if (g_isAfkStarted.load())
         {
+            if (!g_afkEffectsReady.load()) {
+                g_cv.wait_for(lock, std::chrono::milliseconds(50));
+                continue;
+            }
             HWND user = GetForegroundWindow();
             auto wins = FindAllRobloxWindows(true);
             wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
+            for (HWND w : wins) ApplySavedInstanceSettingsToWindow(w);
+            bool retryPass = false;
+            bool cancelPendingAction = false;
             if (wins.empty())
             {
-                if (g_autoStartAfk.load() && g_isAfkStarted.load())
+                if (!g_isAfkStarted.exchange(false)) {
+                    continue;
+                }
+                if (g_autoStartAfk.load())
                 {
                     FinalizeAfkSession();
-                    g_isAfkStarted = false;
-                    if (g_intervalMacroEnabled.exchange(false)) {
-                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
-                    }
-                    ResetIcanForgetCounter();
+                    g_mainUiActivityPhase = 0;
+                    g_afkEffectsReady = true;
+                    g_macroAbortRequested = true;
+                    StopIntervalMacroForAfkSession();
+                    ResetICanForgetTracking();
                     DeactivateAutoUtilsOnAfkStop();
-                    ApplyAutoUtilsStopEffects();
+                    {
+                        std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+                        ApplyAutoUtilsStopEffects();
+                    }
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"Stopped: Roblox not found.", false);
                     QueueStatusBarOverlay(L"Auto-stopped: Roblox not found", 2200, user, StatusBarEventType::Session);
-                    QueueRefreshTrayMenu(false); UpdateTrayIcon(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. Anti-AFK is now off."); continue;
+                    QueueRefreshTrayMenu(false); UpdateTrayIcon(); RefreshMainUiAfkState(); ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. Anti-AFK is now off.");
+                    trackingSessionStart = 0;
+                    pendingFocusRetries.clear();
+                    focusRetryCounts.clear();
+                    retryDeadlineWarned = false;
+                    continue;
                 }
                 else
                 {
-                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Roblox not found.", false);
                     QueueStatusBarOverlay(L"Roblox window not found", 2200, user, StatusBarEventType::Session);
                     FinalizeAfkSession();
-                    g_isAfkStarted = false;
-                    if (g_intervalMacroEnabled.exchange(false)) {
-                        QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
-                    }
-                    ResetIcanForgetCounter();
+                    g_mainUiActivityPhase = 0;
+                    g_afkEffectsReady = true;
+                    g_macroAbortRequested = true;
+                    StopIntervalMacroForAfkSession();
+                    ResetICanForgetTracking();
                     DeactivateAutoUtilsOnAfkStop();
-                    ApplyAutoUtilsStopEffects();
+                    {
+                        std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+                        ApplyAutoUtilsStopEffects();
+                    }
                     QueueRefreshTrayMenu(false);
                     UpdateTrayIcon();
+                    RefreshMainUiAfkState();
                     ShowTrayNotification(L"AntiAFK-RBX • Auto-Stopped", L"Roblox window not found. Anti-AFK is now off.");
+                    trackingSessionStart = 0;
+                    pendingFocusRetries.clear();
+                    focusRetryCounts.clear();
+                    retryDeadlineWarned = false;
                     continue;
                 }
             }
             else
             {
                 bool autoReconnectTriggered = false;
-                bool cancelPendingAction = false;
+                uint64_t currentSessionStart = g_afkStartTime.load();
+                if (currentSessionStart != trackingSessionStart) {
+                    ResetWindowActionTracking();
+                    pendingFocusRetries.clear();
+                    focusRetryCounts.clear();
+                    retryDeadlineWarned = false;
+                    trackingSessionStart = currentSessionStart;
+                }
+                PruneWindowActionTracking();
+                bool hadPendingFocusRetries = !pendingFocusRetries.empty();
+                for (auto it = pendingFocusRetries.begin(); it != pendingFocusRetries.end(); ) {
+                    DWORD pid = 0;
+                    if (IsWindow(it->first)) GetWindowThreadProcessId(it->first, &pid);
+                    if (!IsWindow(it->first) || pid != it->second) {
+                        focusRetryCounts.erase(it->first);
+                        it = pendingFocusRetries.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+                retryPass = !pendingFocusRetries.empty();
+                if (retryPass) g_mainUiActivityPhase = 4;
+                bool skipActionCycle = false;
+                if (hadPendingFocusRetries && !retryPass) {
+                    skipActionCycle = true;
+                    retryDeadlineWarned = false;
+                    QueueStatusBarOverlay(L"Anti-AFK retry cancelled: window closed", 1800, user, StatusBarEventType::Action);
+                }
+                if (retryPass) {
+                    std::vector<HWND> retryWins;
+                    retryWins.reserve(pendingFocusRetries.size() + wins.size());
+                    for (const auto& pending : pendingFocusRetries) {
+                        if (IsWindow(pending.first)) retryWins.push_back(pending.first);
+                    }
+                    for (HWND w : wins) {
+                        if (std::find(retryWins.begin(), retryWins.end(), w) == retryWins.end())
+                            retryWins.push_back(w);
+                    }
+                    wins = std::move(retryWins);
+                }
+                std::stable_sort(wins.begin(), wins.end(), [](HWND a, HWND b) {
+                    return GetWindowLastActivityTick(a) < GetWindowLastActivityTick(b);
+                });
+                auto removePendingRetry = [&](HWND hwnd) {
+                    pendingFocusRetries.erase(
+                        std::remove_if(pendingFocusRetries.begin(), pendingFocusRetries.end(),
+                            [hwnd](const std::pair<HWND, DWORD>& p) { return p.first == hwnd; }),
+                        pendingFocusRetries.end());
+                    focusRetryCounts.erase(hwnd);
+                    if (pendingFocusRetries.empty()) retryDeadlineWarned = false;
+                };
+                auto isPendingWindow = [&](HWND hwnd) {
+                    for (const auto& p : pendingFocusRetries)
+                        if (p.first == hwnd) return true;
+                    return false;
+                };
                 if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load()) RefreshRobloxWindowOpacity(false);
                 if (g_autoGrid.load()) ApplyAutoRobloxWindowLayout();
-                if (g_userSafeMode.load() > 0)
+                if (!skipActionCycle)
                 {
+                bool userSafeWaited = false;
+                if (g_userSafeMode.load() > 0 && GetTickCount64() - g_afkStartTime.load() > 1000)
+                {
+                    g_mainUiActivityPhase = 2;
                     uint64_t startWaitTime = GetTickCount64();
                     bool shownStatus = false;
                     const int userSafeCheckInterval = 100;
+                    int userSafeLimit = MAX_WAIT_TIME;
+                    uint64_t safeWaitMs = GetMaxSafeWaitMs(wins);
+                    if (safeWaitMs / 1000 < (uint64_t)userSafeLimit)
+                        userSafeLimit = (int)(safeWaitMs / 1000);
 
                     while (true)
                     {
+                        if (g_userSafeMode.load() == 0) break;
                         uint64_t currentTime = GetTickCount64();
                         uint64_t elapsedSeconds = (currentTime - startWaitTime) / 1000;
 
@@ -27814,7 +32414,7 @@ void main_thread(bool arg_tray)
                             break;
                         }
 
-                        if (elapsedSeconds >= MAX_WAIT_TIME)
+                        if (elapsedSeconds >= (uint64_t)userSafeLimit)
                         {
                             break;
                         }
@@ -27826,7 +32426,7 @@ void main_thread(bool arg_tray)
                             break;
                         }
 
-                        int remaining = (int)(MAX_WAIT_TIME - elapsedSeconds);
+                        int remaining = (int)((uint64_t)userSafeLimit - elapsedSeconds);
                         wchar_t waitMsg[128];
                         swprintf_s(waitMsg, L"Waiting 3s inactivity • force in %ds", remaining);
                         if (!shownStatus)
@@ -27839,37 +32439,44 @@ void main_thread(bool arg_tray)
                             QueueStatusBarMessage(waitMsg, StatusBarEventType::Action);
                         }
 
-                        g_cv.wait_for(lock, std::chrono::milliseconds(userSafeCheckInterval), [] { return !g_userActive.load() || g_stopThread.load() || !g_isAfkStarted.load(); });
+                        g_cv.wait_for(lock, std::chrono::milliseconds(userSafeCheckInterval), [] { return !g_userActive.load() || g_stopThread.load() || !g_isAfkStarted.load() || g_userSafeMode.load() == 0; });
                     }
+                    userSafeWaited = shownStatus;
                     if (!cancelPendingAction) QueueStatusBarHide(false);
+                    g_mainUiActivityPhase = 1;
                 }
 
+                g_mainUiActivityPhase = 3;
                 FpsCapperPauseGuard fpsCapperGuard;
 
-                QueueStatusBarOverlay(L"Performing anti-AFK action",
+                QueueStatusBarOverlay(L"Performing Anti-AFK action",
                                       STATUS_BAR_ACTION_PENDING_DURATION, wins.front(), StatusBarEventType::Action);
 
-                DWORD statusBarLeadWaited = 0;
-                while (statusBarLeadWaited < STATUS_BAR_PRE_ACTION_DELAY)
-                {
-                    if (g_stopThread.load()) {
-                        QueueStatusBarHide(false);
-                        return;
-                    }
-                    if (!g_isAfkStarted.load()) {
-                        cancelPendingAction = true;
-                        break;
-                    }
+                if (!userSafeWaited) {
+                    DWORD statusBarLeadWaited = 0;
+                    while (statusBarLeadWaited < STATUS_BAR_PRE_ACTION_DELAY)
+                    {
+                        if (g_stopThread.load()) {
+                            QueueStatusBarHide(false);
+                            return;
+                        }
+                        if (!g_isAfkStarted.load()) {
+                            cancelPendingAction = true;
+                            break;
+                        }
 
-                    DWORD waitChunk = (std::min)((DWORD)50, STATUS_BAR_PRE_ACTION_DELAY - statusBarLeadWaited);
-                    Sleep(waitChunk);
-                    statusBarLeadWaited += waitChunk;
+                        DWORD waitChunk = (std::min)((DWORD)50, STATUS_BAR_PRE_ACTION_DELAY - statusBarLeadWaited);
+                        Sleep(waitChunk);
+                        statusBarLeadWaited += waitChunk;
+                    }
                 }
 
                 if (cancelPendingAction) {
                     QueueStatusBarHide(false);
                     continue;
                 }
+
+                user = GetForegroundWindow();
 
                 if (g_multiSupport.load())
                 {
@@ -27902,13 +32509,30 @@ void main_thread(bool arg_tray)
                     }
 
                     HWND w = wins[i];
-                    if (!IsWindow(w)) continue;
+                    if (!IsWindow(w)) {
+                        removePendingRetry(w);
+                        continue;
+                    }
 
-                    if (!GetWindowInstanceSetting_AntiAfk(w)) continue;
+                    if (!GetWindowInstanceSetting_AntiAfk(w)) {
+                        removePendingRetry(w);
+                        continue;
+                    }
 
                     if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(w))
                     {
+                        removePendingRetry(w);
                         continue;
+                    }
+
+                    if (retryPass && !isPendingWindow(w)) {
+                        uint64_t last = GetWindowLastActivityTick(w);
+                        uint64_t intervalMs = (uint64_t)(std::max)(1, g_selectedTime.load()) * 1000ull;
+                        uint64_t deadline = last + AFK_MAX_ACTION_GAP_MS;
+                        uint64_t lead = GetActionLeadMs(wins.size());
+                        uint64_t nowTick = GetTickCount64();
+                        if (intervalMs > 0 && nowTick < last + intervalMs && nowTick + lead < deadline)
+                            continue;
                     }
 
                     bool selfHidden = IsRobloxWindowSelfHidden(w);
@@ -27916,31 +32540,95 @@ void main_thread(bool arg_tray)
                     if (wasMinimized)
                         ShowWindow(w, SW_RESTORE);
 
-                    SetForegroundWindow(w);
                     if (g_stopThread.load() || !g_isAfkStarted.load()) {
                         if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
                         cancelPendingAction = true;
                         break;
                     }
-                    Sleep(g_preActionDelay.load());
 
-                    for (int fgAttempt = 0; fgAttempt < 2 && GetForegroundWindow() != w; ++fgAttempt) {
-                        SetForegroundWindow(w);
-                        Sleep(g_preActionDelay.load());
+                    std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+                    struct TempShowGuard {
+                        HWND hwnd = NULL;
+                        bool active = false;
+                        LONG_PTR origExStyle = 0;
+                        bool hadLayered = false;
+                        bool gotLayeredAttr = false;
+                        COLORREF origKey = 0;
+                        BYTE origAlpha = 255;
+                        DWORD origFlags = 0;
+                        ~TempShowGuard() {
+                            if (active && hwnd && IsWindow(hwnd)) {
+                                if (IsWindowVisible(hwnd))
+                                    HideRobloxWindowTracked(hwnd);
+                                if (hadLayered) {
+                                    if (gotLayeredAttr)
+                                        SetLayeredWindowAttributes(hwnd, origKey, origAlpha, origFlags);
+                                } else {
+                                    SetWindowLongPtr(hwnd, GWL_EXSTYLE, origExStyle);
+                                }
+                            }
+                        }
+                    } tempShow;
+                    if (selfHidden && !IsWindowVisible(w)) {
+                        tempShow.hwnd = w;
+                        tempShow.origExStyle = GetWindowLongPtr(w, GWL_EXSTYLE);
+                        tempShow.hadLayered = (tempShow.origExStyle & WS_EX_LAYERED) != 0;
+                        if (tempShow.hadLayered) {
+                            tempShow.gotLayeredAttr = GetLayeredWindowAttributes(w, &tempShow.origKey, &tempShow.origAlpha, &tempShow.origFlags) != 0;
+                        } else {
+                            SetWindowLongPtr(w, GWL_EXSTYLE, tempShow.origExStyle | WS_EX_LAYERED);
+                        }
+                        SetLayeredWindowAttributes(w, 0, 0, LWA_ALPHA);
+                        ShowWindow(w, SW_SHOWNOACTIVATE);
+                        tempShow.active = true;
+                        Sleep(50);
                     }
-        if (GetForegroundWindow() != w) {
-            if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
-            if (!IsWindowVisible(w)) anySkippedHidden = true;
-            continue;
-        }
+                    auto addFocusRetry = [&]() {
+                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                        if (!IsWindowVisible(w)) {
+                            anySkippedHidden = true;
+                            removePendingRetry(w);
+                        } else {
+                            DWORD wPid = 0;
+                            GetWindowThreadProcessId(w, &wPid);
+                            bool alreadyPending = false;
+                            for (const auto& pending : pendingFocusRetries) {
+                                if (pending.first == w) { alreadyPending = true; break; }
+                            }
+                            if (!alreadyPending) pendingFocusRetries.push_back({ w, wPid });
+                            focusRetryCounts[w] = focusRetryCounts[w] + 1;
+                        }
+                    };
 
-                    if (g_autoReconnect.load()) {
+                    const int effectivePreDelay = (retryPass && isPendingWindow(w))
+                        ? (std::max)(g_preActionDelay.load(), 90)
+                        : g_preActionDelay.load();
+                    bool focused = TryActivateRobloxWindow(w);
+                    if (!focused) {
+                        Sleep(effectivePreDelay);
+                        focused = TryActivateRobloxWindow(w);
+                    }
+                    if (!focused) {
+                        addFocusRetry();
+                        continue;
+                    }
+                    Sleep(effectivePreDelay);
+                    if (!IsTargetForegroundForInput(w)) {
+                        addFocusRetry();
+                        continue;
+                    }
+                    removePendingRetry(w);
+
+                    if (g_autoReconnect.load() && GetWindowInstanceSetting_Reconnect(w, g_autoReconnect.load())) {
                         if (CheckForAutoReconnect(w)) {
                             g_autoReconnectsPerformed++;
+            g_sessionReconnects++;
                             autoReconnectTriggered = true;
                             {
+                                DWORD pendingPid = 0;
+                                GetWindowThreadProcessId(w, &pendingPid);
                                 std::lock_guard<std::mutex> lock(g_reconnectMacroDelayMutex);
-                                g_reconnectMacroPending[w] = GetTickCount64();
+                                g_reconnectMacroPending[w] = { pendingPid, GetTickCount64() };
                             }
                         }
                     }
@@ -27952,65 +32640,78 @@ void main_thread(bool arg_tray)
                     }
 
                     std::vector<std::wstring> customMacroNames;
-                    bool hasCustomMacro = GetWindowInstanceSetting_Macro(w, customMacroNames);
-                    bool perInstanceAction = hasCustomMacro && !customMacroNames.empty();
+                    bool hasMacroOverride = false;
+                    bool hasCustomMacro = GetWindowInstanceSetting_Macro(w, customMacroNames, &hasMacroOverride);
+                    bool perInstanceAction = hasMacroOverride;
+                    if (!hasCustomMacro) customMacroNames.clear();
 
                     PruneClosedInstanceSettings();
                     if (ShouldMuteRobloxNow()) {
                         DWORD wPid = 0;
                         GetWindowThreadProcessId(w, &wPid);
-                        if (wPid > 0 && GetWindowInstanceSetting_Mute(w, true)) MuteProcessByPid(wPid, true);
+                        if (wPid > 0 && wPid != g_unmutedPid.load() && GetWindowInstanceSetting_Mute(w, true)) MuteProcessByPid(wPid, true);
                     }
+                    const bool simpleModeRun = g_simpleMode.load();
+                    const bool effectivePerInstanceAction = !simpleModeRun && perInstanceAction;
                     g_randomCyclePick = -1;
-                    if (!(g_selectedAction.load() == 4 && perInstanceAction)) {
-                        int actionRepeats = (g_selectedAction.load() == 4) ? 1 : g_actionRepeatCount.load();
+                    if (!(g_selectedAction.load() == 4 && effectivePerInstanceAction)) {
+                        int actionRepeats = (simpleModeRun || g_selectedAction.load() == 4) ? 1 : g_actionRepeatCount.load();
                         for (int j = 0; j < actionRepeats; j++)
                         {
                             if (g_stopThread.load() || !g_isAfkStarted.load()) {
                                 cancelPendingAction = true;
                                 break;
                             }
-                            AntiAFK_Action(w);
-                            anyActionPerformed = true;
+                            lock.unlock();
+                            bool actOk = AntiAFK_Action(w);
+                            lock.lock();
+                            if (actOk)
+                                anyActionPerformed = true;
                         }
                     }
 
-                    if (!cancelPendingAction && perInstanceAction) {
+                    if (!cancelPendingAction && effectivePerInstanceAction) {
                         for (const auto& macroName : customMacroNames) {
-                            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+                            if (g_stopThread.load() || !g_isAfkStarted.load()) {
+                                cancelPendingAction = true;
+                                break;
+                            }
                             std::unique_lock<std::mutex> lockM(g_macrosMutex);
                             Macro* m = MacroEngine_FindMacro(macroName);
                             if (m && !m->triggerOnInterval) {
                                 Macro macroCopy = *m;
                                 lockM.unlock();
                                 lock.unlock();
-                                MacroEngine_ExecuteMacro(macroCopy, w);
+                                if (MacroEngine_ExecuteMacro(macroCopy, w))
+                                    anyActionPerformed = true;
                                 lock.lock();
-                                anyActionPerformed = true;
                             }
                         }
                     }
 
-                    if (!perInstanceAction && g_selectedAction.load() != 4 && !cancelPendingAction) {
+                    if (!simpleModeRun && !effectivePerInstanceAction && g_selectedAction.load() != 4 && !cancelPendingAction) {
                         std::vector<Macro> afterMacros = MacroEngine_GetCooldownMacros();
                         for (const auto& am : afterMacros) {
-                            if (g_stopThread.load() || !g_isAfkStarted.load()) break;
+                            if (g_stopThread.load() || !g_isAfkStarted.load()) {
+                                cancelPendingAction = true;
+                                break;
+                            }
                             lock.unlock();
-                            MacroEngine_ExecuteMacro(am, w);
+                            if (MacroEngine_ExecuteMacro(am, w))
+                                anyActionPerformed = true;
                             lock.lock();
-                            anyActionPerformed = true;
                         }
                     }
                     if (cancelPendingAction) {
                         if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
                         break;
                     }
-                    if (GetWindowInstanceSetting_Reset(w, g_autoReset.load())) {
+                    if (!simpleModeRun && GetWindowInstanceSetting_Reset(w, g_autoReset.load())) {
                         if (g_stopThread.load() || !g_isAfkStarted.load()) {
                             cancelPendingAction = true;
                         } else {
-                            AutoReset_Action(w);
-                            QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Auto reset sent.", false);
+                            if (AutoReset_ActionDuringAfk(w))
+                                QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Auto reset sent.", false);
                         }
                     }
                     if (cancelPendingAction) {
@@ -28031,7 +32732,7 @@ void main_thread(bool arg_tray)
                     }
                 }
 
-                if (g_restoreMethod.load() > 0)
+                if (g_restoreMethod.load() > 0 && anyActionPerformed)
                 {
                     if (g_restoreMethod.load() == 1)
                     {
@@ -28053,8 +32754,9 @@ void main_thread(bool arg_tray)
                 }
 
                 if (!cancelPendingAction && anyActionPerformed) {
-                    QueueStatusBarOverlay(L"Performing anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front(), StatusBarEventType::Action);
+                    QueueStatusBarOverlay(L"Performing Anti-AFK action", STATUS_BAR_POST_ACTION_DURATION, wins.front(), StatusBarEventType::Action);
                     g_afkActionsPerformed++;
+            g_sessionAfkActions++;
                     g_lastAfkActionTimestamp = GetTickCount64();
                     QueueDiscordWebhookEvent(DiscordWebhookEvent::Action, L"Cycle completed.", false);
                     if (autoReconnectTriggered) {
@@ -28064,32 +32766,108 @@ void main_thread(bool arg_tray)
             QueueStatusBarHide(false);
             if (anySkippedHidden && !cancelPendingAction) {
                 QueueStatusBarOverlay(L"Anti-AFK skipped: Roblox window is hidden", 1800, wins.front(), StatusBarEventType::Action);
-            } else {
+            } else if (pendingFocusRetries.empty()) {
                 QueueStatusBarOverlay(L"Anti-AFK action cancelled", 1800, wins.front(), StatusBarEventType::Action);
             }
         }
+                }
             }
             g_updateInterval = false;
 
+            if (!cancelPendingAction && !pendingFocusRetries.empty()) {
+                int maxFailures = 0;
+                for (const auto& pending : pendingFocusRetries) {
+                    auto it = focusRetryCounts.find(pending.first);
+                    if (it != focusRetryCounts.end() && it->second > maxFailures) maxFailures = it->second;
+                }
+                DWORD retryDelayMs = (maxFailures >= 8) ? 60000u : 15000u;
+                HWND retryAnchor = pendingFocusRetries.front().first;
+                int retrySeconds = (int)((retryDelayMs + 999) / 1000);
+                wchar_t retryMsg[128];
+                swprintf_s(retryMsg, L"Anti-AFK focus failed • retry in %ds", retrySeconds);
+                QueueStatusBarOverlayPersistent(retryMsg, retryAnchor, StatusBarEventType::Action);
+                DWORD waitedMs = 0;
+                while (waitedMs < retryDelayMs) {
+                    if (g_stopThread.load() || !g_isAfkStarted.load()) {
+                        cancelPendingAction = true;
+                        break;
+                    }
+                    DWORD chunk = (std::min)((DWORD)1000, retryDelayMs - waitedMs);
+                    g_cv.wait_for(lock, std::chrono::milliseconds(chunk), [] { return g_stopThread.load() || g_updateInterval.load() || !g_isAfkStarted.load(); });
+                    if (g_stopThread.load() || !g_isAfkStarted.load()) {
+                        cancelPendingAction = true;
+                        break;
+                    }
+                    waitedMs += chunk;
+                    for (auto it = pendingFocusRetries.begin(); it != pendingFocusRetries.end(); ) {
+                        DWORD pid = 0;
+                        if (IsWindow(it->first)) GetWindowThreadProcessId(it->first, &pid);
+                        if (!IsWindow(it->first) || pid != it->second) {
+                            focusRetryCounts.erase(it->first);
+                            it = pendingFocusRetries.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
+                    if (pendingFocusRetries.empty()) break;
+                    if (!retryDeadlineWarned) {
+                        for (const auto& pending : pendingFocusRetries) {
+                            if (IsWindowNearAfkDeadline(pending.first)) {
+                                ShowTrayNotification(L"AntiAFK-RBX • Input Needed", L"Roblox may disconnect soon. Click the Roblox window or press a key in it.");
+                                retryDeadlineWarned = true;
+                                break;
+                            }
+                        }
+                    }
+                    int remainingSeconds = (int)((retryDelayMs - waitedMs + 999) / 1000);
+                    swprintf_s(retryMsg, L"Anti-AFK focus failed • retry in %ds", remainingSeconds);
+                    QueueStatusBarMessage(retryMsg, StatusBarEventType::Action);
+                    if (g_updateInterval.load()) break;
+                }
+                if (cancelPendingAction) {
+                    QueueStatusBarHide(false);
+                    continue;
+                }
+                if (!pendingFocusRetries.empty()) {
+                    g_updateInterval = false;
+                    continue;
+                }
+                QueueStatusBarHide(false);
+                retryDeadlineWarned = false;
+            }
+
+            if (retryPass) {
+                wins = FindAllRobloxWindows(true);
+                wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
+            }
+
             const int focusCheckInterval = 500;
-            const int totalWaitMs = g_selectedTime.load() * 1000;
-            DWORD previousActivePid = 0;
+            g_mainUiActivityPhase = 1;
+            uint64_t intervalMs = (uint64_t)g_selectedTime.load() * 1000ull;
+            uint64_t safeWaitMs = GetMaxSafeWaitMs(wins);
+            if (safeWaitMs < intervalMs) intervalMs = safeWaitMs;
+            if (!wins.empty() && intervalMs < 1000) intervalMs = 1000;
+            const int totalWaitMs = (int)intervalMs;
             auto waitStart = std::chrono::steady_clock::now();
             while (true) {
                 if (g_stopThread.load() || !g_isAfkStarted.load()) break;
 
-                    if (g_intervalMacroEnabled.load()) {
+                    if (!g_simpleMode.load() && g_intervalMacroEnabled.load() && !g_intervalMacroThreadRunning.load()) {
                         ULONGLONG now = GetTickCount64();
                         for (HWND w : wins) {
                             if (!IsWindow(w)) continue;
                         std::vector<Macro> intervalMacros;
                         {
                             std::vector<std::wstring> macroNames;
-                            if (GetWindowInstanceSetting_IntervalMacro(w, macroNames) && !macroNames.empty()) {
-                                std::lock_guard<std::mutex> lockM(g_macrosMutex);
-                                for (const auto& macroName : macroNames) {
-                                    Macro* m = MacroEngine_FindMacro(macroName);
-                                    if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+                            bool hasOverride = false;
+                            bool hasMacros = GetWindowInstanceSetting_IntervalMacro(w, macroNames, &hasOverride);
+                            if (hasOverride) {
+                                if (hasMacros && !macroNames.empty()) {
+                                    std::lock_guard<std::mutex> lockM(g_macrosMutex);
+                                    for (const auto& macroName : macroNames) {
+                                        Macro* m = MacroEngine_FindMacro(macroName);
+                                        if (m && m->intervalSec > 0) intervalMacros.push_back(*m);
+                                    }
                                 }
                             } else {
                                 std::lock_guard<std::mutex> lockM(g_macrosMutex);
@@ -28119,23 +32897,42 @@ void main_thread(bool arg_tray)
                                     } else {
                                         ULONGLONG elapsed = now - it->second;
                                         if (elapsed >= (ULONGLONG)m.intervalSec * 1000) {
-                                            it->second = now;
                                             shouldRun = true;
                                         }
                                     }
                                 }
                                 if (shouldRun) {
+                                    if (g_userSafeMode.load() > 0 && g_userActive.load()) continue;
+                                    if (g_skipActiveEnabled.load() && IsRobloxWindowActiveRecently(w)) continue;
                                     bool selfHidden = IsRobloxWindowSelfHidden(w);
                                     bool wasMinimized = IsIconic(w) && !selfHidden;
+                                    bool temporarilyShown = false;
                                     if (wasMinimized) ShowWindow(w, SW_RESTORE);
-                                    SetForegroundWindow(w);
+                                    if (selfHidden && !IsWindowVisible(w)) {
+                                        ShowWindow(w, SW_SHOWNOACTIVATE);
+                                        temporarilyShown = true;
+                                        Sleep(50);
+                                    }
+                                    if (!TryActivateRobloxWindow(w)) {
+                                        if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
+                                        if (temporarilyShown && IsWindowVisible(w)) HideRobloxWindowTracked(w);
+                                        continue;
+                                    }
+                                    {
+                                        std::lock_guard<std::mutex> lockR(g_lastIntervalMacroRunMutex);
+                                        g_lastIntervalMacroRun[std::make_pair(w, m.name)] = now;
+                                    }
                                     Sleep(g_preActionDelay.load());
                                     lock.unlock();
-                                    MacroEngine_ExecuteMacro(m, w);
+                                    bool executed = MacroEngine_ExecuteMacro(m, w);
                                     lock.lock();
+                                    if (temporarilyShown && IsWindowVisible(w)) HideRobloxWindowTracked(w);
                                     if (wasMinimized) ShowWindow(w, SW_MINIMIZE);
-                                    g_afkActionsPerformed++;
-                                    g_lastAfkActionTimestamp = GetTickCount64();
+                                    if (executed) {
+                                        g_afkActionsPerformed++;
+                                        g_sessionAfkActions++;
+                                        g_lastAfkActionTimestamp = GetTickCount64();
+                                    }
                                 }
                             }
                     }
@@ -28151,30 +32948,7 @@ void main_thread(bool arg_tray)
                     ApplyAutoRobloxWindowLayout();
                 }
 
-                if (g_unmuteOnFocus.load() && g_autoMute.load() && g_utilsMuteOverride.load() == -1) {
-                    HWND fg = GetForegroundWindow();
-                    DWORD currentFgPid = 0;
-                    GetWindowThreadProcessId(fg, &currentFgPid);
-
-                    bool fgIsRoblox = false;
-                    for (HWND w : wins) {
-                        DWORD wPid = 0;
-                        GetWindowThreadProcessId(w, &wPid);
-                        if (wPid == currentFgPid) { fgIsRoblox = true; break; }
-                    }
-
-                    if (fgIsRoblox && currentFgPid > 0 && currentFgPid != g_unmutedPid.load()) {
-                        if (previousActivePid > 0 && previousActivePid != currentFgPid) {
-                            MuteProcessByPid(previousActivePid, true);
-                        }
-                        MuteProcessByPid(currentFgPid, false);
-                        previousActivePid = currentFgPid;
-                        g_unmutedPid = currentFgPid;
-                    } else if (!fgIsRoblox && previousActivePid > 0) {
-                        MuteProcessByPid(previousActivePid, true);
-                        previousActivePid = 0;
-                    }
-                }
+                UpdateUnmuteOnFocus(wins);
 
                 {
                     static uint64_t s_lastStatsFlush = 0;
@@ -28207,11 +32981,17 @@ void main_thread(bool arg_tray)
                     }
                 }
             }
-            MuteUnmutedPid();
-            g_unmutedPid = 0;
         }
         else
         {
+            trackingSessionStart = 0;
+            pendingFocusRetries.clear();
+            focusRetryCounts.clear();
+            retryDeadlineWarned = false;
+            {
+                auto allWins = FindAllRobloxWindows(true);
+                for (HWND w : allWins) ApplySavedInstanceSettingsToWindow(w);
+            }
             if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
                 ApplyAutoRobloxWindowLayout();
             }
@@ -28266,11 +33046,13 @@ void main_thread(bool arg_tray)
 
                     if (shouldStart) {
                         if (!g_isAfkStarted.load()) {
+                            g_macroAbortRequested = false;
                             g_isAfkStarted = true;
                             g_afkStartTime = GetTickCount64();
                             QueueRefreshTrayMenu(true);
                             UpdateTrayIcon();
                             ActivateAutoUtilsOnAfkStart();
+                            StartIntervalMacroForAfkSession();
                             QueueStatusBarOverlay(L"Anti-AFK auto-started", 2000, wins.front(), StatusBarEventType::Session);
                             QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started automatically.", false);
                             ApplyAutoUtilsStartEffects();
@@ -28340,13 +33122,26 @@ std::wstring FormatHotkeyString(UINT modifiers, UINT vk)
 }
 
 static bool g_hkCtrl = false, g_hkShift = false, g_hkAlt = false, g_hkWin = false;
+static bool g_trayMenuOpen = false;
+static bool g_trayMenuRefreshPending = false;
 
 LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
     if (nCode == HC_ACTION && g_hotkeyCaptureActive.load()) {
         KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+        if (p->flags & LLKHF_INJECTED) {
+            return CallNextHookEx(NULL, nCode, wParam, lParam);
+        }
         UINT vk = (UINT)p->vkCode;
         if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+            if (vk == VK_ESCAPE) {
+                g_hotkeyCaptureActive = false;
+                g_hkCtrl = g_hkShift = g_hkAlt = g_hkWin = false;
+                if (g_hotkeyCaptureWnd) {
+                    PostMessage(g_hotkeyCaptureWnd, WM_APP + 10, 0, 0);
+                }
+                return 1;
+            }
             switch (vk) {
             case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: g_hkCtrl = true; break;
             case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: g_hkShift = true; break;
@@ -28359,6 +33154,9 @@ LRESULT CALLBACK HotkeyCaptureProc(int nCode, WPARAM wParam, LPARAM lParam)
                     if (g_hkShift) mods |= MOD_SHIFT;
                     if (g_hkAlt) mods |= MOD_ALT;
                     if (g_hkWin) mods |= MOD_WIN;
+                    if (mods == 0 && !(vk >= VK_F1 && vk <= VK_F12)) {
+                        return 1;
+                    }
                     if (g_hotkeyCaptureIsGrid.load()) {
                         g_hotkeyGridModifiers = mods;
                         g_hotkeyGridVk = vk;
@@ -28411,14 +33209,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_nid.uCallbackMessage = WM_USER + 1;
         g_nid.hIcon = CreateCustomIcon();
         lstrcpy(g_nid.szTip, L"AntiAFK-RBX • Click right mouse button for menu");
-        Shell_NotifyIcon(NIM_ADD, &g_nid);
+        if (!Shell_NotifyIcon(NIM_ADD, &g_nid)) {
+            SetTimer(hwnd, TRAY_READD_RETRY_TIMER, 2000, NULL);
+        }
         CreateTrayMenu(g_isAfkStarted.load());
+        SetTimer(hwnd, TRAY_TIP_TIMER, 1000, NULL);
         SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_TOOLWINDOW);
         if (g_hotkeyEnabled.load()) {
-            RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            if (!RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load())) {
+                g_hotkeyEnabled = false;
+                ShowTrayNotification(kNotifyTitleError, L"Hotkey is already in use. Disable it or choose another combination.");
+                SaveSettings();
+            }
         }
         if (g_hotkeyGridEnabled.load()) {
-            RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+            if (!RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load())) {
+                g_hotkeyGridEnabled = false;
+                ShowTrayNotification(kNotifyTitleError, L"Grid hotkey is already in use. Disable it or choose another combination.");
+                SaveSettings();
+            }
         }
         {
             RAWINPUTDEVICE rid;
@@ -28485,7 +33294,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SetTimer(g_hMainUiWnd, 1002, 1000, NULL);
         }
         g_previewAlphaNotify = true;
+        g_v4WelcomeShown = true;
         SaveSettings();
+        return 0;
+    case WM_APP_BLOXSTRAP_START:
+        StartAfkWhenRobloxAppears();
+        return 0;
+    case WM_APP_BLOXSTRAP_SETTING:
+        g_bloxstrapIntegration = (wParam != 0);
+        UpdateBloxstrapIntegration(g_bloxstrapIntegration.load());
+        SaveSettings();
+        CreateTrayMenu(g_isAfkStarted.load());
+        if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+            InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+        }
         return 0;
     case WM_APP + 10:
     {
@@ -28508,8 +33330,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
         }
         if (hotkeyRegisterFailed) {
-            if (wasGrid) g_hotkeyGridEnabled = false;
-            else g_hotkeyEnabled = false;
+            if (wasGrid) {
+                g_hotkeyGridModifiers = g_hotkeyGridPrevModifiers;
+                g_hotkeyGridVk = g_hotkeyGridPrevVk;
+                g_hotkeyGridEnabled = g_hotkeyGridPrevEnabled;
+                if (g_hotkeyGridEnabled.load()) RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load());
+            } else {
+                g_hotkeyModifiers = g_hotkeyPrevModifiers;
+                g_hotkeyVk = g_hotkeyPrevVk;
+                g_hotkeyEnabled = g_hotkeyPrevEnabled;
+                if (g_hotkeyEnabled.load()) RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyModifiers.load(), g_hotkeyVk.load());
+            }
         }
         SaveSettings();
         CreateTrayMenu(g_isAfkStarted.load());
@@ -28517,7 +33348,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             InvalidateRect(g_hMainUiWnd, NULL, TRUE);
         }
         if (hotkeyRegisterFailed) {
-            ShowStatusBarOverlay(L"Hotkey is in use by another program", 2500, hwnd);
+            ShowStatusBarOverlay(L"Hotkey is in use - previous hotkey restored", 2800, hwnd);
         } else if (wasGrid) {
             ShowStatusBarOverlay(FormatHotkeyString(g_hotkeyGridModifiers.load(), g_hotkeyGridVk.load()).c_str(), 2000, hwnd);
         } else {
@@ -28531,7 +33362,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (payload) {
             bool skip = false;
             if (!g_isAfkStarted.load()) {
-                if (payload->text == L"Performing anti-AFK action" ||
+                if (payload->text == L"Performing Anti-AFK action" ||
                     payload->text == L"Waiting for inactivity" ||
                     payload->text == L"Auto-started after inactivity" ||
                     payload->text == L"Anti-AFK auto-started") {
@@ -28551,7 +33382,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (payload) {
             bool skip = false;
             if (!g_isAfkStarted.load()) {
-                if (payload->text == L"Performing anti-AFK action" ||
+                if (payload->text == L"Performing Anti-AFK action" ||
                     payload->text == L"Waiting for inactivity" ||
                     payload->text == L"Auto-started after inactivity" ||
                     payload->text == L"Anti-AFK auto-started") {
@@ -28578,8 +33409,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         HideStatusBarOverlay(wParam != 0);
         return 0;
     case WM_APP_REFRESH_TRAY_MENU:
+    {
+        if (g_trayMenuOpen) {
+            g_trayMenuRefreshPending = true;
+            return 0;
+        }
         CreateTrayMenu(wParam != 0);
         return 0;
+    }
     case WM_APP_WEBHOOK_TEST_RESULT:
     {
         std::wstring* msg = reinterpret_cast<std::wstring*>(wParam);
@@ -28596,10 +33433,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             GetCursorPos(&pt);
             SetForegroundWindow(hwnd);
             ApplyDarkMode(hwnd, true);
+            g_trayMenuOpen = true;
             TrackPopupMenu(g_hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
+            g_trayMenuOpen = false;
             PostMessage(hwnd, WM_NULL, 0, 0);
+            if (g_trayMenuRefreshPending) {
+                g_trayMenuRefreshPending = false;
+                CreateTrayMenu(g_isAfkStarted.load());
+            }
         }
         else if (lParam == WM_LBUTTONDOWN)
+        {
+            if (!g_useLegacyUi.load())
+                ShowMainUIDialog(hwnd);
+        }
+        else if (lParam == NIN_BALLOONUSERCLICK)
         {
             if (!g_useLegacyUi.load())
                 ShowMainUIDialog(hwnd);
@@ -28611,6 +33459,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_SHOW_TUTORIAL:
         {
             ShowTutorialDialog(hwnd);
+            break;
+        }
+        case ID_WHATS_NEW:
+        {
+            OpenV4Welcome(hwnd);
             break;
         }
         case ID_OPEN_UI:
@@ -28655,6 +33508,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             wins.erase(std::remove_if(wins.begin(), wins.end(), [](HWND hw){ return IsRobloxWindowClosedToTray(hw); }), wins.end());
             if (!wins.empty())
             {
+                bool anyElevated = false;
+                for (HWND w : wins) {
+                    if (IsWindowProcessElevatedMismatch(w)) {
+                        anyElevated = true;
+                        break;
+                    }
+                }
+                if (anyElevated) {
+                    HWND owner = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd;
+                    int res = ShowDarkMessageBox(
+                        owner,
+                        L"Roblox is running as Administrator, while AntiAFK-RBX is not.\n\nWindows UIPI blocks focusing or sending Anti-AFK keys to an elevated Roblox window.\n\nRestart Roblox normally (not as Administrator), or run AntiAFK-RBX as Administrator.\n\nStart anyway?",
+                        L"AntiAFK-RBX • Elevated Roblox Warning",
+                        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
+                    );
+                    if (res != IDYES) {
+                        break;
+                    }
+                }
                 if (!g_isAfkStarted.load() && g_selectedAction.load() == 4 && MacroEngine_GetCooldownMacros().empty() && !MacroEngine_AllWindowsHaveInstanceMacros()) {
                     HWND owner = g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd;
                     EnableWindow(owner, FALSE);
@@ -28665,16 +33537,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         break;
                     }
                 }
-                if (!g_isAfkStarted.load())
-                {
-                    g_afkStartTime = GetTickCount64();
+                g_afkEffectsReady = false;
+                if (g_isAfkStarted.exchange(true)) {
+                    g_afkEffectsReady = true;
+                    break;
                 }
-                g_isAfkStarted = true;
-                if (!g_intervalMacroEnabled.load()) {
-                    g_intervalMacroEnabled = true;
-                    QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled with Anti-AFK.", false);
-                }
-                SpawnIntervalMacroThreadIfNeeded();
+                g_afkStartTime = GetTickCount64();
+                g_macroAbortRequested = false;
+                g_updateInterval = false;
+                StartIntervalMacroForAfkSession();
                 {
                     std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
                     g_manuallyStoppedPids.clear();
@@ -28692,24 +33563,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(g_hMainUiWnd, NULL, FALSE);
                 }
                 ActivateAutoUtilsOnAfkStart();
-                g_cv.notify_all();
-                std::thread([]()
+                try
                 {
-                    try
-                    {
-                        ApplyAutoUtilsStartEffects();
-                    }
-                    catch (...)
-                    {
-                    }
-                }).detach();
+                    ApplyAutoUtilsStartEffects();
+                }
+                catch (...)
+                {
+                }
+                g_afkEffectsReady = true;
+                g_cv.notify_all();
 
                 ShowStatusBarOverlay(L"Anti-AFK started", 1800, wins.front(), StatusBarEventType::Session);
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started manually.", false);
              }
              else
              {
-                 ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
+                 ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
                  ShowStatusBarOverlay(L"Roblox window not found", 2200, GetForegroundWindow());
                  QueueDiscordWebhookEvent(DiscordWebhookEvent::Error, L"Start failed: Roblox not found.", false);
                  if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -28726,14 +33595,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_STOP_AFK:
         {
             bool wasRunning = g_isAfkStarted.exchange(false);
-            if (g_intervalMacroEnabled.exchange(false)) {
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Stopped with Anti-AFK.", false);
-            }
+            g_updateInterval = false;
+            g_afkEffectsReady = true;
+            g_macroAbortRequested = true;
+            StopIntervalMacroForAfkSession();
             if (wasRunning && g_afkStartTime.load() > 0) {
                 FinalizeAfkSession();
                 SaveSettings();
             }
-            ResetIcanForgetCounter();
+            ResetICanForgetTracking();
             auto wins_stop = FindAllRobloxWindows(true);
             {
                 std::lock_guard<std::mutex> lock(g_manuallyStoppedPidsMutex);
@@ -28746,7 +33616,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
             }
             DeactivateAutoUtilsOnAfkStop();
-            ApplyAutoUtilsStopEffects();
+            {
+                std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+                ApplyAutoUtilsStopEffects();
+            }
             CreateTrayMenu(false);
             UpdateTrayIcon();
             ShowStatusBarOverlay(L"Anti-AFK stopped", 1800, wins_stop.empty() ? GetForegroundWindow() : wins_stop.front(), StatusBarEventType::Session);
@@ -28770,7 +33643,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
+                ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -28785,7 +33658,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
+                ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -28826,12 +33699,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             break;
         }
+        case ID_SS_ALWAYS_SHOW_HINT_UI:
+        {
+            g_ssAlwaysShowHintAndClose = !g_ssAlwaysShowHintAndClose.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+            }
+            break;
+        }
         case ID_GRID_SNAP:
         {
             auto wins = FindAllRobloxWindows(true);
             if (wins.empty())
             {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
+                ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
                 ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             }
             else
@@ -28841,6 +33724,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     if (g_manualGridSnapThread.joinable()) g_manualGridSnapThread.join();
                     try {
                         g_manualGridSnapThread = std::thread([]() {
+                            std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
                             std::lock_guard<std::mutex> lock(g_autoWindowLayoutMutex);
                             try {
                                 GridSnapRobloxWindows();
@@ -28903,15 +33787,200 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                 ShowTrayNotification(L"AntiAFK-RBX • UI Mode Changed", L"Switched to Legacy (Tray) mode.");
                             }
             break;
+        case ID_UI_DISABLE_SPLASH:
+            g_disableSplash = !g_disableSplash.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UI_DISABLE_ACRYLIC:
+            g_disableAcrylic = !g_disableAcrylic.load();
+            ApplyAcrylicSetting();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UI_DISABLE_ANIMATIONS:
+            g_disableAnimations = !g_disableAnimations.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            break;
+        case ID_UI_DISABLE_NOTIFICATIONS:
+            g_notificationsDisabled = !g_notificationsDisabled.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UI_KEEP_ON_TOP:
+            g_keepWindowOnTop = !g_keepWindowOnTop.load();
+            ApplyWindowOnTopSetting();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UI_DISABLE_CORNERS:
+            g_disableWindowCorners = !g_disableWindowCorners.load();
+            ApplyWindowCornersSetting();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            break;
+        case ID_UI_HIDE_NEXT_ACTION:
+            g_uiHideNextActionText = !g_uiHideNextActionText.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+            break;
+        case ID_UI_HIDE_INSTANCES:
+            g_uiHideInstancesText = !g_uiHideInstancesText.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+            break;
+        case ID_UI_HIDE_SIMPLE_SWITCH:
+            g_uiHideSimpleModeSwitch = !g_uiHideSimpleModeSwitch.load();
+            SaveSettings();
+            CreateTrayMenu(g_isAfkStarted.load());
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) InvalidateRect(g_hMainUiWnd, NULL, FALSE);
+            break;
+        case ID_GLOBAL_OPACITY_SET:
+            ShowCustomInputDialog(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : NULL, CustomInputDialogType::GlobalOpacityValue);
+            break;
         case ID_TOGGLE_SIMPLE_MODE:
-            g_simpleMode = !g_simpleMode.load();
+        {
+            const bool enteringSimple = !g_simpleMode.load();
+            if (enteringSimple) {
+                std::vector<const wchar_t*> activeAdv;
+                if (g_autoStartAfk.load()) activeAdv.push_back(L"Auto-start Anti-AFK");
+                if (g_autoReset.load()) activeAdv.push_back(L"Auto Reset (Esc+R+Enter)");
+                if (g_autoHideRoblox.load()) activeAdv.push_back(L"Hide/Show Roblox");
+                if (g_autoOpacity.load()) activeAdv.push_back(L"Enable Opacity");
+                if (g_autoGrid.load()) activeAdv.push_back(L"Grid Roblox");
+                if (g_autoMute.load()) activeAdv.push_back(L"Auto-Mute Roblox");
+                if (g_doNotSleep.load()) activeAdv.push_back(L"Do Not Sleep");
+                if (g_discordWebhookEnabled.load()) activeAdv.push_back(L"Discord Webhook");
+                if (g_intervalMacroEnabled.load()) activeAdv.push_back(L"Interval Macros");
+                if (g_selectedAction.load() == 4) activeAdv.push_back(L"Macros Only action");
+                if (g_afkReminderEnabled.load()) activeAdv.push_back(L"I Can Forget");
+
+                if (!activeAdv.empty()) {
+                    std::wstring msg = L"The following Advanced features are enabled and will be paused while Simple Mode is active (your settings are kept):\n";
+                    for (size_t i = 0; i < activeAdv.size(); ++i) {
+                        msg += L"\n- ";
+                        msg += activeAdv[i];
+                    }
+                    msg += L"\n\nSwitch to Simple Mode?";
+                    HWND dlgOwner = (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) ? g_hMainUiWnd : hwnd;
+                    if (ShowDarkMessageBox(dlgOwner, msg.c_str(), L"Switch to Simple Mode", MB_OKCANCEL | MB_ICONWARNING) != IDOK) {
+                        break;
+                    }
+                }
+            }
+
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                MainUIData* mainData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
+                RECT cr;
+                if (mainData && !g_disableAnimations.load() && GetClientRect(g_hMainUiWnd, &cr) && cr.right > 0 && cr.bottom > 0) {
+                    if (mainData->simplePrevSnapshotBmp) {
+                        DeleteObject(mainData->simplePrevSnapshotBmp);
+                        mainData->simplePrevSnapshotBmp = NULL;
+                    }
+                    HDC wndDC = GetDC(g_hMainUiWnd);
+                    if (wndDC) {
+                        HDC snapDC = CreateCompatibleDC(wndDC);
+                        HBITMAP snapBmp = CreateCompatibleBitmap(wndDC, cr.right, cr.bottom);
+                        if (snapDC && snapBmp) {
+                            HGDIOBJ oldBmp = SelectObject(snapDC, snapBmp);
+                            FillRect(snapDC, &cr, AcrylicBaseBgBrush());
+                            SetBkMode(snapDC, TRANSPARENT);
+                            mainData->isOffscreenRender = true;
+                            MainUI_Paint_DrawContent(snapDC, cr, mainData);
+                            mainData->isOffscreenRender = false;
+                            SelectObject(snapDC, oldBmp);
+                            mainData->simplePrevSnapshotBmp = snapBmp;
+                            mainData->simpleTransitionAnim = 0.0f;
+                            mainData->simpleTransitionDirection = 1;
+                        } else if (snapBmp) {
+                            DeleteObject(snapBmp);
+                        }
+                        if (snapDC) DeleteDC(snapDC);
+                        ReleaseDC(g_hMainUiWnd, wndDC);
+                    }
+                }
+            }
+
+            g_simpleMode = enteringSimple;
+            if (g_isAfkStarted.load()) {
+                if (enteringSimple) {
+                    g_utilsWindowOpacityOverride = -1;
+                    g_opacityOverrideAuto = false;
+                    g_utilsMuteOverride = 0;
+                    g_muteOverrideAuto = false;
+                    RefreshRobloxWindowOpacity(false);
+                    MuteAllRoblox(false);
+                    ShowAllSelfHiddenRobloxWindows();
+                    StopIntervalMacroForAfkSession();
+                    UpdateDoNotSleepRequest();
+                } else {
+                    ActivateAutoUtilsOnAfkStart();
+                    StartIntervalMacroForAfkSession();
+                    ApplyAutoUtilsStartEffects();
+                }
+            }
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                MainUIData* mainData = (MainUIData*)GetWindowLongPtr(g_hMainUiWnd, GWLP_USERDATA);
+                if (mainData) {
+                    mainData->currentPage = 0;
+                    mainData->prevPage = 0;
+                    mainData->pageTransitionAnim = 1.0f;
+                    mainData->pageTransitionDirection = 0;
+                    mainData->hoveringNavItem = -1;
+                    mainData->highlightElement = -1;
+                    mainData->isHoveringSimpleExit = false;
+                    mainData->isHoveringSimpleFpsSettings = false;
+                    mainData->isHoveringSimpleRamSettings = false;
+                    mainData->isHoveringSimpleMutexStatus = false;
+                    mainData->simpleHoverHelp = -1;
+                    mainData->isHoveringInterval = false;
+                    mainData->isHoveringAction = false;
+                    mainData->isHoveringUserSafe = false;
+                    mainData->isHoveringMultiInstanceToggle = false;
+                    mainData->isHoveringAutoReconnectToggle = false;
+                    mainData->isHoveringFpsCapperToggle = false;
+                    mainData->isHoveringRamCleanerToggle = false;
+                    mainData->isHoveringSkipActiveToggle = false;
+                    mainData->showingGridSettings = false;
+                    mainData->gridSettingsViewAnim = 0.0f;
+                    mainData->gridSettingsViewDirection = 0;
+                    mainData->showingFpsCapperSettings = false;
+                    mainData->fpsCapperSettingsViewAnim = 0.0f;
+                    mainData->fpsCapperSettingsViewDirection = 0;
+                    mainData->showingMacros = false;
+                    mainData->macrosViewAnim = 0.0f;
+                    mainData->macrosViewDirection = 0;
+                    mainData->showingStatusBarSettings = false;
+                    mainData->statusBarSettingsViewAnim = 0.0f;
+                    mainData->statusBarSettingsViewDirection = 0;
+                    mainData->showingActionDelays = false;
+                    mainData->actionDelaysViewAnim = 0.0f;
+                    mainData->actionDelaysViewDirection = 0;
+                    mainData->showingSettingsSub = false;
+                    mainData->settingsSubViewAnim = 0.0f;
+                    mainData->settingsSubViewDirection = 0;
+                    mainData->showingTimings = false;
+                    mainData->timingsViewAnim = 0.0f;
+                    mainData->timingsViewDirection = 0;
+                    mainData->showingAlphaInfo = false;
+                    mainData->alphaInfoViewAnim = 0.0f;
+                    mainData->alphaInfoViewDirection = 0;
+                    RECT cr;
+                    if (GetClientRect(g_hMainUiWnd, &cr) && g_simpleMode.load()) {
+                        MainUI_Layout_SimpleMode(cr, mainData);
+                    }
+                }
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
             }
-            ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled, advanced options hidden" : L"Simple Mode disabled, showing all options", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            ShowStatusBarOverlay(g_simpleMode.load() ? L"Simple Mode enabled" : L"Advanced Mode enabled", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
+        }
         case ID_TOGGLE_HOTKEY:
         {
             g_hotkeyEnabled = !g_hotkeyEnabled.load();
@@ -28935,12 +34004,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case ID_CAPTURE_HOTKEY:
         {
+            if (g_hotkeyCaptureActive.load()) {
+                if (g_hotkeyCaptureIsGrid && g_hotkeyGridPrevEnabled) RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridPrevModifiers, g_hotkeyGridPrevVk);
+                else if (!g_hotkeyCaptureIsGrid && g_hotkeyPrevEnabled) RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyPrevModifiers, g_hotkeyPrevVk);
+            }
+            g_hotkeyPrevModifiers = g_hotkeyModifiers.load();
+            g_hotkeyPrevVk = g_hotkeyVk.load();
+            g_hotkeyPrevEnabled = g_hotkeyEnabled.load();
             g_hotkeyCaptureWnd = hwnd;
             g_hotkeyCaptureIsGrid = false;
             UnregisterHotKey(hwnd, HOTKEY_START_STOP_ID);
+    g_hkCtrl = false; g_hkShift = false; g_hkAlt = false; g_hkWin = false;
     g_hotkeyCaptureActive = true;
     if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
     g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+            if (!g_hHotkeyHook) {
+                g_hotkeyCaptureActive = false;
+                g_hotkeyCaptureWnd = NULL;
+                if (g_hotkeyPrevEnabled) RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyPrevModifiers, g_hotkeyPrevVk);
+                ShowStatusBarOverlay(L"Could not start hotkey capture", 2500, hwnd);
+                break;
+            }
             ShowStatusBarOverlay(L"Press new hotkey combination...", 5000, hwnd);
             break;
         }
@@ -28967,12 +34051,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case ID_CAPTURE_GRID_HOTKEY:
         {
+            if (g_hotkeyCaptureActive.load()) {
+                if (g_hotkeyCaptureIsGrid && g_hotkeyGridPrevEnabled) RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridPrevModifiers, g_hotkeyGridPrevVk);
+                else if (!g_hotkeyCaptureIsGrid && g_hotkeyPrevEnabled) RegisterHotKey(hwnd, HOTKEY_START_STOP_ID, g_hotkeyPrevModifiers, g_hotkeyPrevVk);
+            }
+            g_hotkeyGridPrevModifiers = g_hotkeyGridModifiers.load();
+            g_hotkeyGridPrevVk = g_hotkeyGridVk.load();
+            g_hotkeyGridPrevEnabled = g_hotkeyGridEnabled.load();
             g_hotkeyCaptureWnd = hwnd;
             g_hotkeyCaptureIsGrid = true;
             UnregisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID);
+    g_hkCtrl = false; g_hkShift = false; g_hkAlt = false; g_hkWin = false;
     g_hotkeyCaptureActive = true;
     if (g_hHotkeyHook) { UnhookWindowsHookEx(g_hHotkeyHook); g_hHotkeyHook = NULL; }
     g_hHotkeyHook = SetWindowsHookEx(WH_KEYBOARD_LL, HotkeyCaptureProc, GetModuleHandle(NULL), 0);
+            if (!g_hHotkeyHook) {
+                g_hotkeyCaptureActive = false;
+                g_hotkeyCaptureWnd = NULL;
+                if (g_hotkeyGridPrevEnabled) RegisterHotKey(hwnd, HOTKEY_GRID_SNAP_ID, g_hotkeyGridPrevModifiers, g_hotkeyGridPrevVk);
+                ShowStatusBarOverlay(L"Could not start hotkey capture", 2500, hwnd);
+                break;
+            }
             ShowStatusBarOverlay(L"Press new grid hotkey combination...", 5000, hwnd);
             break;
         }
@@ -29020,7 +34119,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_statusBarEnabled.load() && g_hStatusBarWnd && IsWindowVisible(g_hStatusBarWnd)) {
                 StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
                 if (sbData) {
-                    sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                    sbData->targetBounds = CalculateStatusBarBounds(sbData->anchorWindow, sbData->message);
                     UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
                 }
             }
@@ -29035,7 +34134,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_statusBarEnabled.load() && g_hStatusBarWnd && IsWindowVisible(g_hStatusBarWnd)) {
                 StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
                 if (sbData) {
-                    sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                    sbData->targetBounds = CalculateStatusBarBounds(sbData->anchorWindow, sbData->message);
                     UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
                 }
             }
@@ -29065,10 +34164,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_hStatusBarWnd && IsWindow(g_hStatusBarWnd)) {
                 StatusBarData* sbData = (StatusBarData*)GetWindowLongPtr(g_hStatusBarWnd, GWLP_USERDATA);
                 bool visible = IsWindowVisible(g_hStatusBarWnd) != FALSE;
-                bool stillAllowed = sbData && StatusBarHasAnyContent() && g_statusBarEnabled.load() && StatusBarEventEnabled(sbData->eventType);
+                bool stillAllowed = sbData && g_statusBarEnabled.load() && StatusBarEventEnabled(sbData->eventType);
                 if (visible) {
                     if (stillAllowed && sbData) {
-                        sbData->targetBounds = CalculateStatusBarBounds(NULL, sbData->message);
+                        sbData->targetBounds = CalculateStatusBarBounds(sbData->anchorWindow, sbData->message);
                         UpdateStatusBarPlacement(g_hStatusBarWnd, sbData);
                         InvalidateRect(g_hStatusBarWnd, NULL, FALSE);
                     } else {
@@ -29082,6 +34181,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case ID_USER_SAFE_LEGACY:
         case ID_USER_SAFE_BETA:
             g_userSafeMode = LOWORD(wParam) - ID_USER_SAFE_OFF;
+            g_cv.notify_all();
             if (g_userSafeMode.load() > 0)
             {
                 if (!g_monitorThreadRunning.load()) StartActivityMonitor();
@@ -29098,6 +34198,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_AUTO_START_AFK:
             g_autoStartAfk = !g_autoStartAfk.load();
+            g_cv.notify_all();
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29118,6 +34219,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_AUTO_RECONNECT:
             g_autoReconnect = !g_autoReconnect.load();
+            if (g_autoReconnect.load()) {
+                if (g_isAfkStarted.load() && g_reconnectCheckInterval.load() > 0) RestartReconnectMonitor();
+            } else {
+                StopReconnectMonitor();
+            }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29137,31 +34243,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         case ID_RECONNECT_INTERVAL_30:
             g_reconnectCheckInterval = 30;
-            if (g_isAfkStarted.load() && g_autoReconnect.load()) StartReconnectMonitor();
+            if (g_isAfkStarted.load() && g_autoReconnect.load()) RestartReconnectMonitor();
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_RECONNECT_INTERVAL_60:
             g_reconnectCheckInterval = 60;
-            if (g_isAfkStarted.load() && g_autoReconnect.load()) StartReconnectMonitor();
+            if (g_isAfkStarted.load() && g_autoReconnect.load()) RestartReconnectMonitor();
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_RECONNECT_INTERVAL_120:
             g_reconnectCheckInterval = 120;
-            if (g_isAfkStarted.load() && g_autoReconnect.load()) StartReconnectMonitor();
+            if (g_isAfkStarted.load() && g_autoReconnect.load()) RestartReconnectMonitor();
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_RECONNECT_INTERVAL_300:
             g_reconnectCheckInterval = 300;
-            if (g_isAfkStarted.load() && g_autoReconnect.load()) StartReconnectMonitor();
+            if (g_isAfkStarted.load() && g_autoReconnect.load()) RestartReconnectMonitor();
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
         case ID_RECONNECT_INTERVAL_600:
             g_reconnectCheckInterval = 600;
-            if (g_isAfkStarted.load() && g_autoReconnect.load()) StartReconnectMonitor();
+            if (g_isAfkStarted.load() && g_autoReconnect.load()) RestartReconnectMonitor();
             SaveSettings();
             CreateTrayMenu(g_isAfkStarted.load());
             break;
@@ -29170,10 +34276,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
 case ID_RECONNECT_MANUAL_CHECK:
 if (g_autoReconnect.load()) {
-if (!g_manualReconnectCheckRunning.load() && g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
 if (g_manualReconnectCheckRunning.exchange(true)) {
 QueueStatusBarOverlay(L"Reconnect check already running", 1500, NULL, StatusBarEventType::Reconnect);
 } else {
+if (g_manualReconnectCheckThread.joinable()) g_manualReconnectCheckThread.join();
 QueueStatusBarOverlay(L"Manual reconnect check...", 2000, NULL, StatusBarEventType::Reconnect);
 try {
 g_manualReconnectCheckThread = std::thread([]() {
@@ -29200,6 +34306,17 @@ case ID_AUTO_RESET:
             break;
         case ID_AUTO_HIDE:
             g_autoHideRoblox = !g_autoHideRoblox.load();
+            if (g_isAfkStarted.load()) {
+                std::lock_guard<std::recursive_mutex> inputLock(g_inputActionMutex);
+                if (g_autoHideRoblox.load()) {
+                    auto wins = FindAllRobloxWindows(true);
+                    for (HWND w : wins) {
+                        if (GetWindowInstanceSetting_Hide(w, true)) HideRobloxWindowTracked(w);
+                    }
+                } else {
+                    ShowAllSelfHiddenRobloxWindows();
+                }
+            }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29208,6 +34325,10 @@ case ID_AUTO_RESET:
             break;
         case ID_AUTO_OPACITY:
             g_autoOpacity = !g_autoOpacity.load();
+            if (g_isAfkStarted.load()) {
+                g_utilsWindowOpacityOverride = g_autoOpacity.load() ? 1 : -1;
+                g_opacityOverrideAuto = g_autoOpacity.load();
+            }
             RefreshRobloxWindowOpacity(false);
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -29285,11 +34406,7 @@ case ID_AUTO_RESET:
         }
         case ID_DO_NOT_SLEEP:
             g_doNotSleep = !g_doNotSleep.load();
-            if (g_doNotSleep.load()) {
-                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
-            } else {
-                SetThreadExecutionState(ES_CONTINUOUS);
-            }
+            UpdateDoNotSleepRequest();
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29298,6 +34415,12 @@ case ID_AUTO_RESET:
             break;
         case ID_AUTO_MUTE:
             g_autoMute = !g_autoMute.load();
+            if (g_isAfkStarted.load()) {
+                g_utilsMuteOverride = -1;
+                g_muteOverrideAuto = false;
+                MuteAllRoblox(g_autoMute.load());
+                g_unmutedPid = 0;
+            }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29306,7 +34429,7 @@ case ID_AUTO_RESET:
             break;
         case ID_UNMUTE_ON_FOCUS:
             if (!g_autoMute.load()) {
-                ShowStatusBarOverlay(L"Enable AutoMute first", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+                ShowStatusBarOverlay(L"Enable Auto-Mute first", 1600, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
             g_unmuteOnFocus = !g_unmuteOnFocus.load();
@@ -29418,13 +34541,19 @@ case ID_AUTO_RESET:
         }
         case ID_UTILS_RESET_ALL:
         {
-            if (ExecuteRobloxWindowActionForAll(AutoReset_Action, 1)) {
-                ShowStatusBarOverlay(L"Reset sent to all Roblox windows", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Manual reset sent to all Roblox windows.", false);
-            } else {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-            }
+            if (ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Send Reset (Esc+R+Enter) to all Roblox windows?", L"AntiAFK-RBX • Reset All", MB_YESNO | MB_DEFBUTTON2) != IDYES) break;
+            std::thread([]() {
+                try {
+                    bool ok = ExecuteRobloxWindowActionForAll(AutoReset_Action, 1);
+                    if (ok) {
+                        QueueStatusBarOverlay(L"Reset sent to all Roblox windows", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                        QueueDiscordWebhookEvent(DiscordWebhookEvent::AutoReset, L"Manual reset sent to all Roblox windows.", false);
+                    } else {
+                        ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
+                        QueueStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                    }
+                } catch (...) {}
+            }).detach();
             break;
         }
         case ID_UTILS_TEST_ACTION: case ID_TEST_ACTION:
@@ -29434,13 +34563,17 @@ case ID_AUTO_RESET:
                 ShowStatusBarOverlay(L"Start AFK first to test", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
             } else {
                 g_randomCyclePick = -1;
-                if (ExecuteRobloxWindowActionForAll(AntiAFK_Action, 3, false)) {
-                    g_lastAfkActionTimestamp = GetTickCount64();
-                    ShowStatusBarOverlay(L"Test Anti-AFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                } else {
-                    ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox window not found!");
-                    ShowStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
-                }
+                std::thread([]() {
+                    try {
+                        if (ExecuteRobloxWindowActionForAll(AntiAFK_ActionVoid, 3, true)) {
+                            g_lastAfkActionTimestamp = GetTickCount64();
+                            QueueStatusBarOverlay(L"Test Anti-AFK action sent", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                        } else {
+                            ShowTrayNotification(kNotifyTitleError, L"Roblox window not found!");
+                            QueueStatusBarOverlay(L"Roblox window not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
+                        }
+                    } catch (...) {}
+                }).detach();
             }
             break;
         }
@@ -29448,13 +34581,14 @@ case ID_AUTO_RESET:
         {
             auto pids = FindAllRobloxProcessIds();
             if (pids.empty()) {
-                ShowTrayNotification(L"AntiAFK-RBX • Error", L"Roblox process not found!");
+                ShowTrayNotification(kNotifyTitleError, L"Roblox process not found!");
                 ShowStatusBarOverlay(L"Roblox process not found", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : GetForegroundWindow());
                 break;
             }
 
             bool shouldMute = !ShouldMuteRobloxNow();
             g_utilsMuteOverride = shouldMute ? 1 : 0;
+            g_muteOverrideAuto = false;
             MuteAllRoblox(shouldMute);
             if (!shouldMute) {
                 g_unmutedPid = 0;
@@ -29471,6 +34605,7 @@ case ID_AUTO_RESET:
             bool isCurrentlyOn = ShouldRunFpsCapperNow();
             int sessionFpsLimit = g_fpsLimit > 0 ? g_fpsLimit.load() : (g_fpsLastActiveLimit.load() > 0 ? g_fpsLastActiveLimit.load() : 5);
             g_utilsFpsLimitOverride = isCurrentlyOn ? 0 : sessionFpsLimit;
+            g_fpsOverrideAuto = false;
             RestartFpsCapperForEffectiveLimit();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29544,6 +34679,16 @@ case ID_AUTO_RESET:
             CreateTrayMenu(g_isAfkStarted.load());
             ShowStatusBarOverlay(g_discordNotifyReconnect.load() ? L"Webhook Reconnect enabled" : L"Webhook Reconnect disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
             break;
+        case ID_DISCORD_NOTIFY_RESET:
+            if (!g_discordWebhookEnabled.load()) break;
+            g_discordNotifyReset = !g_discordNotifyReset.load();
+            SaveSettings();
+            if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
+                InvalidateRect(g_hMainUiWnd, NULL, TRUE);
+            }
+            CreateTrayMenu(g_isAfkStarted.load());
+            ShowStatusBarOverlay(g_discordNotifyReset.load() ? L"Webhook Auto Reset enabled" : L"Webhook Auto Reset disabled", 1700, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
+            break;
         case ID_DISCORD_NOTIFY_ERRORS:
             if (!g_discordWebhookEnabled.load()) break;
             g_discordNotifyErrors = !g_discordNotifyErrors.load();
@@ -29607,7 +34752,7 @@ case ID_AUTO_RESET:
             std::wstring clipboardText;
             if (!ReadUnicodeTextFromClipboard(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, clipboardText))
             {
-                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard does not contain Unicode text right now.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
+                ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Clipboard is empty or contains no text.", L"AntiAFK-RBX • Discord Webhook", MB_OK);
                 ShowStatusBarOverlay(L"Clipboard text not available", 1800, g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd);
                 break;
             }
@@ -29623,6 +34768,7 @@ case ID_AUTO_RESET:
         }
         case ID_DISCORD_WEBHOOK_CLEAR:
             if (!g_discordWebhookEnabled.load()) break;
+            if (ShowDarkMessageBox(hwnd, L"Clear the saved Discord webhook URL?", L"AntiAFK-RBX • Clear Webhook", MB_YESNO | MB_DEFBUTTON2) != IDYES) break;
             SetDiscordWebhookUrl(L"");
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -29742,6 +34888,17 @@ case ID_AUTO_RESET:
             QueueWebhookTestAsync(webhookUrl, L"the Legacy UI");
             break;
         }
+        case ID_DISCORD_LAST_ERROR:
+        {
+            std::wstring lastWebhookErrorCopy;
+            {
+                std::lock_guard<std::mutex> errorLock(g_lastWebhookErrorMutex);
+                lastWebhookErrorCopy = g_lastWebhookError;
+            }
+            if (lastWebhookErrorCopy.empty()) lastWebhookErrorCopy = L"No webhook errors recorded.";
+            ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, lastWebhookErrorCopy.c_str(), L"AntiAFK-RBX • Discord Webhook", MB_OK | MB_ICONINFORMATION);
+            break;
+        }
         case ID_FPS_CAP_3:
         case ID_FPS_CAP_5:
         case ID_FPS_CAP_7:
@@ -29761,6 +34918,9 @@ case ID_AUTO_RESET:
             int oldLimit = g_fpsLimit;
             g_fpsLastActiveLimit = newLimit;
             g_fpsLimit = newLimit;
+            if (g_isAfkStarted.load() && g_fpsOverrideAuto.load()) {
+                g_utilsFpsLimitOverride = newLimit;
+            }
 
             if (oldLimit != g_fpsLimit) {
                 RestartFpsCapperForEffectiveLimit();
@@ -29784,6 +34944,10 @@ case ID_AUTO_RESET:
                 g_fpsLimit = g_fpsLastActiveLimit.load();
             }
             if (oldLimit != g_fpsLimit) {
+                if (g_isAfkStarted.load()) {
+                    g_utilsFpsLimitOverride = g_fpsLimit > 0 ? g_fpsLimit.load() : 0;
+                    g_fpsOverrideAuto = (g_fpsLimit > 0);
+                }
                 RestartFpsCapperForEffectiveLimit();
                 SaveSettings();
                 CreateTrayMenu(g_isAfkStarted.load());
@@ -29881,6 +35045,10 @@ case ID_AUTO_RESET:
         case ID_RAM_CLEANER_TOGGLE:
         {
             g_ramCleanerAutoStart = !g_ramCleanerAutoStart.load();
+            if (g_isAfkStarted.load()) {
+                g_ramCleanerEnabled = g_ramCleanerAutoStart.load();
+                if (g_ramCleanerEnabled.load()) EnsureRamCleanerThreadStarted();
+            }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
                 InvalidateRect(g_hMainUiWnd, NULL, TRUE);
@@ -29896,10 +35064,13 @@ case ID_AUTO_RESET:
                 break;
             }
             g_intervalMacroEnabled = !g_intervalMacroEnabled.load();
+            ResetIntervalMacroTracking();
             if (g_intervalMacroEnabled.load()) {
+                g_macroAbortRequested = false;
                 SpawnIntervalMacroThreadIfNeeded();
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStarted, L"Enabled manually.", false);
             } else {
+                g_intervalMacroGen++;
                 QueueDiscordWebhookEvent(DiscordWebhookEvent::IntervalMacrosStopped, L"Disabled manually.", false);
             }
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -30106,16 +35277,20 @@ case ID_AUTO_RESET:
         case ID_ACTION_WS:
         case ID_ACTION_ZOOM:
         case ID_ACTION_RANDOM:
+        case ID_ACTION_ARROWS:
         case ID_MACROS_SELECT:
             if (LOWORD(wParam) == ID_MACROS_SELECT && g_selectedAction.load() != 4) {
-                int confirm = ShowDarkMessageBox(hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
+                int confirm = ShowDarkMessageBox(g_hMainUiWnd && IsWindow(g_hMainUiWnd) ? g_hMainUiWnd : hwnd, L"Enable 'Macros Only' as the AFK action?\n\nNo key actions (W/S, Space, Zoom) will be performed. Only macros with the 'AFK cooldown' trigger will run, once per AFK cycle.", L"AntiAFK-RBX • Macros Only", MB_YESNO | MB_DEFBUTTON2);
                 if (confirm != IDYES) {
                     break;
                 }
             }
-            g_selectedAction = NormalizeSelectedAction(LOWORD(wParam) - ID_ACTION_SPACE);
-            if (LOWORD(wParam) == ID_MACROS_SELECT) {
+            if (LOWORD(wParam) == ID_ACTION_ARROWS) {
+                g_selectedAction = 5;
+            } else if (LOWORD(wParam) == ID_MACROS_SELECT) {
                 g_selectedAction = 4;
+            } else {
+                g_selectedAction = NormalizeSelectedAction(LOWORD(wParam) - ID_ACTION_SPACE);
             }
             SaveSettings();
             if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
@@ -30149,9 +35324,12 @@ case ID_AUTO_RESET:
             if (LOWORD(wParam) >= ID_FPS_CAP_CUSTOM_BASE && LOWORD(wParam) <= ID_FPS_CAP_CUSTOM_BASE + 60) {
                 int newLimit = LOWORD(wParam) - ID_FPS_CAP_CUSTOM_BASE;
                 int oldLimit = g_fpsLimit;
-                g_fpsLastActiveLimit = newLimit;
+                if (newLimit > 0) g_fpsLastActiveLimit = newLimit;
                 g_fpsLimit = newLimit;
-                if (oldLimit != g_fpsLimit) {
+                if (g_isAfkStarted.load() && g_fpsOverrideAuto.load()) {
+                    g_utilsFpsLimitOverride = newLimit;
+                }
+                if (oldLimit != g_fpsLimit || g_fpsOverrideAuto.load()) {
                     RestartFpsCapperForEffectiveLimit();
                 }
                 SaveSettings();
@@ -30171,6 +35349,10 @@ case ID_AUTO_RESET:
         }
         break;
     case WM_TIMER:
+        if (wParam == TRAY_TIP_TIMER) {
+            if (g_isAfkStarted.load()) UpdateTrayIcon();
+            return 0;
+        }
         if (wParam == TRAY_READD_RETRY_TIMER) {
             if (++g_trayReaddAttempts > TRAY_READD_MAX_ATTEMPTS) {
                 KillTimer(hwnd, TRAY_READD_RETRY_TIMER);
@@ -30186,16 +35368,20 @@ case ID_AUTO_RESET:
         return TRUE;
     case WM_ENDSESSION:
         if (wParam) {
+            g_stopThread = true;
+            g_macroAbortRequested = true;
+            g_cv.notify_all();
             {
                 std::lock_guard<std::mutex> cvLock(g_cv_m);
                 g_stopThread = true;
+                g_macroAbortRequested = true;
                 g_cv.notify_all();
             }
             if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
                 FinalizeAfkSession();
-                ResetIcanForgetCounter();
+                ResetICanForgetTracking();
+                QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"App exiting.", false);
             }
-    ResetRobloxSessionEffectsOnExit();
     {
         std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
@@ -30211,7 +35397,20 @@ case WM_DESTROY:
             g_hHotkeyHook = NULL;
         }
     g_hotkeyCaptureActive = false;
-    ResetRobloxSessionEffectsOnExit();
+    g_stopThread = true;
+    g_macroAbortRequested = true;
+    g_cv.notify_all();
+    {
+        std::lock_guard<std::mutex> cvLock(g_cv_m);
+        g_stopThread = true;
+        g_macroAbortRequested = true;
+        g_cv.notify_all();
+    }
+    if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
+        FinalizeAfkSession();
+        ResetICanForgetTracking();
+        QueueDiscordWebhookEvent(DiscordWebhookEvent::Stopped, L"App exiting.", false);
+    }
 {
         std::lock_guard<std::mutex> trayLock(g_trayIconMutex);
         Shell_NotifyIcon(NIM_DELETE, &g_nid);
@@ -30220,10 +35419,6 @@ case WM_DESTROY:
             g_nid.hIcon = NULL;
         }
     }
-        if (g_isAfkStarted.exchange(false) && g_afkStartTime.load() > 0) {
-            FinalizeAfkSession();
-            ResetIcanForgetCounter();
-        }
         if (g_hMainUiWnd && IsWindow(g_hMainUiWnd)) {
             DestroyWindow(g_hMainUiWnd);
         }
@@ -30244,6 +35439,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nShowCmd);
+    if (strstr(GetCommandLineA(), "--self-test") != NULL) {
+        return RunJsonSelfTests();
+    }
     {
         typedef BOOL(WINAPI* SetProcessDpiAwarenessContext_fn)(HANDLE);
         auto fn = (SetProcessDpiAwarenessContext_fn)GetProcAddress(
@@ -30268,12 +35466,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     bool earlyAlreadyRunning = (hEarlyInstanceMutex && GetLastError() == ERROR_ALREADY_EXISTS);
     HWND hEarlyExistingWnd = FindWindow(CLASS_NAME, NULL);
     bool isSecondInstance = (earlyAlreadyRunning || hEarlyExistingWnd);
-    g_programLaunches++;
+    if (!isSecondInstance) g_programLaunches++;
     if (settingsLoaded && !isSecondInstance) {
         SaveSettings();
     }
     g_lastActivityTime = GetTickCount64();
     if (!isSecondInstance) {
+        RecoverStaleFpsSuspendState();
         RefreshRobloxWindowOpacity(false);
         if (IsUtilsWindowOpacityEnabled() || g_autoOpacity.load() || g_autoGrid.load()) {
             ApplyAutoRobloxWindowLayout();
@@ -30286,7 +35485,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     bool arg_noSplash = false, arg_tray = false, arg_startAfk = false;
     bool arg_checkUpdatesAndExit = false, arg_resetSettingsAndExit = false;
     bool arg_force = false;
-    bool arg_bloxstrapIntegration_cmd = false;
+    bool arg_bloxstrapIntegrationSet = false;
+    bool arg_bloxstrapIntegrationValue = true;
+    bool arg_bloxstrapIntegrationLauncherMode = false;
     bool arg_hasUtilityCommand = false;
     bool arg_utilsShowAll = false, arg_utilsHideAll = false, arg_utilsGridSnap = false;
     bool arg_utilsTestAction = false, arg_utilsResetAll = false, arg_utilsCloseAll = false;
@@ -30344,6 +35545,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 else if (val == L"ws") g_selectedAction = 1;
                 else if (val == L"zoom") g_selectedAction = 2;
                 else if (val == L"random") g_selectedAction = 3;
+                else if (val == L"macros" || val == L"macros-only") g_selectedAction = 4;
+                else if (val == L"arrows" || val == L"left-right") g_selectedAction = 5;
             }
             else if (arg == L"--multi-instance") {
                 bool value = true;
@@ -30415,9 +35618,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             }
             else if (arg == L"--bloxstrap-integration") {
                 bool value = true;
-                ReadOptionalOnOffArgument(argv, argc, i, true, value);
-                g_bloxstrapIntegration = value;
-                arg_bloxstrapIntegration_cmd = value;
+                if (ReadOptionalOnOffArgument(argv, argc, i, true, value)) {
+                    arg_bloxstrapIntegrationSet = true;
+                    arg_bloxstrapIntegrationValue = value;
+                    g_bloxstrapIntegration = value;
+                } else {
+                    arg_bloxstrapIntegrationLauncherMode = true;
+                }
             }
             else if (arg == L"--do-not-sleep") {
                 bool value = true;
@@ -30434,6 +35641,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                     int val = std::stoi(argv[++i]);
                     if (val >= 0 && val <= 60) {
                         g_fpsLimit = val;
+                        if (val > 0) g_fpsLastActiveLimit = val;
                     }
                 }
                 catch (...) {}
@@ -30587,6 +35795,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             else if (arg == L"--custom-process-names" && i + 1 < argc) {
                 std::lock_guard<std::mutex> lock(g_customProcessNamesMutex);
                 g_customProcessNames = argv[++i];
+                std::replace(g_customProcessNames.begin(), g_customProcessNames.end(), L',', L';');
             }
             else if (arg == L"--action-preset" && i + 1 < argc) {
                 std::wstring val = argv[++i];
@@ -30628,37 +35837,37 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 while (pos < combo.size()) {
                     size_t plus = combo.find(L'+', pos);
                     std::wstring token = (plus == std::wstring::npos) ? combo.substr(pos) : combo.substr(pos, plus - pos);
-                    if (token == L"Ctrl" || token == L"CTRL") mods |= MOD_CONTROL;
-                    else if (token == L"Shift" || token == L"SHIFT") mods |= MOD_SHIFT;
-                    else if (token == L"Alt" || token == L"ALT") mods |= MOD_ALT;
-                    else if (token == L"Win" || token == L"WIN") mods |= MOD_WIN;
+                    if (_wcsicmp(token.c_str(), L"Ctrl") == 0) mods |= MOD_CONTROL;
+                    else if (_wcsicmp(token.c_str(), L"Shift") == 0) mods |= MOD_SHIFT;
+                    else if (_wcsicmp(token.c_str(), L"Alt") == 0) mods |= MOD_ALT;
+                    else if (_wcsicmp(token.c_str(), L"Win") == 0) mods |= MOD_WIN;
                     else {
-                        if (token.size() == 1 && token[0] >= L'A' && token[0] <= L'Z') vk = token[0];
+                        if (token.size() == 1 && iswalpha(token[0])) vk = (UINT)towupper(token[0]);
                         else if (token.size() == 1 && token[0] >= L'0' && token[0] <= L'9') vk = token[0];
-                        else if (token[0] == L'F' && token.size() > 1) {
+                        else if ((token[0] == L'F' || token[0] == L'f') && token.size() > 1) {
                             int n = _wtoi(token.c_str() + 1);
                             if (n >= 1 && n <= 12) vk = VK_F1 + (n - 1);
                         }
-                        else if (token == L"Space") vk = VK_SPACE;
-                        else if (token == L"Enter") vk = VK_RETURN;
-                        else if (token == L"Tab") vk = VK_TAB;
-                        else if (token == L"Esc" || token == L"Escape") vk = VK_ESCAPE;
-                        else if (token == L"Backspace") vk = VK_BACK;
-                        else if (token == L"Del" || token == L"Delete") vk = VK_DELETE;
-                        else if (token == L"Ins" || token == L"Insert") vk = VK_INSERT;
-                        else if (token == L"Home") vk = VK_HOME;
-                        else if (token == L"End") vk = VK_END;
-                        else if (token == L"PgUp") vk = VK_PRIOR;
-                        else if (token == L"PgDn") vk = VK_NEXT;
-                        else if (token == L"Left") vk = VK_LEFT;
-                        else if (token == L"Right") vk = VK_RIGHT;
-                        else if (token == L"Up") vk = VK_UP;
-                        else if (token == L"Down") vk = VK_DOWN;
+                        else if (_wcsicmp(token.c_str(), L"Space") == 0) vk = VK_SPACE;
+                        else if (_wcsicmp(token.c_str(), L"Enter") == 0) vk = VK_RETURN;
+                        else if (_wcsicmp(token.c_str(), L"Tab") == 0) vk = VK_TAB;
+                        else if (_wcsicmp(token.c_str(), L"Esc") == 0 || _wcsicmp(token.c_str(), L"Escape") == 0) vk = VK_ESCAPE;
+                        else if (_wcsicmp(token.c_str(), L"Backspace") == 0) vk = VK_BACK;
+                        else if (_wcsicmp(token.c_str(), L"Del") == 0 || _wcsicmp(token.c_str(), L"Delete") == 0) vk = VK_DELETE;
+                        else if (_wcsicmp(token.c_str(), L"Ins") == 0 || _wcsicmp(token.c_str(), L"Insert") == 0) vk = VK_INSERT;
+                        else if (_wcsicmp(token.c_str(), L"Home") == 0) vk = VK_HOME;
+                        else if (_wcsicmp(token.c_str(), L"End") == 0) vk = VK_END;
+                        else if (_wcsicmp(token.c_str(), L"PgUp") == 0) vk = VK_PRIOR;
+                        else if (_wcsicmp(token.c_str(), L"PgDn") == 0) vk = VK_NEXT;
+                        else if (_wcsicmp(token.c_str(), L"Left") == 0) vk = VK_LEFT;
+                        else if (_wcsicmp(token.c_str(), L"Right") == 0) vk = VK_RIGHT;
+                        else if (_wcsicmp(token.c_str(), L"Up") == 0) vk = VK_UP;
+                        else if (_wcsicmp(token.c_str(), L"Down") == 0) vk = VK_DOWN;
                     }
                     if (plus == std::wstring::npos) break;
                     pos = plus + 1;
                 }
-                if (vk != 0) {
+                if (vk != 0 && (mods != 0 || (vk >= VK_F1 && vk <= VK_F12))) {
                     g_hotkeyModifiers = mods;
                     g_hotkeyVk = vk;
                     g_hotkeyEnabled = true;
@@ -30667,12 +35876,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             else if (arg == L"--screen-saver") {
                 bool value = true;
                 ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                arg_hasUtilityCommand = true;
                 arg_screenSaverSet = true;
                 arg_screenSaverOn = value;
             }
             else if (arg == L"--screen-saver-always-show-exit") {
                 bool value = true;
                 ReadOptionalOnOffArgument(argv, argc, i, true, value);
+                arg_hasUtilityCommand = true;
                 arg_screenSaverAlwaysSet = true;
                 arg_screenSaverAlways = value;
             }
@@ -30725,7 +35936,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         arg_tray = true;
     }
 
-    if (arg_bloxstrapIntegration_cmd) {
+    if (arg_bloxstrapIntegrationSet && !earlyAlreadyRunning && !hEarlyExistingWnd) {
+        UpdateBloxstrapIntegration(arg_bloxstrapIntegrationValue);
+        SaveSettings();
+    }
+
+    if (arg_bloxstrapIntegrationLauncherMode) {
         arg_noSplash = true;
         arg_tray = true;
         g_notificationsDisabled = true;
@@ -30761,7 +35977,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             }
             if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
             hSingleInstanceMutex = CreateMutex(NULL, FALSE, L"AntiAFK-RBX-SingleInstance");
-        } else if (arg_bloxstrapIntegration_cmd) {
+        } else if (arg_bloxstrapIntegrationSet && hExistingWnd) {
+            PostMessage(hExistingWnd, WM_APP_BLOXSTRAP_SETTING, arg_bloxstrapIntegrationValue ? 1 : 0, 0);
+            if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
+            GdiplusShutdown(gdiplusToken);
+            return 0;
+        } else if (arg_bloxstrapIntegrationLauncherMode) {
+            if (hExistingWnd) PostMessage(hExistingWnd, WM_APP_BLOXSTRAP_START, 0, 0);
             if (hSingleInstanceMutex) CloseHandle(hSingleInstanceMutex);
             GdiplusShutdown(gdiplusToken);
             return 0;
@@ -30805,15 +36027,6 @@ ApplyAutoRobloxWindowLayout();
         return 0;
     }
 
-    if (arg_startAfk) {
-        g_autoStartAfk = false;
-        g_isAfkStarted = true;
-        g_afkStartTime = GetTickCount64();
-        ActivateAutoUtilsOnAfkStart();
-        ApplyAutoUtilsStartEffects();
-        QueueDiscordWebhookEvent(DiscordWebhookEvent::Started, L"Started via CLI.", false);
-    }
-
     const bool noSplash = arg_noSplash || g_disableSplash.load();
     const bool useMainUiStartupOverlay = !noSplash && !arg_tray && g_firstWelcomeShown.load() && !g_useLegacyUi.load();
     if (!noSplash && g_firstWelcomeShown.load() && !g_useLegacyUi.load() && !useMainUiStartupOverlay) {
@@ -30850,7 +36063,7 @@ ApplyAutoRobloxWindowLayout();
         }
         if (!IsMultiInstanceMutexValid())
         {
-            ShowTrayNotification(L"AntiAFK-RBX • Error", L"Failed to create Multi-Instance mutex!");
+            ShowTrayNotification(kNotifyTitleError, L"Failed to create Multi-Instance mutex!");
             ShowStatusBarOverlay(L"Mutex creation failed. Close all Roblox windows and retry.", 5000, g_hwnd);
             ShowMutexBanner(L"Mutex registration failed", L"Could not register the singleton mutex", false);
         }
@@ -30910,7 +36123,8 @@ ApplyAutoRobloxWindowLayout();
             SendMessage(g_hwnd, WM_COMMAND, ID_GRID_SNAP, 0);
         }
         if (arg_utilsTestAction) {
-            SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_TEST_ACTION, 0);
+            if (arg_startAfk) g_pendingUtilityTestAction = true;
+            else SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_TEST_ACTION, 0);
         }
         if (arg_utilsResetAll) {
             SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_RESET_ALL, 0);
@@ -30919,7 +36133,8 @@ ApplyAutoRobloxWindowLayout();
             SendMessage(g_hwnd, WM_COMMAND, ID_UTILS_CLOSE_ALL, 0);
         }
         if (arg_reconnectManualCheck) {
-            SendMessage(g_hwnd, WM_COMMAND, ID_RECONNECT_MANUAL_CHECK, 0);
+            if (arg_startAfk) g_pendingUtilityReconnectCheck = true;
+            else SendMessage(g_hwnd, WM_COMMAND, ID_RECONNECT_MANUAL_CHECK, 0);
         }
         if (arg_cleanRamNow) {
             SendMessage(g_hwnd, WM_COMMAND, ID_RAM_CLEAN_SWEEP, 0);
@@ -30942,20 +36157,40 @@ ApplyAutoRobloxWindowLayout();
     }
     g_webhookThreadRunning = true;
     g_webhookThread = std::thread(WebhookWorkerThread);
-    std::thread t(main_thread, arg_tray);
+    std::thread t(main_thread, arg_tray, arg_startAfk);
+    if (arg_hasUtilityCommand && !(arg_screenSaverSet && arg_screenSaverOn)) {
+        std::thread([]() {
+            ULONGLONG startWait = GetTickCount64();
+            while (!g_stopThread.load() &&
+                   (g_pendingUtilityTestAction.load() || g_pendingUtilityReconnectCheck.load()) &&
+                   (GetTickCount64() - startWait < 10000)) {
+                Sleep(50);
+            }
+            Sleep(300);
+            if (!g_stopThread.load() && g_hwnd && IsWindow(g_hwnd)) {
+                PostMessage(g_hwnd, WM_CLOSE, 0, 0);
+            }
+        }).detach();
+    }
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0) > 0)
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+    g_stopThread = true;
+    g_macroAbortRequested = true;
+    g_cv.notify_all();
     {
         std::lock_guard<std::mutex> lock(g_cv_m);
         g_stopThread = true;
+        g_macroAbortRequested = true;
         g_cv.notify_all();
     }
     if (t.joinable())
         t.join();
+
+    ResetRobloxSessionEffectsOnExit();
 
     g_isFpsCapperRunning = false;
     {
@@ -30973,7 +36208,8 @@ ApplyAutoRobloxWindowLayout();
     if (g_intervalMacroThread.joinable()) g_intervalMacroThread.join();
 
     {
-        std::lock_guard<std::mutex> lock(g_discordWebhookMutex);
+        std::unique_lock<std::mutex> lock(g_discordWebhookMutex);
+        g_webhookCv.wait_for(lock, std::chrono::seconds(3), [] { return g_webhookQueue.empty() && !g_webhookBusy.load(); });
         g_webhookThreadRunning = false;
         g_webhookCv.notify_all();
     }
@@ -30981,7 +36217,7 @@ ApplyAutoRobloxWindowLayout();
         bool webhookIdle;
         {
             std::unique_lock<std::mutex> lock(g_discordWebhookMutex);
-            webhookIdle = g_webhookCv.wait_for(lock, std::chrono::seconds(3), [] { return !g_webhookBusy.load(); });
+            webhookIdle = !g_webhookBusy.load();
         }
         if (webhookIdle)
             g_webhookThread.join();
@@ -31005,4 +36241,3 @@ ApplyAutoRobloxWindowLayout();
     GdiplusShutdown(gdiplusToken);
     return 0;
 }
-// ==========
