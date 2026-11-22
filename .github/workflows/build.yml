@@ -3,7 +3,7 @@ name: Build AntiAFK-RBX
 on:
     push:
         branches:
-            - preview
+            - main
         tags:
             - "v*"
 

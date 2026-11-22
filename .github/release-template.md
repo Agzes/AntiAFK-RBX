@@ -1,6 +1,6 @@
 <!-- release part -->
 
-<div align="center"><kbd>Preview</kbd> • <kbd>{{VERSION}}</kbd> • <kbd>by Agzes</kbd>
+<div align="center"><kbd>Stable</kbd> • <kbd>{{VERSION}}</kbd> • <kbd>by Agzes</kbd>
 <h1 align="center">$\Huge{\textsf{𝗔𝗻𝘁𝗶𝗔𝗙𝗞-𝗥𝗕𝗫}}$ <sup><sup></sup></sup></h1>
 <kbd align="left"><div align="center"><h1> ⚒️ ChangeLog ⚒️ </h1></div>
 
@@ -13,14 +13,6 @@
 > Changelog will be here soon.
 
 <div align="center"><h4> ⚒️ And other minor changes/fixes... ⚒️ </h4></div></kbd><br><br>
-
-<!-- preview note -->
-<kbd>
-<div align="center"><div align="center"><h1> Note! </h1><b>&nbsp;&nbsp;This release was built from the preview branch.&nbsp;&nbsp;<br>&nbsp;&nbsp;Download the stable version here: <a href="https://github.com/Agzes/AntiAFK-RBX/releases/latest">Latest Stable</a></b>&nbsp;&nbsp;</div><br></div><br>
-
-</kbd>
-<!-- preview note -->
-<br><br>
 
 <!-- end - release part -->
 

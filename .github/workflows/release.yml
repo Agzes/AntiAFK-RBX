@@ -3,9 +3,9 @@ name: Release AntiAFK-RBX
 on:
     push:
         branches:
-            - preview
+            - main
         paths:
-            - "version.preview"
+            - "version"
 
 permissions:
     contents: write
@@ -24,9 +24,9 @@ jobs:
               id: version
               shell: bash
               run: |
-                  V=$(tr -dc '0-9' < version.preview)
+                  V=$(tr -dc '0-9' < version)
                   if [ -z "$V" ]; then
-                    echo "::error::version.preview contains no version number"
+                    echo "::error::version contains no version number"
                     exit 1
                   fi
                   MAJOR=$((V / 10000000))
@@ -45,26 +45,33 @@ jobs:
                   echo "Derived tag: $TAG"
 
             - name: Verify tag exists
+              id: tag
               shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
                   TAG: ${{ steps.version.outputs.tag }}
               run: |
-                  gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha >/dev/null \
+                  TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha) \
                     || { echo "::error::Tag $TAG does not exist. Push the tag first so the build runs."; exit 1; }
-                  echo "Tag $TAG exists."
+                  if [ -z "$TAG_SHA" ]; then
+                    echo "::error::Could not resolve commit for tag $TAG."
+                    exit 1
+                  fi
+                  echo "sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
+                  echo "Tag $TAG exists at $TAG_SHA."
 
             - name: Wait for tag build and download artifact
               shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
                   TAG: ${{ steps.version.outputs.tag }}
+                  TAG_SHA: ${{ steps.tag.outputs.sha }}
               run: |
                   mkdir -p dist
                   ART_NAME="AntiAFK-RBX-Release-$TAG"
                   for attempt in $(seq 1 60); do
                     RUN_ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ART_NAME" \
-                      --jq '.artifacts[0].workflow_run.id // empty')
+                      | jq -r --arg sha "$TAG_SHA" '.artifacts[] | select(.workflow_run.head_sha == $sha) | .workflow_run.id' | head -n1)
                     if [ -n "$RUN_ID" ]; then
                       echo "Found artifact $ART_NAME in run $RUN_ID"
                       gh run download "$RUN_ID" -n "$ART_NAME" -D dist
