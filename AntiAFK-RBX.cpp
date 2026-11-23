@@ -21472,19 +21472,27 @@ static void MainUI_Layout_SimpleMode(const RECT& clientRect, MainUIData* pData) 
     pData->simpleExitBtnRect = { w - outerPadX - exitBtnW, exitBtnY, w - outerPadX, exitBtnY + exitBtnH };
 
     const int annH = S(32);
-    pData->discordButtonRect = { 0, pData->disclaimerRect.top - annH, w, pData->disclaimerRect.top };
+    pData->discordButtonRect = { 0, pData->disclaimerRect.top - annH - 1, w, pData->disclaimerRect.top };
     int bodyBottom = pData->discordButtonRect.top;
-    if (g_updateFound.load() || g_updateCheckFailed.load()) {
-        const int updH = S(28);
-        pData->updateBannerRect = { 0, bodyBottom - updH, w, bodyBottom };
+    const bool hasUpdateBanner = (g_updateFound.load() || g_updateCheckFailed.load());
+    const bool hasMutexBanner = !g_mutexBannerMessage.empty();
+    if (hasUpdateBanner) {
+        pData->updateBannerRect = { 0, bodyBottom - annH, w, bodyBottom };
         bodyBottom = pData->updateBannerRect.top;
     } else {
         pData->updateBannerRect = { 0, 0, 0, 0 };
     }
+    if (hasMutexBanner) {
+        pData->mutexBannerRect = { 0, bodyBottom - annH, w, bodyBottom };
+        bodyBottom = pData->mutexBannerRect.top;
+    } else {
+        pData->mutexBannerRect = { 0, 0, 0, 0 };
+    }
 
-    const int padY = S(8);
-    const int gap = S(8);
-    const int colGap = gap;
+    const bool compactGrid = hasUpdateBanner && hasMutexBanner;
+    const int padY = S(compactGrid ? 6 : 8);
+    const int gap = S(compactGrid ? 6 : 8);
+    const int colGap = S(8);
     const int rowGap = gap;
     const int sectionGap = gap;
     const int innerW = w - outerPadX * 2;
@@ -21497,7 +21505,7 @@ static void MainUI_Layout_SimpleMode(const RECT& clientRect, MainUIData* pData) 
     const int gridTop = pData->simpleHeaderRect.bottom + 1 + padY;
     const int availH = (std::max)(S(220), bodyBottom - padY - gridTop);
 
-    const int primaryH = S(68);
+    const int primaryH = S(compactGrid ? 62 : 68);
     pData->simpleIntervalCardRect = { col1L, gridTop, col1R, gridTop + primaryH };
     pData->simpleActionCardRect = { col2L, gridTop, col2R, gridTop + primaryH };
 
@@ -21620,6 +21628,25 @@ static bool MainUI_HandleSimpleModeClick(HWND hwnd, POINT pt, MainUIData* pData)
             std::thread([]() {
                 CheckForUpdates(false);
             }).detach();
+        }
+        return true;
+    }
+    if (!g_mutexBannerMessage.empty() && pData->mutexBannerRect.bottom > pData->mutexBannerRect.top && PtInRect(&pData->mutexBannerRect, pt)) {
+        if (g_mutexBannerIsSuccess) {
+            ClearMutexBanner();
+        } else {
+            MutexCreateResult result = EnableMultiInstanceSupport();
+            if (result == MUTEX_CREATED || result == MUTEX_ALREADY_EXISTS) {
+                ClearMutexBanner();
+            } else {
+                int msgResult = ShowMutexErrorDialog(hwnd);
+                if (msgResult == 1 || msgResult == 3) {
+                    ClearMutexBanner();
+                } else if (msgResult == 2) {
+                    g_mutexIgnored = true;
+                    ClearMutexBanner();
+                }
+            }
         }
         return true;
     }
@@ -23795,6 +23822,218 @@ void MainUI_Paint_DrawAutoUtilsGuide(HDC hdc, const RECT& clientRect, MainUIData
     DeleteObject(bigFontH);
 }
 
+static void MainUI_Paint_DrawAnnouncementBar(HDC hdc, Graphics& g, const RECT& rect, HFONT hFontText, HFONT hFontSmall, bool isHovering) {
+    if (rect.bottom <= rect.top) return;
+
+    AnnouncementInfo announcement = GetAnnouncementCopy();
+    Color discordBgColor = isHovering ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
+    SolidBrush discordBgBrush(discordBgColor);
+    g.FillRectangle(&discordBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    SolidBrush discordSepBrush(Color(180, 56, 56, 56));
+    {
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        g.FillRectangle(&discordSepBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    HFONT discordIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font discordIconFont(hdc, discordIconFontH);
+    SolidBrush discordIconBrush(announcement.enabled
+        ? Color(255, GetRValue(announcement.iconColor), GetGValue(announcement.iconColor), GetBValue(announcement.iconColor))
+        : Color(255, 88, 101, 242));
+    int discordIconSize = 11;
+    int discordIconPadding = 2;
+    int discordIconX = rect.left + 20;
+    int discordIconY = rect.top + (rect.bottom - rect.top - discordIconSize) / 2 - discordIconPadding + 2;
+    RectF discordIconRect((REAL)discordIconX, (REAL)discordIconY, (REAL)(discordIconSize + discordIconPadding * 2), (REAL)(discordIconSize + discordIconPadding * 2));
+    StringFormat sfDiscordIcon;
+    sfDiscordIcon.SetAlignment(StringAlignmentCenter);
+    sfDiscordIcon.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(announcement.enabled ? announcement.icon.c_str() : L"\uE8BD", -1, &discordIconFont, discordIconRect, &sfDiscordIcon, &discordIconBrush);
+    DeleteObject(discordIconFontH);
+
+    Font discordTextFont(hdc, hFontText);
+    SolidBrush discordTextBrush(Color(255, 220, 220, 220));
+    int discordTextX = discordIconX + discordIconSize + discordIconPadding * 2 + 10;
+    RectF discordTextRect((REAL)discordTextX, (REAL)(rect.top + 1), (REAL)(rect.right - discordTextX - 30), (REAL)(announcement.enabled && !announcement.description.empty() ? 18 : 32));
+    StringFormat sfDiscordText;
+    sfDiscordText.SetAlignment(StringAlignmentNear);
+    sfDiscordText.SetLineAlignment(announcement.enabled && !announcement.description.empty() ? StringAlignmentFar : StringAlignmentCenter);
+    sfDiscordText.SetTrimming(StringTrimmingEllipsisCharacter);
+    g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
+
+    if (announcement.enabled && !announcement.description.empty()) {
+        Font discordDescriptionFont(hdc, hFontSmall);
+        SolidBrush discordDescriptionBrush(Color(255, 150, 150, 150));
+        RectF discordDescriptionRect((REAL)discordTextX, (REAL)(rect.top + 16), (REAL)(rect.right - discordTextX - 30), (REAL)16);
+        StringFormat sfDiscordDescription;
+        sfDiscordDescription.SetAlignment(StringAlignmentNear);
+        sfDiscordDescription.SetLineAlignment(StringAlignmentNear);
+        sfDiscordDescription.SetTrimming(StringTrimmingEllipsisCharacter);
+        g.DrawString(announcement.description.c_str(), -1, &discordDescriptionFont, discordDescriptionRect, &sfDiscordDescription, &discordDescriptionBrush);
+    }
+
+    HFONT discordArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font discordArrowFont(hdc, discordArrowFontH);
+    SolidBrush discordArrowBrush(Color(255, 150, 150, 150));
+    int discordArrowSize = 9;
+    int discordArrowPadding = 2;
+    int discordArrowX = rect.right - 20 - discordArrowSize - discordArrowPadding * 2;
+    int discordArrowY = rect.top + (rect.bottom - rect.top - discordArrowSize) / 2 - discordArrowPadding + 1;
+    RectF discordArrowRect((REAL)discordArrowX, (REAL)discordArrowY, (REAL)(discordArrowSize + discordArrowPadding * 2), (REAL)(discordArrowSize + discordArrowPadding * 2));
+    StringFormat sfDiscordArrow;
+    sfDiscordArrow.SetAlignment(StringAlignmentCenter);
+    sfDiscordArrow.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE76C", -1, &discordArrowFont, discordArrowRect, &sfDiscordArrow, &discordArrowBrush);
+    DeleteObject(discordArrowFontH);
+}
+
+static void MainUI_Paint_DrawUpdateBanner(HDC hdc, Graphics& g, const RECT& rect, HFONT hFontText, HFONT hFontSmall, bool isHovering) {
+    if (rect.bottom <= rect.top) return;
+
+    bool checkFailed = g_updateCheckFailed.load() && !g_updateFound.load();
+    Color updateBannerBgColor = checkFailed ? (isHovering ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40)) : (isHovering ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40));
+    SolidBrush updateBannerBgBrush(updateBannerBgColor);
+    g.FillRectangle(&updateBannerBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    SolidBrush updateBannerSepBrush(Color(180, 56, 56, 56));
+    {
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        g.FillRectangle(&updateBannerSepBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    HFONT updateBannerIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font updateBannerIconFont(hdc, updateBannerIconFontH);
+    SolidBrush updateBannerIconBrush(checkFailed ? Color(255, 210, 120, 80) : Color(255, 80, 200, 120));
+    int updateBannerIconSize = 11;
+    int updateBannerIconPadding = 2;
+    int updateBannerIconX = rect.left + 20;
+    int updateBannerIconY = rect.top + (rect.bottom - rect.top - updateBannerIconSize) / 2 - updateBannerIconPadding + 2;
+    RectF updateBannerIconRect((REAL)updateBannerIconX, (REAL)updateBannerIconY, (REAL)(updateBannerIconSize + updateBannerIconPadding * 2), (REAL)(updateBannerIconSize + updateBannerIconPadding * 2));
+    StringFormat sfUpdateBannerIcon;
+    sfUpdateBannerIcon.SetAlignment(StringAlignmentCenter);
+    sfUpdateBannerIcon.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(checkFailed ? L"\uEA39" : L"\uE896", -1, &updateBannerIconFont, updateBannerIconRect, &sfUpdateBannerIcon, &updateBannerIconBrush);
+    DeleteObject(updateBannerIconFontH);
+
+    Font updateBannerTextFont(hdc, hFontText);
+    SolidBrush updateBannerTextBrush(Color(255, 220, 220, 220));
+    int updateBannerTextX = updateBannerIconX + updateBannerIconSize + updateBannerIconPadding * 2 + 10;
+    RectF updateBannerTextRect((REAL)updateBannerTextX, (REAL)(rect.top + 1), (REAL)(rect.right - updateBannerTextX - 30), (REAL)(checkFailed ? 32 : 18));
+    StringFormat sfUpdateBannerText;
+    sfUpdateBannerText.SetAlignment(StringAlignmentNear);
+    sfUpdateBannerText.SetLineAlignment(checkFailed ? StringAlignmentCenter : StringAlignmentFar);
+    sfUpdateBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
+    g.DrawString(checkFailed ? L"Failed to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
+
+    if (!checkFailed) {
+        Font updateBannerDescFont(hdc, hFontSmall);
+        SolidBrush updateBannerDescBrush(Color(255, 150, 150, 150));
+        RectF updateBannerDescRect((REAL)updateBannerTextX, (REAL)(rect.top + 16), (REAL)(rect.right - updateBannerTextX - 30), (REAL)16);
+        StringFormat sfUpdateBannerDesc;
+        sfUpdateBannerDesc.SetAlignment(StringAlignmentNear);
+        sfUpdateBannerDesc.SetLineAlignment(StringAlignmentNear);
+        sfUpdateBannerDesc.SetTrimming(StringTrimmingEllipsisCharacter);
+
+        wchar_t versionText[64];
+        FormatVersionReadable(g_updateServerVersion.load(), versionText, 64);
+        wchar_t descText[128];
+        swprintf_s(descText, L"%s \u2022 %s", GetReleaseChannelName(), versionText);
+        g.DrawString(descText, -1, &updateBannerDescFont, updateBannerDescRect, &sfUpdateBannerDesc, &updateBannerDescBrush);
+    }
+
+    HFONT updateBannerArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font updateBannerArrowFont(hdc, updateBannerArrowFontH);
+    SolidBrush updateBannerArrowBrush(Color(255, 150, 150, 150));
+    int updateBannerArrowSize = 9;
+    int updateBannerArrowPadding = 2;
+    int updateBannerArrowX = rect.right - 20 - updateBannerArrowSize - updateBannerArrowPadding * 2;
+    int updateBannerArrowY = rect.top + (rect.bottom - rect.top - updateBannerArrowSize) / 2 - updateBannerArrowPadding + 1;
+    RectF updateBannerArrowRect((REAL)updateBannerArrowX, (REAL)updateBannerArrowY, (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2), (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2));
+    StringFormat sfUpdateBannerArrow;
+    sfUpdateBannerArrow.SetAlignment(StringAlignmentCenter);
+    sfUpdateBannerArrow.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE76C", -1, &updateBannerArrowFont, updateBannerArrowRect, &sfUpdateBannerArrow, &updateBannerArrowBrush);
+    DeleteObject(updateBannerArrowFontH);
+}
+
+static void MainUI_Paint_DrawMutexBanner(HDC hdc, Graphics& g, const RECT& rect, HFONT hFontText, HFONT hFontSmall, bool isHovering) {
+    if (rect.bottom <= rect.top) return;
+
+    Color mutexBannerBgColor = g_mutexBannerIsSuccess
+        ? (isHovering ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40))
+        : (isHovering ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40));
+    SolidBrush mutexBannerBgBrush(mutexBannerBgColor);
+    g.FillRectangle(&mutexBannerBgBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), (REAL)(rect.bottom - rect.top));
+    SolidBrush mutexBannerSepBrush(Color(180, 56, 56, 56));
+    {
+        PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
+        SmoothingMode oldSmooth = g.GetSmoothingMode();
+        g.SetPixelOffsetMode(PixelOffsetModeNone);
+        g.SetSmoothingMode(SmoothingModeNone);
+        g.FillRectangle(&mutexBannerSepBrush, (REAL)rect.left, (REAL)rect.top, (REAL)(rect.right - rect.left), 1.0f);
+        g.SetPixelOffsetMode(oldOffset);
+        g.SetSmoothingMode(oldSmooth);
+    }
+
+    HFONT mutexBannerIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font mutexBannerIconFont(hdc, mutexBannerIconFontH);
+    SolidBrush mutexBannerIconBrush(g_mutexBannerIsSuccess ? Color(255, 80, 200, 120) : Color(255, 220, 160, 80));
+    int mutexBannerIconSize = 11;
+    int mutexBannerIconPadding = 2;
+    int mutexBannerIconX = rect.left + 20;
+    int mutexBannerIconY = rect.top + (rect.bottom - rect.top - mutexBannerIconSize) / 2 - mutexBannerIconPadding + 2;
+    RectF mutexBannerIconRect((REAL)mutexBannerIconX, (REAL)mutexBannerIconY, (REAL)(mutexBannerIconSize + mutexBannerIconPadding * 2), (REAL)(mutexBannerIconSize + mutexBannerIconPadding * 2));
+    StringFormat sfMutexBannerIcon;
+    sfMutexBannerIcon.SetAlignment(StringAlignmentCenter);
+    sfMutexBannerIcon.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(g_mutexBannerIsSuccess ? L"\uE73E" : L"\uE7BA", -1, &mutexBannerIconFont, mutexBannerIconRect, &sfMutexBannerIcon, &mutexBannerIconBrush);
+    DeleteObject(mutexBannerIconFontH);
+
+    Font mutexBannerTextFont(hdc, hFontText);
+    SolidBrush mutexBannerTextBrush(Color(255, 220, 220, 220));
+    int mutexBannerTextX = mutexBannerIconX + mutexBannerIconSize + mutexBannerIconPadding * 2 + 10;
+    RectF mutexBannerTextRect((REAL)mutexBannerTextX, (REAL)(rect.top + 1), (REAL)(rect.right - mutexBannerTextX - 30), (REAL)(!g_mutexBannerDescription.empty() ? 18 : 32));
+    StringFormat sfMutexBannerText;
+    sfMutexBannerText.SetAlignment(StringAlignmentNear);
+    sfMutexBannerText.SetLineAlignment(!g_mutexBannerDescription.empty() ? StringAlignmentFar : StringAlignmentCenter);
+    sfMutexBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
+    g.DrawString(g_mutexBannerMessage.c_str(), -1, &mutexBannerTextFont, mutexBannerTextRect, &sfMutexBannerText, &mutexBannerTextBrush);
+
+    if (!g_mutexBannerDescription.empty()) {
+        Font mutexBannerDescFont(hdc, hFontSmall);
+        SolidBrush mutexBannerDescBrush(Color(255, 150, 150, 150));
+        RectF mutexBannerDescRect((REAL)mutexBannerTextX, (REAL)(rect.top + 16), (REAL)(rect.right - mutexBannerTextX - 30), (REAL)16);
+        StringFormat sfMutexBannerDesc;
+        sfMutexBannerDesc.SetAlignment(StringAlignmentNear);
+        sfMutexBannerDesc.SetLineAlignment(StringAlignmentNear);
+        sfMutexBannerDesc.SetTrimming(StringTrimmingEllipsisCharacter);
+        g.DrawString(g_mutexBannerDescription.c_str(), -1, &mutexBannerDescFont, mutexBannerDescRect, &sfMutexBannerDesc, &mutexBannerDescBrush);
+    }
+
+    HFONT mutexBannerCloseFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    Font mutexBannerCloseFont(hdc, mutexBannerCloseFontH);
+    SolidBrush mutexBannerCloseBrush(isHovering ? Color(255, 220, 220, 220) : Color(255, 150, 150, 150));
+    int mutexBannerCloseSize = 9;
+    int mutexBannerClosePadding = 2;
+    int mutexBannerCloseX = rect.right - 20 - mutexBannerCloseSize - mutexBannerClosePadding * 2;
+    int mutexBannerCloseY = rect.top + (rect.bottom - rect.top - mutexBannerCloseSize) / 2 - mutexBannerClosePadding + 1;
+    RectF mutexBannerCloseRect((REAL)mutexBannerCloseX, (REAL)mutexBannerCloseY, (REAL)(mutexBannerCloseSize + mutexBannerClosePadding * 2), (REAL)(mutexBannerCloseSize + mutexBannerClosePadding * 2));
+    StringFormat sfMutexBannerClose;
+    sfMutexBannerClose.SetAlignment(StringAlignmentCenter);
+    sfMutexBannerClose.SetLineAlignment(StringAlignmentCenter);
+    g.DrawString(L"\uE76C", -1, &mutexBannerCloseFont, mutexBannerCloseRect, &sfMutexBannerClose, &mutexBannerCloseBrush);
+    DeleteObject(mutexBannerCloseFontH);
+}
+
 static void MainUI_Paint_SimpleMode(HDC hdc, const RECT& clientRect, MainUIData* pData) {
     if (!pData) return;
 
@@ -24145,95 +24384,14 @@ static void MainUI_Paint_SimpleMode(HDC hdc, const RECT& clientRect, MainUIData*
         drawDropdownBox(pData->userSafeDropdownRect, simpleUserSafeNames[userSafeMode], usDdHover);
     }
 
-    if ((g_updateFound.load() || g_updateCheckFailed.load()) && pData->updateBannerRect.bottom > pData->updateBannerRect.top) {
-        const RECT& ur = pData->updateBannerRect;
-        const bool checkFailed = g_updateCheckFailed.load() && !g_updateFound.load();
-        Color updBg = checkFailed
-            ? (pData->isHoveringUpdateBanner ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40))
-            : (pData->isHoveringUpdateBanner ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40));
-        SolidBrush updBgBrush(updBg);
-        g.FillRectangle(&updBgBrush, (REAL)ur.left, (REAL)ur.top, (REAL)(ur.right - ur.left), (REAL)(ur.bottom - ur.top));
-        {
-            PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-            SmoothingMode oldSmooth = g.GetSmoothingMode();
-            g.SetPixelOffsetMode(PixelOffsetModeNone);
-            g.SetSmoothingMode(SmoothingModeNone);
-            SolidBrush updSepBrush(Color(180, 56, 56, 56));
-            g.FillRectangle(&updSepBrush, (REAL)ur.left, (REAL)ur.top, (REAL)(ur.right - ur.left), 1.0f);
-            g.SetPixelOffsetMode(oldOffset);
-            g.SetSmoothingMode(oldSmooth);
-        }
-        SolidBrush updIconBrush(checkFailed ? Color(255, 210, 120, 80) : Color(255, 80, 200, 120));
-        const int icoSz = S(16);
-        const int icoX = ur.left + outerPadX + S(2);
-        const int icoY = ur.top + (ur.bottom - ur.top - icoSz) / 2;
-        g.DrawString(checkFailed ? L"\uEA39" : L"\uE896", -1, &iconBtnFont, RectF((REAL)icoX, (REAL)icoY + 1.0f, (REAL)icoSz, (REAL)icoSz), &sfCenter, &updIconBrush);
-
-        const int txtX = icoX + icoSz + S(8);
-        const int txtW = (std::max)(S(40), (int)(ur.right - S(28) - txtX));
-        SolidBrush updTextBrush(Color(255, 224, 224, 224));
-        if (!checkFailed) {
-            wchar_t versionText[64];
-            FormatVersionReadable(g_updateServerVersion.load(), versionText, 64);
-            wchar_t updLine[160];
-            swprintf_s(updLine, L"Update Available \u2022 %s %s", GetReleaseChannelName(), versionText);
-            g.DrawString(updLine, -1, &textFont, RectF((REAL)txtX, (REAL)ur.top, (REAL)txtW, (REAL)(ur.bottom - ur.top)), &sfLeft, &updTextBrush);
-        } else {
-            g.DrawString(L"Failed to check updates", -1, &textFont, RectF((REAL)txtX, (REAL)ur.top, (REAL)txtW, (REAL)(ur.bottom - ur.top)), &sfLeft, &updTextBrush);
-        }
-        SolidBrush arrowBrush(Color(255, 152, 152, 152));
-        g.DrawString(L"\uE76C", -1, &iconChevronFont, RectF((REAL)(ur.right - S(24)), (REAL)ur.top + 1.0f, (REAL)S(16), (REAL)(ur.bottom - ur.top)), &sfCenter, &arrowBrush);
+    if (g_updateFound.load() || g_updateCheckFailed.load()) {
+        MainUI_Paint_DrawUpdateBanner(hdc, g, pData->updateBannerRect, pData->hFontText, pData->hFontSmall, pData->isHoveringUpdateBanner);
+    }
+    if (!g_mutexBannerMessage.empty()) {
+        MainUI_Paint_DrawMutexBanner(hdc, g, pData->mutexBannerRect, pData->hFontText, pData->hFontSmall, pData->isHoveringMutexBanner);
     }
 
-    {
-        AnnouncementInfo announcement = GetAnnouncementCopy();
-        if (pData->discordButtonRect.bottom > pData->discordButtonRect.top) {
-            const RECT& ar = pData->discordButtonRect;
-            Color annBg = pData->isHoveringDiscord ? Color(55, 62, 62, 62) : Color(32, 38, 38, 38);
-            SolidBrush annBgBrush(annBg);
-            g.FillRectangle(&annBgBrush, (REAL)ar.left, (REAL)ar.top, (REAL)(ar.right - ar.left), (REAL)(ar.bottom - ar.top));
-            {
-                PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-                SmoothingMode oldSmooth = g.GetSmoothingMode();
-                g.SetPixelOffsetMode(PixelOffsetModeNone);
-                g.SetSmoothingMode(SmoothingModeNone);
-                SolidBrush annSepBrush(Color(180, 56, 56, 56));
-                g.FillRectangle(&annSepBrush, (REAL)ar.left, (REAL)ar.top, (REAL)(ar.right - ar.left), 1.0f);
-                g.SetPixelOffsetMode(oldOffset);
-                g.SetSmoothingMode(oldSmooth);
-            }
-            SolidBrush annIconBrush(announcement.enabled
-                ? Color(255, GetRValue(announcement.iconColor), GetGValue(announcement.iconColor), GetBValue(announcement.iconColor))
-                : Color(255, 88, 101, 242));
-            const int icoSz = S(16);
-            const int icoX = ar.left + outerPadX + S(2);
-            const int icoY = ar.top + (ar.bottom - ar.top - icoSz) / 2;
-            g.DrawString(announcement.enabled ? announcement.icon.c_str() : L"\uE8BD", -1, &iconBtnFont, RectF((REAL)icoX, (REAL)icoY + 1.0f, (REAL)icoSz, (REAL)icoSz), &sfCenter, &annIconBrush);
-
-            const int txtX = icoX + icoSz + S(8);
-            const int txtW = (std::max)(S(40), (int)(ar.right - S(28) - txtX));
-            SolidBrush annTitleBrush(Color(255, 224, 224, 224));
-            if (announcement.enabled && !announcement.description.empty()) {
-                StringFormat sfAnnTop;
-                sfAnnTop.SetAlignment(StringAlignmentNear);
-                sfAnnTop.SetLineAlignment(StringAlignmentFar);
-                sfAnnTop.SetFormatFlags(StringFormatFlagsNoWrap);
-                sfAnnTop.SetTrimming(StringTrimmingEllipsisCharacter);
-                g.DrawString(announcement.title.c_str(), -1, &textFont, RectF((REAL)txtX, (REAL)ar.top, (REAL)txtW, (REAL)S(16)), &sfAnnTop, &annTitleBrush);
-                SolidBrush annDescBrush(Color(255, 152, 152, 152));
-                StringFormat sfAnnBot;
-                sfAnnBot.SetAlignment(StringAlignmentNear);
-                sfAnnBot.SetLineAlignment(StringAlignmentNear);
-                sfAnnBot.SetFormatFlags(StringFormatFlagsNoWrap);
-                sfAnnBot.SetTrimming(StringTrimmingEllipsisCharacter);
-                g.DrawString(announcement.description.c_str(), -1, &smallFont, RectF((REAL)txtX, (REAL)(ar.top + S(16)), (REAL)txtW, (REAL)S(15)), &sfAnnBot, &annDescBrush);
-            } else {
-                g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &textFont, RectF((REAL)txtX, (REAL)ar.top, (REAL)txtW, (REAL)(ar.bottom - ar.top)), &sfLeft, &annTitleBrush);
-            }
-            SolidBrush arrowBrush(Color(255, 152, 152, 152));
-            g.DrawString(L"\uE76C", -1, &iconChevronFont, RectF((REAL)(ar.right - S(24)), (REAL)ar.top + 1.0f, (REAL)S(16), (REAL)(ar.bottom - ar.top)), &sfCenter, &arrowBrush);
-        }
-    }
+    MainUI_Paint_DrawAnnouncementBar(hdc, g, pData->discordButtonRect, pData->hFontText, pData->hFontSmall, pData->isHoveringDiscord);
 
     if (pData->simpleHoverHelp >= 0 && pData->simpleHoverHelp < 8) {
         static const wchar_t* const simpleHelpTips[8] = {
@@ -26390,208 +26548,14 @@ if (!g_simpleMode.load()) {
         }
 
         if (g_updateFound.load() || g_updateCheckFailed.load()) {
-            bool checkFailed = g_updateCheckFailed.load() && !g_updateFound.load();
-            Color updateBannerBgColor = checkFailed ? (pData->isHoveringUpdateBanner ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40)) : (pData->isHoveringUpdateBanner ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40));
-            SolidBrush updateBannerBgBrush(updateBannerBgColor);
-            g.FillRectangle(&updateBannerBgBrush, (REAL)pData->updateBannerRect.left, (REAL)pData->updateBannerRect.top, (REAL)(pData->updateBannerRect.right - pData->updateBannerRect.left), (REAL)(pData->updateBannerRect.bottom - pData->updateBannerRect.top));
-            SolidBrush updateBannerSepBrush(Color(180, 56, 56, 56));
-            {
-                PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-                SmoothingMode oldSmooth = g.GetSmoothingMode();
-                g.SetPixelOffsetMode(PixelOffsetModeNone);
-                g.SetSmoothingMode(SmoothingModeNone);
-                g.FillRectangle(&updateBannerSepBrush, (REAL)pData->updateBannerRect.left, (REAL)pData->updateBannerRect.top, (REAL)(pData->updateBannerRect.right - pData->updateBannerRect.left), 1.0f);
-                g.SetPixelOffsetMode(oldOffset);
-                g.SetSmoothingMode(oldSmooth);
-            }
-
-            HFONT updateBannerIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-            Font updateBannerIconFont(hdc, updateBannerIconFontH);
-            SolidBrush updateBannerIconBrush(checkFailed ? Color(255, 210, 120, 80) : Color(255, 80, 200, 120));
-            int updateBannerIconSize = 11;
-            int updateBannerIconPadding = 2;
-            int updateBannerIconX = pData->updateBannerRect.left + 20;
-            int updateBannerIconY = pData->updateBannerRect.top + (pData->updateBannerRect.bottom - pData->updateBannerRect.top - updateBannerIconSize) / 2 - updateBannerIconPadding + 2;
-            RectF updateBannerIconRect((REAL)updateBannerIconX, (REAL)updateBannerIconY, (REAL)(updateBannerIconSize + updateBannerIconPadding * 2), (REAL)(updateBannerIconSize + updateBannerIconPadding * 2));
-            StringFormat sfUpdateBannerIcon;
-            sfUpdateBannerIcon.SetAlignment(StringAlignmentCenter);
-            sfUpdateBannerIcon.SetLineAlignment(StringAlignmentCenter);
-            g.DrawString(checkFailed ? L"\uEA39" : L"\uE896", -1, &updateBannerIconFont, updateBannerIconRect, &sfUpdateBannerIcon, &updateBannerIconBrush);
-            DeleteObject(updateBannerIconFontH);
-
-            Font updateBannerTextFont(hdc, pData->hFontText);
-            SolidBrush updateBannerTextBrush(Color(255, 220, 220, 220));
-            int updateBannerTextX = updateBannerIconX + updateBannerIconSize + updateBannerIconPadding * 2 + 10;
-            RectF updateBannerTextRect((REAL)updateBannerTextX, (REAL)(pData->updateBannerRect.top + 1), (REAL)(pData->updateBannerRect.right - updateBannerTextX - 30), (REAL)(checkFailed ? 32 : 18));
-            StringFormat sfUpdateBannerText;
-            sfUpdateBannerText.SetAlignment(StringAlignmentNear);
-            sfUpdateBannerText.SetLineAlignment(checkFailed ? StringAlignmentCenter : StringAlignmentFar);
-            sfUpdateBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
-            g.DrawString(checkFailed ? L"Failed to check updates" : L"Update Available", -1, &updateBannerTextFont, updateBannerTextRect, &sfUpdateBannerText, &updateBannerTextBrush);
-
-            if (!checkFailed) {
-                Font updateBannerDescFont(hdc, pData->hFontSmall);
-                SolidBrush updateBannerDescBrush(Color(255, 150, 150, 150));
-                RectF updateBannerDescRect((REAL)updateBannerTextX, (REAL)(pData->updateBannerRect.top + 16), (REAL)(pData->updateBannerRect.right - updateBannerTextX - 30), (REAL)16);
-                StringFormat sfUpdateBannerDesc;
-                sfUpdateBannerDesc.SetAlignment(StringAlignmentNear);
-                sfUpdateBannerDesc.SetLineAlignment(StringAlignmentNear);
-                sfUpdateBannerDesc.SetTrimming(StringTrimmingEllipsisCharacter);
-
-                wchar_t versionText[64];
-                FormatVersionReadable(g_updateServerVersion.load(), versionText, 64);
-                wchar_t descText[128];
-                swprintf_s(descText, L"%s • %s", GetReleaseChannelName(), versionText);
-                g.DrawString(descText, -1, &updateBannerDescFont, updateBannerDescRect, &sfUpdateBannerDesc, &updateBannerDescBrush);
-            }
-
-            HFONT updateBannerArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-            Font updateBannerArrowFont(hdc, updateBannerArrowFontH);
-            SolidBrush updateBannerArrowBrush(Color(255, 150, 150, 150));
-            int updateBannerArrowSize = 9;
-            int updateBannerArrowPadding = 2;
-            int updateBannerArrowX = pData->updateBannerRect.right - 20 - updateBannerArrowSize - updateBannerArrowPadding * 2;
-            int updateBannerArrowY = pData->updateBannerRect.top + (pData->updateBannerRect.bottom - pData->updateBannerRect.top - updateBannerArrowSize) / 2 - updateBannerArrowPadding + 1;
-            RectF updateBannerArrowRect((REAL)updateBannerArrowX, (REAL)updateBannerArrowY, (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2), (REAL)(updateBannerArrowSize + updateBannerArrowPadding * 2));
-            StringFormat sfUpdateBannerArrow;
-            sfUpdateBannerArrow.SetAlignment(StringAlignmentCenter);
-            sfUpdateBannerArrow.SetLineAlignment(StringAlignmentCenter);
-            g.DrawString(L"\uE76C", -1, &updateBannerArrowFont, updateBannerArrowRect, &sfUpdateBannerArrow, &updateBannerArrowBrush);
-            DeleteObject(updateBannerArrowFontH);
+            MainUI_Paint_DrawUpdateBanner(hdc, g, pData->updateBannerRect, pData->hFontText, pData->hFontSmall, pData->isHoveringUpdateBanner);
         }
 
         if (!g_mutexBannerMessage.empty()) {
-            Color mutexBannerBgColor = g_mutexBannerIsSuccess
-                ? (pData->isHoveringMutexBanner ? Color(50, 60, 80, 50) : Color(30, 40, 50, 40))
-                : (pData->isHoveringMutexBanner ? Color(50, 80, 55, 50) : Color(30, 50, 40, 40));
-            SolidBrush mutexBannerBgBrush(mutexBannerBgColor);
-            g.FillRectangle(&mutexBannerBgBrush, (REAL)pData->mutexBannerRect.left, (REAL)pData->mutexBannerRect.top, (REAL)(pData->mutexBannerRect.right - pData->mutexBannerRect.left), (REAL)(pData->mutexBannerRect.bottom - pData->mutexBannerRect.top));
-            SolidBrush mutexBannerSepBrush(Color(180, 56, 56, 56));
-            {
-                PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-                SmoothingMode oldSmooth = g.GetSmoothingMode();
-                g.SetPixelOffsetMode(PixelOffsetModeNone);
-                g.SetSmoothingMode(SmoothingModeNone);
-                g.FillRectangle(&mutexBannerSepBrush, (REAL)pData->mutexBannerRect.left, (REAL)pData->mutexBannerRect.top, (REAL)(pData->mutexBannerRect.right - pData->mutexBannerRect.left), 1.0f);
-                g.SetPixelOffsetMode(oldOffset);
-                g.SetSmoothingMode(oldSmooth);
-            }
-
-            HFONT mutexBannerIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-            Font mutexBannerIconFont(hdc, mutexBannerIconFontH);
-            SolidBrush mutexBannerIconBrush(g_mutexBannerIsSuccess ? Color(255, 80, 200, 120) : Color(255, 220, 160, 80));
-            int mutexBannerIconSize = 11;
-            int mutexBannerIconPadding = 2;
-            int mutexBannerIconX = pData->mutexBannerRect.left + 20;
-            int mutexBannerIconY = pData->mutexBannerRect.top + (pData->mutexBannerRect.bottom - pData->mutexBannerRect.top - mutexBannerIconSize) / 2 - mutexBannerIconPadding + 2;
-            RectF mutexBannerIconRect((REAL)mutexBannerIconX, (REAL)mutexBannerIconY, (REAL)(mutexBannerIconSize + mutexBannerIconPadding * 2), (REAL)(mutexBannerIconSize + mutexBannerIconPadding * 2));
-            StringFormat sfMutexBannerIcon;
-            sfMutexBannerIcon.SetAlignment(StringAlignmentCenter);
-            sfMutexBannerIcon.SetLineAlignment(StringAlignmentCenter);
-            g.DrawString(g_mutexBannerIsSuccess ? L"\uE73E" : L"\uE7BA", -1, &mutexBannerIconFont, mutexBannerIconRect, &sfMutexBannerIcon, &mutexBannerIconBrush);
-            DeleteObject(mutexBannerIconFontH);
-
-            Font mutexBannerTextFont(hdc, pData->hFontText);
-            SolidBrush mutexBannerTextBrush(Color(255, 220, 220, 220));
-            int mutexBannerTextX = mutexBannerIconX + mutexBannerIconSize + mutexBannerIconPadding * 2 + 10;
-            RectF mutexBannerTextRect((REAL)mutexBannerTextX, (REAL)(pData->mutexBannerRect.top + 1), (REAL)(pData->mutexBannerRect.right - mutexBannerTextX - 30), (REAL)(!g_mutexBannerDescription.empty() ? 18 : 32));
-            StringFormat sfMutexBannerText;
-            sfMutexBannerText.SetAlignment(StringAlignmentNear);
-            sfMutexBannerText.SetLineAlignment(!g_mutexBannerDescription.empty() ? StringAlignmentFar : StringAlignmentCenter);
-            sfMutexBannerText.SetTrimming(StringTrimmingEllipsisCharacter);
-            g.DrawString(g_mutexBannerMessage.c_str(), -1, &mutexBannerTextFont, mutexBannerTextRect, &sfMutexBannerText, &mutexBannerTextBrush);
-
-            if (!g_mutexBannerDescription.empty()) {
-                Font mutexBannerDescFont(hdc, pData->hFontSmall);
-                SolidBrush mutexBannerDescBrush(Color(255, 150, 150, 150));
-                RectF mutexBannerDescRect((REAL)mutexBannerTextX, (REAL)(pData->mutexBannerRect.top + 16), (REAL)(pData->mutexBannerRect.right - mutexBannerTextX - 30), (REAL)16);
-                StringFormat sfMutexBannerDesc;
-                sfMutexBannerDesc.SetAlignment(StringAlignmentNear);
-                sfMutexBannerDesc.SetLineAlignment(StringAlignmentNear);
-                sfMutexBannerDesc.SetTrimming(StringTrimmingEllipsisCharacter);
-                g.DrawString(g_mutexBannerDescription.c_str(), -1, &mutexBannerDescFont, mutexBannerDescRect, &sfMutexBannerDesc, &mutexBannerDescBrush);
-            }
-
-            HFONT mutexBannerCloseFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-            Font mutexBannerCloseFont(hdc, mutexBannerCloseFontH);
-            SolidBrush mutexBannerCloseBrush(pData->isHoveringMutexBanner ? Color(255, 220, 220, 220) : Color(255, 150, 150, 150));
-            int mutexBannerCloseSize = 9;
-            int mutexBannerClosePadding = 2;
-            int mutexBannerCloseX = pData->mutexBannerRect.right - 20 - mutexBannerCloseSize - mutexBannerClosePadding * 2;
-            int mutexBannerCloseY = pData->mutexBannerRect.top + (pData->mutexBannerRect.bottom - pData->mutexBannerRect.top - mutexBannerCloseSize) / 2 - mutexBannerClosePadding + 1;
-            RectF mutexBannerCloseRect((REAL)mutexBannerCloseX, (REAL)mutexBannerCloseY, (REAL)(mutexBannerCloseSize + mutexBannerClosePadding * 2), (REAL)(mutexBannerCloseSize + mutexBannerClosePadding * 2));
-            StringFormat sfMutexBannerClose;
-            sfMutexBannerClose.SetAlignment(StringAlignmentCenter);
-            sfMutexBannerClose.SetLineAlignment(StringAlignmentCenter);
-            g.DrawString(L"\uE76C", -1, &mutexBannerCloseFont, mutexBannerCloseRect, &sfMutexBannerClose, &mutexBannerCloseBrush);
-            DeleteObject(mutexBannerCloseFontH);
+            MainUI_Paint_DrawMutexBanner(hdc, g, pData->mutexBannerRect, pData->hFontText, pData->hFontSmall, pData->isHoveringMutexBanner);
         }
 
-        AnnouncementInfo announcement = GetAnnouncementCopy();
-        Color discordBgColor = pData->isHoveringDiscord ? Color(50, 60, 60, 60) : Color(30, 40, 40, 40);
-        SolidBrush discordBgBrush(discordBgColor);
-        g.FillRectangle(&discordBgBrush, (REAL)pData->discordButtonRect.left, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - pData->discordButtonRect.left), (REAL)(pData->discordButtonRect.bottom - pData->discordButtonRect.top));
-        SolidBrush discordSepBrush(Color(180, 56, 56, 56));
-        {
-            PixelOffsetMode oldOffset = g.GetPixelOffsetMode();
-            SmoothingMode oldSmooth = g.GetSmoothingMode();
-            g.SetPixelOffsetMode(PixelOffsetModeNone);
-            g.SetSmoothingMode(SmoothingModeNone);
-            g.FillRectangle(&discordSepBrush, (REAL)pData->discordButtonRect.left, (REAL)pData->discordButtonRect.top, (REAL)(pData->discordButtonRect.right - pData->discordButtonRect.left), 1.0f);
-            g.SetPixelOffsetMode(oldOffset);
-            g.SetSmoothingMode(oldSmooth);
-        }
-
-        HFONT discordIconFontH = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-        Font discordIconFont(hdc, discordIconFontH);
-        SolidBrush discordIconBrush(announcement.enabled
-            ? Color(255, GetRValue(announcement.iconColor), GetGValue(announcement.iconColor), GetBValue(announcement.iconColor))
-            : Color(255, 88, 101, 242));
-        int discordIconSize = 11;
-        int discordIconPadding = 2;
-        int discordIconX = pData->discordButtonRect.left + 20;
-        int discordIconY = pData->discordButtonRect.top + (pData->discordButtonRect.bottom - pData->discordButtonRect.top - discordIconSize) / 2 - discordIconPadding + 2;
-        RectF discordIconRect((REAL)discordIconX, (REAL)discordIconY, (REAL)(discordIconSize + discordIconPadding * 2), (REAL)(discordIconSize + discordIconPadding * 2));
-        StringFormat sfDiscordIcon;
-        sfDiscordIcon.SetAlignment(StringAlignmentCenter);
-        sfDiscordIcon.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(announcement.enabled ? announcement.icon.c_str() : L"\uE8BD", -1, &discordIconFont, discordIconRect, &sfDiscordIcon, &discordIconBrush);
-        DeleteObject(discordIconFontH);
-
-        Font discordTextFont(hdc, pData->hFontText);
-        SolidBrush discordTextBrush(Color(255, 220, 220, 220));
-        int discordTextX = discordIconX + discordIconSize + discordIconPadding * 2 + 10;
-        RectF discordTextRect((REAL)discordTextX, (REAL)(pData->discordButtonRect.top + 1), (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)(announcement.enabled && !announcement.description.empty() ? 18 : 32));
-        StringFormat sfDiscordText;
-        sfDiscordText.SetAlignment(StringAlignmentNear);
-        sfDiscordText.SetLineAlignment(announcement.enabled && !announcement.description.empty() ? StringAlignmentFar : StringAlignmentCenter);
-        sfDiscordText.SetTrimming(StringTrimmingEllipsisCharacter);
-        g.DrawString(announcement.enabled ? announcement.title.c_str() : L"Join our Discord", -1, &discordTextFont, discordTextRect, &sfDiscordText, &discordTextBrush);
-
-        if (announcement.enabled && !announcement.description.empty()) {
-            Font discordDescriptionFont(hdc, pData->hFontSmall);
-            SolidBrush discordDescriptionBrush(Color(255, 150, 150, 150));
-            RectF discordDescriptionRect((REAL)discordTextX, (REAL)(pData->discordButtonRect.top + 16), (REAL)(pData->discordButtonRect.right - discordTextX - 30), (REAL)16);
-            StringFormat sfDiscordDescription;
-            sfDiscordDescription.SetAlignment(StringAlignmentNear);
-            sfDiscordDescription.SetLineAlignment(StringAlignmentNear);
-            sfDiscordDescription.SetTrimming(StringTrimmingEllipsisCharacter);
-            g.DrawString(announcement.description.c_str(), -1, &discordDescriptionFont, discordDescriptionRect, &sfDiscordDescription, &discordDescriptionBrush);
-        }
-
-        HFONT discordArrowFontH = CreateFontW(-MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
-        Font discordArrowFont(hdc, discordArrowFontH);
-        SolidBrush discordArrowBrush(Color(255, 150, 150, 150));
-        int discordArrowSize = 9;
-        int discordArrowPadding = 2;
-        int discordArrowX = pData->discordButtonRect.right - 20 - discordArrowSize - discordArrowPadding * 2;
-        int discordArrowY = pData->discordButtonRect.top + (pData->discordButtonRect.bottom - pData->discordButtonRect.top - discordArrowSize) / 2 - discordArrowPadding + 1;
-        RectF discordArrowRect((REAL)discordArrowX, (REAL)discordArrowY, (REAL)(discordArrowSize + discordArrowPadding * 2), (REAL)(discordArrowSize + discordArrowPadding * 2));
-        StringFormat sfDiscordArrow;
-        sfDiscordArrow.SetAlignment(StringAlignmentCenter);
-        sfDiscordArrow.SetLineAlignment(StringAlignmentCenter);
-        g.DrawString(L"\uE76C", -1, &discordArrowFont, discordArrowRect, &sfDiscordArrow, &discordArrowBrush);
-        DeleteObject(discordArrowFontH);
+        MainUI_Paint_DrawAnnouncementBar(hdc, g, pData->discordButtonRect, pData->hFontText, pData->hFontSmall, pData->isHoveringDiscord);
 
         if (pData->isHoveringAdvancedMultiInstanceLink) MainUI_Paint_DrawHoverTooltip(hdc, pData->advancedMultiInstanceLinkRect, pData->hFontSmall, g_simpleMode.load() ? L"Simple Mode is on • disable it to use this setting" : L"Configure multi-instance delay", false);
         if (pData->isHoveringMutexStatus && pData->mutexStatusAnim > 0.01f) {
@@ -30548,6 +30512,7 @@ if (pData->showingGridSettings || pData->gridSettingsViewAnim > 0.0f) {
                 anyHover |= checkHover(pData->isHoveringSimpleExit, pData->simpleExitBtnRect);
                 anyHover |= (pData->discordButtonRect.bottom > pData->discordButtonRect.top && checkHover(pData->isHoveringDiscord, pData->discordButtonRect));
                 anyHover |= ((g_updateFound.load() || g_updateCheckFailed.load()) && pData->updateBannerRect.bottom > pData->updateBannerRect.top && checkHover(pData->isHoveringUpdateBanner, pData->updateBannerRect));
+                anyHover |= (!g_mutexBannerMessage.empty() && pData->mutexBannerRect.bottom > pData->mutexBannerRect.top && checkHover(pData->isHoveringMutexBanner, pData->mutexBannerRect));
 
                 bool nowMutexChip = (newSimpleHelp == -1) && g_multiSupport.load() && (pData->simpleMutexStatusRect.right > pData->simpleMutexStatusRect.left) && PtInRect(&pData->simpleMutexStatusRect, pt);
                 if (nowMutexChip != pData->isHoveringSimpleMutexStatus) { pData->isHoveringSimpleMutexStatus = nowMutexChip; InvalidateRect(hwnd, NULL, FALSE); }
