@@ -1134,7 +1134,7 @@ std::atomic<int> g_restoreMethod(1); // 0 - Off, 1 - SetForeground, 2 - Alt+Tab 
 std::atomic<int> g_userSafeMode(2); // 0 - Off, 1 - Legacy, 2 - Beta
 std::atomic<int> g_fpsLimit(0); // 0 for OFF
 std::atomic<int> g_fpsLastActiveLimit(15);
-std::atomic<int> g_cpuLimitPercent(90);
+std::atomic<int> g_cpuLimitPercent(10);
 std::atomic<int> g_cpuLimitPeriod(100);
 std::atomic<bool> g_cpuLimitMode(false);
 std::atomic<int> g_multiInstanceInterval(0);
@@ -10525,8 +10525,23 @@ void FpsCapperThread()
         std::vector<HANDLE> handles;
     };
     std::vector<FpsGroup> fpsGroups;
+    std::map<int, std::vector<DWORD>> prevPidsByFps;
     std::mutex handlesMutex;
     auto last_update = std::chrono::steady_clock::now() - std::chrono::milliseconds(500);
+    auto last_thread_snap = std::chrono::steady_clock::now() - std::chrono::milliseconds(5000);
+
+    auto sleepCapperMs = [&](double ms) {
+        if (ms <= 0.0) return;
+        DWORD totalMs = static_cast<DWORD>(ms + 0.5);
+        if (totalMs == 0) totalMs = 1;
+        DWORD elapsed = 0;
+        while (elapsed < totalMs) {
+            if (!g_isFpsCapperRunning.load() || g_stopThread.load() || g_isFpsCapperPaused.load()) break;
+            DWORD chunk = (std::min)(static_cast<DWORD>(20), totalMs - elapsed);
+            Sleep(chunk);
+            elapsed += chunk;
+        }
+    };
 
     auto calcDuty = [&](int fpsVal, double& workMs, double& freezeMs) {
         if (g_cpuLimitMode.load()) {
@@ -10538,7 +10553,7 @@ void FpsCapperThread()
             if (workMs < 2.0) workMs = 2.0;
         } else {
             double frameMs = 1000.0 / static_cast<double>((std::max)(1, fpsVal));
-            workMs = (std::min)(15.0, (std::max)(4.0, frameMs * 0.10));
+            workMs = (std::min)(5.0, (std::max)(2.0, frameMs * 0.05));
             freezeMs = frameMs - workMs;
             if (freezeMs < 0.0) freezeMs = 0.0;
         }
@@ -10601,37 +10616,56 @@ void FpsCapperThread()
                 if (shouldCap) pidsByFps[procFps].push_back(pid);
             }
 
-            std::vector<FpsGroup> newGroups;
-            for (const auto& kv : pidsByFps) {
-                FpsGroup grp;
-                grp.fps = kv.first;
-                for (DWORD pid : kv.second) {
+            bool groupsChanged = (pidsByFps != prevPidsByFps);
+            bool snapExpired = (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_thread_snap).count() >= 2000);
+            if (groupsChanged || snapExpired) {
+                last_thread_snap = now;
+                std::map<DWORD, std::vector<HANDLE>> threadsByPid;
+                std::unordered_set<DWORD> wantedPids;
+                for (const auto& kv : pidsByFps) {
+                    for (DWORD pid : kv.second) wantedPids.insert(pid);
+                }
+                if (!wantedPids.empty()) {
                     HANDLE thSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
                     if (thSnap != INVALID_HANDLE_VALUE) {
                         THREADENTRY32 te = { 0 };
                         te.dwSize = sizeof(THREADENTRY32);
                         if (Thread32First(thSnap, &te)) {
                             do {
-                                if (te.th32OwnerProcessID == pid) {
+                                if (wantedPids.count(te.th32OwnerProcessID)) {
                                     HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
-                                    if (hThread) grp.handles.push_back(hThread);
+                                    if (hThread) threadsByPid[te.th32OwnerProcessID].push_back(hThread);
                                 }
                             } while (Thread32Next(thSnap, &te));
                         }
                         CloseHandle(thSnap);
                     }
                 }
-                if (!grp.handles.empty()) newGroups.push_back(std::move(grp));
-            }
 
-            std::lock_guard<std::mutex> lock(handlesMutex);
-            for (auto& g : fpsGroups) {
-                for (HANDLE h : g.handles) {
-                    ResumeThread(h);
-                    CloseHandle(h);
+                std::vector<FpsGroup> newGroups;
+                for (const auto& kv : pidsByFps) {
+                    FpsGroup grp;
+                    grp.fps = kv.first;
+                    for (DWORD pid : kv.second) {
+                        auto it = threadsByPid.find(pid);
+                        if (it != threadsByPid.end()) {
+                            grp.handles.insert(grp.handles.end(), it->second.begin(), it->second.end());
+                            it->second.clear();
+                        }
+                    }
+                    if (!grp.handles.empty()) newGroups.push_back(std::move(grp));
                 }
+
+                std::lock_guard<std::mutex> lock(handlesMutex);
+                for (auto& g : fpsGroups) {
+                    for (HANDLE h : g.handles) {
+                        ResumeThread(h);
+                        CloseHandle(h);
+                    }
+                }
+                fpsGroups = std::move(newGroups);
+                prevPidsByFps = std::move(pidsByFps);
             }
-            fpsGroups = std::move(newGroups);
         }
 
         std::lock_guard<std::mutex> lock(handlesMutex);
@@ -10647,9 +10681,9 @@ void FpsCapperThread()
             double work_ms = 0.0, freeze_ms = 0.0;
             calcDuty(fpsGroups[0].fps, work_ms, freeze_ms);
             for (HANDLE hThread : fpsGroups[0].handles) SuspendThread(hThread);
-            PreciseSleepMs(freeze_ms, false);
+            sleepCapperMs(freeze_ms);
             for (HANDLE hThread : fpsGroups[0].handles) ResumeThread(hThread);
-            PreciseSleepMs(work_ms, false);
+            sleepCapperMs(work_ms);
         } else {
             struct GroupState { double workMs; double freezeMs; bool frozen; double nextMs; };
             std::vector<GroupState> states(fpsGroups.size());
@@ -13256,7 +13290,7 @@ bool LoadSettings()
     DWORD multiSupport = 0, selectedTime = 540, selectedAction = 5, autoStartAfk = 0;
     DWORD autoUpdate = 1, userSafeMode = 2, autoReconnect = 1, autoReset = 0, autoHideRoblox = 0, autoOpacity = 0, autoGrid = 0, restoreMethod = 1;
     DWORD tutorialShown = 0, firstWelcomeShown = 0, previewAlphaNotify = 0, v4WelcomeShown = 1, useLegacyUi = 0, bloxstrapIntegration = 0, statusBarEnabled = 1, statusBarPrimaryMonitor = 0, statusBarPositionBottom = 0, statusBarShowIcon = 1, statusBarShowBrand = 1, statusBarEventSession = 1, statusBarEventAction = 1, statusBarEventReconnect = 1, statusBarEventMacro = 1, statusBarEventUi = 1, fpsLimit = 0, unlockFpsOnFocus = 0;
-    DWORD cpuLimitPercent = 90, cpuLimitPeriod = 100, cpuLimitMode = 0;
+    DWORD cpuLimitPercent = 10, cpuLimitPeriod = 100, cpuLimitMode = 0;
     DWORD multiInstanceInterval = 0, windowOpacity = 0, afkReminder = 0, skipActive = 0, doNotSleep = 0, autoMute = 0, unmuteOnFocus = 0, simpleMode = 1;
     DWORD disableSplash = 0, disableAcrylic = 0, disableAnimations = 0, notificationsDisabled = 0, keepWindowOnTop = 0;
     DWORD disableWindowCorners = 0;
@@ -13842,7 +13876,7 @@ void ResetSettings()
     g_fpsLimit = 0;
     g_fpsLastActiveLimit = 15;
     g_unlockFpsOnFocus = false;
-    g_cpuLimitPercent = 90;
+    g_cpuLimitPercent = 10;
     g_cpuLimitPeriod = 100;
     g_cpuLimitMode = false;
     g_multiInstanceInterval = 0;
@@ -14096,7 +14130,7 @@ struct SettingsSnapshot {
     std::wstring customProcessNames;
     int reconnectCheckInterval = 0;
     int reconnectMacroDelaySec = 60;
-    int cpuLimitPercent = 90;
+    int cpuLimitPercent = 10;
     int cpuLimitPeriod = 100;
     bool cpuLimitMode = false;
     bool hotkeyEnabled = true;
@@ -17457,7 +17491,7 @@ LRESULT CALLBACK CustomInputDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
                           (pData->type == CustomInputDialogType::RamCleanInterval) ? L"300" :
                           (pData->type == CustomInputDialogType::RamCleanLimit) ? L"750" :
                           (pData->type == CustomInputDialogType::DiscordMentionTarget) ? L"@everyone" :
-                          (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"90" :
+                          (pData->type == CustomInputDialogType::CpuLimitPercent) ? L"10" :
                           (pData->type == CustomInputDialogType::CpuLimitPeriod) ? L"100" :
                           (pData->type == CustomInputDialogType::InstanceTitle) ? L"Roblox Client" :
                           (pData->type == CustomInputDialogType::PresetName) ? L"My Preset" :
