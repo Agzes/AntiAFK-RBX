@@ -1,5 +1,7 @@
 <!-- release part -->
 
+<div align="center"><a href="https://github.com/Agzes/AntiAFK-RBX/releases/download/{{VERSION}}/AntiAFK-RBX.{{VERSION}}.exe"><img src="https://raw.githubusercontent.com/Agzes/AntiAFK-RBX/main/ReadME/download.png" alt="Download Now ({{VERSION}})" width="340" style="width:35%; min-width:160px; max-width:360px;"></a></div>
+
 <div align="center"><kbd>Stable</kbd> • <kbd>{{VERSION}}</kbd> • <kbd>by Agzes</kbd>
 <h1 align="center">$\Huge{\textsf{𝗔𝗻𝘁𝗶𝗔𝗙𝗞-𝗥𝗕𝗫}}$ <sup><sup></sup></sup></h1>
 <kbd align="left"><div align="center"><h1> ⚒️ ChangeLog ⚒️ </h1></div>
